@@ -34,6 +34,8 @@ export const CSS = `
 .ce-row{display:flex;align-items:center;gap:6px;width:100%;border:0;background:transparent;color:inherit;font:inherit;text-align:left;padding:4px 8px;cursor:pointer;border-radius:4px;min-width:0}
 .ce-row:hover{background:var(--dsw-alias-interactive-bg-hover,#26292e)}
 .ce-active{background:var(--dsw-alias-interactive-bg-hover,#2c313a)}
+.ce-row-drop{background:color-mix(in srgb,var(--dsw-alias-brand-primary,#59b7ff) 18%,transparent);box-shadow:inset 0 0 0 1px var(--dsw-alias-brand-primary,#59b7ff)}
+.ce-tree-ico{margin:0 1px}
 .ce-ico{flex:none;display:inline-flex;color:var(--dsw-alias-label-tertiary,#777)}
 .ce-name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 .ce-note{color:var(--dsw-alias-label-tertiary,#777);padding:3px 10px;font-size:12px}

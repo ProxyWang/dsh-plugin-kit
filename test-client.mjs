@@ -182,6 +182,17 @@ check("tree compresses single-child chains", chain.dirs.get("m")?.name === "m/n/
 const { filesUnder } = await import("./src/client/changetree.js");
 check("filesUnder collects subtree items", filesUnder(tree).length === 4 && filesUnder(tree.dirs.get("a")).length === 3, filesUnder(tree).length);
 
+// --- tree drag & reveal helpers ------------------------------------------------------------------
+const { ancestorDirs, parentDir, canDropInto } = await import("./src/client/pathtools.js");
+check("ancestorDirs outermost first", JSON.stringify(ancestorDirs("a/b/c.txt")) === JSON.stringify(["a", "a/b"]), ancestorDirs("a/b/c.txt"));
+check("ancestorDirs top-level file has none", ancestorDirs("top.txt").length === 0, ancestorDirs("top.txt"));
+check("parentDir", parentDir("a/b/c.txt") === "a/b" && parentDir("top.txt") === "", [parentDir("a/b/c.txt"), parentDir("top.txt")]);
+check("canDropInto allows cross-folder and to-root moves", canDropInto("a/x.txt", "b") === true && canDropInto("a/x.txt", "") === true, null);
+check("canDropInto refuses self, descendant and same-folder", canDropInto("a", "a") === false && canDropInto("a", "a/b") === false && canDropInto("a/x.txt", "a") === false, null);
+check("canDropInto refuses root no-op for top-level file", canDropInto("top.txt", "") === false, null);
+const { fileTint } = await import("./src/client/changetree.js");
+check("fileTint maps extensions", fileTint("x.go") === "cet-go" && fileTint("y.json") === "cet-json" && fileTint("z.unknown") === "cet-file", [fileTint("x.go"), fileTint("z.unknown")]);
+
 // --- changes panel: staged/unstaged split + commit box --------------------------------------
 const { ChangesPanel, isStagedXy } = await import("./src/client/changes.js");
 const { ChangeTree: ChangeTreeCmp } = await import("./src/client/changetree.js");

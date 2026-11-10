@@ -1300,6 +1300,7 @@ export function CodeBody(props) {
 						t,
 						onOpenFile: (path, line, col) => void openFile(path, line, col),
 						activePath: doc?.path ?? diff?.path,
+						revealPath: doc?.path ?? null,
 						refreshKey: treeKey,
 						onNotify: (text, kind) => say(text, kind),
 						onDeleted: (path) => {

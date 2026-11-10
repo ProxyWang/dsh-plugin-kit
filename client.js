@@ -192,6 +192,7 @@ var zh = {
   "tree.newFile": "新建文件",
   "tree.copyPath": "复制路径（⌥/Alt 点击复制相对路径）",
   "tree.copied": "路径已复制",
+  "tree.moved": "已移动",
   "tree.newDir": "新建文件夹",
   "tree.newFileRoot": "根目录新建文件",
   "tree.newDirRoot": "根目录新建文件夹",
@@ -484,6 +485,7 @@ var en = {
   "tree.newFile": "New file",
   "tree.copyPath": "Copy path (⌥/Alt-click copies the relative path)",
   "tree.copied": "Path copied",
+  "tree.moved": "Moved",
   "tree.newDir": "New folder",
   "tree.newFileRoot": "New file at root",
   "tree.newDirRoot": "New folder at root",
@@ -831,7 +833,6 @@ function svg(children, size = 16) {
 }
 var IconCode = ({ size }) => svg([h("path", { key: "a", d: "M9 6 3.5 12 9 18" }), h("path", { key: "b", d: "M15 6 20.5 12 15 18" })], size ?? 16);
 var IconFolder = ({ open }) => svg(open ? h("path", { key: "p", d: "M3 19 6 8h13l-3 11Z M6 8V5h5l2 3" }) : h("path", { key: "p", d: "M3 6h6l2 2h10v12H3Z" }));
-var IconFile = () => svg(h("path", { key: "p", d: "M6 2h8l4 4v16H6Z M14 2v4h4" }));
 var IconRefresh = () => svg([h("path", { key: "p", d: "M20 12a8 8 0 1 1-2.3-5.7" }), h("path", { key: "q", d: "M20 3v5h-5" })]);
 var IconArrowLeft = () => svg([h("path", { key: "p", d: "M20 12H5" }), h("path", { key: "q", d: "M11 6 5 12l6 6" })]);
 var IconArrowRight = () => svg([h("path", { key: "p", d: "M4 12h15" }), h("path", { key: "q", d: "M13 6l6 6-6 6" })]);
@@ -1417,228 +1418,28 @@ function toAbs(cwd, path) {
   if (typeof path !== "string") return "";
   return path.startsWith("/") || /^[A-Za-z]:[\\/]/.test(path) ? path.replace(/\\/g, "/") : `${cwd.replace(/\/+$/, "")}/${path.replace(/\\/g, "/")}`;
 }
-
-// src/client/tree.js
-function TreePanel({ cwd, t, onOpenFile, activePath, refreshKey, onNotify, onDeleted }) {
-  const [listing, setListing] = useState({});
-  const [expanded, setExpanded] = useState([]);
-  const [action, setAction] = useState(null);
-  const loadDir = useCallback((path) => {
-    setListing((current) => ({ ...current, [path]: { loading: true } }));
-    api("fs.list", { cwd, path }).then((res) => {
-      setListing((current) => ({ ...current, [path]: res.ok ? res.value : { error: res.error } }));
-    });
-  }, [cwd]);
-  useEffect(() => {
-    setListing({});
-    setExpanded([]);
-    setAction(null);
-    loadDir("");
-  }, [cwd, refreshKey, loadDir]);
-  const toggle = (path) => {
-    if (expanded.includes(path)) {
-      setExpanded(expanded.filter((p) => p !== path));
-      return;
-    }
-    setExpanded([...expanded, path]);
-    if (listing[path] === void 0) loadDir(path);
-  };
-  const parentOf = (path) => path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "";
-  const finish = (res, okMsg, touchedDir) => {
-    if (!res.ok || res.value?.error) {
-      onNotify?.(`${t("error")}: ${res.value?.error ?? res.error}`, "error");
-      return;
-    }
-    onNotify?.(okMsg);
-    loadDir(touchedDir);
-    setAction(null);
-  };
-  const cleanName = (name) => {
-    const clean = String(name ?? "").trim();
-    if (clean === "" || clean.includes("/") || clean === "." || clean === "..") {
-      onNotify?.(`${t("error")}: ${t("tree.badName")}`, "error");
-      return null;
-    }
-    return clean;
-  };
-  const runCreate = (dirPath, name, kind) => {
-    const clean = cleanName(name);
-    if (clean === null) return;
-    api("fs.create", { cwd, path: dirPath === "" ? clean : `${dirPath}/${clean}`, kind }).then((res) => finish(res, t("tree.created"), dirPath));
-  };
-  const runRename = (path, newName) => {
-    const clean = cleanName(newName);
-    if (clean === null) return;
-    const dir = parentOf(path);
-    api("fs.rename", { cwd, path, to: dir === "" ? clean : `${dir}/${clean}` }).then((res) => finish(res, t("tree.renamed"), dir));
-  };
-  const runDelete = (path) => {
-    api("fs.delete", { cwd, path }).then((res) => {
-      if (!res.ok || res.value?.error) {
-        onNotify?.(`${t("error")}: ${res.value?.error ?? res.error}`, "error");
-        setAction(null);
-        return;
-      }
-      onNotify?.(t("tree.deleted"));
-      onDeleted?.(path);
-      loadDir(parentOf(path));
-      setAction(null);
-    });
-  };
-  const depthOf = (path) => path === "" ? 0 : path.split("/").length;
-  const copyPath = (path, event) => {
-    const text = event?.altKey ? path : toAbs(cwd, path);
-    const ok = () => onNotify?.(t("tree.copied"));
-    const bad = () => onNotify?.(`${t("error")}: clipboard`, "error");
-    try {
-      const p = navigator.clipboard?.writeText(text);
-      if (p && typeof p.then === "function") p.then(ok, bad);
-      else ok();
-    } catch {
-      bad();
-    }
-  };
-  const inputRow = (dirPath, kind, placeholder) => h(
-    "div",
-    {
-      key: `inp:${dirPath}:${kind}`,
-      className: "ce-row ctp-inputrow",
-      style: { paddingLeft: 6 + depthOf(dirPath) * 14 }
-    },
-    h("input", {
-      className: "ce-input",
-      placeholder,
-      autoFocus: true,
-      value: action?.value ?? "",
-      onChange: (e) => setAction({ ...action, value: e.target.value }),
-      onKeyDown: (e) => {
-        e.stopPropagation();
-        if (e.key === "Enter") {
-          if (kind === "rename") runRename(action.path, e.target.value);
-          else runCreate(dirPath, e.target.value, kind);
-        } else if (e.key === "Escape") setAction(null);
-      }
-    })
-  );
-  const acts = (path, isDir) => h(
-    "span",
-    { className: "ctp-acts" },
-    isDir ? h("button", {
-      type: "button",
-      className: "cet-act",
-      title: t("tree.newFile"),
-      onClick: (e) => {
-        e.stopPropagation();
-        if (!expanded.includes(path)) setExpanded([...expanded, path]);
-        if (listing[path] === void 0) loadDir(path);
-        setAction({ kind: "newfile", path, value: "" });
-      }
-    }, "+") : null,
-    h("button", {
-      type: "button",
-      className: "cet-act",
-      title: t("tree.copyPath"),
-      onClick: (e) => {
-        e.stopPropagation();
-        copyPath(path, e);
-      }
-    }, "📋"),
-    h("button", {
-      type: "button",
-      className: "cet-act",
-      title: t("tree.rename"),
-      onClick: (e) => {
-        e.stopPropagation();
-        setAction({ kind: "rename", path, value: path.split("/").pop() });
-      }
-    }, "✎"),
-    action?.kind === "delete" && action.path === path ? h(
-      Fragment,
-      null,
-      h("button", {
-        type: "button",
-        className: "cet-act cet-act-show cet-act-danger",
-        onClick: (e) => {
-          e.stopPropagation();
-          runDelete(path);
-        }
-      }, t("changes.confirm")),
-      h("button", {
-        type: "button",
-        className: "cet-act cet-act-show",
-        onClick: (e) => {
-          e.stopPropagation();
-          setAction(null);
-        }
-      }, t("changes.cancel"))
-    ) : h("button", {
-      type: "button",
-      className: "cet-act",
-      title: t("tree.delete"),
-      onClick: (e) => {
-        e.stopPropagation();
-        setAction({ kind: "delete", path });
-      }
-    }, "✕")
-  );
-  const renderLevel = (path, depth) => {
-    const state = listing[path];
-    if (!state) return null;
-    if (state.loading) return h("div", { key: `${path}-l`, className: "ce-note", style: { paddingLeft: 8 + depth * 14 } }, t("loading"));
-    if (state.error) return h("div", { key: `${path}-l`, className: "ce-note", style: { paddingLeft: 8 + depth * 14 } }, `${t("tree.failed")}: ${state.error}`);
-    const entries = [...state.entries ?? []].sort((a, b) => a.type === b.type ? a.name.localeCompare(b.name) : a.type === "directory" ? -1 : 1);
-    const rows = [];
-    for (const entry of entries) {
-      const childPath = path === "" ? entry.name : `${path}/${entry.name}`;
-      if (entry.type === "directory") {
-        const open = expanded.includes(childPath);
-        rows.push(
-          h(
-            "button",
-            { key: childPath, className: "ce-row", style: { paddingLeft: 6 + depth * 14 }, onClick: () => toggle(childPath), type: "button" },
-            h("span", { className: "ce-ico" }, h(IconFolder, { open })),
-            h("span", { className: "ce-name" }, entry.name),
-            acts(childPath, true)
-          )
-        );
-        if (action?.kind === "rename" && action.path === childPath) rows.push(inputRow(childPath, "rename", t("tree.renamePlaceholder")));
-        if (open && action?.kind === "newfile" && action.path === childPath) rows.push(inputRow(childPath, "file", t("tree.newFilePlaceholder")));
-        if (open && action?.kind === "newdir" && action.path === childPath) rows.push(inputRow(childPath, "dir", t("tree.newDirPlaceholder")));
-        if (open) rows.push(renderLevel(childPath, depth + 1));
-      } else if (entry.type === "file") {
-        rows.push(
-          h(
-            "button",
-            {
-              key: childPath,
-              className: `ce-row${activePath && (activePath === childPath || activePath.endsWith(`/${childPath}`)) ? " ce-active" : ""}`,
-              style: { paddingLeft: 6 + depth * 14 },
-              type: "button",
-              onClick: () => onOpenFile(childPath, 1, 1)
-            },
-            h("span", { className: "ce-ico" }, h(IconFile)),
-            h("span", { className: "ce-name" }, entry.name),
-            acts(childPath, false)
-          )
-        );
-        if (action?.kind === "rename" && action.path === childPath) rows.push(inputRow(path, "rename", t("tree.renamePlaceholder")));
-      }
-    }
-    if (!rows.length) rows.push(h("div", { key: `${path}-e`, className: "ce-note", style: { paddingLeft: 8 + depth * 14 } }, t("tree.empty")));
-    return h(Fragment, { key: path }, rows);
-  };
-  return h(
-    "div",
-    { className: "ce-scroll ce-rail" },
-    h(
-      "div",
-      { className: "ctp-tools" },
-      h("button", { type: "button", className: "cet-act cet-act-show", title: t("tree.newFileRoot"), onClick: () => setAction({ kind: "newfile", path: "", value: "" }) }, `+ ${t("tree.fileWord")}`),
-      h("button", { type: "button", className: "cet-act cet-act-show", title: t("tree.newDirRoot"), onClick: () => setAction({ kind: "newdir", path: "", value: "" }) }, `+ ${t("tree.dirWord")}`)
-    ),
-    action !== null && (action.kind === "newfile" || action.kind === "newdir") && action.path === "" ? inputRow("", action.kind === "newdir" ? "dir" : "file", action.kind === "newdir" ? t("tree.newDirPlaceholder") : t("tree.newFilePlaceholder")) : null,
-    renderLevel("", 0)
-  );
+function ancestorDirs(path) {
+  const out = [];
+  const clean = String(path ?? "");
+  let idx = clean.indexOf("/");
+  while (idx > 0) {
+    out.push(clean.slice(0, idx));
+    idx = clean.indexOf("/", idx + 1);
+  }
+  return out;
+}
+function parentDir(path) {
+  const clean = String(path ?? "");
+  const at = clean.lastIndexOf("/");
+  return at > 0 ? clean.slice(0, at) : "";
+}
+function canDropInto(dragPath, targetDir) {
+  const from = String(dragPath ?? "");
+  const to = String(targetDir ?? "");
+  if (from === "" || to === from) return false;
+  if (to === parentDir(from)) return false;
+  if (to === from || to.startsWith(`${from}/`)) return false;
+  return true;
 }
 
 // src/client/changetree.js
@@ -1900,6 +1701,345 @@ function ChangeTree({ items, onOpen, onDiscard, onDiscardDir, onStage, onStageDi
   };
   walk(tree, 0, "");
   return h(Fragment, null, rows);
+}
+
+// src/client/tree.js
+function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshKey, onNotify, onDeleted }) {
+  const [listing, setListing] = useState({});
+  const [expanded, setExpanded] = useState([]);
+  const [action, setAction] = useState(null);
+  const [dragPath, setDragPath] = useState(null);
+  const [dropDir, setDropDir] = useState(null);
+  const railRef = useRef(null);
+  const lastRevealed = useRef(null);
+  const revealTick = useRef(null);
+  const loadDir = useCallback((path) => {
+    setListing((current) => ({ ...current, [path]: { loading: true } }));
+    api("fs.list", { cwd, path }).then((res) => {
+      setListing((current) => ({ ...current, [path]: res.ok ? res.value : { error: res.error } }));
+    });
+  }, [cwd]);
+  useEffect(() => {
+    setListing({});
+    setExpanded([]);
+    setAction(null);
+    loadDir("");
+  }, [cwd, refreshKey, loadDir]);
+  useEffect(() => {
+    const p = typeof revealPath === "string" && revealPath !== "" ? revealPath : null;
+    if (!p) return;
+    const tick = `${refreshKey}`;
+    if (p === lastRevealed.current && tick === revealTick.current) return;
+    lastRevealed.current = p;
+    revealTick.current = tick;
+    const chain = ancestorDirs(p);
+    if (chain.length === 0) return;
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      for (const d of chain) next.add(d);
+      return [...next];
+    });
+    for (const d of chain) loadDir(d);
+  }, [revealPath, refreshKey, loadDir]);
+  useEffect(() => {
+    const p = typeof revealPath === "string" && revealPath !== "" ? revealPath : null;
+    if (!p || typeof CSS === "undefined") return void 0;
+    const raf = requestAnimationFrame(() => {
+      try {
+        railRef.current?.querySelector(`[data-tp="${CSS.escape(p)}"]`)?.scrollIntoView({ block: "nearest" });
+      } catch {
+      }
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [revealPath, listing, expanded]);
+  const toggle = (path) => {
+    if (expanded.includes(path)) {
+      setExpanded(expanded.filter((p) => p !== path));
+      return;
+    }
+    setExpanded([...expanded, path]);
+    if (listing[path] === void 0) loadDir(path);
+  };
+  const parentOf = (path) => path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "";
+  const finish = (res, okMsg, touchedDir) => {
+    if (!res.ok || res.value?.error) {
+      onNotify?.(`${t("error")}: ${res.value?.error ?? res.error}`, "error");
+      return;
+    }
+    onNotify?.(okMsg);
+    loadDir(touchedDir);
+    setAction(null);
+  };
+  const cleanName = (name) => {
+    const clean = String(name ?? "").trim();
+    if (clean === "" || clean.includes("/") || clean === "." || clean === "..") {
+      onNotify?.(`${t("error")}: ${t("tree.badName")}`, "error");
+      return null;
+    }
+    return clean;
+  };
+  const runCreate = (dirPath, name, kind) => {
+    const clean = cleanName(name);
+    if (clean === null) return;
+    api("fs.create", { cwd, path: dirPath === "" ? clean : `${dirPath}/${clean}`, kind }).then((res) => finish(res, t("tree.created"), dirPath));
+  };
+  const runRename = (path, newName) => {
+    const clean = cleanName(newName);
+    if (clean === null) return;
+    const dir = parentOf(path);
+    api("fs.rename", { cwd, path, to: dir === "" ? clean : `${dir}/${clean}` }).then((res) => finish(res, t("tree.renamed"), dir));
+  };
+  const runDelete = (path) => {
+    api("fs.delete", { cwd, path }).then((res) => {
+      if (!res.ok || res.value?.error) {
+        onNotify?.(`${t("error")}: ${res.value?.error ?? res.error}`, "error");
+        setAction(null);
+        return;
+      }
+      onNotify?.(t("tree.deleted"));
+      onDeleted?.(path);
+      loadDir(parentOf(path));
+      setAction(null);
+    });
+  };
+  const runMove = (from, toDir) => {
+    const name = from.split("/").pop();
+    const to = toDir === "" ? name : `${toDir}/${name}`;
+    if (to === from) return;
+    const srcDir = parentDir(from);
+    api("fs.rename", { cwd, path: from, to }).then((res) => {
+      if (!res.ok || res.value?.error) {
+        onNotify?.(`${t("error")}: ${res.value?.error ?? res.error}`, "error");
+        return;
+      }
+      onNotify?.(t("tree.moved"));
+      loadDir(srcDir);
+      loadDir(toDir);
+    });
+  };
+  const dragProps = (path) => ({
+    draggable: true,
+    onDragStart: (e) => {
+      setDragPath(path);
+      try {
+        e.dataTransfer.setData("text/plain", path);
+        e.dataTransfer.effectAllowed = "move";
+      } catch {
+      }
+    },
+    onDragEnd: () => {
+      setDragPath(null);
+      setDropDir(null);
+    }
+  });
+  const dropProps = (dirPath) => ({
+    onDragOver: (e) => {
+      if (!dragPath || !canDropInto(dragPath, dirPath)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      try {
+        e.dataTransfer.dropEffect = "move";
+      } catch {
+      }
+      if (dropDir !== dirPath) setDropDir(dirPath);
+    },
+    onDragLeave: (e) => {
+      e.stopPropagation();
+      if (dropDir === dirPath) setDropDir(null);
+    },
+    onDrop: (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const from = dragPath;
+      setDragPath(null);
+      setDropDir(null);
+      if (from && canDropInto(from, dirPath)) runMove(from, dirPath);
+    }
+  });
+  const depthOf = (path) => path === "" ? 0 : path.split("/").length;
+  const copyPath = (path, event) => {
+    const text = event?.altKey ? path : toAbs(cwd, path);
+    const ok = () => onNotify?.(t("tree.copied"));
+    const bad = () => onNotify?.(`${t("error")}: clipboard`, "error");
+    try {
+      const p = navigator.clipboard?.writeText(text);
+      if (p && typeof p.then === "function") p.then(ok, bad);
+      else ok();
+    } catch {
+      bad();
+    }
+  };
+  const inputRow = (dirPath, kind, placeholder) => h(
+    "div",
+    {
+      key: `inp:${dirPath}:${kind}`,
+      className: "ce-row ctp-inputrow",
+      style: { paddingLeft: 6 + depthOf(dirPath) * 14 }
+    },
+    h("input", {
+      className: "ce-input",
+      placeholder,
+      autoFocus: true,
+      value: action?.value ?? "",
+      onChange: (e) => setAction({ ...action, value: e.target.value }),
+      onKeyDown: (e) => {
+        e.stopPropagation();
+        if (e.key === "Enter") {
+          if (kind === "rename") runRename(action.path, e.target.value);
+          else runCreate(dirPath, e.target.value, kind);
+        } else if (e.key === "Escape") setAction(null);
+      }
+    })
+  );
+  const acts = (path, isDir) => h(
+    "span",
+    { className: "ctp-acts" },
+    isDir ? h("button", {
+      type: "button",
+      className: "cet-act",
+      title: t("tree.newFile"),
+      onClick: (e) => {
+        e.stopPropagation();
+        if (!expanded.includes(path)) setExpanded([...expanded, path]);
+        if (listing[path] === void 0) loadDir(path);
+        setAction({ kind: "newfile", path, value: "" });
+      }
+    }, "+") : null,
+    h("button", {
+      type: "button",
+      className: "cet-act",
+      title: t("tree.copyPath"),
+      onClick: (e) => {
+        e.stopPropagation();
+        copyPath(path, e);
+      }
+    }, "📋"),
+    h("button", {
+      type: "button",
+      className: "cet-act",
+      title: t("tree.rename"),
+      onClick: (e) => {
+        e.stopPropagation();
+        setAction({ kind: "rename", path, value: path.split("/").pop() });
+      }
+    }, "✎"),
+    action?.kind === "delete" && action.path === path ? h(
+      Fragment,
+      null,
+      h("button", {
+        type: "button",
+        className: "cet-act cet-act-show cet-act-danger",
+        onClick: (e) => {
+          e.stopPropagation();
+          runDelete(path);
+        }
+      }, t("changes.confirm")),
+      h("button", {
+        type: "button",
+        className: "cet-act cet-act-show",
+        onClick: (e) => {
+          e.stopPropagation();
+          setAction(null);
+        }
+      }, t("changes.cancel"))
+    ) : h("button", {
+      type: "button",
+      className: "cet-act",
+      title: t("tree.delete"),
+      onClick: (e) => {
+        e.stopPropagation();
+        setAction({ kind: "delete", path });
+      }
+    }, "✕")
+  );
+  const renderLevel = (path, depth) => {
+    const state = listing[path];
+    if (!state) return null;
+    if (state.loading) return h("div", { key: `${path}-l`, className: "ce-note", style: { paddingLeft: 8 + depth * 14 } }, t("loading"));
+    if (state.error) return h("div", { key: `${path}-l`, className: "ce-note", style: { paddingLeft: 8 + depth * 14 } }, `${t("tree.failed")}: ${state.error}`);
+    const entries = [...state.entries ?? []].sort((a, b) => a.type === b.type ? a.name.localeCompare(b.name) : a.type === "directory" ? -1 : 1);
+    const rows = [];
+    for (const entry of entries) {
+      const childPath = path === "" ? entry.name : `${path}/${entry.name}`;
+      if (entry.type === "directory") {
+        const open = expanded.includes(childPath);
+        rows.push(
+          h(
+            "button",
+            {
+              key: childPath,
+              "data-tp": childPath,
+              className: `ce-row${dropDir === childPath ? " ce-row-drop" : ""}`,
+              style: { paddingLeft: 6 + depth * 14 },
+              onClick: () => toggle(childPath),
+              type: "button",
+              ...dragProps(childPath),
+              ...dropProps(childPath)
+            },
+            h("span", { className: "ce-ico" }, h(IconFolder, { open })),
+            h("span", { className: "ce-name" }, entry.name),
+            acts(childPath, true)
+          )
+        );
+        if (action?.kind === "rename" && action.path === childPath) rows.push(inputRow(childPath, "rename", t("tree.renamePlaceholder")));
+        if (open && action?.kind === "newfile" && action.path === childPath) rows.push(inputRow(childPath, "file", t("tree.newFilePlaceholder")));
+        if (open && action?.kind === "newdir" && action.path === childPath) rows.push(inputRow(childPath, "dir", t("tree.newDirPlaceholder")));
+        if (open) rows.push(renderLevel(childPath, depth + 1));
+      } else if (entry.type === "file") {
+        rows.push(
+          h(
+            "button",
+            {
+              key: childPath,
+              "data-tp": childPath,
+              className: `ce-row${activePath && (activePath === childPath || activePath.endsWith(`/${childPath}`)) ? " ce-active" : ""}`,
+              style: { paddingLeft: 6 + depth * 14 },
+              type: "button",
+              onClick: () => onOpenFile(childPath, 1, 1),
+              ...dragProps(childPath)
+            },
+            h("span", { className: `cet-fico ce-tree-ico ${fileTint(childPath)}` }, h(FileGlyph)),
+            h("span", { className: "ce-name" }, entry.name),
+            acts(childPath, false)
+          )
+        );
+        if (action?.kind === "rename" && action.path === childPath) rows.push(inputRow(path, "rename", t("tree.renamePlaceholder")));
+      }
+    }
+    if (!rows.length) rows.push(h("div", { key: `${path}-e`, className: "ce-note", style: { paddingLeft: 8 + depth * 14 } }, t("tree.empty")));
+    return h(Fragment, { key: path }, rows);
+  };
+  return h(
+    "div",
+    {
+      className: "ce-scroll ce-rail",
+      ref: railRef,
+      onDragOver: (e) => {
+        if (!dragPath || !canDropInto(dragPath, "")) return;
+        e.preventDefault();
+        try {
+          e.dataTransfer.dropEffect = "move";
+        } catch {
+        }
+      },
+      onDrop: (e) => {
+        if (!dragPath) return;
+        e.preventDefault();
+        const from = dragPath;
+        setDragPath(null);
+        setDropDir(null);
+        if (canDropInto(from, "")) runMove(from, "");
+      }
+    },
+    h(
+      "div",
+      { className: "ctp-tools" },
+      h("button", { type: "button", className: "cet-act cet-act-show", title: t("tree.newFileRoot"), onClick: () => setAction({ kind: "newfile", path: "", value: "" }) }, `+ ${t("tree.fileWord")}`),
+      h("button", { type: "button", className: "cet-act cet-act-show", title: t("tree.newDirRoot"), onClick: () => setAction({ kind: "newdir", path: "", value: "" }) }, `+ ${t("tree.dirWord")}`)
+    ),
+    action !== null && (action.kind === "newfile" || action.kind === "newdir") && action.path === "" ? inputRow("", action.kind === "newdir" ? "dir" : "file", action.kind === "newdir" ? t("tree.newDirPlaceholder") : t("tree.newFilePlaceholder")) : null,
+    renderLevel("", 0)
+  );
 }
 
 // src/client/changes.js
@@ -4216,6 +4356,7 @@ function CodeBody(props) {
         t,
         onOpenFile: (path, line, col) => void openFile(path, line, col),
         activePath: doc?.path ?? diff?.path,
+        revealPath: doc?.path ?? null,
         refreshKey: treeKey,
         onNotify: (text, kind) => say(text, kind),
         onDeleted: (path) => {
@@ -4455,7 +4596,7 @@ function CodeTitle({ useTabInfo }) {
 }
 
 // src/client/styles.js
-var CSS = `
+var CSS2 = `
 .ce-root{height:100%;min-height:0;display:flex;flex-direction:column;position:relative;color:var(--dsw-alias-label-primary,#ddd);font-size:13px;background:var(--dsw-alias-bg-base,#181818)}
 .ce-toolbar{display:flex;align-items:center;gap:6px;padding:6px 8px;border-bottom:.5px solid var(--dsw-alias-border-l1,#333);flex:none}
 .ce-seg{display:flex;border-radius:var(--dsw-radius-sm,6px);overflow:hidden;border:.5px solid var(--dsw-alias-border-l2,#444)}
@@ -4487,6 +4628,8 @@ var CSS = `
 .ce-row{display:flex;align-items:center;gap:6px;width:100%;border:0;background:transparent;color:inherit;font:inherit;text-align:left;padding:4px 8px;cursor:pointer;border-radius:4px;min-width:0}
 .ce-row:hover{background:var(--dsw-alias-interactive-bg-hover,#26292e)}
 .ce-active{background:var(--dsw-alias-interactive-bg-hover,#2c313a)}
+.ce-row-drop{background:color-mix(in srgb,var(--dsw-alias-brand-primary,#59b7ff) 18%,transparent);box-shadow:inset 0 0 0 1px var(--dsw-alias-brand-primary,#59b7ff)}
+.ce-tree-ico{margin:0 1px}
 .ce-ico{flex:none;display:inline-flex;color:var(--dsw-alias-label-tertiary,#777)}
 .ce-name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 .ce-note{color:var(--dsw-alias-label-tertiary,#777);padding:3px 10px;font-size:12px}
@@ -4910,7 +5053,7 @@ function insertStyles() {
     const tag = document.createElement("style");
     tag.dataset.plugin = TAB_ID;
     tag.dataset.pluginCss = id;
-    tag.textContent = CSS;
+    tag.textContent = CSS2;
     document.head.appendChild(tag);
     return () => tag.remove();
   }

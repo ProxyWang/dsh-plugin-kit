@@ -72,7 +72,7 @@ const EXT_TINT = {
 	yaml: "cet-toml",
 };
 
-function fileTint(path) {
+export function fileTint(path) {
 	const dot = path.lastIndexOf(".");
 	const ext = dot > 0 ? path.slice(dot + 1).toLowerCase() : "";
 	return EXT_TINT[ext] ?? "cet-file";
@@ -81,7 +81,7 @@ function fileTint(path) {
 const FolderGlyph = () => h("svg", { viewBox: "0 0 16 16", fill: "currentColor", "aria-hidden": true },
 	h("path", { d: "M1.5 3h4l1.2 1.5h7.8v8.5h-13z", opacity: 0.9 }),
 );
-const FileGlyph = () => h("svg", { viewBox: "0 0 16 16", fill: "none", stroke: "currentColor", strokeWidth: 1.2, "aria-hidden": true },
+export const FileGlyph = () => h("svg", { viewBox: "0 0 16 16", fill: "none", stroke: "currentColor", strokeWidth: 1.2, "aria-hidden": true },
 	h("path", { d: "M4 1.8h5.2L12.5 5v9.2H4z" }),
 	h("path", { d: "M9.2 1.8V5h3.3" }),
 );

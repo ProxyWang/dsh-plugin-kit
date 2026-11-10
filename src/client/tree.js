@@ -1,14 +1,20 @@
 /* ---------------- workspace file tree panel ---------------- */
 
-import { Fragment, h, useCallback, useEffect, useState } from "./react.js";
+import { Fragment, h, useCallback, useEffect, useRef, useState } from "./react.js";
 import { api } from "./api.js";
-import { IconFile, IconFolder } from "./icons.js";
-import { toAbs } from "./pathtools.js";
+import { IconFolder } from "./icons.js";
+import { FileGlyph, fileTint } from "./changetree.js";
+import { ancestorDirs, canDropInto, parentDir, toAbs } from "./pathtools.js";
 
-export function TreePanel({ cwd, t, onOpenFile, activePath, refreshKey, onNotify, onDeleted }) {
+export function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshKey, onNotify, onDeleted }) {
 	const [listing, setListing] = useState({});
 	const [expanded, setExpanded] = useState([]);
 	const [action, setAction] = useState(null); // {kind: newfile|newdir|rename|delete, path, value}
+	const [dragPath, setDragPath] = useState(null); // path being dragged (move source)
+	const [dropDir, setDropDir] = useState(null); // dir currently highlighted as drop target
+	const railRef = useRef(null);
+	const lastRevealed = useRef(null);
+	const revealTick = useRef(null);
 	const loadDir = useCallback((path) => {
 		setListing((current) => ({ ...current, [path]: { loading: true } }));
 		api("fs.list", { cwd, path }).then((res) => {
@@ -21,6 +27,37 @@ export function TreePanel({ cwd, t, onOpenFile, activePath, refreshKey, onNotify
 		setAction(null);
 		loadDir("");
 	}, [cwd, refreshKey, loadDir]);
+	// VSCode-style auto reveal: opening a file (from search, quick-open, an LSP
+	// jump…) expands its ancestor chain and scrolls the row into view. Runs
+	// once per path/refresh — reloads the chain so it also works right after
+	// a tree refresh cleared the listings.
+	useEffect(() => {
+		const p = typeof revealPath === "string" && revealPath !== "" ? revealPath : null;
+		if (!p) return;
+		const tick = `${refreshKey}`;
+		if (p === lastRevealed.current && tick === revealTick.current) return;
+		lastRevealed.current = p;
+		revealTick.current = tick;
+		const chain = ancestorDirs(p);
+		if (chain.length === 0) return;
+		setExpanded((prev) => {
+			const next = new Set(prev);
+			for (const d of chain) next.add(d);
+			return [...next];
+		});
+		for (const d of chain) loadDir(d);
+	}, [revealPath, refreshKey, loadDir]);
+	// Scroll once the rows exist: retried whenever listings/expansion settle.
+	useEffect(() => {
+		const p = typeof revealPath === "string" && revealPath !== "" ? revealPath : null;
+		if (!p || typeof CSS === "undefined") return undefined;
+		const raf = requestAnimationFrame(() => {
+			try {
+				railRef.current?.querySelector(`[data-tp="${CSS.escape(p)}"]`)?.scrollIntoView({ block: "nearest" });
+			} catch { /* escape unsupported */ }
+		});
+		return () => cancelAnimationFrame(raf);
+	}, [revealPath, listing, expanded]);
 	const toggle = (path) => {
 		if (expanded.includes(path)) {
 			setExpanded(expanded.filter((p) => p !== path));
@@ -71,6 +108,60 @@ export function TreePanel({ cwd, t, onOpenFile, activePath, refreshKey, onNotify
 			setAction(null);
 		});
 	};
+	// Drag-move: drop onto a folder (or the panel background for the root)
+	// renames the entry into it; both directories refresh afterwards.
+	const runMove = (from, toDir) => {
+		const name = from.split("/").pop();
+		const to = toDir === "" ? name : `${toDir}/${name}`;
+		if (to === from) return;
+		const srcDir = parentDir(from);
+		api("fs.rename", { cwd, path: from, to }).then((res) => {
+			if (!res.ok || res.value?.error) {
+				onNotify?.(`${t("error")}: ${res.value?.error ?? res.error}`, "error");
+				return;
+			}
+			onNotify?.(t("tree.moved"));
+			loadDir(srcDir);
+			loadDir(toDir);
+		});
+	};
+	const dragProps = (path) => ({
+		draggable: true,
+		onDragStart: (e) => {
+			setDragPath(path);
+			try {
+				e.dataTransfer.setData("text/plain", path);
+				e.dataTransfer.effectAllowed = "move";
+			} catch { /* older browsers */ }
+		},
+		onDragEnd: () => {
+			setDragPath(null);
+			setDropDir(null);
+		},
+	});
+	const dropProps = (dirPath) => ({
+		onDragOver: (e) => {
+			if (!dragPath || !canDropInto(dragPath, dirPath)) return;
+			e.preventDefault();
+			e.stopPropagation();
+			try {
+				e.dataTransfer.dropEffect = "move";
+			} catch {}
+			if (dropDir !== dirPath) setDropDir(dirPath);
+		},
+		onDragLeave: (e) => {
+			e.stopPropagation();
+			if (dropDir === dirPath) setDropDir(null);
+		},
+		onDrop: (e) => {
+			e.preventDefault();
+			e.stopPropagation();
+			const from = dragPath;
+			setDragPath(null);
+			setDropDir(null);
+			if (from && canDropInto(from, dirPath)) runMove(from, dirPath);
+		},
+	});
 	const depthOf = (path) => (path === "" ? 0 : path.split("/").length);
 	// Clipboard copy: plain click → absolute path, ⌥/Alt-click → workspace-relative.
 	const copyPath = (path, event) => {
@@ -178,7 +269,16 @@ export function TreePanel({ cwd, t, onOpenFile, activePath, refreshKey, onNotify
 				rows.push(
 					h(
 						"button",
-						{ key: childPath, className: "ce-row", style: { paddingLeft: 6 + depth * 14 }, onClick: () => toggle(childPath), type: "button" },
+						{
+							key: childPath,
+							"data-tp": childPath,
+							className: `ce-row${dropDir === childPath ? " ce-row-drop" : ""}`,
+							style: { paddingLeft: 6 + depth * 14 },
+							onClick: () => toggle(childPath),
+							type: "button",
+							...dragProps(childPath),
+							...dropProps(childPath),
+						},
 						h("span", { className: "ce-ico" }, h(IconFolder, { open })),
 						h("span", { className: "ce-name" }, entry.name),
 						acts(childPath, true),
@@ -194,12 +294,14 @@ export function TreePanel({ cwd, t, onOpenFile, activePath, refreshKey, onNotify
 						"button",
 						{
 							key: childPath,
+							"data-tp": childPath,
 							className: `ce-row${activePath && (activePath === childPath || activePath.endsWith(`/${childPath}`)) ? " ce-active" : ""}`,
 							style: { paddingLeft: 6 + depth * 14 },
 							type: "button",
 							onClick: () => onOpenFile(childPath, 1, 1),
+							...dragProps(childPath),
 						},
-						h("span", { className: "ce-ico" }, h(IconFile)),
+						h("span", { className: `cet-fico ce-tree-ico ${fileTint(childPath)}` }, h(FileGlyph)),
 						h("span", { className: "ce-name" }, entry.name),
 						acts(childPath, false),
 					),
@@ -210,14 +312,32 @@ export function TreePanel({ cwd, t, onOpenFile, activePath, refreshKey, onNotify
 		if (!rows.length) rows.push(h("div", { key: `${path}-e`, className: "ce-note", style: { paddingLeft: 8 + depth * 14 } }, t("tree.empty")));
 		return h(Fragment, { key: path }, rows);
 	};
-	return h("div", { className: "ce-scroll ce-rail" },
-		h("div", { className: "ctp-tools" },
-			h("button", { type: "button", className: "cet-act cet-act-show", title: t("tree.newFileRoot"), onClick: () => setAction({ kind: "newfile", path: "", value: "" }) }, `+ ${t("tree.fileWord")}`),
-			h("button", { type: "button", className: "cet-act cet-act-show", title: t("tree.newDirRoot"), onClick: () => setAction({ kind: "newdir", path: "", value: "" }) }, `+ ${t("tree.dirWord")}`),
-		),
-		action !== null && (action.kind === "newfile" || action.kind === "newdir") && action.path === ""
-			? inputRow("", action.kind === "newdir" ? "dir" : "file", action.kind === "newdir" ? t("tree.newDirPlaceholder") : t("tree.newFilePlaceholder"))
-			: null,
-		renderLevel("", 0),
+	return h("div", {
+		className: "ce-scroll ce-rail",
+		ref: railRef,
+		onDragOver: (e) => {
+			if (!dragPath || !canDropInto(dragPath, "")) return;
+			e.preventDefault();
+			try {
+				e.dataTransfer.dropEffect = "move";
+			} catch {}
+		},
+		onDrop: (e) => {
+			if (!dragPath) return;
+			e.preventDefault();
+			const from = dragPath;
+			setDragPath(null);
+			setDropDir(null);
+			if (canDropInto(from, "")) runMove(from, "");
+		},
+	},
+	h("div", { className: "ctp-tools" },
+		h("button", { type: "button", className: "cet-act cet-act-show", title: t("tree.newFileRoot"), onClick: () => setAction({ kind: "newfile", path: "", value: "" }) }, `+ ${t("tree.fileWord")}`),
+		h("button", { type: "button", className: "cet-act cet-act-show", title: t("tree.newDirRoot"), onClick: () => setAction({ kind: "newdir", path: "", value: "" }) }, `+ ${t("tree.dirWord")}`),
+	),
+	action !== null && (action.kind === "newfile" || action.kind === "newdir") && action.path === ""
+		? inputRow("", action.kind === "newdir" ? "dir" : "file", action.kind === "newdir" ? t("tree.newDirPlaceholder") : t("tree.newFilePlaceholder"))
+		: null,
+	renderLevel("", 0),
 	);
 }
