@@ -1,5 +1,30 @@
 # Changelog
 
+## 1.4.0 (2026-11-11)
+
+Second competitor-parity round: the remaining VSCode / GitLens / Postman gaps.
+
+### Added
+
+- **Find widget (⌘F)**: `Aa` match-case, `ab|` whole-word and `.*` regex toggles (VSCode parity); invalid patterns show a hint instead of silently matching nothing; matches flash their actual matched text; options persist per session.
+- **Workspace replace**: ▸ toggle in the search panel reveals a replace row — per-file ⇄ action and Replace All with a two-step confirm showing the file count; literal replacements keep `$` literal while regex mode honors `$1`/`$&`; every write goes through the `baseMtime` guard so external edits are never clobbered; capped at 200 files per run with a summary toast.
+- **Staged diff scope**: `git.diff scope:"staged"` (index vs HEAD); staged-section rows open it, with its own chip label.
+- **Git stash suite**: `git.stash.list/save/apply/pop/drop` routes (ref-validated, deterministic nothing-to-stash pre-check incl. the untracked-only case, conflict-tolerant apply/pop); collapsible 贮藏 section in the Changes panel with inline message input, include-untracked checkbox, and Apply/Pop/Drop (two-step) per row.
+- **File history (GitLens-style)**: `git.history` route (`log --follow`, relative dates); 🕘 head button opens the history overlay; clicking a commit shows that commit's diff **scoped to the file** (`git.diff` commit scope gained an optional path filter).
+- **Hunk-level revert**: `git.revertHunk` re-derives the patch fresh and reverse-applies it via `git apply -R -` (stdin; worktree-only, index untouched); ⟲ button on every hunk row in both diff views, working scope only.
+- **Editor tabs**: open files join a tab strip (dedup, capped 15, persisted); switching restores per-tab cursor+scroll; middle-click or ✕ closes with neighbor fallback; unsaved-edit guard; file/folder deletion evicts tabs.
+- **File tree**: drag-to-move (files and folders, root drop included) with canDropInto guards and drop-target highlight; auto-reveal expands ancestors and scrolls to the file opened from search/quick-open/LSP jumps; type-tinted file glyphs shared with the changes tree.
+- **API tester**: collapsible Query Params table (merged into the URL at send and in copy-as-curl, same-name override, fragment preserved) and a per-request timeout input (clamped 1–120 s); both persist in drafts, history and favorites.
+
+### Changed
+
+- `openDiffSource` always reloads from the host (mtime LRU keeps it cheap) — the source view can no longer show stale content after a hunk revert or external edit.
+- `parseDiff` drops the trailing empty segment, removing the phantom context row at every diff tail.
+
+### Tests
+
+- 45+ new assertions across the round: find matcher (smart-case/words/regex/zero-length), replace engine ($-escaping, capture refs, multiline anchors), staged scope, stash flow (incl. untracked sweep + pop restore), history + scoped commit diff, revertHunk (two-hunk selectivity, range/fence errors), tab list algebra, mergeParams, tree drag/reveal helpers, DiffView revert wiring.
+
 ## 1.3.0 (2026-11-11)
 
 Competitor-parity round: every module benchmarked against VSCode / GitLens / Postman and closed to the gap.
