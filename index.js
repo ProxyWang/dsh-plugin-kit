@@ -1,8 +1,8 @@
 /**
- * Host half of @local/dsh-code-explorer.
+ * Host half of dsh-plugin-kit.
  *
  * Serves one JSON API prefix `/code-explorer/api` for this package's Client
- * half (same private-route pattern the installed dsh-inline-diff bundle uses):
+ * half (private-route pattern: one prefix handler dispatching a route table):
  *
  *   POST fs.list        {cwd, path}   → directory entries (workspace-fenced)
  *   POST fs.read        {cwd, path}   → bounded text (workspace-fenced)
@@ -25,8 +25,12 @@ import { readJsonBody, respondJson } from "./lib/host/http.js";
 import { textCache } from "./lib/host/fence.js";
 import { servers } from "./lib/host/lsp.js";
 import { routes } from "./lib/host/routes.js";
+import { setSkillsRegistry } from "./lib/host/skills.js";
 
 function apply(ctx) {
+	ctx.inject(["skills"], (skillsCtx) => {
+		setSkillsRegistry(skillsCtx.skills);
+	});
 	ctx.inject(["webServer"], (webCtx) => {
 		const webServer = webCtx.webServer;
 		ctx.effect(() => {

@@ -1,8 +1,12 @@
 {
-  "name": "@local/dsh-code-explorer",
-  "version": "1.0.0",
-  "description": "Harness code explorer panel: workspace file tree, quick-open file picker, full-text search, VSCode-style editor with gopls definition/references/hover jumps, and branch changes diff view.",
-  "private": true,
+  "name": "dsh-plugin-kit",
+  "version": "1.1.0",
+  "description": "Harness dev toolbox panel: workspace file tree with create/rename/delete, code editor with save, full-text search, gopls jumps and blame column, git changes with whole-file diff marks and change rail, branch switcher, skills manager, and a Postman-style API tester with curl import.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://gitee.com/wang-jun-07/dsh-plugin-kit.git"
+  },
   "type": "module",
   "exports": {
     ".": "./index.js",
@@ -25,15 +29,20 @@
     }
   },
   "scripts": {
-    "test": "node test-host.mjs && node test-client.mjs && node test-search.mjs && node test-nested.mjs && node test-parent.mjs && node test-remote.mjs"
+    "build": "node scripts/build-client.mjs",
+    "test": "node scripts/build-client.mjs && node test-host.mjs && node test-client.mjs && node test-search.mjs && node test-nested.mjs && node test-parent.mjs && node test-remote.mjs"
   },
   "icon": "icon.svg",
   "files": [
     "index.js",
     "client.js",
+    "src/client/*.js",
     "lib/host/*.js",
     "cordis.patch.yml",
     "locale/*.json",
     "icon.svg"
-  ]
+  ],
+  "devDependencies": {
+    "esbuild": "^0.28.2"
+  }
 }

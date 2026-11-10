@@ -1,4 +1,4 @@
 - insert:
     - id: code-explorer
-      name: '@local/dsh-code-explorer'
+      name: 'dsh-plugin-kit'
       config: {}

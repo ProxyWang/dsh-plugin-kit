@@ -1,6 +1,6 @@
 {
   "meta": {
-    "title": "Code Explorer",
-    "description": "Right-sidebar code browsing: workspace file tree, quick-open file picker (⌘P), full-text search (⇧⌘F), VSCode-style editor with gopls definition/references/hover and a click-to-peek references window, current-branch change diffs; navigate forward/back with ⌘] / ⌘[."
+    "title": "Dev Toolbox",
+    "description": "Right-sidebar development toolbox: workspace file tree, code editor with save (⌘S), full-text search (⇧⌘F), find-in-file (⌘F), gopls definition/references jumps, git & call diffs over the whole file (changed-line marks, folded deletion bars), skills manager (view/edit/create/delete SKILL.md), grouped sidebar launcher; forward/back via ⌘] / ⌘[."
   }
 }

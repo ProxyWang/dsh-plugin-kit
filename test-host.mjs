@@ -1,7 +1,7 @@
 // Drives the host half through a fake webServer to exercise every route.
 import { Readable } from "node:stream";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, writeFileSync, appendFileSync, rmSync } from "node:fs";
+import { mkdirSync, writeFileSync, appendFileSync, rmSync, symlinkSync, existsSync } from "node:fs";
 
 const fixture = "/tmp/ce-test";
 const cleanupFixture = () => { try { rmSync(fixture, { recursive: true, force: true }); } catch {} };
@@ -44,6 +44,9 @@ const ctx = {
 			registered.push(route);
 			return () => {};
 		},
+	},
+	skills: {
+		list: async () => [{ name: "registry-fake", description: "from registry", provider: "office-plugin" }],
 	},
 };
 
@@ -140,6 +143,144 @@ check("commit diff of 'add version var'", cd.ok && cd.value.scope === "commit" &
 
 const cBad = await call("git.diff", { cwd, path: "main.go", scope: "commit", sha: "deadbeefdeadbeef" });
 check("unknown commit refused", cBad.ok && cBad.value.error === "unknown commit", cBad);
+
+// --- fs.write (editor save) ---------------------------------------------------------------
+const origMain = (await call("fs.read", { cwd, path: "main.go" })).value.content;
+const wres = await call("fs.write", { cwd, path: "main.go", content: `${origMain}// edited\n` });
+check("fs.write ok", wres.ok && wres.value.size > 0, wres);
+const rback = await call("fs.read", { cwd, path: "main.go" });
+check("fs.write roundtrip", rback.ok && rback.value.content.endsWith("// edited\n"), rback);
+const wesc = await call("fs.write", { cwd, path: "../evil.go", content: "x" });
+check("fs.write fenced", wesc.ok === false, wesc);
+const wmiss = await call("fs.write", { cwd, path: "nope.go", content: "x" });
+check("fs.write refuses missing file", wmiss.ok === false, wmiss);
+await call("fs.write", { cwd, path: "main.go", content: origMain });
+
+// --- git.discard (revert changes, never delete) -------------------------------------------
+const curMain = (await call("fs.read", { cwd, path: "main.go" })).value.content;
+writeFileSync(`${cwd}/main.go`, `${curMain}// dirty again\n`);
+const dRes = await call("git.discard", { cwd, path: "main.go", ch: "M" });
+const dRead = await call("fs.read", { cwd, path: "main.go" });
+check("git.discard restores HEAD content", dRes.ok && dRead.value.content === curMain, dRes);
+writeFileSync(`${cwd}/staged.go`, "package main\n");
+git(["add", "staged.go"]);
+const aRes = await call("git.discard", { cwd, path: "staged.go", ch: "A" });
+const aStatus = await call("git.status", { cwd });
+check("git.discard unstages added file without deleting", aRes.ok && existsSync(`${cwd}/staged.go`) && aStatus.value.working.some((w) => w.path === "staged.go" && w.xy.trim() === "??"), aStatus.value.working);
+const dEsc = await call("git.discard", { cwd, path: "../evil.go", ch: "M" });
+check("git.discard fenced", dEsc.ok === false, dEsc);
+
+// --- git.branches / git.checkout ------------------------------------------------------------
+const bList = await call("git.branches", { cwd });
+check("git.branches lists locals with current flag", bList.ok && bList.value.branches.some((b) => b.name === "feature" && b.current === true) && bList.value.branches.some((b) => b.name === "master" && b.current === false), bList.value?.branches);
+const bCo = await call("git.checkout", { cwd, branch: "master" });
+check("git.checkout switches branch", bCo.ok && bCo.value.status.branch === "master", bCo);
+const bBack = await call("git.checkout", { cwd, branch: "feature" });
+check("git.checkout switches back", bBack.ok && bBack.value.status.branch === "feature", bBack);
+const bBad = await call("git.checkout", { cwd, branch: "--help" });
+check("git.checkout rejects flag-like names", bBad.ok === true && bBad.value?.error === "invalid branch name", bBad);
+
+// --- git.blame ------------------------------------------------------------------------------
+const blameRes = await call("git.blame", { cwd, path: "main.go" });
+const mainContent = (await call("fs.read", { cwd, path: "main.go" })).value.content;
+const expectedLines = mainContent.endsWith("\n") ? mainContent.split("\n").length - 1 : mainContent.split("\n").length;
+check("git.blame per-line attribution", blameRes.ok && blameRes.value.lines.length === expectedLines && blameRes.value.lines.every((l) => l.author === "t" && /^[0-9a-f]{40}$/.test(l.sha)), blameRes.value?.lines?.slice(0, 2));
+
+// --- api.send proxy -------------------------------------------------------------------------
+const http = await import("node:http");
+const srv = http.createServer((req, res) => {
+	const chunks = [];
+	req.on("data", (c) => chunks.push(c));
+	req.on("end", () => {
+		const received = Buffer.concat(chunks).toString("utf8");
+		res.writeHead(200, { "content-type": "application/json" });
+		res.end(JSON.stringify({ method: req.method, body: received, header: req.headers["x-t"] ?? null }));
+	});
+});
+await new Promise((resolveListen) => srv.listen(0, "127.0.0.1", resolveListen));
+const echoPort = srv.address().port;
+const sRes = await call("api.send", { method: "POST", url: `http://127.0.0.1:${echoPort}/echo`, headers: [{ name: "X-T", value: "v1" }], body: "{\"hi\":1}" });
+check("api.send posts headers+body and reads json", sRes.ok && sRes.value.status === 200 && JSON.parse(sRes.value.text).header === "v1" && JSON.parse(sRes.value.text).body === "{\"hi\":1}", sRes);
+const sBad = await call("api.send", { method: "GET", url: "ftp://x/y" });
+check("api.send rejects non-http schemes", sBad.ok === true && Boolean(sBad.value?.error), sBad);
+srv.close();
+
+// --- read scope: sibling roots allowed for reads, never for writes ------------------------
+mkdirSync("/tmp/ce-sib", { recursive: true });
+writeFileSync("/tmp/ce-sib/lib.go", "package sib\n");
+const sibRead = await call("fs.read", { cwd, path: "../ce-sib/lib.go" });
+check("fs.read allows sibling root", sibRead.ok && sibRead.value.content.includes("package sib"), sibRead);
+const sibWrite = await call("fs.write", { cwd, path: "../ce-sib/lib.go", content: "x" });
+check("fs.write stays workspace-only", sibWrite.ok === false, sibWrite);
+const sibList = await call("fs.list", { cwd, path: "../ce-sib" });
+check("fs.list stays workspace-only", sibList.ok === false, sibList);
+rmSync("/tmp/ce-sib", { recursive: true, force: true });
+
+// --- fs.create / fs.rename / fs.delete -------------------------------------------------------
+const cNew = await call("fs.create", { cwd, path: "newdir/sub.txt", kind: "file" });
+check("fs.create refuses missing parent", cNew.ok === false, cNew);
+const cDir = await call("fs.create", { cwd, path: "newdir", kind: "dir" });
+const cFile = await call("fs.create", { cwd, path: "newdir/sub.txt", kind: "file" });
+check("fs.create dir+file", cDir.ok && cFile.ok, [cDir, cFile]);
+const cDup = await call("fs.create", { cwd, path: "newdir/sub.txt", kind: "file" });
+check("fs.create refuses existing", cDup.value?.error === "path already exists", cDup);
+const rRen = await call("fs.rename", { cwd, path: "newdir/sub.txt", to: "newdir/renamed.txt" });
+const rRead = await call("fs.read", { cwd, path: "newdir/renamed.txt" });
+check("fs.rename moves file", rRen.ok && rRead.ok, rRen);
+const rOver = await call("fs.rename", { cwd, path: "newdir/renamed.txt", to: "main.go" });
+check("fs.rename refuses existing target", rOver.value?.error === "target already exists", rOver);
+const dDel = await call("fs.delete", { cwd, path: "newdir" });
+const dList = await call("fs.list", { cwd, path: "" });
+check("fs.delete removes dir recursive", dDel.ok && !dList.value.entries.some((e) => e.name === "newdir"), dDel);
+const dRoot = await call("fs.delete", { cwd, path: "." });
+check("fs.delete refuses workspace root", dRoot.value?.error === "cannot delete the workspace root", dRoot);
+
+// --- skills manager routes ---------------------------------------------------------------
+process.env.DSH_CE_HOME = `${cwd}-home`;
+mkdirSync("/tmp/ce-bundled-skills/office-fake", { recursive: true });
+writeFileSync("/tmp/ce-bundled-skills/office-fake/SKILL.md", "---\nname: office-fake\ndescription: \"bundled\"\n---\n");
+process.env.DSH_BUNDLED_SKILL_DIR = "/tmp/ce-bundled-skills";
+mkdirSync(`${cwd}/.agents/skills/demo-skill`, { recursive: true });
+writeFileSync(`${cwd}/.agents/skills/demo-skill/SKILL.md`, "---\nname: demo-skill\ndescription: \"demo\"\n---\n\nbody\n");
+mkdirSync(`${cwd}-home/.agents/skills/home-skill`, { recursive: true });
+writeFileSync(`${cwd}-home/.agents/skills/home-skill/SKILL.md`, "---\nname: home-skill\ndescription: \"from home\"\n---\n\nhome body\n");
+mkdirSync(`${cwd}/.agents/skills/block-skill`, { recursive: true });
+writeFileSync(`${cwd}/.agents/skills/block-skill/SKILL.md`, "---\nname: block-skill\ndescription: >-\n  folded one\n  two lines\n---\n\nx\n");
+
+const sList = await call("skills.list", { cwd });
+check("skills.list finds project + user skills", sList.ok && sList.value.skills.some((s) => s.name === "demo-skill" && s.source === "project-agents") && sList.value.skills.some((s) => s.name === "home-skill" && s.source === "user-agents"), sList);
+check("skills.list folds block-scalar descriptions", sList.ok && sList.value.skills.find((s) => s.name === "block-skill")?.description === "folded one two lines", sList.value.skills.find((s) => s.name === "block-skill"));
+check("skills.list includes bundled root", sList.ok && sList.value.skills.some((s) => s.name === "office-fake" && s.source === "bundled"), sList.value.skills.find((s) => s.name === "office-fake"));
+const bundledItem = sList.value.skills.find((s) => s.name === "office-fake");
+const bWrite = await call("skills.write", { cwd, path: bundledItem.path, content: "x" });
+check("bundled skills are read-only", bWrite.ok === false && /read-only/.test(bWrite.error ?? ""), bWrite);
+check("skills.list merges registry-only entries as other", sList.ok && sList.value.skills.some((s) => s.name === "registry-fake" && s.source === "other" && s.provider === "office-plugin"), sList.value.skills.find((s) => s.name === "registry-fake"));
+const demo = sList.value.skills.find((s) => s.name === "demo-skill");
+const sRead = await call("skills.read", { cwd, path: demo.path });
+check("skills.read returns content", sRead.ok && sRead.value.content.includes("name: demo-skill"), sRead);
+const sWrite = await call("skills.write", { cwd, path: demo.path, content: `${sRead.value.content}more\n` });
+const sRead2 = await call("skills.read", { cwd, path: demo.path });
+check("skills.write persists", sWrite.ok && sRead2.ok && sRead2.value.content.endsWith("more\n"), sRead2);
+const sCreate = await call("skills.create", { cwd, name: "fresh-skill", scope: "user" });
+check("skills.create under home root", sCreate.ok && sCreate.value.path.startsWith(`${cwd}-home/`), sCreate);
+const sEscape = await call("skills.read", { cwd, path: "/etc/hosts" });
+check("skills.read fenced to roots", sEscape.ok === false, sEscape);
+const sBadName = await call("skills.create", { cwd, name: "../evil" });
+check("skills.create rejects bad name", sBadName.ok === false, sBadName);
+const sDel = await call("skills.delete", { cwd, path: sCreate.value.path.replace(/\/SKILL\.md$/, "") });
+const sList2 = await call("skills.list", { cwd });
+check("skills.delete removes dir skill", sDel.ok && !sList2.value.skills.some((s) => s.name === "fresh-skill"), sList2);
+const sDelCwd = await call("skills.delete", { cwd, path: cwd });
+check("skills.delete refuses non-skill dir", sDelCwd.ok === false, sDelCwd);
+const sDelByFile = await call("skills.delete", { cwd, path: demo.path });
+const sList3 = await call("skills.list", { cwd });
+check("skills.delete accepts SKILL.md locator", sDelByFile.ok && !sList3.value.skills.some((s) => s.name === "demo-skill"), sDelByFile);
+mkdirSync(`${cwd}-home/.agents/skills/real-skill`, { recursive: true });
+writeFileSync(`${cwd}-home/.agents/skills/real-skill/SKILL.md`, "---\nname: real-skill\n---\n");
+symlinkSync(`${cwd}-home/.agents/skills/real-skill`, `${cwd}/.agents/skills/linked-skill`);
+const sDelLink = await call("skills.delete", { cwd, path: `${cwd}/.agents/skills/linked-skill/SKILL.md` });
+check("skills.delete on symlink removes link only", sDelLink.ok && !existsSync(`${cwd}/.agents/skills/linked-skill`) && existsSync(`${cwd}-home/.agents/skills/real-skill/SKILL.md`), sDelLink);
+rmSync(`${cwd}-home`, { recursive: true, force: true });
 
 for (const cleanup of cleanups) cleanup();
 console.log(`\n${pass} passed, ${fail} failed`);
