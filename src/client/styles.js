@@ -129,6 +129,7 @@ export const CSS = `
 .ce-bp-act{flex:none;border:.5px solid var(--dsw-alias-border-l2,#444);background:transparent;color:var(--dsw-alias-label-secondary,#999);border-radius:6px;font:inherit;font-size:11px;padding:3px 9px;cursor:pointer}
 .ce-bp-act:hover{color:var(--dsw-alias-label-primary,#ddd);background:var(--dsw-alias-interactive-bg-hover,#2b2b2b)}
 .ce-bp-act:disabled{opacity:.45;cursor:default}
+.ce-bp-push{color:var(--dsw-alias-brand-primary,#6cb2ff);border-color:color-mix(in srgb,var(--dsw-alias-brand-primary,#59b7ff) 45%,transparent)}
 .ce-palette-head{display:flex;align-items:center;gap:6px;padding:8px}
 .ce-input{flex:1;min-width:0;background:var(--dsw-alias-bg-layer-1,#1e2126);border:.5px solid var(--dsw-alias-border-l2,#444);border-radius:6px;color:var(--dsw-alias-label-primary,#ddd);padding:6px 9px;font:inherit;outline:none}
 .ce-input:focus{border-color:var(--dsw-alias-brand-primary,#59b7ff)}

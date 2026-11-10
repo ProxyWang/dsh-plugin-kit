@@ -84,10 +84,40 @@ sh("git", ["checkout", "-q", "-b", "main2", "origin/main2", "--no-track"], `${ro
 const stB2 = await call("git.status", { cwd: `${root}/B` });
 check("B inferred upstream origin/main2 auto", stB2.ok && stB2.value.upstream === "origin/main2" && stB2.value.upstreamInferred === true, stB2);
 
-// detached HEAD pull refused cleanly.
+// --- git.push ---------------------------------------------------------------------
+sh("git", ["config", "user.email", "t@t"], `${root}/A`);
+sh("git", ["config", "user.name", "t"], `${root}/A`);
+// A: new local commit then push → origin/main advances, ahead back to 0.
+sh("sh", ["-c", "printf 'package m\\n\\nvar A = 1\\nvar B = 2\\nvar D = 4\\n' > a.go"], `${root}/A`);
+sh("git", ["commit", "-qam", "c3-from-A"], `${root}/A`);
+const stA1 = await call("git.status", { cwd: `${root}/A` });
+check("A ahead 1 before push", stA1.ok && stA1.value.ahead === 1, stA1.value && { ahead: stA1.value.ahead });
+const pushA = await call("git.push", { cwd: `${root}/A` });
+check("A push succeeds, ahead back to 0", pushA.ok && !pushA.value.error && pushA.value.status.ahead === 0, pushA);
+const originLog = sh("git", ["--git-dir", `${root}/origin.git`, "log", "--format=%s", "-1", "main"]);
+check("origin/main received the pushed commit", /c3-from-A/.test(originLog), originLog);
+
+// Publish: brand-new branch without upstream → push -u creates tracking.
+sh("git", ["checkout", "-q", "-b", "feature-x"], `${root}/A`);
+sh("sh", ["-c", "printf 'x\\n' > x.txt && git add x.txt && git commit -qm feat-x"], `${root}/A`);
+const stA2 = await call("git.status", { cwd: `${root}/A` });
+check("feature-x starts without upstream", stA2.ok && stA2.value.upstream === null, stA2.value && stA2.value.upstream);
+const pubA = await call("git.push", { cwd: `${root}/A` });
+check("push publishes branch without upstream", pubA.ok && !pubA.value.error && pubA.value.published === true, pubA);
+const stA3 = await call("git.status", { cwd: `${root}/A` });
+check("published branch now tracks origin", stA3.ok && stA3.value.upstream === "origin/feature-x" && stA3.value.upstreamInferred === false, stA3.value && { up: stA3.value.upstream, inferred: stA3.value.upstreamInferred });
+
+// Non-fast-forward push is refused; nothing is forced.
+sh("git", ["checkout", "-q", "renamed"], `${root}/B`);
+const pushB = await call("git.push", { cwd: `${root}/B` });
+check("diverged push refused (never force)", pushB.ok && Boolean(pushB.value.error), pushB);
+
+// detached HEAD: pull and push both refused cleanly.
 sh("git", ["checkout", "-q", "--detach"], `${root}/A`);
 const pdet = await call("git.pull", { cwd: `${root}/A` });
 check("detached HEAD pull refused", pdet.ok && /detached/i.test(pdet.value.error || ""), pdet);
+const pdetPush = await call("git.push", { cwd: `${root}/A` });
+check("detached HEAD push refused", pdetPush.ok && /detached/i.test(pdetPush.value.error || ""), pdetPush);
 
 try { sh("rm", ["-rf", root]); } catch {}
 console.log(`\n${pass} passed, ${fail} failed`);

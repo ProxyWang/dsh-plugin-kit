@@ -248,6 +248,20 @@ check(
 );
 const cmtEmpty = await call("git.commit", { cwd, message: "   " });
 check("git.commit requires a message", cmtEmpty.ok && cmtEmpty.value?.error === "commit message is required", cmtEmpty);
+
+// amend rewrites the previous commit instead of adding one
+writeFileSync(`${cwd}/amend.txt`, "v1\n");
+await call("git.stage", { cwd, path: "amend.txt" });
+const cmtOrig = await call("git.commit", { cwd, message: "original subject" });
+check("pre-amend commit landed", cmtOrig.ok && /original subject/.test(cmtOrig.value.commit ?? ""), cmtOrig.value);
+writeFileSync(`${cwd}/amend.txt`, "v2\n");
+await call("git.stage", { cwd, path: "amend.txt" });
+const cmtAmend = await call("git.commit", { cwd, message: "amended subject", amend: true });
+check("git.commit amend returns amended flag + new subject", cmtAmend.ok && !cmtAmend.value.error && cmtAmend.value.amended === true && /amended subject/.test(cmtAmend.value.commit ?? ""), cmtAmend.value);
+const logTwo = execFileSync("git", ["-C", cwd, "log", "--format=%s", "-2"], { encoding: "utf8" });
+check("amend replaced instead of adding a commit", !/original subject/.test(logTwo) && /amended subject/.test(logTwo), logTwo);
+const amendedContent = execFileSync("git", ["-C", cwd, "show", "HEAD:amend.txt"], { encoding: "utf8" });
+check("amend folded the newly staged content", amendedContent.trim() === "v2", amendedContent);
 const cmtNone = await call("git.commit", { cwd, message: "nothing" });
 check("git.commit with nothing staged fails", cmtNone.ok && Boolean(cmtNone.value?.error) && Boolean(cmtNone.value?.status), cmtNone.value?.error);
 const stEsc = await call("git.stage", { cwd, path: "../evil.go" });

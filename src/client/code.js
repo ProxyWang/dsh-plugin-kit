@@ -181,7 +181,7 @@ export function CodeBody(props) {
 	}, [cwd]);
 
 	const loadFile = useCallback(
-		async (path, line, col, mark) => {
+		async (path, line, col, mark, opts) => {
 			if (!cwd) return null;
 			const res = await api("fs.read", { cwd, path });
 			if (!res.ok) {
@@ -266,6 +266,25 @@ export function CodeBody(props) {
 			} else {
 				symbolNonce.current++;
 			}
+			// VSCode parity: opening a file with uncommitted working-tree changes
+			// shows gutter marks right away, without going through the Changes
+			// list. Untracked files are skipped (whole-file green is noise).
+			if (!opts?.noAutoMarks) {
+				const markSeq = seq;
+				const repo = repoSelRef.current;
+				api("git.diff", repo ? { cwd, path, scope: "working", repo } : { cwd, path, scope: "working" })
+					.then((gres) => {
+						if (openSeqRef.current !== markSeq || modeRef.current !== "code") return;
+						const gval = gres.ok ? gres.value ?? {} : {};
+						if (gval.error || gval.untracked || !gval.diff) return;
+						const marks = changedNewLines(gval.diff);
+						const dels = deletedGroups(gval.diff);
+						if (marks.size === 0 && dels.size === 0) return;
+						setDiffMarks((cur) => (cur === null ? marks : cur));
+						setDelGroups((cur) => (cur === null ? dels : cur));
+					})
+					.catch(() => {});
+			}
 			// reveal after layout; mark drives the exact-token highlight
 			const markLine = mark?.line ?? clampLine;
 			requestAnimationFrame(() => {
@@ -344,6 +363,27 @@ export function CodeBody(props) {
 			void loadFile(cur.path, c?.line ?? 1, c?.col ?? 1);
 		}
 	}, [cwd, sync.busy, git, say, t, loadFile]);
+
+	// Push the current branch; when it has no upstream yet the host publishes
+	// it with -u (VSCode's "Publish branch"). Never force-pushes.
+	const doPush = useCallback(async () => {
+		if (!cwd || sync.busy) return;
+		setSync({ busy: true });
+		say(t("sync.pushing"));
+		const res = await api("git.push", repoSelRef.current ? { cwd, repo: repoSelRef.current } : { cwd });
+		setSync({ busy: false });
+		if (!res.ok) {
+			say(t("sync.pushFail", { msg: res.error }), "error");
+			return;
+		}
+		const value = res.value ?? {};
+		if (value.status) setGit(value.status);
+		if (value.error) {
+			say(t("sync.pushFail", { msg: value.error }), "error");
+			return;
+		}
+		say(value.published ? t("sync.published") : t("sync.pushed"));
+	}, [cwd, sync.busy, say, t]);
 
 	// A repo selection re-fetches that repo's full status.
 	useEffect(() => {
@@ -489,7 +529,7 @@ export function CodeBody(props) {
 		setDiff({ path, scope, text, base: res.ok ? res.value.base : void 0 });
 		setShowDiffView(false);
 		modeRef.current = "code";
-		await loadFile(path, first, 1);
+		await loadFile(path, first, 1, null, { noAutoMarks: true });
 		setDiffMarks(marks);
 		setDelGroups(deletedGroups(text));
 	}, [cwd, loadFile]);
@@ -552,7 +592,8 @@ export function CodeBody(props) {
 	const [committing, setCommitting] = useState(false);
 	// Commit the staged set; when nothing is staged the panel asks for a
 	// "stage all & commit" instead (stageAll), done here as two calls.
-	const commitChanges = useCallback(async (message, stageAll) => {
+	// amend rewrites the previous commit (never combined with stageAll).
+	const commitChanges = useCallback(async (message, stageAll, amend) => {
 		if (!cwd || committing) return false;
 		setCommitting(true);
 		try {
@@ -565,7 +606,7 @@ export function CodeBody(props) {
 				}
 				if (sres.value.status) setGit(sres.value.status);
 			}
-			const res = await api("git.commit", repo ? { cwd, message, repo } : { cwd, message });
+			const res = await api("git.commit", repo ? { cwd, message, amend: amend === true, repo } : { cwd, message, amend: amend === true });
 			const value = res.ok ? res.value ?? {} : { error: res.error };
 			if (value.status) setGit(value.status);
 			if (!res.ok || value.error) {
@@ -808,7 +849,7 @@ export function CodeBody(props) {
 		setShowDiffView(false);
 		const path = diff.path;
 		const needLoad = !docRef.current || docRef.current.path !== path;
-		const ready = needLoad ? loadFile(path, first, 1) : Promise.resolve();
+		const ready = needLoad ? loadFile(path, first, 1, null, { noAutoMarks: true }) : Promise.resolve();
 		void ready.then(() => {
 			setDiffMarks(marks);
 			setDelGroups(deletedGroups(diff.text));
@@ -1237,7 +1278,7 @@ export function CodeBody(props) {
 						onStageDir: (dirPath) => void stageChange(dirPath),
 						onUnstage: (item) => void unstageChange(item.path),
 						onUnstageDir: (dirPath) => void unstageChange(dirPath),
-						onCommit: (msg, stageAll) => commitChanges(msg, stageAll),
+						onCommit: (msg, stageAll, amend) => commitChanges(msg, stageAll, amend),
 						committing,
 						refresh: refreshGit,
 					}))
@@ -1410,6 +1451,7 @@ export function CodeBody(props) {
 				t,
 				onFetch: () => void doFetch(),
 				onPull: () => void doPull(),
+				onPush: () => void doPush(),
 				onClose: () => setBranchPickOpen(false),
 				onDone: (ok, err) => {
 					setBranchPickOpen(false);

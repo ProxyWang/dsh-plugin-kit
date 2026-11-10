@@ -203,6 +203,8 @@ const commitBtn = collect(commitBox ?? []).find((n) => n.props?.className === "c
 check("commit button targets the staged set", commitBtn && commitBtn.children.some((c) => String(c) === "✓ changes.commit"), commitBtn?.children);
 const commitInput = collect(commitBox ?? []).find((n) => n.props?.className === "ce-input ce-commitbox-msg");
 check("commit input placeholder for staged mode", commitInput?.props?.placeholder === "changes.commitPlaceholder", commitInput?.props);
+const amendBtn = collect(commitBox ?? []).find((n) => n.type === "button" && n.props?.title === "changes.amendTitle");
+check("commit box carries the amend toggle", Boolean(amendBtn) && amendBtn.children.includes("changes.amend"), amendBtn?.children);
 const panelNoStaged = ChangesPanel({
 	cwd: "/w", t: (k) => k,
 	git: { ...fakeGit, working: fakeGit.working.filter((f) => f.xy !== "M ") },

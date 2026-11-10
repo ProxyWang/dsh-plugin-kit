@@ -12,6 +12,7 @@ export function isStagedXy(xy) {
 export function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commitsOpen, setCommitsOpen, onOpenCommit, onOpenDiff, onDiscard, onDiscardDir, onStage, onStageDir, onUnstage, onUnstageDir, onCommit, committing, refresh }) {
 	const [treeView, setTreeView] = useState(true);
 	const [message, setMessage] = useState("");
+	const [amend, setAmend] = useState(false);
 	const selector = repos && repos.length > 0
 		? h(
 			"select",
@@ -36,13 +37,17 @@ export function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commit
 	);
 	// Enter (or the button) commits; with an empty index the button stages
 	// everything first, labelled explicitly so the behavior is no surprise.
+	// Amend mode rewrites the previous commit instead (never stage-all then).
 	const submit = () => {
 		const m = message.trim();
-		if (!m || committing || git.working.length === 0) return;
-		Promise.resolve(onCommit(m, staged.length === 0)).then((ok) => {
+		if (!m || committing) return;
+		if (!amend && git.working.length === 0) return;
+		Promise.resolve(onCommit(m, !amend && staged.length === 0, amend)).then((ok) => {
 			if (ok) setMessage("");
 		});
 	};
+	const commitDisabled = message.trim() === "" || committing || (!amend && git.working.length === 0);
+	const commitLabel = amend ? t("changes.amendCommit") : staged.length > 0 ? t("changes.commit") : t("changes.commitAll");
 	return h(
 		"div",
 		{ className: "ce-rail ce-scroll" },
@@ -51,10 +56,17 @@ export function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commit
 			? `${t("changes.vs")} ${git.upstream} · ↑${git.ahead ?? 0} ↓${git.behind ?? 0}${git.upstreamInferred ? " · auto" : ""}`
 			: t("sync.noUpstream")),
 		h("div", { className: "ce-commitbox" },
+			h("button", {
+				type: "button",
+				className: `ce-tool ce-tiny${amend ? " ce-tool-on" : ""}`,
+				title: t("changes.amendTitle"),
+				disabled: committing,
+				onClick: () => setAmend((v) => !v),
+			}, t("changes.amend")),
 			h("input", {
 				className: "ce-input ce-commitbox-msg",
 				type: "text",
-				placeholder: staged.length > 0 ? t("changes.commitPlaceholder") : t("changes.commitAllPlaceholder"),
+				placeholder: staged.length > 0 || amend ? t("changes.commitPlaceholder") : t("changes.commitAllPlaceholder"),
 				value: message,
 				disabled: committing,
 				spellcheck: false,
@@ -71,10 +83,10 @@ export function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commit
 			h("button", {
 				type: "button",
 				className: "ce-commitbox-btn",
-				disabled: message.trim() === "" || committing || git.working.length === 0,
-				title: staged.length > 0 ? t("changes.commit") : t("changes.commitAll"),
+				disabled: commitDisabled,
+				title: amend ? t("changes.amendTitle") : staged.length > 0 ? t("changes.commit") : t("changes.commitAll"),
 				onClick: submit,
-			}, committing ? t("changes.commitBusy") : `✓ ${staged.length > 0 ? t("changes.commit") : t("changes.commitAll")}`),
+			}, committing ? t("changes.commitBusy") : `✓ ${commitLabel}`),
 		),
 		staged.length > 0
 			? h(

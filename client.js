@@ -141,6 +141,9 @@ var zh = {
   "changes.unstageAll": "全部取消暂存",
   "changes.commit": "提交",
   "changes.commitAll": "全部暂存并提交",
+  "changes.amend": "amend",
+  "changes.amendTitle": "修补（amend）上一次提交：用当前信息替换其提交信息",
+  "changes.amendCommit": "amend 提交",
   "changes.commitPlaceholder": "提交信息（Enter 提交已暂存变更）",
   "changes.commitAllPlaceholder": "提交信息（Enter 将暂存全部变更并提交）",
   "changes.commitBusy": "正在提交…",
@@ -155,6 +158,8 @@ var zh = {
   "branch.pull": "pull",
   "branch.fetchTitle": "只取远端更新并刷新 ahead/behind，不改工作区与当前分支",
   "branch.pullTitle": "fetch 后快进合并到当前分支（ff-only，分叉时拒绝）",
+  "branch.push": "push",
+  "branch.pushTitle": "推送当前分支到远程（无上游时自动 publish -u；绝不 force）",
   "branch.checkedOut": "已切换分支",
   "blame.toggle": "行追溯（blame）：谁在何时改的每行",
   "blame.uncommitted": "未提交",
@@ -297,6 +302,10 @@ var zh = {
   "sync.localAhead": "本地领先 {n}，远程无新提交",
   "sync.detached": "分离 HEAD，不能拉取",
   "sync.diverged": "本地与远程已分叉：未做任何修改（本面板只做快进拉取，请用「变更」视图核对后自行 rebase/merge）",
+  "sync.pushing": "正在推送到远程…",
+  "sync.pushed": "已推送到远程 ✓",
+  "sync.published": "已发布分支并建立跟踪 ✓",
+  "sync.pushFail": "推送失败：{msg}",
   "symbols.placeholder": "跳转到符号（函数 / 类型）",
   "symbols.none": "无匹配符号（语言服务器可能仍在索引）",
   "symbols.crumb": "当前符号 — 打开符号列表",
@@ -376,6 +385,9 @@ var en = {
   "changes.unstageAll": "Unstage All",
   "changes.commit": "Commit",
   "changes.commitAll": "Stage All & Commit",
+  "changes.amend": "amend",
+  "changes.amendTitle": "Amend the previous commit: replaces its message with this one",
+  "changes.amendCommit": "Amend Commit",
   "changes.commitPlaceholder": "Message (Enter commits the staged changes)",
   "changes.commitAllPlaceholder": "Message (Enter stages all changes and commits)",
   "changes.commitBusy": "Committing…",
@@ -390,6 +402,8 @@ var en = {
   "branch.pull": "pull",
   "branch.fetchTitle": "Fetch remote updates only; refreshes ahead/behind without touching the worktree or current branch",
   "branch.pullTitle": "Fetch then fast-forward the current branch (ff-only; refuses when diverged)",
+  "branch.push": "push",
+  "branch.pushTitle": "Push the current branch (publishes with -u when no upstream; never force)",
   "branch.checkedOut": "Branch checked out",
   "blame.toggle": "Toggle blame: who changed each line, when",
   "blame.uncommitted": "uncommitted",
@@ -532,6 +546,10 @@ var en = {
   "sync.localAhead": "Local ahead by {n}; remote has nothing new",
   "sync.detached": "Detached HEAD; cannot pull",
   "sync.diverged": "Local and remote diverged; nothing was changed (this panel only fast-forwards — rebase or merge manually after reviewing Changes)",
+  "sync.pushing": "Pushing to remote…",
+  "sync.pushed": "Pushed to remote ✓",
+  "sync.published": "Branch published with tracking ✓",
+  "sync.pushFail": "Push failed: {msg}",
   "symbols.placeholder": "Go to symbol (function / type)",
   "symbols.none": "No matching symbols (server may still be indexing)",
   "symbols.crumb": "Current symbol — open symbol list",
@@ -998,7 +1016,7 @@ function MarkdownView({ text }) {
 }
 
 // src/client/branchpick.js
-function BranchPalette({ cwd, repo, current, t, onDone, onClose, onFetch, onPull }) {
+function BranchPalette({ cwd, repo, current, t, onDone, onClose, onFetch, onPull, onPush, canPush }) {
   const [query, setQuery] = useState("");
   const [list, setList] = useState(null);
   const [error, setError] = useState("");
@@ -1096,6 +1114,7 @@ function BranchPalette({ cwd, repo, current, t, onDone, onClose, onFetch, onPull
       }),
       h("button", { type: "button", className: "ce-bp-act", title: t("branch.fetchTitle"), disabled: busy, onClick: onFetch }, t("branch.fetch")),
       h("button", { type: "button", className: "ce-bp-act", title: t("branch.pullTitle"), disabled: busy, onClick: onPull }, t("branch.pull")),
+      onPush ? h("button", { type: "button", className: "ce-bp-act ce-bp-push", title: t("branch.pushTitle"), disabled: busy || canPush === false, onClick: onPush }, t("branch.push")) : null,
       h("button", { type: "button", className: "ce-tool ce-tiny", title: `${t("close")} (Esc)`, onClick: onClose }, "✕")
     ),
     h(
@@ -1601,6 +1620,7 @@ function isStagedXy(xy) {
 function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commitsOpen, setCommitsOpen, onOpenCommit, onOpenDiff, onDiscard, onDiscardDir, onStage, onStageDir, onUnstage, onUnstageDir, onCommit, committing, refresh }) {
   const [treeView, setTreeView] = useState(true);
   const [message, setMessage] = useState("");
+  const [amend, setAmend] = useState(false);
   const selector = repos && repos.length > 0 ? h(
     "select",
     { className: "ce-input ce-repo", value: repoSel ?? "", onChange: (event) => onSelectRepo(event.target.value || null) },
@@ -1623,11 +1643,14 @@ function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commitsOpen, 
   );
   const submit = () => {
     const m = message.trim();
-    if (!m || committing || git.working.length === 0) return;
-    Promise.resolve(onCommit(m, staged.length === 0)).then((ok) => {
+    if (!m || committing) return;
+    if (!amend && git.working.length === 0) return;
+    Promise.resolve(onCommit(m, !amend && staged.length === 0, amend)).then((ok) => {
       if (ok) setMessage("");
     });
   };
+  const commitDisabled = message.trim() === "" || committing || !amend && git.working.length === 0;
+  const commitLabel = amend ? t("changes.amendCommit") : staged.length > 0 ? t("changes.commit") : t("changes.commitAll");
   return h(
     "div",
     { className: "ce-rail ce-scroll" },
@@ -1636,10 +1659,17 @@ function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commitsOpen, 
     h(
       "div",
       { className: "ce-commitbox" },
+      h("button", {
+        type: "button",
+        className: `ce-tool ce-tiny${amend ? " ce-tool-on" : ""}`,
+        title: t("changes.amendTitle"),
+        disabled: committing,
+        onClick: () => setAmend((v) => !v)
+      }, t("changes.amend")),
       h("input", {
         className: "ce-input ce-commitbox-msg",
         type: "text",
-        placeholder: staged.length > 0 ? t("changes.commitPlaceholder") : t("changes.commitAllPlaceholder"),
+        placeholder: staged.length > 0 || amend ? t("changes.commitPlaceholder") : t("changes.commitAllPlaceholder"),
         value: message,
         disabled: committing,
         spellcheck: false,
@@ -1656,10 +1686,10 @@ function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commitsOpen, 
       h("button", {
         type: "button",
         className: "ce-commitbox-btn",
-        disabled: message.trim() === "" || committing || git.working.length === 0,
-        title: staged.length > 0 ? t("changes.commit") : t("changes.commitAll"),
+        disabled: commitDisabled,
+        title: amend ? t("changes.amendTitle") : staged.length > 0 ? t("changes.commit") : t("changes.commitAll"),
         onClick: submit
-      }, committing ? t("changes.commitBusy") : `✓ ${staged.length > 0 ? t("changes.commit") : t("changes.commitAll")}`)
+      }, committing ? t("changes.commitBusy") : `✓ ${commitLabel}`)
     ),
     staged.length > 0 ? h(
       Fragment,
@@ -2493,7 +2523,7 @@ function CodeBody(props) {
     setTimeout(pull, 4500);
   }, [cwd]);
   const loadFile = useCallback(
-    async (path, line, col, mark) => {
+    async (path, line, col, mark, opts) => {
       if (!cwd) return null;
       const res = await api("fs.read", { cwd, path });
       if (!res.ok) {
@@ -2575,6 +2605,21 @@ function CodeBody(props) {
       } else {
         symbolNonce.current++;
       }
+      if (!opts?.noAutoMarks) {
+        const markSeq = seq;
+        const repo = repoSelRef.current;
+        api("git.diff", repo ? { cwd, path, scope: "working", repo } : { cwd, path, scope: "working" }).then((gres) => {
+          if (openSeqRef.current !== markSeq || modeRef.current !== "code") return;
+          const gval = gres.ok ? gres.value ?? {} : {};
+          if (gval.error || gval.untracked || !gval.diff) return;
+          const marks = changedNewLines(gval.diff);
+          const dels = deletedGroups(gval.diff);
+          if (marks.size === 0 && dels.size === 0) return;
+          setDiffMarks((cur) => cur === null ? marks : cur);
+          setDelGroups((cur) => cur === null ? dels : cur);
+        }).catch(() => {
+        });
+      }
       const markLine = mark?.line ?? clampLine;
       requestAnimationFrame(() => {
         scrollAreaToLine(Math.max(1, markLine));
@@ -2649,6 +2694,24 @@ function CodeBody(props) {
       void loadFile(cur.path, c?.line ?? 1, c?.col ?? 1);
     }
   }, [cwd, sync.busy, git, say, t, loadFile]);
+  const doPush = useCallback(async () => {
+    if (!cwd || sync.busy) return;
+    setSync({ busy: true });
+    say(t("sync.pushing"));
+    const res = await api("git.push", repoSelRef.current ? { cwd, repo: repoSelRef.current } : { cwd });
+    setSync({ busy: false });
+    if (!res.ok) {
+      say(t("sync.pushFail", { msg: res.error }), "error");
+      return;
+    }
+    const value = res.value ?? {};
+    if (value.status) setGit(value.status);
+    if (value.error) {
+      say(t("sync.pushFail", { msg: value.error }), "error");
+      return;
+    }
+    say(value.published ? t("sync.published") : t("sync.pushed"));
+  }, [cwd, sync.busy, say, t]);
   useEffect(() => {
     repoSelRef.current = repoSel;
     if (repoSel) refreshGit();
@@ -2783,7 +2846,7 @@ function CodeBody(props) {
     setDiff({ path, scope, text, base: res.ok ? res.value.base : void 0 });
     setShowDiffView(false);
     modeRef.current = "code";
-    await loadFile(path, first, 1);
+    await loadFile(path, first, 1, null, { noAutoMarks: true });
     setDiffMarks(marks);
     setDelGroups(deletedGroups(text));
   }, [cwd, loadFile]);
@@ -2838,7 +2901,7 @@ function CodeBody(props) {
     return true;
   }, [cwd, say, t]);
   const [committing, setCommitting] = useState(false);
-  const commitChanges = useCallback(async (message, stageAll) => {
+  const commitChanges = useCallback(async (message, stageAll, amend) => {
     if (!cwd || committing) return false;
     setCommitting(true);
     try {
@@ -2851,7 +2914,7 @@ function CodeBody(props) {
         }
         if (sres.value.status) setGit(sres.value.status);
       }
-      const res = await api("git.commit", repo ? { cwd, message, repo } : { cwd, message });
+      const res = await api("git.commit", repo ? { cwd, message, amend: amend === true, repo } : { cwd, message, amend: amend === true });
       const value = res.ok ? res.value ?? {} : { error: res.error };
       if (value.status) setGit(value.status);
       if (!res.ok || value.error) {
@@ -3070,7 +3133,7 @@ function CodeBody(props) {
     setShowDiffView(false);
     const path = diff.path;
     const needLoad = !docRef.current || docRef.current.path !== path;
-    const ready = needLoad ? loadFile(path, first, 1) : Promise.resolve();
+    const ready = needLoad ? loadFile(path, first, 1, null, { noAutoMarks: true }) : Promise.resolve();
     void ready.then(() => {
       setDiffMarks(marks);
       setDelGroups(deletedGroups(diff.text));
@@ -3470,7 +3533,7 @@ function CodeBody(props) {
         onStageDir: (dirPath) => void stageChange(dirPath),
         onUnstage: (item) => void unstageChange(item.path),
         onUnstageDir: (dirPath) => void unstageChange(dirPath),
-        onCommit: (msg, stageAll) => commitChanges(msg, stageAll),
+        onCommit: (msg, stageAll, amend) => commitChanges(msg, stageAll, amend),
         committing,
         refresh: refreshGit
       })) : null,
@@ -3634,6 +3697,7 @@ function CodeBody(props) {
       t,
       onFetch: () => void doFetch(),
       onPull: () => void doPull(),
+      onPush: () => void doPush(),
       onClose: () => setBranchPickOpen(false),
       onDone: (ok, err) => {
         setBranchPickOpen(false);
@@ -3788,6 +3852,7 @@ var CSS = `
 .ce-bp-act{flex:none;border:.5px solid var(--dsw-alias-border-l2,#444);background:transparent;color:var(--dsw-alias-label-secondary,#999);border-radius:6px;font:inherit;font-size:11px;padding:3px 9px;cursor:pointer}
 .ce-bp-act:hover{color:var(--dsw-alias-label-primary,#ddd);background:var(--dsw-alias-interactive-bg-hover,#2b2b2b)}
 .ce-bp-act:disabled{opacity:.45;cursor:default}
+.ce-bp-push{color:var(--dsw-alias-brand-primary,#6cb2ff);border-color:color-mix(in srgb,var(--dsw-alias-brand-primary,#59b7ff) 45%,transparent)}
 .ce-palette-head{display:flex;align-items:center;gap:6px;padding:8px}
 .ce-input{flex:1;min-width:0;background:var(--dsw-alias-bg-layer-1,#1e2126);border:.5px solid var(--dsw-alias-border-l2,#444);border-radius:6px;color:var(--dsw-alias-label-primary,#ddd);padding:6px 9px;font:inherit;outline:none}
 .ce-input:focus{border-color:var(--dsw-alias-brand-primary,#59b7ff)}

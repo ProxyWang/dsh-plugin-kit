@@ -3,7 +3,7 @@
 import { h, useEffect, useMemo, useState } from "./react.js";
 import { api } from "./api.js";
 
-export function BranchPalette({ cwd, repo, current, t, onDone, onClose, onFetch, onPull }) {
+export function BranchPalette({ cwd, repo, current, t, onDone, onClose, onFetch, onPull, onPush, canPush }) {
 	const [query, setQuery] = useState("");
 	const [list, setList] = useState(null);
 	const [error, setError] = useState("");
@@ -102,6 +102,9 @@ export function BranchPalette({ cwd, repo, current, t, onDone, onClose, onFetch,
 			}),
 			h("button", { type: "button", className: "ce-bp-act", title: t("branch.fetchTitle"), disabled: busy, onClick: onFetch }, t("branch.fetch")),
 			h("button", { type: "button", className: "ce-bp-act", title: t("branch.pullTitle"), disabled: busy, onClick: onPull }, t("branch.pull")),
+			onPush
+				? h("button", { type: "button", className: "ce-bp-act ce-bp-push", title: t("branch.pushTitle"), disabled: busy || canPush === false, onClick: onPush }, t("branch.push"))
+				: null,
 			h("button", { type: "button", className: "ce-tool ce-tiny", title: `${t("close")} (Esc)`, onClick: onClose }, "✕"),
 		),
 		h("div", { className: "ce-palette-list ce-scroll" },
