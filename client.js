@@ -187,6 +187,8 @@ var zh = {
   "branch.checkedOut": "已切换分支",
   "blame.toggle": "行追溯（blame）：谁在何时改的每行",
   "blame.uncommitted": "未提交",
+  "history.title": "文件历史",
+  "history.none": "没有提交历史（文件可能未被跟踪）",
   "tree.newFile": "新建文件",
   "tree.copyPath": "复制路径（⌥/Alt 点击复制相对路径）",
   "tree.copied": "路径已复制",
@@ -477,6 +479,8 @@ var en = {
   "branch.checkedOut": "Branch checked out",
   "blame.toggle": "Toggle blame: who changed each line, when",
   "blame.uncommitted": "uncommitted",
+  "history.title": "File History",
+  "history.none": "No commit history (file may be untracked)",
   "tree.newFile": "New file",
   "tree.copyPath": "Copy path (⌥/Alt-click copies the relative path)",
   "tree.copied": "Path copied",
@@ -2814,6 +2818,36 @@ function GotoLinePalette({ t, totalLines, initial, onGo, onClose }) {
     )
   );
 }
+function FileHistoryOverlay({ t, hist, onPick, onClose }) {
+  return h(
+    "div",
+    { className: "ce-overlay", onMouseDown: (event) => event.stopPropagation() },
+    h(
+      "div",
+      { className: "ce-overlay-head" },
+      h("span", null, `${t("history.title")}${hist.commits ? ` · ${hist.commits.length}` : ""}`),
+      h("span", { className: "ce-histpath" }, hist.path),
+      h("span", { className: "ce-spacer" }),
+      h("button", { className: "ce-tool ce-tiny", type: "button", title: `${t("close")} (Esc)`, onClick: onClose }, "✕")
+    ),
+    h(
+      "div",
+      { className: "ce-overlay-list ce-scroll" },
+      hist.busy ? h("div", { className: "ce-note" }, t("loading")) : null,
+      hist.error ? h("div", { className: "ce-note" }, `${t("error")}: ${hist.error}`) : null,
+      !hist.busy && !hist.error && (hist.commits ?? []).length === 0 ? h("div", { className: "ce-note" }, t("history.none")) : null,
+      (hist.commits ?? []).map(
+        (c) => h(
+          "button",
+          { key: c.hash, type: "button", className: "ce-histrow", title: `${c.hash} · ${c.author} · ${c.when}`, onClick: () => onPick(c) },
+          h("span", { className: "ce-chash" }, c.hash),
+          h("span", { className: "ce-csubject" }, c.subject),
+          h("span", { className: "ce-histmeta" }, `${c.author} · ${c.when}`)
+        )
+      )
+    )
+  );
+}
 
 // src/client/codeview.js
 function buildTokenCells(text, lang, state, lineNo, flash) {
@@ -3049,6 +3083,7 @@ function CodeBody(props) {
   const [blame, setBlame] = useState(null);
   const [wrapOn, setWrapOn] = useState(false);
   const [gotoOpen, setGotoOpen] = useState(false);
+  const [fileHist, setFileHist] = useState(null);
   const [previewOn, setPreviewOn] = useState(false);
   const [delGroups, setDelGroups] = useState(null);
   const [delPreview, setDelPreview] = useState(null);
@@ -3601,6 +3636,42 @@ function CodeBody(props) {
     },
     [cwd, say, t]
   );
+  const openFileHistory = useCallback(() => {
+    const d = docRef.current;
+    if (!cwd || !d) return;
+    const path = d.path;
+    setFileHist({ path, busy: true });
+    const repo = repoSelRef.current;
+    api("git.history", repo ? { cwd, path, repo } : { cwd, path }).then((res) => {
+      setFileHist((cur) => {
+        if (!cur || cur.path !== path) return cur;
+        if (!res.ok) return { path, error: res.error };
+        if (res.value?.error) return { path, error: res.value.error };
+        return { path, commits: res.value?.commits ?? [] };
+      });
+    });
+  }, [cwd]);
+  const openHistCommit = useCallback(
+    async (commit) => {
+      const path = fileHist?.path;
+      if (!cwd || !path || !commit?.hash) return;
+      const repo = repoSelRef.current;
+      const res = await api("git.diff", repo ? { cwd, path, scope: "commit", sha: commit.hash, repo } : { cwd, path, scope: "commit", sha: commit.hash });
+      const value = res.ok ? res.value ?? {} : { error: res.error };
+      if (value.error) {
+        say(`${t("error")}: ${value.error}`, "error");
+        return;
+      }
+      setFileHist(null);
+      modeRef.current = "diff";
+      setDiff({ path: `${commit.hash} · ${path}`, scope: "commit", commit: value.commit, text: value.diff ?? "" });
+      setShowDiffView(true);
+      setOverlay(null);
+      setHover(null);
+      setPeek(null);
+    },
+    [cwd, fileHist, say, t]
+  );
   const openPalette = useCallback(() => {
     if (!cwd) return;
     setPalette({ query: "", results: [], busy: true });
@@ -3847,6 +3918,10 @@ function CodeBody(props) {
           cancelEdit();
           return;
         }
+        if (fileHist) {
+          setFileHist(null);
+          return;
+        }
         if (gotoOpen) {
           setGotoOpen(false);
           return;
@@ -3870,7 +3945,7 @@ function CodeBody(props) {
         if (searchOpen) setSearchOpen(false);
       }
     },
-    [palette, closePalette, openPalette, openSearch, searchOpen, peek, closePeek, goBack, goForward, symPalette, editing, saveEdit, cancelEdit, findOpen, delPreview, gotoOpen, toggleWrap]
+    [palette, closePalette, openPalette, openSearch, searchOpen, peek, closePeek, goBack, goForward, symPalette, editing, saveEdit, cancelEdit, findOpen, delPreview, gotoOpen, toggleWrap, fileHist]
   );
   const doJump = useCallback(
     async (kind, pos) => {
@@ -4219,6 +4294,7 @@ function CodeBody(props) {
               setBlameOn((v) => !v);
               setBlame(null);
             } }, "B") : null,
+            doc && !diff && !doc.image ? h("button", { type: "button", className: `ce-tool ce-tiny${fileHist ? " ce-tool-on" : ""}`, title: t("history.title"), onClick: openFileHistory }, "🕘") : null,
             h("span", { className: "ce-spacer" }),
             cursor ? h("button", { type: "button", className: "ce-pos ce-pos-btn", title: t("goto.title"), onClick: () => setGotoOpen(true) }, `Ln ${cursor.line}, Col ${cursor.col}${cursor.word ? ` · ${cursor.word}` : ""}`) : null,
             diagnostics.length ? h("span", { className: "ce-diag" }, `${diagnostics.length} ${t("diag.count")}`) : null
@@ -4328,6 +4404,7 @@ function CodeBody(props) {
         }, onClose: () => setOverlay(null) }) : null,
         palette ? h(QuickOpen, { t, state: palette, onQuery: onPaletteQuery, onPick: onPalettePick, onClose: closePalette }) : null,
         gotoOpen && doc && !doc.image ? h(GotoLinePalette, { t, totalLines: doc.lines.length, initial: cursor?.line ?? 1, onGo: jumpToLine, onClose: () => setGotoOpen(false) }) : null,
+        fileHist ? h(FileHistoryOverlay, { t, hist: fileHist, onPick: (c) => void openHistCommit(c), onClose: () => setFileHist(null) }) : null,
         searchOpen && search ? h(SearchPanel, {
           t,
           cwd,
@@ -4507,6 +4584,11 @@ var CSS = `
 .ce-commit{display:flex;gap:8px;align-items:baseline;width:100%;text-align:left;border:0;background:transparent;color:inherit;font:inherit;padding:3px 10px 3px 14px;cursor:pointer;border-radius:4px;white-space:nowrap}
 .ce-commit:hover{background:var(--dsw-alias-interactive-bg-hover,#262a30)}
 .ce-chash{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;color:var(--dsw-alias-label-tertiary,#778);flex:none}
+.ce-histrow{display:flex;gap:8px;align-items:baseline;width:100%;text-align:left;border:0;background:transparent;color:inherit;font:inherit;padding:4px 10px;cursor:pointer;white-space:nowrap}
+.ce-histrow:hover{background:var(--dsw-alias-interactive-bg-hover,#2b2b2b)}
+.ce-histrow .ce-csubject{flex:1}
+.ce-histmeta{flex:none;font-size:10px;color:var(--dsw-alias-label-tertiary,#778)}
+.ce-histpath{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:var(--dsw-alias-label-tertiary,#889);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;margin-left:8px}
 .ce-csubject{color:var(--dsw-alias-label-secondary,#9ab);overflow:hidden;text-overflow:ellipsis;min-width:0}
 .ce-symglyph{width:16px;flex:none;text-align:center;color:var(--dsw-alias-label-tertiary,#889);font-size:12px}
 .ce-prog{font-size:11px;color:var(--dsw-alias-label-tertiary,#889);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:50%}

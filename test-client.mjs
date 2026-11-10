@@ -239,6 +239,25 @@ const amendBtn = collect(commitBox ?? []).find((n) => n.type === "button" && n.p
 check("commit box carries the amend toggle", Boolean(amendBtn) && amendBtn.children.includes("changes.amend"), amendBtn?.children);
 const sections = panelNodes.filter((n) => n.props?.className === "ce-section");
 check("changes panel renders the stash section", sections.some((s) => JSON.stringify(s.children ?? []).includes("stash.title")), sections.length);
+
+// --- file history overlay ------------------------------------------------------------------------
+const { FileHistoryOverlay } = await import("./src/client/overlays.js");
+let pickedCommit = null;
+const histEl = FileHistoryOverlay({
+	t: (k) => k,
+	hist: { path: "a/b.go", commits: [{ hash: "abc1234", when: "2 days ago", author: "t", subject: "fix thing" }] },
+	onPick: (c) => { pickedCommit = c; },
+	onClose: () => {},
+});
+const histNodes = collect(histEl);
+const histRow = histNodes.find((n) => n.props?.className === "ce-histrow");
+check("history overlay renders commit rows", Boolean(histRow) && JSON.stringify(histRow.children).includes("fix thing") && JSON.stringify(histRow.children).includes("t · 2 days ago"), histRow?.children);
+histRow.props.onClick();
+check("clicking a history row picks its commit", pickedCommit?.hash === "abc1234", pickedCommit);
+const histBusy = collect(FileHistoryOverlay({ t: (k) => k, hist: { path: "x", busy: true }, onPick: () => {}, onClose: () => {} }));
+check("history overlay shows loading while busy", histBusy.some((n) => (n.children ?? []).includes?.("loading")) || JSON.stringify(histBusy).includes('"loading"'), null);
+const histEmpty = collect(FileHistoryOverlay({ t: (k) => k, hist: { path: "x", commits: [] }, onPick: () => {}, onClose: () => {} }));
+check("history overlay empty state", JSON.stringify(histEmpty).includes("history.none"), null);
 const panelNoStaged = ChangesPanel({
 	cwd: "/w", t: (k) => k,
 	git: { ...fakeGit, working: fakeGit.working.filter((f) => f.xy !== "M ") },

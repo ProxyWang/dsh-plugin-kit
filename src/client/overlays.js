@@ -658,3 +658,37 @@ export function GotoLinePalette({ t, totalLines, initial, onGo, onClose }) {
 		),
 	);
 }
+
+/** File history overlay (🕘): commits that touched one file, newest first; clicking opens that commit's diff for the file. */
+export function FileHistoryOverlay({ t, hist, onPick, onClose }) {
+	return h(
+		"div",
+		{ className: "ce-overlay", onMouseDown: (event) => event.stopPropagation() },
+		h(
+			"div",
+			{ className: "ce-overlay-head" },
+			h("span", null, `${t("history.title")}${hist.commits ? ` · ${hist.commits.length}` : ""}`),
+			h("span", { className: "ce-histpath" }, hist.path),
+			h("span", { className: "ce-spacer" }),
+			h("button", { className: "ce-tool ce-tiny", type: "button", title: `${t("close")} (Esc)`, onClick: onClose }, "✕"),
+		),
+		h(
+			"div",
+			{ className: "ce-overlay-list ce-scroll" },
+			hist.busy ? h("div", { className: "ce-note" }, t("loading")) : null,
+			hist.error ? h("div", { className: "ce-note" }, `${t("error")}: ${hist.error}`) : null,
+			!hist.busy && !hist.error && (hist.commits ?? []).length === 0
+				? h("div", { className: "ce-note" }, t("history.none"))
+				: null,
+			(hist.commits ?? []).map((c) =>
+				h(
+					"button",
+					{ key: c.hash, type: "button", className: "ce-histrow", title: `${c.hash} · ${c.author} · ${c.when}`, onClick: () => onPick(c) },
+					h("span", { className: "ce-chash" }, c.hash),
+					h("span", { className: "ce-csubject" }, c.subject),
+					h("span", { className: "ce-histmeta" }, `${c.author} · ${c.when}`),
+				),
+			),
+		),
+	);
+}

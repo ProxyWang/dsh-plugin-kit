@@ -351,6 +351,26 @@ const mainContent = (await call("fs.read", { cwd, path: "main.go" })).value.cont
 const expectedLines = mainContent.endsWith("\n") ? mainContent.split("\n").length - 1 : mainContent.split("\n").length;
 check("git.blame per-line attribution", blameRes.ok && blameRes.value.lines.length === expectedLines && blameRes.value.lines.every((l) => l.author === "t" && /^[0-9a-f]{40}$/.test(l.sha)), blameRes.value?.lines?.slice(0, 2));
 
+// --- git.history + commit-scope path filter -----------------------------------------------------
+const hist = await call("git.history", { cwd, path: "main.go" });
+check(
+	"git.history lists commits for the file, newest first",
+	hist.ok && Array.isArray(hist.value.commits) && hist.value.commits.length >= 3
+		&& /add version var/.test(hist.value.commits[0].subject)
+		&& hist.value.commits.some((c) => /second commit/.test(c.subject))
+		&& hist.value.commits.every((c) => /^[0-9a-f]+$/.test(c.hash) && c.author === "t" && typeof c.when === "string"),
+	hist.value?.commits?.slice(0, 3),
+);
+const histUntracked = await call("git.history", { cwd, path: "extra.txt" });
+check("git.history untracked file → empty list", histUntracked.ok && histUntracked.value.commits.length === 0, histUntracked.value);
+const histEscape = await call("git.history", { cwd, path: "../evil" });
+check("git.history fenced", histEscape.ok === false || Boolean(histEscape.value?.error), histEscape);
+const newest = hist.value.commits[0];
+const fileDiff = await call("git.diff", { cwd, path: "main.go", scope: "commit", sha: newest.hash });
+check("commit-scope diff filters to the requested path", fileDiff.ok && fileDiff.value.diff.includes("main.go") && !fileDiff.value.diff.includes("pkg/svc.go") && fileDiff.value.path === "main.go", fileDiff.value?.diff?.slice(0, 140));
+const wholeDiff = await call("git.diff", { cwd, path: "", scope: "commit", sha: newest.hash });
+check("commit-scope whole-tree diff still works", wholeDiff.ok && wholeDiff.value.diff.length > 0 && wholeDiff.value.path === undefined, wholeDiff.value?.error);
+
 // --- api.send proxy -------------------------------------------------------------------------
 const http = await import("node:http");
 const srv = http.createServer((req, res) => {

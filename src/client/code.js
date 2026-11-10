@@ -11,7 +11,7 @@ import { BranchPalette } from "./branchpick.js";
 import { RelPath, toAbs } from "./pathtools.js";
 import { TreePanel } from "./tree.js";
 import { ChangesPanel } from "./changes.js";
-import { LocationList, QuickOpen, SearchPanel, RefsPeek, SymbolPalette, GotoLinePalette } from "./overlays.js";
+import { LocationList, QuickOpen, SearchPanel, RefsPeek, SymbolPalette, GotoLinePalette, FileHistoryOverlay } from "./overlays.js";
 import { computeGutter, computeVisible, computeWrapRows, compileFindRe, findRangesInLine, WRAP_LINE_CAP } from "./codeview.js";
 
 /** Files that open in rendered preview by default: markdown, html and svg. */
@@ -57,6 +57,7 @@ export function CodeBody(props) {
 	const [blame, setBlame] = useState(null);
 	const [wrapOn, setWrapOn] = useState(false);
 	const [gotoOpen, setGotoOpen] = useState(false);
+	const [fileHist, setFileHist] = useState(null); // {path, commits?, busy?, error?}
 	const [previewOn, setPreviewOn] = useState(false);
 	const [delGroups, setDelGroups] = useState(null);
 	const [delPreview, setDelPreview] = useState(null);
@@ -662,6 +663,46 @@ export function CodeBody(props) {
 		[cwd, say, t],
 	);
 
+	// File history (🕘): commits that touched the open file, newest first.
+	const openFileHistory = useCallback(() => {
+		const d = docRef.current;
+		if (!cwd || !d) return;
+		const path = d.path;
+		setFileHist({ path, busy: true });
+		const repo = repoSelRef.current;
+		api("git.history", repo ? { cwd, path, repo } : { cwd, path }).then((res) => {
+			setFileHist((cur) => {
+				if (!cur || cur.path !== path) return cur;
+				if (!res.ok) return { path, error: res.error };
+				if (res.value?.error) return { path, error: res.value.error };
+				return { path, commits: res.value?.commits ?? [] };
+			});
+		});
+	}, [cwd]);
+
+	// Clicking a history row shows that commit's diff for this file only.
+	const openHistCommit = useCallback(
+		async (commit) => {
+			const path = fileHist?.path;
+			if (!cwd || !path || !commit?.hash) return;
+			const repo = repoSelRef.current;
+			const res = await api("git.diff", repo ? { cwd, path, scope: "commit", sha: commit.hash, repo } : { cwd, path, scope: "commit", sha: commit.hash });
+			const value = res.ok ? res.value ?? {} : { error: res.error };
+			if (value.error) {
+				say(`${t("error")}: ${value.error}`, "error");
+				return;
+			}
+			setFileHist(null);
+			modeRef.current = "diff";
+			setDiff({ path: `${commit.hash} · ${path}`, scope: "commit", commit: value.commit, text: value.diff ?? "" });
+			setShowDiffView(true);
+			setOverlay(null);
+			setHover(null);
+			setPeek(null);
+		},
+		[cwd, fileHist, say, t],
+	);
+
 	/* quick open (file picker) */
 
 	const openPalette = useCallback(() => {
@@ -934,6 +975,10 @@ export function CodeBody(props) {
 					cancelEdit();
 					return;
 				}
+				if (fileHist) {
+					setFileHist(null);
+					return;
+				}
 				if (gotoOpen) {
 					setGotoOpen(false);
 					return;
@@ -957,7 +1002,7 @@ export function CodeBody(props) {
 				if (searchOpen) setSearchOpen(false);
 			}
 		},
-		[palette, closePalette, openPalette, openSearch, searchOpen, peek, closePeek, goBack, goForward, symPalette, editing, saveEdit, cancelEdit, findOpen, delPreview, gotoOpen, toggleWrap],
+		[palette, closePalette, openPalette, openSearch, searchOpen, peek, closePeek, goBack, goForward, symPalette, editing, saveEdit, cancelEdit, findOpen, delPreview, gotoOpen, toggleWrap, fileHist],
 	);
 
 	const doJump = useCallback(
@@ -1342,6 +1387,7 @@ export function CodeBody(props) {
 							doc && !diff && !doc.image ? h("button", { type: "button", className: `ce-tool ce-tiny${findOpen ? " ce-tool-on" : ""}`, title: `${t("editor.find")} (⌘F / Ctrl+F)`, onClick: () => setFindOpen((v) => !v) }, "⌕") : null,
 							doc && !diff && !doc.image ? h("button", { type: "button", className: `ce-tool ce-tiny${wrapOn ? " ce-tool-on" : ""}`, title: `${t("editor.wrap")} (⌥Z / Alt+Z)`, onClick: toggleWrap }, "↩") : null,
 							doc && !diff && !doc.image ? h("button", { type: "button", className: `ce-tool ce-tiny${blameOn ? " ce-tool-on" : ""}`, title: t("blame.toggle"), disabled: wrapOn, onClick: () => { setBlameOn((v) => !v); setBlame(null); } }, "B") : null,
+							doc && !diff && !doc.image ? h("button", { type: "button", className: `ce-tool ce-tiny${fileHist ? " ce-tool-on" : ""}`, title: t("history.title"), onClick: openFileHistory }, "🕘") : null,
 							h("span", { className: "ce-spacer" }),
 							cursor ? h("button", { type: "button", className: "ce-pos ce-pos-btn", title: t("goto.title"), onClick: () => setGotoOpen(true) }, `Ln ${cursor.line}, Col ${cursor.col}${cursor.word ? ` · ${cursor.word}` : ""}`) : null,
 							diagnostics.length ? h("span", { className: "ce-diag" }, `${diagnostics.length} ${t("diag.count")}`) : null,
@@ -1443,6 +1489,9 @@ export function CodeBody(props) {
 				palette ? h(QuickOpen, { t, state: palette, onQuery: onPaletteQuery, onPick: onPalettePick, onClose: closePalette }) : null,
 				gotoOpen && doc && !doc.image
 					? h(GotoLinePalette, { t, totalLines: doc.lines.length, initial: cursor?.line ?? 1, onGo: jumpToLine, onClose: () => setGotoOpen(false) })
+					: null,
+				fileHist
+					? h(FileHistoryOverlay, { t, hist: fileHist, onPick: (c) => void openHistCommit(c), onClose: () => setFileHist(null) })
 					: null,
 				searchOpen && search ? h(SearchPanel, {
 					t,
