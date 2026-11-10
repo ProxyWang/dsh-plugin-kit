@@ -127,6 +127,8 @@ var zh = {
   "diff.toUnified": "统一视图",
   "diff.prevChange": "上一处变更",
   "diff.nextChange": "下一处变更",
+  "diff.revertHunk": "回退此变更块（git apply -R，仅工作区 diff）",
+  "diff.hunkReverted": "已回退该变更块",
   "diff.deletedLines": "行被删除 · 点击查看",
   "diff.deletedAt": "此处删除的内容",
   "changes.discard": "回退变更（恢复到 HEAD）",
@@ -426,6 +428,8 @@ var en = {
   "diff.toUnified": "Unified view",
   "diff.prevChange": "Previous change",
   "diff.nextChange": "Next change",
+  "diff.revertHunk": "Revert this hunk (git apply -R, working diffs only)",
+  "diff.hunkReverted": "Hunk reverted",
   "diff.deletedLines": "deleted lines · click to view",
   "diff.deletedAt": "Deleted here",
   "changes.discard": "Discard changes (restore HEAD)",
@@ -1028,7 +1032,7 @@ function intraMarks(rows) {
   }
   return marks;
 }
-function DiffView({ t, diff, onClose, onOpenSource, canSource }) {
+function DiffView({ t, diff, onClose, onOpenSource, canSource, onRevertHunk }) {
   const rows = useMemo(() => parseDiff(diff.text ?? ""), [diff.text]);
   const shown = rows.length > 4e3 ? rows.slice(0, 4e3) : rows;
   const marks = useMemo(() => intraMarks(shown), [shown]);
@@ -1036,6 +1040,23 @@ function DiffView({ t, diff, onClose, onOpenSource, canSource }) {
   const [navIdx, setNavIdx] = useState(-1);
   const containerRef = useRef(null);
   const paired = useMemo(() => sbs ? pairRows(shown) : null, [sbs, shown]);
+  const hunkIdxOf = useMemo(() => {
+    const map = /* @__PURE__ */ new Map();
+    let n = 0;
+    shown.forEach((row, i) => {
+      if (row.kind === "hunk") map.set(i, n++);
+    });
+    return map;
+  }, [shown]);
+  const sbsHunkIdxOf = useMemo(() => {
+    if (!paired) return null;
+    const map = /* @__PURE__ */ new Map();
+    let n = 0;
+    paired.forEach((p, i) => {
+      if (p.kind === "hunk") map.set(i, n++);
+    });
+    return map;
+  }, [paired]);
   const anchors = useMemo(() => {
     const out = [];
     if (sbs) {
@@ -1099,7 +1120,16 @@ function DiffView({ t, diff, onClose, onOpenSource, canSource }) {
       },
       diff.gutter === false ? null : h("span", { className: "ce-dnum" }, row.oldLine ?? ""),
       diff.gutter === false ? null : h("span", { className: "ce-dnum" }, row.newLine ?? ""),
-      h("span", { className: "ce-dtext" }, renderMarkedText(row, true))
+      h("span", { className: "ce-dtext" }, renderMarkedText(row, true)),
+      row.kind === "hunk" && onRevertHunk ? h("button", {
+        type: "button",
+        className: "ce-tool ce-tiny ce-hunk-revert",
+        title: t("diff.revertHunk"),
+        onClick: (e) => {
+          e.stopPropagation();
+          onRevertHunk(hunkIdxOf.get(i) ?? 0);
+        }
+      }, "⟲") : null
     );
   };
   const renderSbsRow = (p, i) => {
@@ -1108,7 +1138,16 @@ function DiffView({ t, diff, onClose, onOpenSource, canSource }) {
       return h(
         "div",
         { key: i, "data-dr": i, className: `ce-sbsrow ce-sbsrow-full ce-dline-${p.kind}${navCls}` },
-        h("span", { className: "ce-sbscell" }, p.left.text === "" ? " " : p.left.text)
+        h("span", { className: "ce-sbscell" }, p.left.text === "" ? " " : p.left.text),
+        p.kind === "hunk" && onRevertHunk ? h("button", {
+          type: "button",
+          className: "ce-tool ce-tiny ce-hunk-revert",
+          title: t("diff.revertHunk"),
+          onClick: (e) => {
+            e.stopPropagation();
+            onRevertHunk(sbsHunkIdxOf?.get(i) ?? 0);
+          }
+        }, "⟲") : null
       );
     }
     const jumpLine = p.right?.newLine ?? p.left?.oldLine;
@@ -4053,14 +4092,26 @@ function CodeBody(props) {
     modeRef.current = "code";
     setShowDiffView(false);
     const path = diff.path;
-    const needLoad = !docRef.current || docRef.current.path !== path;
-    const ready = needLoad ? loadFile(path, first, 1, null, { noAutoMarks: true }) : Promise.resolve();
+    const ready = loadFile(path, first, 1, null, { noAutoMarks: true });
     void ready.then(() => {
       setDiffMarks(marks);
       setDelGroups(deletedGroups(diff.text));
-      if (!needLoad) revealPosition(first, 1, void 0);
     });
-  }, [diff, loadFile, revealPosition]);
+  }, [diff, loadFile]);
+  const revertHunk = useCallback(async (hunkIndex) => {
+    if (!cwd || !diff || diff.scope !== "working" || typeof diff.path !== "string" || diff.path === "") return;
+    const path = diff.path;
+    const repo = repoSelRef.current;
+    const res = await api("git.revertHunk", repo ? { cwd, path, hunkIndex, repo } : { cwd, path, hunkIndex });
+    const value = res.ok ? res.value ?? {} : { error: res.error };
+    if (!res.ok || value.error) {
+      say(`${t("error")}: ${value.error ?? res.error}`, "error");
+      return;
+    }
+    say(t("diff.hunkReverted"));
+    if (value.status) setGit(value.status);
+    await openDiff(path, "working");
+  }, [cwd, diff, say, t, openDiff]);
   const onRootKeyDown = useCallback(
     (event) => {
       if ((event.metaKey || event.ctrlKey) && !event.altKey && event.code === "KeyF" && !event.shiftKey) {
@@ -4511,7 +4562,8 @@ function CodeBody(props) {
             if (docRef.current) modeRef.current = "code";
           },
           onOpenSource: (line) => openDiffSource(line),
-          canSource: diff.scope === "working" || diff.scope === "branch" || diff.scope === "staged"
+          canSource: diff.scope === "working" || diff.scope === "branch" || diff.scope === "staged",
+          onRevertHunk: diff.scope === "working" && !diff.untracked && typeof diff.path === "string" && diff.path !== "" ? (idx) => void revertHunk(idx) : null
         }) : doc ? h(
           Fragment,
           null,
@@ -4795,7 +4847,10 @@ var CSS2 = `
 .ce-dnum{width:44px;flex:none;text-align:right;padding-right:8px;color:var(--dsw-alias-label-tertiary,#667);user-select:none}
 .ce-dtext{min-width:0}
 .ce-sbsrow{display:grid;grid-template-columns:40px minmax(0,1fr) 40px minmax(0,1fr)}
-.ce-sbsrow-full{display:block}
+.ce-sbsrow-full{display:flex;align-items:center}
+.ce-sbsrow-full .ce-sbscell{flex:1;min-width:0}
+.ce-hunk-revert{margin-left:auto;flex:none;opacity:.6}
+.ce-dline:hover .ce-hunk-revert,.ce-sbsrow-full:hover .ce-hunk-revert{opacity:1}
 .ce-sbsnum{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;line-height:19px;color:var(--dsw-alias-label-tertiary,#667);text-align:right;padding:1px 6px 1px 0;user-select:none;background:rgba(128,128,128,.05);overflow:hidden}
 .ce-sbscell{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;line-height:19px;white-space:pre-wrap;overflow-wrap:break-word;padding:1px 10px 1px 4px;min-width:0}
 .ce-sbs-del{background:color-mix(in srgb,var(--dsw-alias-state-error-primary,#f85149) 12%,transparent)}

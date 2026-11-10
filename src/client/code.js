@@ -965,14 +965,31 @@ export function CodeBody(props) {
 		modeRef.current = "code";
 		setShowDiffView(false);
 		const path = diff.path;
-		const needLoad = !docRef.current || docRef.current.path !== path;
-		const ready = needLoad ? loadFile(path, first, 1, null, { noAutoMarks: true }) : Promise.resolve();
+		// Always reload from the host (cheap via its mtime LRU) so the source
+		// view never shows stale content after a hunk revert or external edit.
+		const ready = loadFile(path, first, 1, null, { noAutoMarks: true });
 		void ready.then(() => {
 			setDiffMarks(marks);
 			setDelGroups(deletedGroups(diff.text));
-			if (!needLoad) revealPosition(first, 1, void 0);
 		});
-	}, [diff, loadFile, revealPosition]);
+	}, [diff, loadFile]);
+	// Revert one hunk of the working diff (host re-derives the patch fresh and
+	// runs git apply -R). The hunk view refreshes afterwards; the source view
+	// always reloads, so no stale document can linger.
+	const revertHunk = useCallback(async (hunkIndex) => {
+		if (!cwd || !diff || diff.scope !== "working" || typeof diff.path !== "string" || diff.path === "") return;
+		const path = diff.path;
+		const repo = repoSelRef.current;
+		const res = await api("git.revertHunk", repo ? { cwd, path, hunkIndex, repo } : { cwd, path, hunkIndex });
+		const value = res.ok ? res.value ?? {} : { error: res.error };
+		if (!res.ok || value.error) {
+			say(`${t("error")}: ${value.error ?? res.error}`, "error");
+			return;
+		}
+		say(t("diff.hunkReverted"));
+		if (value.status) setGit(value.status);
+		await openDiff(path, "working");
+	}, [cwd, diff, say, t, openDiff]);
 	const onRootKeyDown = useCallback(
 		(event) => {
 			if ((event.metaKey || event.ctrlKey) && !event.altKey && event.code === "KeyF" && !event.shiftKey) {
@@ -1454,6 +1471,9 @@ export function CodeBody(props) {
 						onClose: () => { setDiff(null); if (docRef.current) modeRef.current = "code"; },
 						onOpenSource: (line) => openDiffSource(line),
 						canSource: diff.scope === "working" || diff.scope === "branch" || diff.scope === "staged",
+						onRevertHunk: diff.scope === "working" && !diff.untracked && typeof diff.path === "string" && diff.path !== ""
+							? (idx) => void revertHunk(idx)
+							: null,
 					})
 					: doc
 					? h(

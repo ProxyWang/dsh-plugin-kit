@@ -421,6 +421,31 @@ check("addTabPath dedupes by identity", addTabPath(tabBase, "a") === tabBase, nu
 check("addTabPath rejects empty/non-string", addTabPath(tabBase, "") === tabBase && addTabPath(tabBase, null) === tabBase, null);
 check("addTabPath tolerates garbage list", JSON.stringify(addTabPath(null, "x")) === JSON.stringify(["x"]), null);
 check("addTabPath caps and drops the oldest", JSON.stringify(addTabPath(["1", "2", "3"], "4", 3)) === JSON.stringify(["2", "3", "4"]), addTabPath(["1", "2", "3"], "4", 3));
+
+// --- diff view hunk revert -------------------------------------------------------------------------
+const { DiffView } = await import("./src/client/diff.js");
+let revertedIdx = null;
+const dvNodes = collect(DiffView({
+	t: (k) => k,
+	diff: { path: "a.txt", scope: "working", text: "@@ -1,3 +1,3 @@\n ctx\n-old\n+new\n" },
+	onClose: () => {},
+	onOpenSource: null,
+	canSource: false,
+	onRevertHunk: (i) => { revertedIdx = i; },
+}));
+const revertBtn = dvNodes.find((n) => typeof n.props?.className === "string" && n.props.className.includes("ce-hunk-revert"));
+check("working-scope hunk row shows the revert button", Boolean(revertBtn), null);
+revertBtn?.props?.onClick({ stopPropagation: () => {} });
+check("revert button reports hunk index 0", revertedIdx === 0, revertedIdx);
+const dvCommit = collect(DiffView({
+	t: (k) => k,
+	diff: { path: "c", scope: "commit", commit: "abc", text: "@@ -1 +1 @@\n-a\n+b\n" },
+	onClose: () => {},
+	onOpenSource: null,
+	canSource: false,
+	onRevertHunk: null,
+}));
+check("no revert button when the scope cannot revert", !dvCommit.some((n) => typeof n.props?.className === "string" && String(n.props.className).includes("ce-hunk-revert")), null);
 const c5 = parseCurl("curl -F 'field=hello world' -F 'file=@/tmp/a.png' https://a.b/upload");
 check(
 	"parseCurl -F becomes multipart pairs",

@@ -304,6 +304,25 @@ check("git.diff working still spans HEAD to worktree", wkDiff.ok && wkDiff.value
 await call("git.unstage", { cwd, path: "staged-scope.txt" });
 rmSync(`${cwd}/staged-scope.txt`);
 
+// --- git.revertHunk (single-hunk revert via apply -R) --------------------------------------------
+writeFileSync(`${cwd}/hunky.txt`, "l1\nl2\nl3\nl4\nl5\nl6\nl7\nl8\nl9\nl10\nl11\nl12\n");
+git(["add", "hunky.txt"]);
+git(["commit", "-qm", "add hunky"]);
+writeFileSync(`${cwd}/hunky.txt`, "L1 changed\nl2\nl3\nl4\nl5\nl6\nl7\nl8\nl9\nl10\nl11\nL12 changed\n");
+const rh0 = await call("git.revertHunk", { cwd, path: "hunky.txt", hunkIndex: 0 });
+check("revertHunk reverts the first hunk", rh0.ok && !rh0.value.error, rh0.value?.error);
+const hunkyAfter = (await call("fs.read", { cwd, path: "hunky.txt" })).value.content;
+check("revertHunk kept the far-away second hunk", hunkyAfter.startsWith("l1\n") && hunkyAfter.includes("L12 changed"), hunkyAfter);
+const rh1 = await call("git.revertHunk", { cwd, path: "hunky.txt", hunkIndex: 0 });
+const hunkyClean = (await call("fs.read", { cwd, path: "hunky.txt" })).value.content;
+check("reverting the remaining hunk restores HEAD content", rh1.ok && !rh1.value.error && hunkyClean === "l1\nl2\nl3\nl4\nl5\nl6\nl7\nl8\nl9\nl10\nl11\nl12\n", hunkyClean);
+const rhRange = await call("git.revertHunk", { cwd, path: "hunky.txt", hunkIndex: 3 });
+check("revertHunk out-of-range errors cleanly", rhRange.ok && /hunk not found/.test(rhRange.value?.error ?? ""), rhRange.value);
+const rhNeg = await call("git.revertHunk", { cwd, path: "hunky.txt", hunkIndex: -1 });
+check("revertHunk rejects invalid index", rhNeg.ok && rhNeg.value?.error === "invalid hunk index", rhNeg.value);
+const rhEsc = await call("git.revertHunk", { cwd, path: "../evil.txt", hunkIndex: 0 });
+check("revertHunk fenced", rhEsc.ok === false || Boolean(rhEsc.value?.error), rhEsc);
+
 // --- git.stash.* flow -------------------------------------------------------------------------
 const stashEmpty = await call("git.stash.save", { cwd });
 check("stash.save refused with untracked-only changes (no -u)", stashEmpty.ok && stashEmpty.value?.error === "no local changes to stash", stashEmpty.value);

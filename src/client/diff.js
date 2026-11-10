@@ -218,7 +218,7 @@ export function intraMarks(rows) {
 	return marks;
 }
 
-export function DiffView({ t, diff, onClose, onOpenSource, canSource }) {
+export function DiffView({ t, diff, onClose, onOpenSource, canSource, onRevertHunk }) {
 	const rows = useMemo(() => parseDiff(diff.text ?? ""), [diff.text]);
 	const shown = rows.length > 4000 ? rows.slice(0, 4000) : rows;
 	const marks = useMemo(() => intraMarks(shown), [shown]);
@@ -226,6 +226,24 @@ export function DiffView({ t, diff, onClose, onOpenSource, canSource }) {
 	const [navIdx, setNavIdx] = useState(-1);
 	const containerRef = useRef(null);
 	const paired = useMemo(() => (sbs ? pairRows(shown) : null), [sbs, shown]);
+	// Row index → hunk ordinal, so the ⟲ button can address one hunk.
+	const hunkIdxOf = useMemo(() => {
+		const map = new Map();
+		let n = 0;
+		shown.forEach((row, i) => {
+			if (row.kind === "hunk") map.set(i, n++);
+		});
+		return map;
+	}, [shown]);
+	const sbsHunkIdxOf = useMemo(() => {
+		if (!paired) return null;
+		const map = new Map();
+		let n = 0;
+		paired.forEach((p, i) => {
+			if (p.kind === "hunk") map.set(i, n++);
+		});
+		return map;
+	}, [paired]);
 	// Change anchors for ↑↓ navigation: unified → start of each del/add run;
 	// side-by-side → every aligned non-context row.
 	const anchors = useMemo(() => {
@@ -294,13 +312,35 @@ export function DiffView({ t, diff, onClose, onOpenSource, canSource }) {
 			diff.gutter === false ? null : h("span", { className: "ce-dnum" }, row.oldLine ?? ""),
 			diff.gutter === false ? null : h("span", { className: "ce-dnum" }, row.newLine ?? ""),
 			h("span", { className: "ce-dtext" }, renderMarkedText(row, true)),
+			row.kind === "hunk" && onRevertHunk
+				? h("button", {
+					type: "button",
+					className: "ce-tool ce-tiny ce-hunk-revert",
+					title: t("diff.revertHunk"),
+					onClick: (e) => {
+						e.stopPropagation();
+						onRevertHunk(hunkIdxOf.get(i) ?? 0);
+					},
+				}, "⟲")
+				: null,
 		);
 	};
 	const renderSbsRow = (p, i) => {
 		const navCls = anchors[navIdx] === i ? " ce-dnav" : "";
 		if (p.kind === "hunk" || p.kind === "meta") {
 			return h("div", { key: i, "data-dr": i, className: `ce-sbsrow ce-sbsrow-full ce-dline-${p.kind}${navCls}` },
-				h("span", { className: "ce-sbscell" }, p.left.text === "" ? " " : p.left.text));
+				h("span", { className: "ce-sbscell" }, p.left.text === "" ? " " : p.left.text),
+				p.kind === "hunk" && onRevertHunk
+					? h("button", {
+						type: "button",
+						className: "ce-tool ce-tiny ce-hunk-revert",
+						title: t("diff.revertHunk"),
+						onClick: (e) => {
+							e.stopPropagation();
+							onRevertHunk(sbsHunkIdxOf?.get(i) ?? 0);
+						},
+					}, "⟲")
+					: null);
 		}
 		const jumpLine = p.right?.newLine ?? p.left?.oldLine;
 		const clickable = Boolean(onOpenSource) && jumpLine !== void 0;
