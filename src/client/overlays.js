@@ -417,3 +417,49 @@ export function SymbolPalette({ t, symbols, onPick, onClose }) {
 		),
 	);
 }
+
+/** Minimal "go to line" palette (⌘G / Ctrl+G): one numeric input, Enter jumps. */
+export function GotoLinePalette({ t, totalLines, initial, onGo, onClose }) {
+	const [value, setValue] = useState(String(initial ?? ""));
+	const inputRef = useRef(null);
+	useEffect(() => {
+		inputRef.current?.focus();
+		inputRef.current?.select();
+	}, []);
+	const submit = () => {
+		const n = Number.parseInt(value, 10);
+		if (Number.isFinite(n) && n >= 1) onGo(Math.min(n, totalLines));
+		onClose();
+	};
+	const onKeyDown = (event) => {
+		event.stopPropagation();
+		if (event.key === "Enter") {
+			event.preventDefault();
+			submit();
+		} else if (event.key === "Escape") {
+			event.preventDefault();
+			onClose();
+		}
+	};
+	return h(
+		"div",
+		{ className: "ce-palette ce-goto", onMouseDown: (event) => event.stopPropagation() },
+		h(
+			"div",
+			{ className: "ce-palette-head" },
+			h("input", {
+				ref: inputRef,
+				className: "ce-input",
+				type: "text",
+				inputMode: "numeric",
+				placeholder: t("goto.placeholder", { n: totalLines }),
+				value,
+				onChange: (event) => setValue(event.target.value),
+				onKeyDown,
+				spellcheck: false,
+				autoComplete: "off",
+			}),
+			h("button", { className: "ce-tool ce-tiny", type: "button", title: `${t("close")} (Esc)`, onClick: onClose }, "✕"),
+		),
+	);
+}

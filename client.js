@@ -241,6 +241,11 @@ var zh = {
   "editor.dirty": "未保存",
   "editor.tooBig": "文件过大，无法编辑",
   "editor.find": "文件内查找",
+  "editor.wrap": "自动换行",
+  "editor.wrapTooBig": "文件超过 {n} 行，暂不支持自动换行",
+  "editor.wrapCapped": "文件过大，换行模式仅渲染前 {n} 行",
+  "goto.placeholder": "跳转到行（1-{n}）",
+  "goto.title": "跳转到行 (⌘G / Ctrl+G)",
   "editor.findPlaceholder": "查找…",
   "editor.preview": "预览",
   "editor.raw": "原始",
@@ -472,6 +477,11 @@ var en = {
   "editor.dirty": "unsaved",
   "editor.tooBig": "File too large to edit",
   "editor.find": "Find in file",
+  "editor.wrap": "Word wrap",
+  "editor.wrapTooBig": "File exceeds {n} lines; word wrap unavailable",
+  "editor.wrapCapped": "File too large; wrap mode renders the first {n} lines only",
+  "goto.placeholder": "Go to line (1-{n})",
+  "goto.title": "Go to line (⌘G / Ctrl+G)",
   "editor.findPlaceholder": "Find…",
   "editor.preview": "Preview",
   "editor.raw": "Raw",
@@ -2083,8 +2093,68 @@ function SymbolPalette({ t, symbols, onPick, onClose }) {
     )
   );
 }
+function GotoLinePalette({ t, totalLines, initial, onGo, onClose }) {
+  const [value, setValue] = useState(String(initial ?? ""));
+  const inputRef = useRef(null);
+  useEffect(() => {
+    inputRef.current?.focus();
+    inputRef.current?.select();
+  }, []);
+  const submit = () => {
+    const n = Number.parseInt(value, 10);
+    if (Number.isFinite(n) && n >= 1) onGo(Math.min(n, totalLines));
+    onClose();
+  };
+  const onKeyDown = (event) => {
+    event.stopPropagation();
+    if (event.key === "Enter") {
+      event.preventDefault();
+      submit();
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      onClose();
+    }
+  };
+  return h(
+    "div",
+    { className: "ce-palette ce-goto", onMouseDown: (event) => event.stopPropagation() },
+    h(
+      "div",
+      { className: "ce-palette-head" },
+      h("input", {
+        ref: inputRef,
+        className: "ce-input",
+        type: "text",
+        inputMode: "numeric",
+        placeholder: t("goto.placeholder", { n: totalLines }),
+        value,
+        onChange: (event) => setValue(event.target.value),
+        onKeyDown,
+        spellcheck: false,
+        autoComplete: "off"
+      }),
+      h("button", { className: "ce-tool ce-tiny", type: "button", title: `${t("close")} (Esc)`, onClick: onClose }, "✕")
+    )
+  );
+}
 
 // src/client/codeview.js
+function buildTokenCells(text, lang, state, lineNo, flash) {
+  const runs = tokenizeLine(text, lang, state);
+  const isGo = lang === "go";
+  return runs.map((run, r) => {
+    const marked = flash && flash.col != null && run.startCol === flash.col && flash.word && run.s === flash.word;
+    return run.cls === "ce-id" || run.cls === "ce-type" || run.cls === "ce-kw" ? h(
+      "span",
+      {
+        key: r,
+        className: `ce-t ${run.cls}${isGo ? " ce-jump" : ""}${marked ? " ce-mark" : ""}`,
+        ...isGo ? { "data-ce-l": lineNo, "data-ce-c": run.startCol ?? 1, "data-ce-w": run.word ?? "" } : {}
+      },
+      run.s
+    ) : h("span", { key: r, className: `ce-t ${run.cls}${marked ? " ce-mark" : ""}` }, run.s);
+  });
+}
 function computeVisible({ doc, scroll, viewport, diagByLine, flash, diffMarks, delAnchors, delGroups, t, blameOn, blame, openCommit, onDelPreview }) {
   if (!doc) return null;
   const extraAt = (line) => {
@@ -2109,22 +2179,9 @@ function computeVisible({ doc, scroll, viewport, diagByLine, flash, diffMarks, d
   const rows = [];
   const blameRows = [];
   for (let i = start; i < doc.lines.length && yOf(i) <= scroll + viewport + 8 * ROW; i++) {
-    const runs = tokenizeLine(doc.lines[i], lang, doc.states[i]);
-    const isGo = lang === "go";
     const lineFlash = flash && flash.line === i + 1 ? flash : null;
     const lineChanged = diffMarks !== null && diffMarks.has(i + 1);
-    const cells = runs.map((run, r) => {
-      const marked = lineFlash && lineFlash.col != null && run.startCol === lineFlash.col && lineFlash.word && run.s === lineFlash.word;
-      return run.cls === "ce-id" || run.cls === "ce-type" || run.cls === "ce-kw" ? h(
-        "span",
-        {
-          key: r,
-          className: `ce-t ${run.cls}${isGo ? " ce-jump" : ""}${marked ? " ce-mark" : ""}`,
-          ...isGo ? { "data-ce-l": i + 1, "data-ce-c": run.startCol ?? 1, "data-ce-w": run.word ?? "" } : {}
-        },
-        run.s
-      ) : h("span", { key: r, className: `ce-t ${run.cls}${marked ? " ce-mark" : ""}` }, run.s);
-    });
+    const cells = buildTokenCells(doc.lines[i], lang, doc.states[i], i + 1, lineFlash);
     const lineDiags = diagByLine.get(i + 1);
     const underlines = (lineDiags ?? []).map((item, d) => {
       const endCol = item.endLine === item.line ? Math.min(item.endCol, item.startCol + 200) : item.startCol + 200;
@@ -2205,6 +2262,46 @@ function computeGutter({ doc, scroll, viewport, cursor, findLines, diffMarks, de
   }
   return rows;
 }
+var WRAP_LINE_CAP = 5e3;
+function computeWrapRows({ doc, flash, diffMarks, delAnchors, delGroups, cursor, findLines, t, onDelPreview }) {
+  if (!doc) return null;
+  const lang = langFor(doc.path);
+  const total = doc.lines.length;
+  const limit = Math.min(total, WRAP_LINE_CAP);
+  const rows = [];
+  let delIdx = 0;
+  const pushDelBar = (anchor) => {
+    const deleted = delGroups?.get(anchor) ?? [];
+    rows.push(h("button", {
+      key: `del:${anchor}`,
+      type: "button",
+      className: "ce-delbar ce-delbar-flow",
+      title: t("diff.deletedAt"),
+      onClick: () => onDelPreview({ anchor, lines: deleted })
+    }, `− ${deleted.length} ${t("diff.deletedLines")}`));
+  };
+  for (let i = 0; i < limit; i++) {
+    while (delIdx < delAnchors.length && delAnchors[delIdx] <= i + 1) pushDelBar(delAnchors[delIdx++]);
+    const lineNo = i + 1;
+    const lineFlash = flash && flash.line === lineNo ? flash : null;
+    const lineChanged = diffMarks !== null && diffMarks.has(lineNo);
+    const cells = buildTokenCells(doc.lines[i], lang, doc.states[i], lineNo, lineFlash);
+    rows.push(h(
+      "div",
+      {
+        key: i,
+        "data-wl": lineNo,
+        className: `ce-wline${lineFlash ? " ce-flash" : ""}${lineChanged ? " ce-line-changed" : ""}`
+      },
+      h("span", {
+        className: `ce-wlineno${cursor?.line === lineNo ? " ce-wlineno-active" : ""}${findLines.has(lineNo) ? " ce-gline-find" : ""}${lineChanged ? " ce-gline-changed" : ""}`
+      }, String(lineNo)),
+      h("span", { className: "ce-wtext" }, cells.length ? cells : " ")
+    ));
+  }
+  while (delIdx < delAnchors.length) pushDelBar(delAnchors[delIdx++]);
+  return { rows, capped: total > limit };
+}
 
 // src/client/code.js
 var PREVIEW_RE = /\.(md|markdown|html?|svg)$/i;
@@ -2242,6 +2339,8 @@ function CodeBody(props) {
   const [branchPickOpen, setBranchPickOpen] = useState(false);
   const [blameOn, setBlameOn] = useState(false);
   const [blame, setBlame] = useState(null);
+  const [wrapOn, setWrapOn] = useState(false);
+  const [gotoOpen, setGotoOpen] = useState(false);
   const [previewOn, setPreviewOn] = useState(false);
   const [delGroups, setDelGroups] = useState(null);
   const [delPreview, setDelPreview] = useState(null);
@@ -2269,14 +2368,40 @@ function CodeBody(props) {
   const noticeTimer = useRef(null);
   const latestPersistRef = useRef(null);
   const peekRef = useRef(null);
+  const wrapOnRef = useRef(false);
   docRef.current = doc;
   cursorRef.current = cursor;
   peekRef.current = peek;
+  wrapOnRef.current = wrapOn;
   const say = useCallback((text, kind = "info") => {
     setNotice({ text, kind });
     if (noticeTimer.current) clearTimeout(noticeTimer.current);
     if (kind !== "error") noticeTimer.current = setTimeout(() => setNotice({ text: "", kind: "info" }), 3800);
   }, []);
+  const scrollAreaToLine = useCallback((line) => {
+    const area = codeRef.current;
+    if (!area) return;
+    if (wrapOnRef.current) {
+      const node = area.querySelector(`[data-wl="${line}"]`);
+      if (node) {
+        const nr = node.getBoundingClientRect();
+        const ar = area.getBoundingClientRect();
+        area.scrollTop += nr.top - ar.top - (area.clientHeight - nr.height) / 2;
+      }
+      setScroll(area.scrollTop);
+      return;
+    }
+    area.scrollTop = Math.max(0, (line - 1) * ROW - area.clientHeight / 2);
+    setScroll(area.scrollTop);
+  }, []);
+  const toggleWrap = useCallback(() => {
+    const d = docRef.current;
+    if (!wrapOnRef.current && d && d.lines.length > WRAP_LINE_CAP) {
+      say(t("editor.wrapTooBig", { n: WRAP_LINE_CAP }), "error");
+      return;
+    }
+    setWrapOn((v) => !v);
+  }, [say, t]);
   const persistKey = sessionId && cwd ? `dsh.plugin-kit.v1.${sessionId}` : null;
   useEffect(() => {
     if (!cwd || status.state !== "starting" && !status.progress) return void 0;
@@ -2409,17 +2534,13 @@ function CodeBody(props) {
       }
       const markLine = mark?.line ?? clampLine;
       requestAnimationFrame(() => {
-        const area = codeRef.current;
-        if (!area) return;
-        const target = (Math.max(1, markLine) - 1) * ROW - area.clientHeight / 2;
-        area.scrollTop = Math.max(0, target);
-        setScroll(area.scrollTop);
+        scrollAreaToLine(Math.max(1, markLine));
         setFlash({ line: markLine, col: mark?.col, word: mark?.word });
         setTimeout(() => setFlash((f) => f && f.line === markLine ? null : f), 1800);
       });
       return entry;
     },
-    [cwd, fetchDiagnostics, say, t]
+    [cwd, fetchDiagnostics, say, t, scrollAreaToLine]
   );
   const openFile = useCallback(
     async (path, line, col, record = true, mark) => {
@@ -2533,6 +2654,7 @@ function CodeBody(props) {
     if (!blob) return;
     if (Number.isFinite(blob.railW)) setRailW(Math.max(150, Math.min(760, blob.railW)));
     if (typeof blob.railVisible === "boolean") setRailVisible(blob.railVisible);
+    if (typeof blob.wrapOn === "boolean") setWrapOn(blob.wrapOn);
     if (typeof blob.mode === "string") setMode(blob.mode === "skills" ? "files" : blob.mode);
     if (blob.path && !docRef.current) {
       histRef.current = { back: Array.isArray(blob.back) ? blob.back : [], forward: Array.isArray(blob.forward) ? blob.forward : [] };
@@ -2555,6 +2677,7 @@ function CodeBody(props) {
       mode,
       railW,
       railVisible,
+      wrapOn,
       back: histRef.current.back.slice(-40),
       forward: histRef.current.forward.slice(-40)
     };
@@ -2566,7 +2689,7 @@ function CodeBody(props) {
       } catch {
       }
     }, 700);
-  }, [persistKey, doc, cursor, scroll, mode, railW, railVisible, histTick]);
+  }, [persistKey, doc, cursor, scroll, mode, railW, railVisible, wrapOn, histTick]);
   useEffect(() => () => {
     if (saveTimer.current) clearTimeout(saveTimer.current);
     const last = latestPersistRef.current;
@@ -2588,13 +2711,9 @@ function CodeBody(props) {
     setCursor({ line, col, word: word ?? wordAt(current.lines[line - 1] ?? "", col)?.word ?? "" });
     setFlash({ line, col, word });
     setTimeout(() => setFlash((f) => f && f.line === line ? null : f), 1800);
-    const area = codeRef.current;
-    if (area) {
-      area.scrollTop = Math.max(0, (line - 1) * ROW - area.clientHeight / 2);
-      setScroll(area.scrollTop);
-      area.focus({ preventScroll: true });
-    }
-  }, []);
+    scrollAreaToLine(line);
+    codeRef.current?.focus({ preventScroll: true });
+  }, [scrollAreaToLine]);
   const openDiff = useCallback(
     async (path, scope) => {
       if (!cwd) return;
@@ -2866,14 +2985,10 @@ function CodeBody(props) {
     setFindIdx(next);
     const m = findMatches[next];
     setCursor((c) => ({ line: m.line, col: m.col, word: c?.word ?? "" }));
-    const area = codeRef.current;
-    if (area) {
-      area.scrollTop = Math.max(0, (m.line - 1) * ROW - area.clientHeight / 2);
-      setScroll(area.scrollTop);
-    }
+    scrollAreaToLine(m.line);
     setFlash({ line: m.line, col: m.col, word: findQuery });
     setTimeout(() => setFlash((f) => f && f.line === m.line ? null : f), 1200);
-  }, [findMatches, findIdx, findQuery]);
+  }, [findMatches, findIdx, findQuery, scrollAreaToLine]);
   const startEdit = useCallback(() => {
     if (!doc || doc.truncated || doc.image) return;
     if (doc.raw.length > 2 * 1024 * 1024 || doc.lines.length > 5e4) {
@@ -2968,9 +3083,27 @@ function CodeBody(props) {
         openSearch();
         return;
       }
+      if ((event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey && event.code === "KeyG") {
+        if (modeRef.current === "code" && docRef.current && !editing) {
+          event.preventDefault();
+          setGotoOpen((v) => !v);
+        }
+        return;
+      }
+      if (event.altKey && !event.metaKey && !event.ctrlKey && event.code === "KeyZ") {
+        if (modeRef.current === "code" && docRef.current && !editing) {
+          event.preventDefault();
+          toggleWrap();
+        }
+        return;
+      }
       if (event.key === "Escape") {
         if (editing) {
           cancelEdit();
+          return;
+        }
+        if (gotoOpen) {
+          setGotoOpen(false);
           return;
         }
         if (findOpen) {
@@ -2992,7 +3125,7 @@ function CodeBody(props) {
         if (searchOpen) setSearchOpen(false);
       }
     },
-    [palette, closePalette, openPalette, openSearch, searchOpen, peek, closePeek, goBack, goForward, symPalette, editing, saveEdit, cancelEdit, findOpen, delPreview]
+    [palette, closePalette, openPalette, openSearch, searchOpen, peek, closePeek, goBack, goForward, symPalette, editing, saveEdit, cancelEdit, findOpen, delPreview, gotoOpen, toggleWrap]
   );
   const doJump = useCallback(
     async (kind, pos) => {
@@ -3137,22 +3270,22 @@ function CodeBody(props) {
   const delAnchors = useMemo(() => delGroups === null ? [] : [...delGroups.keys()].sort((a, b) => a - b), [delGroups]);
   const changeRailBlobs = useMemo(() => doc ? changeBlobs(diffMarks, delGroups ? [...delGroups.keys()] : null) : [], [doc, diffMarks, delGroups]);
   const jumpToLine = useCallback((line) => {
-    const area = codeRef.current;
     setCursor((c) => ({ line, col: 1, word: c?.word ?? "" }));
-    if (area) {
-      area.scrollTop = Math.max(0, (line - 1) * ROW - area.clientHeight / 2);
-      setScroll(area.scrollTop);
-    }
+    scrollAreaToLine(line);
     setFlash({ line, col: 1, word: "" });
     setTimeout(() => setFlash((f) => f && f.line === line ? null : f), 1200);
-  }, []);
+  }, [scrollAreaToLine]);
   const visible = useMemo(
-    () => computeVisible({ doc, scroll, viewport, diagByLine, flash, diffMarks, delAnchors, delGroups, t, blameOn, blame, openCommit, onDelPreview: setDelPreview }),
-    [doc, scroll, viewport, diagByLine, flash, diffMarks, delAnchors, delGroups, t, blameOn, blame, openCommit]
+    () => wrapOn ? null : computeVisible({ doc, scroll, viewport, diagByLine, flash, diffMarks, delAnchors, delGroups, t, blameOn, blame, openCommit, onDelPreview: setDelPreview }),
+    [wrapOn, doc, scroll, viewport, diagByLine, flash, diffMarks, delAnchors, delGroups, t, blameOn, blame, openCommit]
   );
   const gutter = useMemo(
-    () => computeGutter({ doc, scroll, viewport, cursor, findLines, diffMarks, delAnchors }),
-    [doc, scroll, viewport, cursor, findLines, diffMarks, delAnchors]
+    () => wrapOn ? null : computeGutter({ doc, scroll, viewport, cursor, findLines, diffMarks, delAnchors }),
+    [wrapOn, doc, scroll, viewport, cursor, findLines, diffMarks, delAnchors]
+  );
+  const wrapDoc = useMemo(
+    () => wrapOn ? computeWrapRows({ doc, flash, diffMarks, delAnchors, delGroups, cursor, findLines, t, onDelPreview: setDelPreview }) : null,
+    [wrapOn, doc, flash, diffMarks, delAnchors, delGroups, cursor, findLines, t]
   );
   const statusTitle = (status.state === "error" ? `${t("status.error")}: ${status.message}` : status.state === "starting" ? t("status.starting") : status.state === "ready" ? t("status.ready") : t("status.off")) + (status.progress ? ` · ${status.progress}` : "");
   const previewActive = previewOn && doc !== null && PREVIEW_RE.test(doc.path);
@@ -3334,12 +3467,13 @@ function CodeBody(props) {
             editing ? h("button", { type: "button", className: "ce-link", onClick: cancelEdit }, t("editor.cancel")) : null,
             editing && editText !== (doc?.raw ?? "") ? h("span", { className: "ce-chip ce-chip-warn" }, t("editor.dirty")) : null,
             doc && !diff && !doc.image ? h("button", { type: "button", className: `ce-tool ce-tiny${findOpen ? " ce-tool-on" : ""}`, title: `${t("editor.find")} (⌘F / Ctrl+F)`, onClick: () => setFindOpen((v) => !v) }, "⌕") : null,
-            doc && !diff && !doc.image ? h("button", { type: "button", className: `ce-tool ce-tiny${blameOn ? " ce-tool-on" : ""}`, title: t("blame.toggle"), onClick: () => {
+            doc && !diff && !doc.image ? h("button", { type: "button", className: `ce-tool ce-tiny${wrapOn ? " ce-tool-on" : ""}`, title: `${t("editor.wrap")} (⌥Z / Alt+Z)`, onClick: toggleWrap }, "↩") : null,
+            doc && !diff && !doc.image ? h("button", { type: "button", className: `ce-tool ce-tiny${blameOn ? " ce-tool-on" : ""}`, title: t("blame.toggle"), disabled: wrapOn, onClick: () => {
               setBlameOn((v) => !v);
               setBlame(null);
             } }, "B") : null,
             h("span", { className: "ce-spacer" }),
-            cursor ? h("span", { className: "ce-pos" }, `Ln ${cursor.line}, Col ${cursor.col}${cursor.word ? ` · ${cursor.word}` : ""}`) : null,
+            cursor ? h("button", { type: "button", className: "ce-pos ce-pos-btn", title: t("goto.title"), onClick: () => setGotoOpen(true) }, `Ln ${cursor.line}, Col ${cursor.col}${cursor.word ? ` · ${cursor.word}` : ""}`) : null,
             diagnostics.length ? h("span", { className: "ce-diag" }, `${diagnostics.length} ${t("diag.count")}`) : null
           ),
           findOpen && !editing ? h(
@@ -3375,11 +3509,11 @@ function CodeBody(props) {
               { className: "ce-imgwrap ce-scroll" },
               doc.image.base64 ? h("img", { className: "ce-img", src: `data:${doc.image.mime};base64,${doc.image.base64}`, alt: doc.path }) : h("div", { className: "ce-note" }, t("image.tooBig")),
               h("div", { className: "ce-imgmeta" }, `${doc.image.mime} · ${(doc.image.size / 1024).toFixed(1)} KB${doc.image.truncated ? ` · ${t("image.tooBig")}` : ""}`)
-            ) : editing ? h("textarea", { className: "ce-edit-ta", value: editText, spellcheck: false, onChange: (e) => setEditText(e.target.value) }) : previewActive ? MD_RE.test(doc.path) ? h(MarkdownView, { text: doc.raw }) : SVG_RE.test(doc.path) ? h("div", { className: "ce-imgwrap ce-scroll" }, h("img", { className: "ce-img", src: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(doc.raw)}`, alt: doc.path })) : h("iframe", { className: "ce-htmlprev", sandbox: "", srcDoc: doc.raw, title: doc.path }) : h(
+            ) : editing ? h("textarea", { className: `ce-edit-ta${wrapOn ? " ce-edit-ta-wrap" : ""}`, value: editText, spellcheck: false, onChange: (e) => setEditText(e.target.value) }) : previewActive ? MD_RE.test(doc.path) ? h(MarkdownView, { text: doc.raw }) : SVG_RE.test(doc.path) ? h("div", { className: "ce-imgwrap ce-scroll" }, h("img", { className: "ce-img", src: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(doc.raw)}`, alt: doc.path })) : h("iframe", { className: "ce-htmlprev", sandbox: "", srcDoc: doc.raw, title: doc.path }) : h(
               Fragment,
               null,
-              blameOn && blame !== null ? h("div", { className: "ce-blame" }, visible?.blameRows) : null,
-              h("div", { className: "ce-gutter" }, h("div", { className: "ce-gutter-inner", style: { transform: `translateY(${-scroll}px)` } }, gutter)),
+              blameOn && blame !== null && !wrapOn ? h("div", { className: "ce-blame" }, visible?.blameRows) : null,
+              wrapOn ? null : h("div", { className: "ce-gutter" }, h("div", { className: "ce-gutter-inner", style: { transform: `translateY(${-scroll}px)` } }, gutter)),
               h(
                 "div",
                 {
@@ -3391,7 +3525,12 @@ function CodeBody(props) {
                   onScroll: (event) => setScroll(event.currentTarget.scrollTop),
                   style: { outline: "none" }
                 },
-                h("div", { className: "ce-code-inner", style: { height: `${visible?.total ?? (doc.lines.length + 2) * ROW}px` } }, visible?.rows)
+                wrapOn ? h(
+                  "div",
+                  { className: "ce-wdoc" },
+                  wrapDoc?.rows,
+                  wrapDoc?.capped ? h("div", { className: "ce-note ce-wcap" }, t("editor.wrapCapped", { n: WRAP_LINE_CAP })) : null
+                ) : h("div", { className: "ce-code-inner", style: { height: `${visible?.total ?? (doc.lines.length + 2) * ROW}px` } }, visible?.rows)
               )
             ),
             !editing && !previewActive && changeRailBlobs.length > 0 ? h("div", { className: "ce-changerail" }, changeRailBlobs.map((b, i) => h("button", {
@@ -3429,6 +3568,7 @@ function CodeBody(props) {
           void openFile(item.path, item.line, item.col, true, word ? { line: item.line, col: item.col, word } : null);
         }, onClose: () => setOverlay(null) }) : null,
         palette ? h(QuickOpen, { t, state: palette, onQuery: onPaletteQuery, onPick: onPalettePick, onClose: closePalette }) : null,
+        gotoOpen && doc && !doc.image ? h(GotoLinePalette, { t, totalLines: doc.lines.length, initial: cursor?.line ?? 1, onGo: jumpToLine, onClose: () => setGotoOpen(false) }) : null,
         searchOpen && search ? h(SearchPanel, {
           t,
           cwd,
@@ -3717,6 +3857,17 @@ var CSS = `
 .ce-gline-changed{color:var(--dsw-alias-state-success-primary,#3fb950);font-weight:700;background:color-mix(in srgb,var(--dsw-alias-state-success-primary,#3fb950) 14%,transparent)}
 .ce-delbar{position:absolute;left:0;right:0;width:100%;height:${ROW}px;display:flex;align-items:center;gap:6px;padding:0 10px;border:0;text-align:left;cursor:pointer;background:color-mix(in srgb,var(--dsw-alias-state-error-primary,#f85149) 16%,transparent);color:var(--dsw-alias-state-error-primary,#f85149);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px}
 .ce-delbar:hover{background:color-mix(in srgb,var(--dsw-alias-state-error-primary,#f85149) 28%,transparent)}
+.ce-wdoc{padding:4px 0 10px;min-width:0}
+.ce-wline{display:flex;align-items:flex-start;padding-right:10px}
+.ce-wlineno{flex:none;width:52px;box-sizing:border-box;padding-right:10px;text-align:right;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;line-height:${ROW}px;color:var(--dsw-alias-label-tertiary,#667);user-select:none}
+.ce-wlineno-active{color:var(--dsw-alias-label-primary,#cde)}
+.ce-wtext{flex:1;min-width:0;white-space:pre-wrap;overflow-wrap:break-word;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;line-height:${ROW}px;tab-size:4}
+.ce-delbar-flow{position:static;width:auto;height:${ROW}px;margin-left:52px;border-radius:4px}
+.ce-wcap{padding:6px 12px}
+.ce-goto{width:min(340px,calc(100% - 32px))}
+.ce-edit-ta-wrap{white-space:pre-wrap;overflow-wrap:break-word}
+.ce-pos-btn{border:0;background:transparent;color:inherit;font:inherit;cursor:pointer;padding:0 2px;border-radius:4px}
+.ce-pos-btn:hover{background:var(--dsw-alias-interactive-bg-hover,#2b2b2b);color:var(--dsw-alias-label-primary,#ddd)}
 .ce-chip-mark{color:var(--dsw-alias-state-success-primary,#3fb950);cursor:pointer}
 .ce-dline-click{cursor:pointer}
 .ce-dline-click:hover{box-shadow:inset 0 0 0 .5px var(--dsw-alias-border-l2,#444)}

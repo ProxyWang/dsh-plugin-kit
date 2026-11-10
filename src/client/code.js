@@ -11,8 +11,8 @@ import { BranchPalette } from "./branchpick.js";
 import { RelPath, toAbs } from "./pathtools.js";
 import { TreePanel } from "./tree.js";
 import { ChangesPanel } from "./changes.js";
-import { LocationList, QuickOpen, SearchPanel, RefsPeek, SymbolPalette } from "./overlays.js";
-import { computeGutter, computeVisible } from "./codeview.js";
+import { LocationList, QuickOpen, SearchPanel, RefsPeek, SymbolPalette, GotoLinePalette } from "./overlays.js";
+import { computeGutter, computeVisible, computeWrapRows, WRAP_LINE_CAP } from "./codeview.js";
 
 /** Files that open in rendered preview by default: markdown, html and svg. */
 const PREVIEW_RE = /\.(md|markdown|html?|svg)$/i;
@@ -52,6 +52,8 @@ export function CodeBody(props) {
 	const [branchPickOpen, setBranchPickOpen] = useState(false);
 	const [blameOn, setBlameOn] = useState(false);
 	const [blame, setBlame] = useState(null);
+	const [wrapOn, setWrapOn] = useState(false);
+	const [gotoOpen, setGotoOpen] = useState(false);
 	const [previewOn, setPreviewOn] = useState(false);
 	const [delGroups, setDelGroups] = useState(null);
 	const [delPreview, setDelPreview] = useState(null);
@@ -80,16 +82,49 @@ export function CodeBody(props) {
 	const noticeTimer = useRef(null);
 	const latestPersistRef = useRef(null);
 	const peekRef = useRef(null);
+	const wrapOnRef = useRef(false);
 
 	docRef.current = doc;
 	cursorRef.current = cursor;
 	peekRef.current = peek;
+	wrapOnRef.current = wrapOn;
 
 	const say = useCallback((text, kind = "info") => {
 		setNotice({ text, kind });
 		if (noticeTimer.current) clearTimeout(noticeTimer.current);
 		if (kind !== "error") noticeTimer.current = setTimeout(() => setNotice({ text: "", kind: "info" }), 3800);
 	}, []);
+
+	// Center `line` in the code area. Word-wrap mode has variable row heights,
+	// so it locates the flow node by its data-wl marker instead of ROW math;
+	// rect-delta scrolling avoids scrollIntoView moving outer containers.
+	const scrollAreaToLine = useCallback((line) => {
+		const area = codeRef.current;
+		if (!area) return;
+		if (wrapOnRef.current) {
+			const node = area.querySelector(`[data-wl="${line}"]`);
+			if (node) {
+				const nr = node.getBoundingClientRect();
+				const ar = area.getBoundingClientRect();
+				area.scrollTop += nr.top - ar.top - (area.clientHeight - nr.height) / 2;
+			}
+			setScroll(area.scrollTop);
+			return;
+		}
+		area.scrollTop = Math.max(0, (line - 1) * ROW - area.clientHeight / 2);
+		setScroll(area.scrollTop);
+	}, []);
+
+	// Word wrap renders the whole document in flow, so it stays off for very
+	// large files (the toggle says why).
+	const toggleWrap = useCallback(() => {
+		const d = docRef.current;
+		if (!wrapOnRef.current && d && d.lines.length > WRAP_LINE_CAP) {
+			say(t("editor.wrapTooBig", { n: WRAP_LINE_CAP }), "error");
+			return;
+		}
+		setWrapOn((v) => !v);
+	}, [say, t]);
 
 	const persistKey = sessionId && cwd ? `dsh.plugin-kit.v1.${sessionId}` : null;
 
@@ -232,17 +267,13 @@ export function CodeBody(props) {
 			// reveal after layout; mark drives the exact-token highlight
 			const markLine = mark?.line ?? clampLine;
 			requestAnimationFrame(() => {
-				const area = codeRef.current;
-				if (!area) return;
-				const target = (Math.max(1, markLine) - 1) * ROW - area.clientHeight / 2;
-				area.scrollTop = Math.max(0, target);
-				setScroll(area.scrollTop);
+				scrollAreaToLine(Math.max(1, markLine));
 				setFlash({ line: markLine, col: mark?.col, word: mark?.word });
 				setTimeout(() => setFlash((f) => (f && f.line === markLine ? null : f)), 1800);
 			});
 			return entry;
 		},
-		[cwd, fetchDiagnostics, say, t],
+		[cwd, fetchDiagnostics, say, t, scrollAreaToLine],
 	);
 
 	const openFile = useCallback(
@@ -366,6 +397,7 @@ export function CodeBody(props) {
 		if (!blob) return;
 		if (Number.isFinite(blob.railW)) setRailW(Math.max(150, Math.min(760, blob.railW)));
 		if (typeof blob.railVisible === "boolean") setRailVisible(blob.railVisible);
+		if (typeof blob.wrapOn === "boolean") setWrapOn(blob.wrapOn);
 		if (typeof blob.mode === "string") setMode(blob.mode === "skills" ? "files" : blob.mode);
 		if (blob.path && !docRef.current) {
 			histRef.current = { back: Array.isArray(blob.back) ? blob.back : [], forward: Array.isArray(blob.forward) ? blob.forward : [] };
@@ -389,6 +421,7 @@ export function CodeBody(props) {
 			mode,
 			railW,
 			railVisible,
+			wrapOn,
 			back: histRef.current.back.slice(-40),
 			forward: histRef.current.forward.slice(-40),
 		};
@@ -399,7 +432,7 @@ export function CodeBody(props) {
 				localStorage.setItem(persistKey, JSON.stringify(payload));
 			} catch {}
 		}, 700);
-	}, [persistKey, doc, cursor, scroll, mode, railW, railVisible, histTick]);
+	}, [persistKey, doc, cursor, scroll, mode, railW, railVisible, wrapOn, histTick]);
 
 	useEffect(() => () => {
 		if (saveTimer.current) clearTimeout(saveTimer.current);
@@ -422,13 +455,9 @@ export function CodeBody(props) {
 		setCursor({ line, col, word: word ?? wordAt(current.lines[line - 1] ?? "", col)?.word ?? "" });
 		setFlash({ line, col, word });
 		setTimeout(() => setFlash((f) => (f && f.line === line ? null : f)), 1800);
-		const area = codeRef.current;
-		if (area) {
-			area.scrollTop = Math.max(0, (line - 1) * ROW - area.clientHeight / 2);
-			setScroll(area.scrollTop);
-			area.focus({ preventScroll: true });
-		}
-	}, []);
+		scrollAreaToLine(line);
+		codeRef.current?.focus({ preventScroll: true });
+	}, [scrollAreaToLine]);
 
 	const openDiff = useCallback(
 		async (path, scope) => {
@@ -733,14 +762,10 @@ export function CodeBody(props) {
 		setFindIdx(next);
 		const m = findMatches[next];
 		setCursor((c) => ({ line: m.line, col: m.col, word: c?.word ?? "" }));
-		const area = codeRef.current;
-		if (area) {
-			area.scrollTop = Math.max(0, (m.line - 1) * ROW - area.clientHeight / 2);
-			setScroll(area.scrollTop);
-		}
+		scrollAreaToLine(m.line);
 		setFlash({ line: m.line, col: m.col, word: findQuery });
 		setTimeout(() => setFlash((f) => (f && f.line === m.line ? null : f)), 1200);
-	}, [findMatches, findIdx, findQuery]);
+	}, [findMatches, findIdx, findQuery, scrollAreaToLine]);
 	const startEdit = useCallback(() => {
 		if (!doc || doc.truncated || doc.image) return;
 		if (doc.raw.length > 2 * 1024 * 1024 || doc.lines.length > 50000) {
@@ -838,9 +863,27 @@ export function CodeBody(props) {
 				openSearch();
 				return;
 			}
+			if ((event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey && event.code === "KeyG") {
+				if (modeRef.current === "code" && docRef.current && !editing) {
+					event.preventDefault();
+					setGotoOpen((v) => !v);
+				}
+				return;
+			}
+			if (event.altKey && !event.metaKey && !event.ctrlKey && event.code === "KeyZ") {
+				if (modeRef.current === "code" && docRef.current && !editing) {
+					event.preventDefault();
+					toggleWrap();
+				}
+				return;
+			}
 			if (event.key === "Escape") {
 				if (editing) {
 					cancelEdit();
+					return;
+				}
+				if (gotoOpen) {
+					setGotoOpen(false);
 					return;
 				}
 				if (findOpen) {
@@ -862,7 +905,7 @@ export function CodeBody(props) {
 				if (searchOpen) setSearchOpen(false);
 			}
 		},
-		[palette, closePalette, openPalette, openSearch, searchOpen, peek, closePeek, goBack, goForward, symPalette, editing, saveEdit, cancelEdit, findOpen, delPreview],
+		[palette, closePalette, openPalette, openSearch, searchOpen, peek, closePeek, goBack, goForward, symPalette, editing, saveEdit, cancelEdit, findOpen, delPreview, gotoOpen, toggleWrap],
 	);
 
 	const doJump = useCallback(
@@ -1019,24 +1062,27 @@ export function CodeBody(props) {
 	const delAnchors = useMemo(() => (delGroups === null ? [] : [...delGroups.keys()].sort((a, b) => a - b)), [delGroups]);
 	const changeRailBlobs = useMemo(() => (doc ? changeBlobs(diffMarks, delGroups ? [...delGroups.keys()] : null) : []), [doc, diffMarks, delGroups]);
 	const jumpToLine = useCallback((line) => {
-		const area = codeRef.current;
 		setCursor((c) => ({ line, col: 1, word: c?.word ?? "" }));
-		if (area) {
-			area.scrollTop = Math.max(0, (line - 1) * ROW - area.clientHeight / 2);
-			setScroll(area.scrollTop);
-		}
+		scrollAreaToLine(line);
 		setFlash({ line, col: 1, word: "" });
 		setTimeout(() => setFlash((f) => (f && f.line === line ? null : f)), 1200);
-	}, []);
-	// Row building lives in codeview.js as pure functions; the memos only wire state.
+	}, [scrollAreaToLine]);
+	// Row building lives in codeview.js as pure functions; the memos only wire
+	// state. Word-wrap mode swaps the virtual-scroll builders for the flow
+	// builder and skips them entirely.
 	const visible = useMemo(
-		() => computeVisible({ doc, scroll, viewport, diagByLine, flash, diffMarks, delAnchors, delGroups, t, blameOn, blame, openCommit, onDelPreview: setDelPreview }),
-		[doc, scroll, viewport, diagByLine, flash, diffMarks, delAnchors, delGroups, t, blameOn, blame, openCommit],
+		() => (wrapOn ? null : computeVisible({ doc, scroll, viewport, diagByLine, flash, diffMarks, delAnchors, delGroups, t, blameOn, blame, openCommit, onDelPreview: setDelPreview })),
+		[wrapOn, doc, scroll, viewport, diagByLine, flash, diffMarks, delAnchors, delGroups, t, blameOn, blame, openCommit],
 	);
 
 	const gutter = useMemo(
-		() => computeGutter({ doc, scroll, viewport, cursor, findLines, diffMarks, delAnchors }),
-		[doc, scroll, viewport, cursor, findLines, diffMarks, delAnchors],
+		() => (wrapOn ? null : computeGutter({ doc, scroll, viewport, cursor, findLines, diffMarks, delAnchors })),
+		[wrapOn, doc, scroll, viewport, cursor, findLines, diffMarks, delAnchors],
+	);
+
+	const wrapDoc = useMemo(
+		() => (wrapOn ? computeWrapRows({ doc, flash, diffMarks, delAnchors, delGroups, cursor, findLines, t, onDelPreview: setDelPreview }) : null),
+		[wrapOn, doc, flash, diffMarks, delAnchors, delGroups, cursor, findLines, t],
 	);
 
 	const statusTitle = (status.state === "error" ? `${t("status.error")}: ${status.message}` : status.state === "starting" ? t("status.starting") : status.state === "ready" ? t("status.ready") : t("status.off")) + (status.progress ? ` · ${status.progress}` : "");
@@ -1240,9 +1286,10 @@ export function CodeBody(props) {
 							editing ? h("button", { type: "button", className: "ce-link", onClick: cancelEdit }, t("editor.cancel")) : null,
 							editing && editText !== (doc?.raw ?? "") ? h("span", { className: "ce-chip ce-chip-warn" }, t("editor.dirty")) : null,
 							doc && !diff && !doc.image ? h("button", { type: "button", className: `ce-tool ce-tiny${findOpen ? " ce-tool-on" : ""}`, title: `${t("editor.find")} (⌘F / Ctrl+F)`, onClick: () => setFindOpen((v) => !v) }, "⌕") : null,
-							doc && !diff && !doc.image ? h("button", { type: "button", className: `ce-tool ce-tiny${blameOn ? " ce-tool-on" : ""}`, title: t("blame.toggle"), onClick: () => { setBlameOn((v) => !v); setBlame(null); } }, "B") : null,
+							doc && !diff && !doc.image ? h("button", { type: "button", className: `ce-tool ce-tiny${wrapOn ? " ce-tool-on" : ""}`, title: `${t("editor.wrap")} (⌥Z / Alt+Z)`, onClick: toggleWrap }, "↩") : null,
+							doc && !diff && !doc.image ? h("button", { type: "button", className: `ce-tool ce-tiny${blameOn ? " ce-tool-on" : ""}`, title: t("blame.toggle"), disabled: wrapOn, onClick: () => { setBlameOn((v) => !v); setBlame(null); } }, "B") : null,
 							h("span", { className: "ce-spacer" }),
-							cursor ? h("span", { className: "ce-pos" }, `Ln ${cursor.line}, Col ${cursor.col}${cursor.word ? ` · ${cursor.word}` : ""}`) : null,
+							cursor ? h("button", { type: "button", className: "ce-pos ce-pos-btn", title: t("goto.title"), onClick: () => setGotoOpen(true) }, `Ln ${cursor.line}, Col ${cursor.col}${cursor.word ? ` · ${cursor.word}` : ""}`) : null,
 							diagnostics.length ? h("span", { className: "ce-diag" }, `${diagnostics.length} ${t("diag.count")}`) : null,
 						),
 						findOpen && !editing ? h("div", { className: "ce-find" },
@@ -1274,7 +1321,7 @@ export function CodeBody(props) {
 									h("div", { className: "ce-imgmeta" }, `${doc.image.mime} · ${(doc.image.size / 1024).toFixed(1)} KB${doc.image.truncated ? ` · ${t("image.tooBig")}` : ""}`),
 								)
 								: editing
-								? h("textarea", { className: "ce-edit-ta", value: editText, spellcheck: false, onChange: (e) => setEditText(e.target.value) })
+								? h("textarea", { className: `ce-edit-ta${wrapOn ? " ce-edit-ta-wrap" : ""}`, value: editText, spellcheck: false, onChange: (e) => setEditText(e.target.value) })
 								: previewActive
 									? (MD_RE.test(doc.path)
 										? h(MarkdownView, { text: doc.raw })
@@ -1284,8 +1331,8 @@ export function CodeBody(props) {
 									: h(
 										Fragment,
 										null,
-										blameOn && blame !== null ? h("div", { className: "ce-blame" }, visible?.blameRows) : null,
-										h("div", { className: "ce-gutter" }, h("div", { className: "ce-gutter-inner", style: { transform: `translateY(${-scroll}px)` } }, gutter)),
+										blameOn && blame !== null && !wrapOn ? h("div", { className: "ce-blame" }, visible?.blameRows) : null,
+										wrapOn ? null : h("div", { className: "ce-gutter" }, h("div", { className: "ce-gutter-inner", style: { transform: `translateY(${-scroll}px)` } }, gutter)),
 							h(
 								"div",
 								{
@@ -1297,7 +1344,12 @@ export function CodeBody(props) {
 									onScroll: (event) => setScroll(event.currentTarget.scrollTop),
 									style: { outline: "none" },
 								},
-								h("div", { className: "ce-code-inner", style: { height: `${visible?.total ?? (doc.lines.length + 2) * ROW}px` } }, visible?.rows),
+								wrapOn
+									? h("div", { className: "ce-wdoc" },
+										wrapDoc?.rows,
+										wrapDoc?.capped ? h("div", { className: "ce-note ce-wcap" }, t("editor.wrapCapped", { n: WRAP_LINE_CAP })) : null,
+									)
+									: h("div", { className: "ce-code-inner", style: { height: `${visible?.total ?? (doc.lines.length + 2) * ROW}px` } }, visible?.rows),
 							),
 								),
 							!editing && !previewActive && changeRailBlobs.length > 0
@@ -1330,6 +1382,9 @@ export function CodeBody(props) {
 						: h("div", { className: "ce-empty" }, t("editor.placeholder")),
 				overlay ? h(LocationList, { t, overlay, cwd, onPick: (item) => { const word = cursorRef.current?.word; setOverlay(null); void openFile(item.path, item.line, item.col, true, word ? { line: item.line, col: item.col, word } : null); }, onClose: () => setOverlay(null) }) : null,
 				palette ? h(QuickOpen, { t, state: palette, onQuery: onPaletteQuery, onPick: onPalettePick, onClose: closePalette }) : null,
+				gotoOpen && doc && !doc.image
+					? h(GotoLinePalette, { t, totalLines: doc.lines.length, initial: cursor?.line ?? 1, onGo: jumpToLine, onClose: () => setGotoOpen(false) })
+					: null,
 				searchOpen && search ? h(SearchPanel, {
 					t,
 					cwd,

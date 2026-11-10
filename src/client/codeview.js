@@ -11,6 +11,31 @@ import { ROW } from "./constants.js";
 import { langFor, tokenizeLine } from "./highlight.js";
 import { relTime } from "./pathtools.js";
 
+/**
+ * Syntax-highlighted token spans for one source line, shared by the virtual
+ * scroll view and the word-wrap flow view. Go identifiers/types/keywords get
+ * data-ce-* hooks for click-to-jump; `flash` marks one exact token occurrence.
+ */
+export function buildTokenCells(text, lang, state, lineNo, flash) {
+	const runs = tokenizeLine(text, lang, state);
+	const isGo = lang === "go";
+	return runs.map((run, r) => {
+		// word-level highlight when the flash names a token at this column
+		const marked = flash && flash.col != null && run.startCol === flash.col && flash.word && run.s === flash.word;
+		return run.cls === "ce-id" || run.cls === "ce-type" || run.cls === "ce-kw"
+			? h(
+				"span",
+				{
+					key: r,
+					className: `ce-t ${run.cls}${isGo ? " ce-jump" : ""}${marked ? " ce-mark" : ""}`,
+					...(isGo ? { "data-ce-l": lineNo, "data-ce-c": run.startCol ?? 1, "data-ce-w": run.word ?? "" } : {}),
+				},
+				run.s,
+			)
+			: h("span", { key: r, className: `ce-t ${run.cls}${marked ? " ce-mark" : ""}` }, run.s);
+	});
+}
+
 /** Rows (syntax-highlighted lines + collapsed-deletion bars) and blame rows for the current viewport. */
 export function computeVisible({ doc, scroll, viewport, diagByLine, flash, diffMarks, delAnchors, delGroups, t, blameOn, blame, openCommit, onDelPreview }) {
 	if (!doc) return null;
@@ -36,25 +61,9 @@ export function computeVisible({ doc, scroll, viewport, diagByLine, flash, diffM
 	const rows = [];
 	const blameRows = [];
 	for (let i = start; i < doc.lines.length && yOf(i) <= scroll + viewport + 8 * ROW; i++) {
-		const runs = tokenizeLine(doc.lines[i], lang, doc.states[i]);
-		const isGo = lang === "go";
 		const lineFlash = flash && flash.line === i + 1 ? flash : null;
 		const lineChanged = diffMarks !== null && diffMarks.has(i + 1);
-		const cells = runs.map((run, r) => {
-			// word-level highlight when the flash names a token at this column
-			const marked = lineFlash && lineFlash.col != null && run.startCol === lineFlash.col && lineFlash.word && run.s === lineFlash.word;
-			return run.cls === "ce-id" || run.cls === "ce-type" || run.cls === "ce-kw"
-				? h(
-					"span",
-					{
-						key: r,
-						className: `ce-t ${run.cls}${isGo ? " ce-jump" : ""}${marked ? " ce-mark" : ""}`,
-						...(isGo ? { "data-ce-l": i + 1, "data-ce-c": run.startCol ?? 1, "data-ce-w": run.word ?? "" } : {}),
-					},
-					run.s,
-				)
-				: h("span", { key: r, className: `ce-t ${run.cls}${marked ? " ce-mark" : ""}` }, run.s);
-		});
+		const cells = buildTokenCells(doc.lines[i], lang, doc.states[i], i + 1, lineFlash);
 		const lineDiags = diagByLine.get(i + 1);
 		const underlines = (lineDiags ?? []).map((item, d) => {
 			const endCol = item.endLine === item.line ? Math.min(item.endCol, item.startCol + 200) : item.startCol + 200;
@@ -136,4 +145,52 @@ export function computeGutter({ doc, scroll, viewport, cursor, findLines, diffMa
 		);
 	}
 	return rows;
+}
+
+/** Word-wrap rendering cap: beyond this the flow layout stays off (perf). */
+export const WRAP_LINE_CAP = 5000;
+
+/**
+ * Word-wrap mode rows: a plain document flow (no absolute positioning, no
+ * virtualization) where each source line is a flex row with an inline line
+ * number, so wrapped visual lines keep their gutter aligned for free.
+ * Collapsed-deletion bars interleave at their anchors. `capped` reports
+ * whether the document exceeds WRAP_LINE_CAP and only its head is rendered.
+ */
+export function computeWrapRows({ doc, flash, diffMarks, delAnchors, delGroups, cursor, findLines, t, onDelPreview }) {
+	if (!doc) return null;
+	const lang = langFor(doc.path);
+	const total = doc.lines.length;
+	const limit = Math.min(total, WRAP_LINE_CAP);
+	const rows = [];
+	let delIdx = 0;
+	const pushDelBar = (anchor) => {
+		const deleted = delGroups?.get(anchor) ?? [];
+		rows.push(h("button", {
+			key: `del:${anchor}`,
+			type: "button",
+			className: "ce-delbar ce-delbar-flow",
+			title: t("diff.deletedAt"),
+			onClick: () => onDelPreview({ anchor, lines: deleted }),
+		}, `− ${deleted.length} ${t("diff.deletedLines")}`));
+	};
+	for (let i = 0; i < limit; i++) {
+		while (delIdx < delAnchors.length && delAnchors[delIdx] <= i + 1) pushDelBar(delAnchors[delIdx++]);
+		const lineNo = i + 1;
+		const lineFlash = flash && flash.line === lineNo ? flash : null;
+		const lineChanged = diffMarks !== null && diffMarks.has(lineNo);
+		const cells = buildTokenCells(doc.lines[i], lang, doc.states[i], lineNo, lineFlash);
+		rows.push(h("div", {
+			key: i,
+			"data-wl": lineNo,
+			className: `ce-wline${lineFlash ? " ce-flash" : ""}${lineChanged ? " ce-line-changed" : ""}`,
+		},
+		h("span", {
+			className: `ce-wlineno${cursor?.line === lineNo ? " ce-wlineno-active" : ""}${findLines.has(lineNo) ? " ce-gline-find" : ""}${lineChanged ? " ce-gline-changed" : ""}`,
+		}, String(lineNo)),
+		h("span", { className: "ce-wtext" }, cells.length ? cells : " "),
+		));
+	}
+	while (delIdx < delAnchors.length) pushDelBar(delAnchors[delIdx++]);
+	return { rows, capped: total > limit };
 }
