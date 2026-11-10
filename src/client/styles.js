@@ -84,6 +84,20 @@ export const CSS = `
 .ce-dline-meta{color:var(--dsw-alias-label-tertiary,#777);font-style:italic}
 .ce-dnum{width:44px;flex:none;text-align:right;padding-right:8px;color:var(--dsw-alias-label-tertiary,#667);user-select:none}
 .ce-dtext{min-width:0}
+.ce-sbsrow{display:grid;grid-template-columns:40px minmax(0,1fr) 40px minmax(0,1fr)}
+.ce-sbsrow-full{display:block}
+.ce-sbsnum{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;line-height:19px;color:var(--dsw-alias-label-tertiary,#667);text-align:right;padding:1px 6px 1px 0;user-select:none;background:rgba(128,128,128,.05);overflow:hidden}
+.ce-sbscell{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;line-height:19px;white-space:pre-wrap;overflow-wrap:break-word;padding:1px 10px 1px 4px;min-width:0}
+.ce-sbs-del{background:color-mix(in srgb,var(--dsw-alias-state-error-primary,#f85149) 12%,transparent)}
+.ce-sbs-add{background:color-mix(in srgb,var(--dsw-alias-state-success-primary,#3fb950) 12%,transparent)}
+.ce-sbs-empty{background:rgba(128,128,128,.05)}
+.ce-wd{border-radius:2px}
+.ce-wd-del{background:color-mix(in srgb,var(--dsw-alias-state-error-primary,#f85149) 45%,transparent)}
+.ce-wd-add{background:color-mix(in srgb,var(--dsw-alias-state-success-primary,#3fb950) 45%,transparent)}
+.ce-wd-zero{display:inline-block;width:0;overflow:hidden;vertical-align:baseline}
+.ce-wd-zero.ce-wd-add{border-left:2px solid var(--dsw-alias-state-success-primary,#3fb950)}
+.ce-wd-zero.ce-wd-del{border-left:2px solid var(--dsw-alias-state-error-primary,#f85149)}
+.ce-dnav{outline:1.5px solid var(--dsw-alias-brand-primary,#59b7ff);outline-offset:-1.5px}
 .ce-empty{flex:1;display:flex;align-items:center;justify-content:center;color:var(--dsw-alias-label-tertiary,#7a8490);padding:24px;text-align:center}
 .ce-statusbar{flex:none;display:flex;gap:8px;align-items:center;padding:3px 10px;border-top:.5px solid var(--dsw-alias-border-l1,#333);font-size:11px;color:var(--dsw-alias-label-tertiary,#889);min-height:22px}
 .ce-title-ico{display:inline-flex;margin-right:2px}

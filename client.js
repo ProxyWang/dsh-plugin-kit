@@ -122,6 +122,10 @@ var zh = {
   "diff.marksChip": "变更行",
   "diff.marksClear": "点击清除变更标注",
   "diff.showHunks": "只看 diff 片段",
+  "diff.toSide": "并排视图",
+  "diff.toUnified": "统一视图",
+  "diff.prevChange": "上一处变更",
+  "diff.nextChange": "下一处变更",
   "diff.deletedLines": "行被删除 · 点击查看",
   "diff.deletedAt": "此处删除的内容",
   "changes.discard": "回退变更（恢复到 HEAD）",
@@ -366,6 +370,10 @@ var en = {
   "diff.marksChip": "changed",
   "diff.marksClear": "Click to clear change marks",
   "diff.showHunks": "Hunk-only diff",
+  "diff.toSide": "Side-by-side view",
+  "diff.toUnified": "Unified view",
+  "diff.prevChange": "Previous change",
+  "diff.nextChange": "Next change",
   "diff.deletedLines": "deleted lines · click to view",
   "diff.deletedAt": "Deleted here",
   "changes.discard": "Discard changes (restore HEAD)",
@@ -743,8 +751,17 @@ var IconSearch = () => svg([h("circle", { key: "c", cx: 10.5, cy: 10.5, r: 6.5 }
 var IconTextSearch = () => svg([h("path", { key: "a", d: "M4 5h16" }), h("path", { key: "b", d: "M4 10h11" }), h("path", { key: "c2", d: "M4 15h8" }), h("path", { key: "d", d: "M18 14.5l2.5 2.5" })]);
 
 // src/client/diff.js
+var SBS_KEY = "dsh.ce.diff.sbs.v1";
+function loadSbs() {
+  try {
+    return localStorage.getItem(SBS_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
 function parseDiff(text) {
   const lines2 = text.split("\n");
+  if (lines2.length > 1 && lines2[lines2.length - 1] === "") lines2.pop();
   const rows = [];
   let oldLine = 0;
   let newLine = 0;
@@ -835,9 +852,180 @@ function changeBlobs(marks, delKeys) {
   }
   return blobs;
 }
+function pairRows(rows) {
+  const out = [];
+  let i = 0;
+  while (i < rows.length) {
+    const row = rows[i];
+    if (row.kind === "del") {
+      const dels = [];
+      while (i < rows.length && rows[i].kind === "del") dels.push(rows[i++]);
+      const adds = [];
+      while (i < rows.length && rows[i].kind === "add") adds.push(rows[i++]);
+      const n = Math.max(dels.length, adds.length);
+      for (let j = 0; j < n; j++) {
+        const left = dels[j] ?? null;
+        const right = adds[j] ?? null;
+        out.push({ kind: left && right ? "mod" : left ? "del" : "add", left, right });
+      }
+      continue;
+    }
+    if (row.kind === "add") {
+      out.push({ kind: "add", left: null, right: row });
+      i++;
+      continue;
+    }
+    out.push({ kind: row.kind, left: row, right: row });
+    i++;
+  }
+  return out;
+}
+function diffTokens(text) {
+  return text.match(/[A-Za-z0-9_$]+|\s+|[^\sA-Za-z0-9_$]/g) ?? [];
+}
+function intraLineDelta(a, b) {
+  if (typeof a !== "string" || typeof b !== "string" || a === b) return null;
+  const ta = diffTokens(a);
+  const tb = diffTokens(b);
+  const min = Math.min(ta.length, tb.length);
+  let p = 0;
+  while (p < min && ta[p] === tb[p]) p++;
+  let s = 0;
+  while (s < min - p && ta[ta.length - 1 - s] === tb[tb.length - 1 - s]) s++;
+  let prefixLen = 0;
+  for (let k = 0; k < p; k++) prefixLen += ta[k].length;
+  let suffixA = 0;
+  for (let k = ta.length - s; k < ta.length; k++) suffixA += ta[k].length;
+  let suffixB = 0;
+  for (let k = tb.length - s; k < tb.length; k++) suffixB += tb[k].length;
+  const oldStart = prefixLen;
+  const oldEnd = a.length - suffixA;
+  const newStart = prefixLen;
+  const newEnd = b.length - suffixB;
+  if (oldStart === oldEnd && newStart === newEnd) return null;
+  return { oldStart, oldEnd, newStart, newEnd };
+}
+function intraMarks(rows) {
+  const marks = /* @__PURE__ */ new Map();
+  let i = 0;
+  while (i < rows.length) {
+    if (rows[i].kind !== "del") {
+      i++;
+      continue;
+    }
+    const dels = [];
+    while (i < rows.length && rows[i].kind === "del") dels.push(rows[i++]);
+    const adds = [];
+    while (i < rows.length && rows[i].kind === "add") adds.push(rows[i++]);
+    const n = Math.min(dels.length, adds.length);
+    for (let j = 0; j < n; j++) {
+      const d = intraLineDelta(dels[j].text, adds[j].text);
+      if (!d) continue;
+      marks.set(dels[j], { start: d.oldStart, end: d.oldEnd });
+      marks.set(adds[j], { start: d.newStart, end: d.newEnd });
+    }
+  }
+  return marks;
+}
 function DiffView({ t, diff, onClose, onOpenSource, canSource }) {
   const rows = useMemo(() => parseDiff(diff.text ?? ""), [diff.text]);
   const shown = rows.length > 4e3 ? rows.slice(0, 4e3) : rows;
+  const marks = useMemo(() => intraMarks(shown), [shown]);
+  const [sbs, setSbs] = useState(loadSbs);
+  const [navIdx, setNavIdx] = useState(-1);
+  const containerRef = useRef(null);
+  const paired = useMemo(() => sbs ? pairRows(shown) : null, [sbs, shown]);
+  const anchors = useMemo(() => {
+    const out = [];
+    if (sbs) {
+      (paired ?? []).forEach((p, i) => {
+        if (p.kind === "mod" || p.kind === "add" || p.kind === "del") out.push(i);
+      });
+      return out;
+    }
+    for (let i = 0; i < shown.length; i++) {
+      const k = shown[i].kind;
+      if ((k === "add" || k === "del") && (i === 0 || shown[i - 1].kind !== "add" && shown[i - 1].kind !== "del")) out.push(i);
+    }
+    return out;
+  }, [sbs, paired, shown]);
+  useEffect(() => {
+    setNavIdx(-1);
+  }, [diff.text, sbs]);
+  const toggleSbs = () => {
+    const next = !sbs;
+    setSbs(next);
+    try {
+      localStorage.setItem(SBS_KEY, next ? "1" : "0");
+    } catch {
+    }
+  };
+  const navTo = (delta) => {
+    if (anchors.length === 0) return;
+    let next = navIdx + delta;
+    if (next < 0) next = anchors.length - 1;
+    if (next >= anchors.length) next = 0;
+    setNavIdx(next);
+    const c = containerRef.current;
+    const node = c?.querySelector(`[data-dr="${anchors[next]}"]`);
+    if (!c || !node) return;
+    const nr = node.getBoundingClientRect();
+    const cr = c.getBoundingClientRect();
+    c.scrollTop += nr.top - cr.top - (c.clientHeight - nr.height) / 2;
+  };
+  const renderMarkedText = (row, withSign) => {
+    const sign = withSign ? row.kind === "add" ? "+ " : row.kind === "del" ? "− " : row.kind === "hunk" ? "" : " " : "";
+    const mark = marks.get(row);
+    if (!mark) {
+      const plain = `${sign}${row.text}`;
+      return plain === "" ? " " : plain;
+    }
+    const cls = row.kind === "del" ? "ce-wd ce-wd-del" : "ce-wd ce-wd-add";
+    const before = `${sign}${row.text.slice(0, mark.start)}`;
+    const mid = row.text.slice(mark.start, mark.end);
+    const after = row.text.slice(mark.end);
+    return mid === "" ? [before, h("span", { key: "m", className: `${cls} ce-wd-zero` }, ""), after] : [before, h("span", { key: "m", className: cls }, mid), after];
+  };
+  const renderUniRow = (row, i) => {
+    const clickable = Boolean(onOpenSource) && (row.newLine !== void 0 || row.oldLine !== void 0);
+    return h(
+      "div",
+      {
+        key: i,
+        "data-dr": i,
+        className: `ce-dline ce-dline-${row.kind}${clickable ? " ce-dline-click" : ""}${anchors[navIdx] === i ? " ce-dnav" : ""}`,
+        ...clickable ? { title: t("diff.openSourceTitle"), onClick: () => onOpenSource(row.newLine ?? row.oldLine) } : {}
+      },
+      diff.gutter === false ? null : h("span", { className: "ce-dnum" }, row.oldLine ?? ""),
+      diff.gutter === false ? null : h("span", { className: "ce-dnum" }, row.newLine ?? ""),
+      h("span", { className: "ce-dtext" }, renderMarkedText(row, true))
+    );
+  };
+  const renderSbsRow = (p, i) => {
+    const navCls = anchors[navIdx] === i ? " ce-dnav" : "";
+    if (p.kind === "hunk" || p.kind === "meta") {
+      return h(
+        "div",
+        { key: i, "data-dr": i, className: `ce-sbsrow ce-sbsrow-full ce-dline-${p.kind}${navCls}` },
+        h("span", { className: "ce-sbscell" }, p.left.text === "" ? " " : p.left.text)
+      );
+    }
+    const jumpLine = p.right?.newLine ?? p.left?.oldLine;
+    const clickable = Boolean(onOpenSource) && jumpLine !== void 0;
+    return h(
+      "div",
+      {
+        key: i,
+        "data-dr": i,
+        className: `ce-sbsrow${clickable ? " ce-dline-click" : ""}${navCls}`,
+        ...clickable ? { title: t("diff.openSourceTitle"), onClick: () => onOpenSource(jumpLine) } : {}
+      },
+      h("span", { className: "ce-sbsnum" }, p.kind === "add" ? "" : p.left?.oldLine ?? ""),
+      h("span", { className: `ce-sbscell${p.kind === "del" || p.kind === "mod" ? " ce-sbs-del" : ""}${p.left === null ? " ce-sbs-empty" : ""}` }, p.left ? renderMarkedText(p.left, false) : ""),
+      h("span", { className: "ce-sbsnum" }, p.kind === "del" ? "" : p.right?.newLine ?? ""),
+      h("span", { className: `ce-sbscell${p.kind === "add" || p.kind === "mod" ? " ce-sbs-add" : ""}${p.right === null ? " ce-sbs-empty" : ""}` }, p.right ? renderMarkedText(p.right, false) : "")
+    );
+  };
   return h(
     Fragment,
     null,
@@ -850,6 +1038,10 @@ function DiffView({ t, diff, onClose, onOpenSource, canSource }) {
       diff.stats ? h("span", { className: "ce-chip" }, `+${diff.stats.add} −${diff.stats.del}`) : null,
       diff.untracked ? h("span", { className: "ce-chip" }, t("diff.untracked")) : null,
       diff.note ? h("span", { className: "ce-chip" }, diff.note) : null,
+      h("span", { className: "ce-spacer" }),
+      h("button", { type: "button", className: "ce-tool ce-tiny", title: t("diff.prevChange"), disabled: anchors.length === 0, onClick: () => navTo(-1) }, "↑"),
+      h("button", { type: "button", className: "ce-tool ce-tiny", title: t("diff.nextChange"), disabled: anchors.length === 0, onClick: () => navTo(1) }, "↓"),
+      h("button", { type: "button", className: `ce-tool ce-tiny${sbs ? " ce-tool-on" : ""}`, title: sbs ? t("diff.toUnified") : t("diff.toSide"), onClick: toggleSbs }, sbs ? "≡" : "▥"),
       canSource && typeof onOpenSource === "function" ? h("button", { type: "button", className: "ce-link", title: t("diff.openSourceTitle"), onClick: () => onOpenSource(null) }, t("diff.openSource")) : null
     ),
     rows.length === 0 ? h("div", { className: "ce-empty" }, diff.text === "" ? t("diff.empty") : `${t("error")}: ${diff.error ?? ""}`) : h(
@@ -857,20 +1049,8 @@ function DiffView({ t, diff, onClose, onOpenSource, canSource }) {
       { className: "ce-scroll ce-code-wrap" },
       h(
         "div",
-        { className: "ce-code" },
-        shown.map(
-          (row, i) => h(
-            "div",
-            {
-              key: i,
-              className: `ce-dline ce-dline-${row.kind}${onOpenSource && (row.newLine !== void 0 || row.oldLine !== void 0) ? " ce-dline-click" : ""}`,
-              ...onOpenSource && (row.newLine !== void 0 || row.oldLine !== void 0) ? { title: t("diff.openSourceTitle"), onClick: () => onOpenSource(row.newLine ?? row.oldLine) } : {}
-            },
-            diff.gutter === false ? null : h("span", { className: "ce-dnum" }, row.oldLine ?? ""),
-            diff.gutter === false ? null : h("span", { className: "ce-dnum" }, row.newLine ?? ""),
-            h("span", { className: "ce-dtext" }, `${row.kind === "add" ? "+" : row.kind === "del" ? "−" : row.kind === "hunk" ? "" : " "} ${row.text}`)
-          )
-        ),
+        { className: "ce-code", ref: containerRef },
+        sbs ? (paired ?? []).map(renderSbsRow) : shown.map(renderUniRow),
         shown.length < rows.length ? h("div", { className: "ce-dline ce-dline-meta" }, "… display truncated …") : null
       )
     )
@@ -3807,6 +3987,20 @@ var CSS = `
 .ce-dline-meta{color:var(--dsw-alias-label-tertiary,#777);font-style:italic}
 .ce-dnum{width:44px;flex:none;text-align:right;padding-right:8px;color:var(--dsw-alias-label-tertiary,#667);user-select:none}
 .ce-dtext{min-width:0}
+.ce-sbsrow{display:grid;grid-template-columns:40px minmax(0,1fr) 40px minmax(0,1fr)}
+.ce-sbsrow-full{display:block}
+.ce-sbsnum{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;line-height:19px;color:var(--dsw-alias-label-tertiary,#667);text-align:right;padding:1px 6px 1px 0;user-select:none;background:rgba(128,128,128,.05);overflow:hidden}
+.ce-sbscell{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;line-height:19px;white-space:pre-wrap;overflow-wrap:break-word;padding:1px 10px 1px 4px;min-width:0}
+.ce-sbs-del{background:color-mix(in srgb,var(--dsw-alias-state-error-primary,#f85149) 12%,transparent)}
+.ce-sbs-add{background:color-mix(in srgb,var(--dsw-alias-state-success-primary,#3fb950) 12%,transparent)}
+.ce-sbs-empty{background:rgba(128,128,128,.05)}
+.ce-wd{border-radius:2px}
+.ce-wd-del{background:color-mix(in srgb,var(--dsw-alias-state-error-primary,#f85149) 45%,transparent)}
+.ce-wd-add{background:color-mix(in srgb,var(--dsw-alias-state-success-primary,#3fb950) 45%,transparent)}
+.ce-wd-zero{display:inline-block;width:0;overflow:hidden;vertical-align:baseline}
+.ce-wd-zero.ce-wd-add{border-left:2px solid var(--dsw-alias-state-success-primary,#3fb950)}
+.ce-wd-zero.ce-wd-del{border-left:2px solid var(--dsw-alias-state-error-primary,#f85149)}
+.ce-dnav{outline:1.5px solid var(--dsw-alias-brand-primary,#59b7ff);outline-offset:-1.5px}
 .ce-empty{flex:1;display:flex;align-items:center;justify-content:center;color:var(--dsw-alias-label-tertiary,#7a8490);padding:24px;text-align:center}
 .ce-statusbar{flex:none;display:flex;gap:8px;align-items:center;padding:3px 10px;border-top:.5px solid var(--dsw-alias-border-l1,#333);font-size:11px;color:var(--dsw-alias-label-tertiary,#889);min-height:22px}
 .ce-title-ico{display:inline-flex;margin-right:2px}

@@ -148,6 +148,30 @@ const { deletedGroups } = await import("./src/client/diff.js");
 const delGroups = deletedGroups("@@ -1,4 +1,3 @@\n ctx\n-old1\n-old2\n+new\n tail\n");
 check("deletedGroups anchors before next kept line", delGroups.size === 1 && delGroups.get(2)?.join() === "old1,old2", [...delGroups.entries()]);
 
+// --- side-by-side pairing + word-level marks --------------------------------------------------
+const { pairRows, intraLineDelta, intraMarks } = await import("./src/client/diff.js");
+const sbsRows = parseDiff("@@ -1,3 +1,4 @@\n ctx\n-old line\n+new line\n+added\n");
+const paired = pairRows(sbsRows);
+check("pairRows pairs del+add into mod", paired.length === 4 && paired[2].kind === "mod" && paired[2].left.text === "old line" && paired[2].right.text === "new line", paired.map((p) => p.kind));
+check("pairRows keeps unmatched add right-only", paired[3].kind === "add" && paired[3].left === null && paired[3].right.text === "added", paired[3]);
+check("pairRows ctx spans both sides with same row", paired[1].kind === "ctx" && paired[1].left === paired[1].right, paired[1].kind);
+const paired2 = pairRows(parseDiff("@@\n-a\n-b\n+c\n"));
+check("pairRows unbalanced dels leave right empty", paired2.length === 3 && paired2[0].kind === "hunk" && paired2[1].kind === "mod" && paired2[2].kind === "del" && paired2[2].right === null, paired2.map((p) => p.kind));
+const d1 = intraLineDelta("foo bar", "foo baz");
+check("intraLineDelta isolates the changed word", d1.oldStart === 4 && d1.oldEnd === 7 && d1.newStart === 4 && d1.newEnd === 7, d1);
+check("intraLineDelta identical lines → null", intraLineDelta("same", "same") === null, null);
+const d2 = intraLineDelta("x z", "x y z");
+check("intraLineDelta pure insertion → empty old range", d2.oldStart === d2.oldEnd && d2.newEnd > d2.newStart && "x y z".slice(d2.newStart, d2.newEnd) === "y ", d2);
+const d3 = intraLineDelta("aaa", "bbb");
+check("intraLineDelta full replace spans both lines", d3.oldStart === 0 && d3.oldEnd === 3 && d3.newStart === 0 && d3.newEnd === 3, d3);
+const mkRows = parseDiff("@@\n-hello world\n+hello there\n");
+const mk = intraMarks(mkRows);
+check("intraMarks marks both sides of a pair", mk.size === 2, [...mk.values()]);
+const mkDel = mk.get(mkRows.find((r) => r.kind === "del"));
+const mkAdd = mk.get(mkRows.find((r) => r.kind === "add"));
+check("intraMarks ranges cover the changed words", mkDel.start === 6 && mkDel.end === 11 && mkAdd.start === 6 && mkAdd.end === 11, { mkDel, mkAdd });
+check("intraMarks skips unpaired rows", intraMarks(parseDiff("@@\n+only add\n")).size === 0, null);
+
 // --- change tree ---------------------------------------------------------------------------
 const { buildTree } = await import("./src/client/changetree.js");
 const tree = buildTree([{ path: "a/b/c.go", ch: "M" }, { path: "a/b/d.go", ch: "M" }, { path: "a/x/e.go", ch: "U" }, { path: "top.go", ch: "M" }]);
