@@ -294,7 +294,7 @@ check("launcher renders element", Launch({}) != null, null);
 check("launcher null on empty registry", makeLauncher({ registry: { entries: () => [] }, sidebarRight: { openTab: () => {} }, getShortcuts: () => null, t: (k) => k })({}) === null, null);
 
 // --- curl parser -----------------------------------------------------------------------------
-const { parseCurl } = await import("./src/client/apiclient.js");
+const { parseCurl, toCurl, substituteVars, buildEnvMap, shellQuote } = await import("./src/client/apiclient.js");
 const c1 = parseCurl("curl -X POST 'https://a.b/c?d=1' -H 'Content-Type: application/json' -H 'X-T: v' --data '{\"x\":1}'");
 check("parseCurl post json", c1.method === "POST" && c1.url === "https://a.b/c?d=1" && c1.headers.length === 2 && c1.body === '{"x":1}', c1);
 const c2 = parseCurl("curl https://a.b/x \\\n  -H 'A: b' \\\n  -u user:pass");
@@ -303,6 +303,23 @@ const c3 = parseCurl("curl -G https://a.b/s -d 'q=1' -d 'r=2'");
 check("parseCurl -G appends query", c3.method === "GET" && c3.url === "https://a.b/s?q=1&r=2" && c3.body === "", c3);
 const c4 = parseCurl("curl --json '{\"a\":1}' https://a.b/j");
 check("parseCurl --json implies POST + content type", c4.method === "POST" && c4.headers.some((hd) => hd.name.toLowerCase() === "content-type" && hd.value === "application/json"), c4);
+
+// --- curl export + env variables ----------------------------------------------------------------
+check("shellQuote escapes single quotes", shellQuote("it's") === `'it'\\''s'`, shellQuote("it's"));
+const curlGet = toCurl({ method: "GET", url: "https://a.b/x", headers: [], bodyType: "none" });
+check("toCurl plain GET has no -X", curlGet === "curl 'https://a.b/x'", curlGet);
+const curlPost = toCurl({ method: "POST", url: "https://a.b/j", headers: [{ name: "X-T", value: "v" }], bodyType: "raw", rawSub: "json", body: '{"a":1}' });
+check("toCurl POST raw json", curlPost.includes("-X POST") && curlPost.includes("-H 'X-T: v'") && curlPost.includes("-H 'Content-Type: application/json'") && curlPost.includes(`--data-raw '{"a":1}'`), curlPost);
+const curlUserCT = toCurl({ method: "POST", url: "https://a.b/j", headers: [{ name: "content-type", value: "text/xml" }], bodyType: "raw", rawSub: "json", body: "x" });
+check("toCurl keeps user Content-Type without duplicating", (curlUserCT.match(/Content-Type|content-type/gi) ?? []).length === 1, curlUserCT);
+const rt = parseCurl(toCurl({ method: "POST", url: "https://a.b/r?q=1", headers: [{ name: "A", value: "b c" }], bodyType: "raw", rawSub: "json", body: '{"k":"v v"}' }));
+check("toCurl → parseCurl roundtrip preserves request", rt.method === "POST" && rt.url === "https://a.b/r?q=1" && rt.headers.some((hd) => hd.name === "A" && hd.value === "b c") && rt.body === '{"k":"v v"}', rt);
+const rtMp = parseCurl(toCurl({ method: "POST", url: "https://a.b/u", headers: [], bodyType: "multipart", formPairs: [{ name: "f", value: "hello world" }] }));
+check("toCurl multipart roundtrips as -F pairs", rtMp.multipart?.[0]?.name === "f" && rtMp.multipart[0].value === "hello world" && rtMp.method === "POST", rtMp);
+check("substituteVars replaces known names", substituteVars("{{base}}/x/{{ id }}", { base: "https://h", id: 7 }) === "https://h/x/7", substituteVars("{{base}}/x/{{ id }}", { base: "https://h", id: 7 }));
+check("substituteVars keeps unknown literal", substituteVars("{{nope}}/x", { base: "b" }) === "{{nope}}/x", null);
+check("substituteVars passthrough without braces", substituteVars("plain", {}) === "plain" && substituteVars(null, {}) === null, null);
+check("buildEnvMap skips empty names, last wins", JSON.stringify(buildEnvMap([{ name: "", value: "x" }, { name: "a", value: "1" }, { name: "a", value: "2" }])) === JSON.stringify({ a: "2" }), buildEnvMap([{ name: "a", value: "1" }, { name: "a", value: "2" }]));
 const c5 = parseCurl("curl -F 'field=hello world' -F 'file=@/tmp/a.png' https://a.b/upload");
 check(
 	"parseCurl -F becomes multipart pairs",

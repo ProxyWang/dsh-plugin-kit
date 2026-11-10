@@ -214,6 +214,12 @@ var zh = {
   "api.clear": "清空",
   "api.restoreTitle": "点击回填到编辑器",
   "api.delete": "删除",
+  "api.copyCurl": "复制为 curl",
+  "api.copied": "已复制 ✓",
+  "api.env": "环境变量",
+  "api.envTitle": "发送时替换 URL、请求头与请求体中的双花括号变量；未定义的变量原样保留",
+  "api.envEmpty": "暂无变量，点下方 + 添加",
+  "api.addEnv": "添加变量",
   "toolrow.edit": "编辑",
   "toolrow.write": "写入",
   "toolrow.failed": "失败",
@@ -462,6 +468,12 @@ var en = {
   "api.clear": "Clear",
   "api.restoreTitle": "Click to load into the editor",
   "api.delete": "Delete",
+  "api.copyCurl": "Copy as curl",
+  "api.copied": "Copied ✓",
+  "api.env": "Environment",
+  "api.envTitle": "Double-brace variables in URL, headers and body are substituted at send time; unknown names stay literal",
+  "api.envEmpty": "No variables yet — add one with +",
+  "api.addEnv": "Add variable",
   "toolrow.edit": "Edit",
   "toolrow.write": "Write",
   "toolrow.failed": "failed",
@@ -4995,6 +5007,46 @@ function statusClass(status) {
   if (status < 500) return "cea-warn";
   return "cea-err";
 }
+function shellQuote(s) {
+  return `'${String(s).replace(/'/g, "'\\''")}'`;
+}
+function toCurl(req) {
+  const parts = ["curl"];
+  const method = String(req?.method || "GET").toUpperCase();
+  const bodyType = req?.bodyType || "none";
+  if (method !== "GET" || bodyType !== "none") parts.push(`-X ${method}`);
+  parts.push(shellQuote(String(req?.url ?? "")));
+  const headers = (req?.headers ?? []).filter((hd) => String(hd?.name ?? "").trim() !== "");
+  for (const hd of headers) parts.push(`-H ${shellQuote(`${String(hd.name).trim()}: ${hd.value ?? ""}`)}`);
+  const hasCT = headers.some((hd) => String(hd.name).trim().toLowerCase() === "content-type");
+  if (bodyType === "raw") {
+    if (!hasCT) parts.push(`-H ${shellQuote(`Content-Type: ${SUB_CT[req?.rawSub] ?? "text/plain"}`)}`);
+    parts.push(`--data-raw ${shellQuote(req?.body ?? "")}`);
+  } else if (bodyType === "form") {
+    for (const p of req?.formPairs ?? []) {
+      const name = String(p?.name ?? "").trim();
+      if (name) parts.push(`--data-urlencode ${shellQuote(`${name}=${p?.value ?? ""}`)}`);
+    }
+  } else if (bodyType === "multipart") {
+    for (const p of req?.formPairs ?? []) {
+      const name = String(p?.name ?? "").trim();
+      if (name) parts.push(`-F ${shellQuote(`${name}=${p?.value ?? ""}`)}`);
+    }
+  }
+  return parts.length <= 2 ? parts.join(" ") : parts.join(" \\\n  ");
+}
+function substituteVars(text, envMap) {
+  if (typeof text !== "string" || !text.includes("{{")) return text;
+  return text.replace(/\{\{\s*([A-Za-z0-9_.\-]+)\s*\}\}/g, (whole, name) => Object.prototype.hasOwnProperty.call(envMap, name) ? String(envMap[name]) : whole);
+}
+function buildEnvMap(pairs) {
+  const map = {};
+  for (const p of pairs ?? []) {
+    const name = String(p?.name ?? "").trim();
+    if (name) map[name] = p?.value ?? "";
+  }
+  return map;
+}
 function prettySize(n) {
   if (n < 1024) return `${n}B`;
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)}KB`;
@@ -5002,6 +5054,7 @@ function prettySize(n) {
 }
 var HIST_KEY = "dsh.ce.api.history.v1";
 var SAVED_KEY = "dsh.ce.api.saved.v1";
+var ENV_KEY = "dsh.ce.api.env.v1";
 var HIST_CAP = 30;
 var SAVED_CAP = 50;
 function pushEntry(list, entry, cap) {
@@ -5051,6 +5104,12 @@ function ApiView({ t }) {
   const [saved, setSaved] = useState([]);
   const [saveOpen, setSaveOpen] = useState(false);
   const [saveName, setSaveName] = useState("");
+  const [envPairs, setEnvPairs] = useState(() => loadList(ENV_KEY));
+  const [envOpen, setEnvOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    storeList(ENV_KEY, envPairs);
+  }, [envPairs]);
   useEffect(() => {
     setHistory(loadList(HIST_KEY));
     setSaved(loadList(SAVED_KEY));
@@ -5102,20 +5161,21 @@ function ApiView({ t }) {
   }, []);
   const send = useCallback(() => {
     if (url.trim() === "" || sending) return;
-    const sendHeaders = headers.filter((hd) => String(hd.name ?? "").trim() !== "").map((hd) => ({ name: hd.name, value: String(hd.value ?? "") }));
+    const envMap = buildEnvMap(envPairs);
+    const sendHeaders = headers.filter((hd) => String(hd.name ?? "").trim() !== "").map((hd) => ({ name: String(hd.name).trim(), value: substituteVars(String(hd.value ?? ""), envMap) }));
     let sendBody;
     let multipart;
     if (bodyType === "raw") {
-      sendBody = body;
+      sendBody = substituteVars(body, envMap);
       upsertHeader(sendHeaders, "Content-Type", SUB_CT[rawSub] ?? "text/plain");
     } else if (bodyType === "form") {
-      sendBody = new URLSearchParams(formPairs.filter((p) => String(p.name ?? "").trim() !== "").map((p) => [p.name.trim(), String(p.value ?? "")])).toString();
+      sendBody = new URLSearchParams(formPairs.filter((p) => String(p.name ?? "").trim() !== "").map((p) => [p.name.trim(), substituteVars(String(p.value ?? ""), envMap)])).toString();
       upsertHeader(sendHeaders, "Content-Type", "application/x-www-form-urlencoded");
     } else if (bodyType === "multipart") {
-      multipart = formPairs.filter((p) => String(p.name ?? "").trim() !== "").map((p) => ({ name: p.name.trim(), value: String(p.value ?? "") }));
+      multipart = formPairs.filter((p) => String(p.name ?? "").trim() !== "").map((p) => ({ name: p.name.trim(), value: substituteVars(String(p.value ?? ""), envMap) }));
     }
     const sentMethod = method;
-    const sentUrl = url.trim();
+    const sentUrl = substituteVars(url.trim(), envMap);
     const sentSnapshot = snapshot();
     setSending(true);
     api("api.send", {
@@ -5144,7 +5204,21 @@ function ApiView({ t }) {
         return next;
       });
     });
-  }, [method, url, headers, bodyType, rawSub, formPairs, body, sending, snapshot]);
+  }, [method, url, headers, bodyType, rawSub, formPairs, body, sending, snapshot, envPairs]);
+  const copyCurl = useCallback(() => {
+    const text = toCurl({ method, url, headers, bodyType, rawSub, formPairs, body });
+    const done = () => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    };
+    try {
+      const p = navigator.clipboard?.writeText(text);
+      if (p && typeof p.then === "function") p.then(done, () => {
+      });
+      else done();
+    } catch {
+    }
+  }, [method, url, headers, bodyType, rawSub, formPairs, body]);
   const doImport = useCallback(() => {
     const p = parseCurl(importText);
     setMethod(p.method);
@@ -5228,16 +5302,26 @@ function ApiView({ t }) {
         setImportOpen(true);
         setHistOpen(false);
         setSaveOpen(false);
+        setEnvOpen(false);
       } }, t("api.import")),
+      h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost", title: t("api.copyCurl"), disabled: url.trim() === "", onClick: copyCurl }, copied ? t("api.copied") : "⧉ curl"),
+      h("button", { type: "button", className: `ce-sk-btn ce-sk-btn-ghost${envOpen ? " cea-btn-on" : ""}`, title: t("api.envTitle"), onClick: () => {
+        setEnvOpen((v) => !v);
+        setHistOpen(false);
+        setSaveOpen(false);
+        setImportOpen(false);
+      } }, `{{}}${envPairs.length ? ` ${envPairs.length}` : ""}`),
       h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost", title: t("api.saveTitle"), onClick: () => {
         setSaveOpen(true);
         setHistOpen(false);
         setImportOpen(false);
+        setEnvOpen(false);
       } }, t("api.saveBtn")),
       h("button", { type: "button", className: `ce-sk-btn ce-sk-btn-ghost${histOpen ? " cea-btn-on" : ""}`, title: t("api.history"), onClick: () => {
         setHistOpen((v) => !v);
         setSaveOpen(false);
         setImportOpen(false);
+        setEnvOpen(false);
       } }, `${t("api.history")}${history.length ? ` ${history.length}` : ""}`)
     ),
     histOpen ? h(
@@ -5400,6 +5484,36 @@ function ApiView({ t }) {
           }
         }),
         h("button", { type: "button", className: "ce-sk-btn", disabled: saveName.trim() === "", onClick: doSaveFavorite }, t("api.saveConfirm"))
+      )
+    ) : null,
+    envOpen ? h(
+      "div",
+      { className: "ce-overlay" },
+      h(
+        "div",
+        { className: "ce-overlay-head" },
+        h("span", null, t("api.env")),
+        h("button", { type: "button", className: "ce-tool ce-tiny", onClick: () => setEnvOpen(false) }, "✕")
+      ),
+      h("div", { className: "ce-note" }, t("api.envTitle")),
+      h(
+        "div",
+        { className: "cea-scroll" },
+        envPairs.length === 0 ? h("div", { className: "ce-note" }, t("api.envEmpty")) : null,
+        envPairs.map((p, i) => h(
+          "div",
+          { key: i, className: "cea-hrow" },
+          h("input", { className: "ce-input cea-hkey", placeholder: "name", value: p.name ?? "", onChange: (e) => setEnvPairs((prev) => prev.map((x, j) => j === i ? { ...x, name: e.target.value } : x)) }),
+          h("input", { className: "ce-input cea-hval", placeholder: "value", value: p.value ?? "", onChange: (e) => setEnvPairs((prev) => prev.map((x, j) => j === i ? { ...x, value: e.target.value } : x)) }),
+          h("button", { type: "button", className: "ce-tool ce-tiny", title: t("api.delete"), onClick: () => setEnvPairs((prev) => prev.filter((_, j) => j !== i)) }, "✕")
+        ))
+      ),
+      h(
+        "div",
+        { className: "cea-bar" },
+        h("button", { type: "button", className: "ce-tool ce-tiny", title: t("api.addEnv"), onClick: () => setEnvPairs((prev) => [...prev, { name: "", value: "" }]) }, "+"),
+        h("span", { className: "ce-spacer" }),
+        h("button", { type: "button", className: "ce-sk-btn", onClick: () => setEnvOpen(false) }, t("close"))
       )
     ) : null
   );
