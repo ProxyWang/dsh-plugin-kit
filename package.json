@@ -1,0 +1,37 @@
+{
+  "name": "@local/dsh-code-explorer",
+  "version": "1.0.0",
+  "description": "Harness code explorer panel: workspace file tree, quick-open file picker, full-text search, VSCode-style editor with gopls definition/references/hover jumps, and branch changes diff view.",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-sidebar-right",
+        "@deepseek-ai/dsh-client-shortcuts"
+      ]
+    }
+  },
+  "scripts": {
+    "test": "node test-host.mjs && node test-client.mjs && node test-search.mjs && node test-nested.mjs && node test-parent.mjs && node test-remote.mjs"
+  },
+  "icon": "icon.svg",
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg"
+  ]
+}

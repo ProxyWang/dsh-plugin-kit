@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Code Explorer",
+    "description": "Right-sidebar code browsing: workspace file tree, quick-open file picker (⌘P), full-text search (⇧⌘F), VSCode-style editor with gopls definition/references/hover and a click-to-peek references window, current-branch change diffs; navigate forward/back with ⌘] / ⌘[."
+  }
+}
