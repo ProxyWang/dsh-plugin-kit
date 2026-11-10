@@ -112,6 +112,7 @@ var zh = {
   nodiag: "无诊断",
   "diag.count": "诊断",
   "diff.scopeWorking": "工作区",
+  "diff.scopeStaged": "暂存区 vs HEAD",
   "diff.scopeBranch": "分支",
   "diff.untracked": "未跟踪的新文件",
   "diff.deleted": "已删除",
@@ -382,6 +383,7 @@ var en = {
   nodiag: "No diagnostics",
   "diag.count": "diagnostics",
   "diff.scopeWorking": "Working",
+  "diff.scopeStaged": "Staged vs HEAD",
   "diff.scopeBranch": "Branch",
   "diff.untracked": "untracked new file",
   "diff.deleted": "deleted",
@@ -1078,7 +1080,7 @@ function DiffView({ t, diff, onClose, onOpenSource, canSource }) {
       { className: "ce-head" },
       h("button", { type: "button", className: "ce-tool ce-tiny", title: `${t("diff.back")} (Esc)`, onClick: onClose }, "←"),
       h("span", { className: "ce-head-path" }, diff.path),
-      h("span", { className: "ce-chip" }, diff.scope === "commit" ? `${t("diff.scopeCommit")} ${diff.commit ?? ""}` : diff.scope === "branch" ? `${t("diff.scopeBranch")} ${diff.base ? `vs ${diff.base}` : ""}` : diff.scope === "call" ? t("diff.scopeCall") : t("diff.scopeWorking")),
+      h("span", { className: "ce-chip" }, diff.scope === "commit" ? `${t("diff.scopeCommit")} ${diff.commit ?? ""}` : diff.scope === "branch" ? `${t("diff.scopeBranch")} ${diff.base ? `vs ${diff.base}` : ""}` : diff.scope === "staged" ? t("diff.scopeStaged") : diff.scope === "call" ? t("diff.scopeCall") : t("diff.scopeWorking")),
       diff.stats ? h("span", { className: "ce-chip" }, `+${diff.stats.add} −${diff.stats.del}`) : null,
       diff.untracked ? h("span", { className: "ce-chip" }, t("diff.untracked")) : null,
       diff.note ? h("span", { className: "ce-chip" }, diff.note) : null,
@@ -1878,10 +1880,10 @@ function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commitsOpen, 
   const badge = (xy) => xy === "??" ? "U" : xy.trim()[0] === "A" || xy.trim()[0] === "?" ? "A" : xy.trim()[0] || "M";
   const staged = git.working.filter((f) => isStagedXy(f.xy));
   const unstaged = git.working.filter((f) => !isStagedXy(f.xy));
-  const flatRows = (files, prefix) => files.map(
+  const flatRows = (files, prefix, scope) => files.map(
     (file) => h(
       "button",
-      { key: `${prefix}:${file.path}`, className: "ce-row", type: "button", title: file.path, onClick: () => onOpenDiff(file.path, "working") },
+      { key: `${prefix}:${file.path}`, className: "ce-row", type: "button", title: file.path, onClick: () => onOpenDiff(file.path, scope) },
       h("span", { className: `ce-badge ce-badge-${badge(file.xy).toLowerCase()}` }, badge(file.xy)),
       h("span", { className: "ce-name" }, file.path)
     )
@@ -1947,12 +1949,12 @@ function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commitsOpen, 
       ),
       treeView ? h(ChangeTree, {
         items: staged.map((f) => ({ path: f.path, ch: badge(f.xy), from: f.from ?? void 0 })),
-        onOpen: (item) => onOpenDiff(item.path, "working"),
+        onOpen: (item) => onOpenDiff(item.path, "staged"),
         onUnstage: (item) => onUnstage && onUnstage(item),
         onUnstageDir: (dirPath) => onUnstageDir && onUnstageDir(dirPath),
         keyPrefix: "s",
         t
-      }) : flatRows(staged, "s")
+      }) : flatRows(staged, "s", "staged")
     ) : null,
     h(
       "div",
@@ -1972,7 +1974,7 @@ function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commitsOpen, 
       onStageDir: (dirPath) => onStageDir && onStageDir(dirPath),
       keyPrefix: "w",
       t
-    }) : flatRows(unstaged, "w"),
+    }) : flatRows(unstaged, "w", "working"),
     h("div", { className: "ce-section" }, t("changes.branch")),
     git.base ? h(
       Fragment,
@@ -4038,7 +4040,7 @@ function CodeBody(props) {
             if (docRef.current) modeRef.current = "code";
           },
           onOpenSource: (line) => openDiffSource(line),
-          canSource: diff.scope === "working" || diff.scope === "branch"
+          canSource: diff.scope === "working" || diff.scope === "branch" || diff.scope === "staged"
         }) : doc ? h(
           Fragment,
           null,

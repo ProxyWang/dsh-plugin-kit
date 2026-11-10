@@ -293,6 +293,17 @@ const unFreshAll = await call("git.unstage", { cwd, repo: fresh, path: "" });
 check("git.unstage whole repo with empty index is a no-op", unFreshAll.ok && !unFreshAll.value?.error, unFreshAll);
 rmSync(fresh, { recursive: true, force: true });
 
+// --- git.diff staged scope (index vs HEAD) ------------------------------------------------------
+writeFileSync(`${cwd}/staged-scope.txt`, "v1\n");
+await call("git.stage", { cwd, path: "staged-scope.txt" });
+writeFileSync(`${cwd}/staged-scope.txt`, "v2 worktree\n");
+const stDiff = await call("git.diff", { cwd, path: "staged-scope.txt", scope: "staged" });
+check("git.diff staged shows index vs HEAD only", stDiff.ok && stDiff.value.scope === "staged" && stDiff.value.diff.includes("+v1") && !stDiff.value.diff.includes("v2 worktree"), stDiff.value?.diff);
+const wkDiff = await call("git.diff", { cwd, path: "staged-scope.txt", scope: "working" });
+check("git.diff working still spans HEAD to worktree", wkDiff.ok && wkDiff.value.diff.includes("v2 worktree"), wkDiff.value?.diff);
+await call("git.unstage", { cwd, path: "staged-scope.txt" });
+rmSync(`${cwd}/staged-scope.txt`);
+
 // --- git.branches / git.checkout ------------------------------------------------------------
 const bList = await call("git.branches", { cwd });
 check("git.branches lists locals with current flag", bList.ok && bList.value.branches.some((b) => b.name === "feature" && b.current === true) && bList.value.branches.some((b) => b.name === "master" && b.current === false), bList.value?.branches);

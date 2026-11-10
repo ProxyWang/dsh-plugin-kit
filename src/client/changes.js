@@ -27,10 +27,10 @@ export function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commit
 	const badge = (xy) => (xy === "??" ? "U" : xy.trim()[0] === "A" || xy.trim()[0] === "?" ? "A" : xy.trim()[0] || "M");
 	const staged = git.working.filter((f) => isStagedXy(f.xy));
 	const unstaged = git.working.filter((f) => !isStagedXy(f.xy));
-	const flatRows = (files, prefix) => files.map((file) =>
+	const flatRows = (files, prefix, scope) => files.map((file) =>
 		h(
 			"button",
-			{ key: `${prefix}:${file.path}`, className: "ce-row", type: "button", title: file.path, onClick: () => onOpenDiff(file.path, "working") },
+			{ key: `${prefix}:${file.path}`, className: "ce-row", type: "button", title: file.path, onClick: () => onOpenDiff(file.path, scope) },
 			h("span", { className: `ce-badge ce-badge-${badge(file.xy).toLowerCase()}` }, badge(file.xy)),
 			h("span", { className: "ce-name" }, file.path),
 		),
@@ -101,13 +101,13 @@ export function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commit
 				treeView
 					? h(ChangeTree, {
 						items: staged.map((f) => ({ path: f.path, ch: badge(f.xy), from: f.from ?? void 0 })),
-						onOpen: (item) => onOpenDiff(item.path, "working"),
+						onOpen: (item) => onOpenDiff(item.path, "staged"),
 						onUnstage: (item) => onUnstage && onUnstage(item),
 						onUnstageDir: (dirPath) => onUnstageDir && onUnstageDir(dirPath),
 						keyPrefix: "s",
 						t,
 					})
-					: flatRows(staged, "s"),
+					: flatRows(staged, "s", "staged"),
 			)
 			: null,
 		h(
@@ -132,7 +132,7 @@ export function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commit
 				keyPrefix: "w",
 				t,
 			})
-			: flatRows(unstaged, "w"),
+			: flatRows(unstaged, "w", "working"),
 		h("div", { className: "ce-section" }, t("changes.branch")),
 		git.base
 			? h(

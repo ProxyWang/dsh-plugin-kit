@@ -1304,7 +1304,7 @@ export function CodeBody(props) {
 						diff,
 						onClose: () => { setDiff(null); if (docRef.current) modeRef.current = "code"; },
 						onOpenSource: (line) => openDiffSource(line),
-						canSource: diff.scope === "working" || diff.scope === "branch",
+						canSource: diff.scope === "working" || diff.scope === "branch" || diff.scope === "staged",
 					})
 					: doc
 					? h(

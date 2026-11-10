@@ -200,9 +200,10 @@ const fakeGit = {
 	branchFiles: [], commits: [], upstream: null, ahead: 0, behind: 0,
 };
 const noop = () => {};
+const openedDiffs = [];
 const panel = ChangesPanel({
 	cwd: "/w", t: (k) => k, git: fakeGit, repos: null, repoSel: null, onSelectRepo: noop,
-	commitsOpen: false, setCommitsOpen: noop, onOpenCommit: noop, onOpenDiff: noop,
+	commitsOpen: false, setCommitsOpen: noop, onOpenCommit: noop, onOpenDiff: (p, s) => openedDiffs.push([p, s]),
 	onDiscard: noop, onDiscardDir: noop, onStage: noop, onStageDir: noop,
 	onUnstage: noop, onUnstageDir: noop, onCommit: () => true, committing: false, refresh: noop,
 });
@@ -221,6 +222,13 @@ check("staged section tree has only the staged file", stagedTree && stagedTree.p
 check("staged tree offers unstage but not stage/discard", stagedTree && stagedTree.props.onUnstage && !stagedTree.props.onStage && !stagedTree.props.onDiscard, Object.keys(stagedTree?.props ?? {}));
 check("working tree has the two unstaged files", workingTree && workingTree.props.items.length === 2, workingTree?.props?.items);
 check("working tree offers stage + discard", workingTree && workingTree.props.onStage && workingTree.props.onDiscard, Object.keys(workingTree?.props ?? {}));
+stagedTree.props.onOpen({ path: "a.go" });
+workingTree.props.onOpen({ path: "b.go" });
+check(
+	"staged rows open the staged diff, working rows the working diff",
+	JSON.stringify(openedDiffs) === JSON.stringify([["a.go", "staged"], ["b.go", "working"]]),
+	openedDiffs,
+);
 const commitBox = panelNodes.find((n) => n.props?.className === "ce-commitbox");
 check("commit box rendered", Boolean(commitBox), null);
 const commitBtn = collect(commitBox ?? []).find((n) => n.props?.className === "ce-commitbox-btn");

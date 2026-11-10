@@ -329,6 +329,7 @@ export function DiffView({ t, diff, onClose, onOpenSource, canSource }) {
 			h("span", { className: "ce-chip" }, diff.scope === "commit"
 				? `${t("diff.scopeCommit")} ${diff.commit ?? ""}`
 				: diff.scope === "branch" ? `${t("diff.scopeBranch")} ${diff.base ? `vs ${diff.base}` : ""}`
+				: diff.scope === "staged" ? t("diff.scopeStaged")
 				: diff.scope === "call" ? t("diff.scopeCall") : t("diff.scopeWorking")),
 			diff.stats ? h("span", { className: "ce-chip" }, `+${diff.stats.add} −${diff.stats.del}`) : null,
 			diff.untracked ? h("span", { className: "ce-chip" }, t("diff.untracked")) : null,
