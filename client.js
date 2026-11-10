@@ -186,6 +186,7 @@ var zh = {
   "api.body": "请求体",
   "api.bodyNone": "无",
   "api.bodyForm": "form-urlencoded",
+  "api.bodyMultipart": "multipart 表单",
   "api.bodyRaw": "raw",
   "api.beautify": "格式化 JSON",
   "api.beautifyErr": "JSON 解析失败",
@@ -193,6 +194,17 @@ var zh = {
   "api.respHeaders": "响应头",
   "api.urlPlaceholder": "https://…",
   "api.err": "请求失败",
+  "api.history": "历史",
+  "api.saved": "收藏",
+  "api.saveBtn": "☆ 收藏",
+  "api.saveTitle": "收藏当前请求",
+  "api.savePlaceholder": "收藏名称",
+  "api.saveConfirm": "保存",
+  "api.histEmpty": "暂无请求历史",
+  "api.savedEmpty": "暂无收藏",
+  "api.clear": "清空",
+  "api.restoreTitle": "点击回填到编辑器",
+  "api.delete": "删除",
   "toolrow.edit": "编辑",
   "toolrow.write": "写入",
   "toolrow.failed": "失败",
@@ -405,6 +417,7 @@ var en = {
   "api.body": "Body",
   "api.bodyNone": "none",
   "api.bodyForm": "form-urlencoded",
+  "api.bodyMultipart": "multipart form",
   "api.bodyRaw": "raw",
   "api.beautify": "Beautify JSON",
   "api.beautifyErr": "Invalid JSON",
@@ -412,6 +425,17 @@ var en = {
   "api.respHeaders": "Headers",
   "api.urlPlaceholder": "https://…",
   "api.err": "Request failed",
+  "api.history": "History",
+  "api.saved": "Saved",
+  "api.saveBtn": "☆ Save",
+  "api.saveTitle": "Save the current request",
+  "api.savePlaceholder": "Favorite name",
+  "api.saveConfirm": "Save",
+  "api.histEmpty": "No requests yet",
+  "api.savedEmpty": "No favorites yet",
+  "api.clear": "Clear",
+  "api.restoreTitle": "Click to load into the editor",
+  "api.delete": "Delete",
   "toolrow.edit": "Edit",
   "toolrow.write": "Write",
   "toolrow.failed": "failed",
@@ -3762,6 +3786,25 @@ var CSS = `
 .cea-hlist div{display:flex;gap:6px;line-height:1.6}
 .cea-hk{font-weight:600;color:var(--dsw-alias-label-primary,#ccc);flex:none}
 .cea-resp{flex:none;margin:0;padding:8px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;line-height:1.55;white-space:pre;overflow:auto;color:var(--dsw-alias-label-primary,#ddd);background:var(--dsw-alias-bg-base,#181818);border-top:.5px solid var(--dsw-alias-border-l1,#333)}
+.cea-btn-on{color:var(--dsw-alias-brand-primary,#6cb2ff);border-color:color-mix(in srgb,var(--dsw-alias-brand-primary,#59b7ff) 45%,transparent)}
+.cea-hist{position:absolute;top:44px;left:8px;right:8px;z-index:8;background:var(--dsw-alias-bg-layer-1,#1e2126);border:.5px solid var(--dsw-alias-border-l2,#444);border-radius:8px;box-shadow:0 10px 30px rgba(0,0,0,.45);display:flex;flex-direction:column;max-height:62%}
+.cea-hist-tabs{display:flex;gap:4px;align-items:center;padding:6px 8px;border-bottom:.5px solid var(--dsw-alias-border-l1,#333);flex:none}
+.cea-tab{border:0;background:transparent;color:var(--dsw-alias-label-secondary,#999);font:inherit;font-size:11px;padding:3px 9px;border-radius:6px;cursor:pointer;flex:none}
+.cea-tab:hover{color:var(--dsw-alias-label-primary,#ddd)}
+.cea-tab-on{background:var(--dsw-alias-interactive-bg-hover,#2b2b2b);color:var(--dsw-alias-label-primary,#ddd)}
+.cea-hist-list{overflow:auto;min-height:0;padding:4px 6px}
+.cea-hrow2{display:flex;align-items:center;gap:2px;border-radius:6px}
+.cea-hrow2:hover{background:var(--dsw-alias-interactive-bg-hover,#26292e)}
+.cea-hmain{flex:1;min-width:0;display:flex;gap:8px;align-items:center;border:0;background:transparent;color:inherit;font:inherit;text-align:left;padding:4px 6px;cursor:pointer}
+.cea-mbadge{flex:none;font-size:9.5px;font-weight:700;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;padding:1px 5px;border-radius:4px;background:var(--dsw-alias-bg-layer-2,#2a2d33);color:var(--dsw-alias-label-secondary,#aaa)}
+.cea-m-post{color:#7ee787}
+.cea-m-put{color:#d2a8ff}
+.cea-m-patch{color:#ffa657}
+.cea-m-delete{color:#ff7b72}
+.cea-hurl{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:var(--dsw-alias-label-primary,#ccc);font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.cea-hname{flex:none;max-width:34%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:var(--dsw-alias-state-warn-primary,#e3b341)}
+.cea-hstatus{flex:none;font-size:11px}
+.cea-hts{flex:none;font-size:10px;color:var(--dsw-alias-label-tertiary,#778);font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
 .ce-htmlprev{flex:1;min-height:0;width:100%;border:0;background:#fff}
 .ctp-tools{display:flex;gap:6px;padding:4px 8px;border-bottom:.5px solid var(--dsw-alias-border-l1,#333);flex:none}
 .ctp-acts{margin-left:auto;display:inline-flex;gap:2px;opacity:0;transition:opacity .1s}
@@ -4386,13 +4429,16 @@ function parseCurl(input) {
     body = "";
     hasBody = false;
   }
+  let multipart = null;
   if (form.length > 0) {
-    body = form.map((f) => f.replace(/@[^;]*$/, "")).join("&");
-    setHeader("Content-Type", "application/x-www-form-urlencoded");
+    multipart = form.map((f) => {
+      const eq = f.indexOf("=");
+      return eq > 0 ? { name: f.slice(0, eq), value: f.slice(eq + 1) } : { name: f, value: "" };
+    });
   }
   if (hasBody && method === "") method = "POST";
   if (method === "") method = "GET";
-  return { method, url, headers, body };
+  return multipart ? { method, url, headers, body, multipart } : { method, url, headers, body };
 }
 function statusClass(status) {
   if (status < 300) return "cea-ok";
@@ -4404,6 +4450,37 @@ function prettySize(n) {
   if (n < 1024) return `${n}B`;
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)}KB`;
   return `${(n / 1024 / 1024).toFixed(1)}MB`;
+}
+var HIST_KEY = "dsh.ce.api.history.v1";
+var SAVED_KEY = "dsh.ce.api.saved.v1";
+var HIST_CAP = 30;
+var SAVED_CAP = 50;
+function pushEntry(list, entry, cap) {
+  const base = Array.isArray(list) ? list.filter((e) => e && e.id !== entry.id) : [];
+  return [entry, ...base].slice(0, cap);
+}
+function relTimeAgo(ts) {
+  const s = Math.max(0, Math.floor((Date.now() - (ts || 0)) / 1e3));
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m`;
+  const hh = Math.floor(m / 60);
+  if (hh < 24) return `${hh}h`;
+  return `${Math.floor(hh / 24)}d`;
+}
+function loadList(key) {
+  try {
+    const list = JSON.parse(localStorage.getItem(key) ?? "[]");
+    return Array.isArray(list) ? list : [];
+  } catch {
+    return [];
+  }
+}
+function storeList(key, list) {
+  try {
+    localStorage.setItem(key, JSON.stringify(list));
+  } catch {
+  }
 }
 function ApiView({ t }) {
   const [method, setMethod] = useState("GET");
@@ -4419,6 +4496,16 @@ function ApiView({ t }) {
   const [showRespHeaders, setShowRespHeaders] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [importText, setImportText] = useState("");
+  const [histOpen, setHistOpen] = useState(false);
+  const [histTab, setHistTab] = useState("history");
+  const [history, setHistory] = useState([]);
+  const [saved, setSaved] = useState([]);
+  const [saveOpen, setSaveOpen] = useState(false);
+  const [saveName, setSaveName] = useState("");
+  useEffect(() => {
+    setHistory(loadList(HIST_KEY));
+    setSaved(loadList(SAVED_KEY));
+  }, []);
   useEffect(() => {
     try {
       const raw = localStorage.getItem(DRAFT_KEY);
@@ -4448,40 +4535,114 @@ function ApiView({ t }) {
       setBeautifyErr(t("api.beautifyErr"));
     }
   }, [body, t]);
+  const snapshot = useCallback(
+    () => ({ method, url, headers, bodyType, rawSub, formPairs, body }),
+    [method, url, headers, bodyType, rawSub, formPairs, body]
+  );
+  const restoreRequest = useCallback((req) => {
+    if (!req || typeof req !== "object") return;
+    if (typeof req.method === "string") setMethod(req.method);
+    if (typeof req.url === "string") setUrl(req.url);
+    if (Array.isArray(req.headers)) setHeaders(req.headers);
+    if (typeof req.bodyType === "string") setBodyType(req.bodyType);
+    if (typeof req.rawSub === "string") setRawSub(req.rawSub);
+    if (Array.isArray(req.formPairs)) setFormPairs(req.formPairs);
+    if (typeof req.body === "string") setBody(req.body);
+    setResponse(null);
+    setHistOpen(false);
+  }, []);
   const send = useCallback(() => {
     if (url.trim() === "" || sending) return;
     const sendHeaders = headers.filter((hd) => String(hd.name ?? "").trim() !== "").map((hd) => ({ name: hd.name, value: String(hd.value ?? "") }));
     let sendBody;
+    let multipart;
     if (bodyType === "raw") {
       sendBody = body;
       upsertHeader(sendHeaders, "Content-Type", SUB_CT[rawSub] ?? "text/plain");
     } else if (bodyType === "form") {
       sendBody = new URLSearchParams(formPairs.filter((p) => String(p.name ?? "").trim() !== "").map((p) => [p.name.trim(), String(p.value ?? "")])).toString();
       upsertHeader(sendHeaders, "Content-Type", "application/x-www-form-urlencoded");
+    } else if (bodyType === "multipart") {
+      multipart = formPairs.filter((p) => String(p.name ?? "").trim() !== "").map((p) => ({ name: p.name.trim(), value: String(p.value ?? "") }));
     }
+    const sentMethod = method;
+    const sentUrl = url.trim();
+    const sentSnapshot = snapshot();
     setSending(true);
     api("api.send", {
       method,
-      url: url.trim(),
+      url: sentUrl,
       headers: sendHeaders,
-      body: sendBody
+      body: sendBody,
+      ...multipart ? { multipart } : {}
     }).then((res) => {
       setSending(false);
-      setResponse(res.ok ? res.value : { error: res.error });
+      const value = res.ok ? res.value : { error: res.error };
+      setResponse(value);
+      const entry = {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        ts: Date.now(),
+        method: sentMethod,
+        url: sentUrl,
+        status: value?.status,
+        ms: value?.ms,
+        error: value?.error ?? void 0,
+        request: sentSnapshot
+      };
+      setHistory((prev) => {
+        const next = pushEntry(prev, entry, HIST_CAP);
+        storeList(HIST_KEY, next);
+        return next;
+      });
     });
-  }, [method, url, headers, bodyType, rawSub, formPairs, body, sending]);
+  }, [method, url, headers, bodyType, rawSub, formPairs, body, sending, snapshot]);
   const doImport = useCallback(() => {
     const p = parseCurl(importText);
     setMethod(p.method);
     setUrl(p.url);
     if (p.headers.length > 0) setHeaders(p.headers);
-    if (p.body !== "") {
+    if (p.multipart) {
+      setFormPairs(p.multipart);
+      setBodyType("multipart");
+    } else if (p.body !== "") {
       setBody(p.body);
       setBodyType("raw");
     }
     setImportText("");
     setImportOpen(false);
   }, [importText]);
+  const doSaveFavorite = useCallback(() => {
+    const name = saveName.trim();
+    if (name === "") return;
+    const entry = { id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, name, ts: Date.now(), request: snapshot() };
+    setSaved((prev) => {
+      const next = [entry, ...prev.filter((e) => e && e.name !== name)].slice(0, SAVED_CAP);
+      storeList(SAVED_KEY, next);
+      return next;
+    });
+    setSaveName("");
+    setSaveOpen(false);
+    setHistTab("saved");
+    setHistOpen(true);
+  }, [saveName, snapshot]);
+  const removeHistory = useCallback((id) => {
+    setHistory((prev) => {
+      const next = prev.filter((e) => e && e.id !== id);
+      storeList(HIST_KEY, next);
+      return next;
+    });
+  }, []);
+  const removeSaved = useCallback((id) => {
+    setSaved((prev) => {
+      const next = prev.filter((e) => e && e.id !== id);
+      storeList(SAVED_KEY, next);
+      return next;
+    });
+  }, []);
+  const clearHistory = useCallback(() => {
+    setHistory([]);
+    storeList(HIST_KEY, []);
+  }, []);
   const respJson = useMemo(() => {
     if (!response || response.error || typeof response.text !== "string") return null;
     const ct = (response.headers ?? []).find((hd) => hd[0].toLowerCase() === "content-type")?.[1] ?? "";
@@ -4514,8 +4675,63 @@ function ApiView({ t }) {
         }
       }),
       h("button", { type: "button", className: "ce-sk-btn cea-send", disabled: sending || url.trim() === "", onClick: send }, sending ? t("api.sending") : t("api.send")),
-      h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost", title: t("api.importTitle"), onClick: () => setImportOpen(true) }, t("api.import"))
+      h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost", title: t("api.importTitle"), onClick: () => {
+        setImportOpen(true);
+        setHistOpen(false);
+        setSaveOpen(false);
+      } }, t("api.import")),
+      h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost", title: t("api.saveTitle"), onClick: () => {
+        setSaveOpen(true);
+        setHistOpen(false);
+        setImportOpen(false);
+      } }, t("api.saveBtn")),
+      h("button", { type: "button", className: `ce-sk-btn ce-sk-btn-ghost${histOpen ? " cea-btn-on" : ""}`, title: t("api.history"), onClick: () => {
+        setHistOpen((v) => !v);
+        setSaveOpen(false);
+        setImportOpen(false);
+      } }, `${t("api.history")}${history.length ? ` ${history.length}` : ""}`)
     ),
+    histOpen ? h(
+      "div",
+      { className: "cea-hist" },
+      h(
+        "div",
+        { className: "cea-hist-tabs" },
+        h("button", { type: "button", className: `cea-tab${histTab === "history" ? " cea-tab-on" : ""}`, onClick: () => setHistTab("history") }, `${t("api.history")} · ${history.length}`),
+        h("button", { type: "button", className: `cea-tab${histTab === "saved" ? " cea-tab-on" : ""}`, onClick: () => setHistTab("saved") }, `${t("api.saved")} · ${saved.length}`),
+        h("span", { className: "ce-spacer" }),
+        histTab === "history" && history.length > 0 ? h("button", { type: "button", className: "ce-link", title: t("api.clear"), onClick: clearHistory }, t("api.clear")) : null,
+        h("button", { type: "button", className: "ce-tool ce-tiny", title: t("close"), onClick: () => setHistOpen(false) }, "✕")
+      ),
+      h(
+        "div",
+        { className: "cea-hist-list ce-scroll" },
+        histTab === "history" ? history.length === 0 ? h("div", { className: "ce-note" }, t("api.histEmpty")) : history.map((e) => h(
+          "div",
+          { key: e.id, className: "cea-hrow2" },
+          h(
+            "button",
+            { type: "button", className: "cea-hmain", title: t("api.restoreTitle"), onClick: () => restoreRequest(e.request) },
+            h("span", { className: `cea-mbadge cea-m-${String(e.method ?? "get").toLowerCase()}` }, e.method),
+            h("span", { className: "cea-hurl" }, e.url),
+            e.error ? h("span", { className: "cea-hstatus cea-err" }, "✕") : h("span", { className: `cea-hstatus ${statusClass(e.status ?? 0)}` }, String(e.status ?? "")),
+            h("span", { className: "cea-hts" }, `${relTimeAgo(e.ts)}${e.ms != null ? ` · ${e.ms}ms` : ""}`)
+          ),
+          h("button", { type: "button", className: "ce-tool ce-tiny", title: t("api.delete"), onClick: () => removeHistory(e.id) }, "✕")
+        )) : saved.length === 0 ? h("div", { className: "ce-note" }, t("api.savedEmpty")) : saved.map((e) => h(
+          "div",
+          { key: e.id, className: "cea-hrow2" },
+          h(
+            "button",
+            { type: "button", className: "cea-hmain", title: t("api.restoreTitle"), onClick: () => restoreRequest(e.request) },
+            h("span", { className: "cea-hname" }, `★ ${e.name}`),
+            h("span", { className: `cea-mbadge cea-m-${String(e.request?.method ?? "get").toLowerCase()}` }, e.request?.method),
+            h("span", { className: "cea-hurl" }, e.request?.url ?? "")
+          ),
+          h("button", { type: "button", className: "ce-tool ce-tiny", title: t("api.delete"), onClick: () => removeSaved(e.id) }, "✕")
+        ))
+      )
+    ) : null,
     h(
       "div",
       { className: "cea-scroll ce-scroll" },
@@ -4542,6 +4758,7 @@ function ApiView({ t }) {
           { className: "cea-method", value: bodyType, onChange: (e) => setBodyType(e.target.value) },
           h("option", { value: "none" }, t("api.bodyNone")),
           h("option", { value: "form" }, t("api.bodyForm")),
+          h("option", { value: "multipart" }, t("api.bodyMultipart")),
           h("option", { value: "raw" }, t("api.bodyRaw"))
         ),
         bodyType === "raw" ? h(
@@ -4559,9 +4776,9 @@ function ApiView({ t }) {
             beautifyErr ? h("span", { className: "cea-err" }, beautifyErr) : null
           ) : null
         ) : null,
-        bodyType === "form" ? h("button", { type: "button", className: "ce-tool ce-tiny", title: t("api.addHeader"), onClick: () => setFormPairs((prev) => [...prev, { name: "", value: "" }]) }, "+") : null
+        bodyType === "form" || bodyType === "multipart" ? h("button", { type: "button", className: "ce-tool ce-tiny", title: t("api.addHeader"), onClick: () => setFormPairs((prev) => [...prev, { name: "", value: "" }]) }, "+") : null
       ),
-      bodyType === "form" ? h(Fragment, null, formPairs.map((p, i) => h(
+      bodyType === "form" || bodyType === "multipart" ? h(Fragment, null, formPairs.map((p, i) => h(
         "div",
         { key: i, className: "cea-hrow" },
         h("input", { className: "ce-input cea-hkey", placeholder: "key", value: p.name ?? "", onChange: (e) => setFormPairs((prev) => prev.map((x, j) => j === i ? { ...x, name: e.target.value } : x)) }),
@@ -4607,6 +4824,33 @@ function ApiView({ t }) {
         { className: "cea-bar" },
         h("span", { className: "ce-spacer" }),
         h("button", { type: "button", className: "ce-sk-btn", disabled: importText.trim() === "", onClick: doImport }, t("api.importBtn"))
+      )
+    ) : null,
+    saveOpen ? h(
+      "div",
+      { className: "ce-overlay" },
+      h(
+        "div",
+        { className: "ce-overlay-head" },
+        h("span", null, t("api.saveTitle")),
+        h("button", { type: "button", className: "ce-tool ce-tiny", onClick: () => setSaveOpen(false) }, "✕")
+      ),
+      h(
+        "div",
+        { className: "cea-bar" },
+        h("input", {
+          className: "ce-input",
+          placeholder: t("api.savePlaceholder"),
+          value: saveName,
+          autoFocus: true,
+          onChange: (e) => setSaveName(e.target.value),
+          onKeyDown: (e) => {
+            e.stopPropagation();
+            if (e.key === "Enter") doSaveFavorite();
+            else if (e.key === "Escape") setSaveOpen(false);
+          }
+        }),
+        h("button", { type: "button", className: "ce-sk-btn", disabled: saveName.trim() === "", onClick: doSaveFavorite }, t("api.saveConfirm"))
       )
     ) : null
   );

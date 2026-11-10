@@ -15,10 +15,11 @@ function upsertHeader(list, name, value) {
 
 /**
  * Parse a (possibly multi-line, backslash-continued) curl command into
- * {method, url, headers:[{name,value}], body}. Supports -X/--request,
- * -H/--header, -d/--data*, --json, -F/--form (as urlencoded pairs),
- * -u/--user (Basic auth), -A/-e/-b (UA/Referer/Cookie), -I/--head,
- * -G/--get (data becomes query), --url, and ignores common noise flags.
+ * {method, url, headers:[{name,value}], body, multipart?}. Supports
+ * -X/--request, -H/--header, -d/--data*, --json, -F/--form (as multipart
+ * field pairs), -u/--user (Basic auth), -A/-e/-b (UA/Referer/Cookie),
+ * -I/--head, -G/--get (data becomes query), --url, and ignores common
+ * noise flags.
  */
 export function parseCurl(input) {
 	const joined = String(input ?? "").replace(/\\\r?\n/g, " ").trim();
@@ -149,13 +150,18 @@ export function parseCurl(input) {
 		body = "";
 		hasBody = false;
 	}
+	// -F entries are multipart fields: split on the first "=" and keep the
+	// raw value (including "@file" markers, which stay visible as text).
+	let multipart = null;
 	if (form.length > 0) {
-		body = form.map((f) => f.replace(/@[^;]*$/, "")).join("&");
-		setHeader("Content-Type", "application/x-www-form-urlencoded");
+		multipart = form.map((f) => {
+			const eq = f.indexOf("=");
+			return eq > 0 ? { name: f.slice(0, eq), value: f.slice(eq + 1) } : { name: f, value: "" };
+		});
 	}
 	if (hasBody && method === "") method = "POST";
 	if (method === "") method = "GET";
-	return { method, url, headers, body };
+	return multipart ? { method, url, headers, body, multipart } : { method, url, headers, body };
 }
 
 function statusClass(status) {
@@ -169,6 +175,43 @@ function prettySize(n) {
 	if (n < 1024) return `${n}B`;
 	if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)}KB`;
 	return `${(n / 1024 / 1024).toFixed(1)}MB`;
+}
+
+const HIST_KEY = "dsh.ce.api.history.v1";
+const SAVED_KEY = "dsh.ce.api.saved.v1";
+const HIST_CAP = 30;
+const SAVED_CAP = 50;
+
+/** Newest-first insert, deduped by id, capped. Pure for testability. */
+export function pushEntry(list, entry, cap) {
+	const base = Array.isArray(list) ? list.filter((e) => e && e.id !== entry.id) : [];
+	return [entry, ...base].slice(0, cap);
+}
+
+/** Compact relative age for history rows: 5s / 4m / 3h / 2d. */
+export function relTimeAgo(ts) {
+	const s = Math.max(0, Math.floor((Date.now() - (ts || 0)) / 1000));
+	if (s < 60) return `${s}s`;
+	const m = Math.floor(s / 60);
+	if (m < 60) return `${m}m`;
+	const hh = Math.floor(m / 60);
+	if (hh < 24) return `${hh}h`;
+	return `${Math.floor(hh / 24)}d`;
+}
+
+function loadList(key) {
+	try {
+		const list = JSON.parse(localStorage.getItem(key) ?? "[]");
+		return Array.isArray(list) ? list : [];
+	} catch {
+		return [];
+	}
+}
+
+function storeList(key, list) {
+	try {
+		localStorage.setItem(key, JSON.stringify(list));
+	} catch { /* storage unavailable */ }
 }
 
 export function ApiView({ t }) {
@@ -185,7 +228,17 @@ export function ApiView({ t }) {
 	const [showRespHeaders, setShowRespHeaders] = useState(false);
 	const [importOpen, setImportOpen] = useState(false);
 	const [importText, setImportText] = useState("");
+	const [histOpen, setHistOpen] = useState(false);
+	const [histTab, setHistTab] = useState("history"); // history | saved
+	const [history, setHistory] = useState([]);
+	const [saved, setSaved] = useState([]);
+	const [saveOpen, setSaveOpen] = useState(false);
+	const [saveName, setSaveName] = useState("");
 
+	useEffect(() => {
+		setHistory(loadList(HIST_KEY));
+		setSaved(loadList(SAVED_KEY));
+	}, []);
 	useEffect(() => {
 		try {
 			const raw = localStorage.getItem(DRAFT_KEY);
@@ -215,41 +268,125 @@ export function ApiView({ t }) {
 		}
 	}, [body, t]);
 
+	/** Full editor snapshot — what history rows and favorites restore. */
+	const snapshot = useCallback(
+		() => ({ method, url, headers, bodyType, rawSub, formPairs, body }),
+		[method, url, headers, bodyType, rawSub, formPairs, body],
+	);
+
+	const restoreRequest = useCallback((req) => {
+		if (!req || typeof req !== "object") return;
+		if (typeof req.method === "string") setMethod(req.method);
+		if (typeof req.url === "string") setUrl(req.url);
+		if (Array.isArray(req.headers)) setHeaders(req.headers);
+		if (typeof req.bodyType === "string") setBodyType(req.bodyType);
+		if (typeof req.rawSub === "string") setRawSub(req.rawSub);
+		if (Array.isArray(req.formPairs)) setFormPairs(req.formPairs);
+		if (typeof req.body === "string") setBody(req.body);
+		setResponse(null);
+		setHistOpen(false);
+	}, []);
+
 	const send = useCallback(() => {
 		if (url.trim() === "" || sending) return;
 		const sendHeaders = headers.filter((hd) => String(hd.name ?? "").trim() !== "").map((hd) => ({ name: hd.name, value: String(hd.value ?? "") }));
 		let sendBody;
+		let multipart;
 		if (bodyType === "raw") {
 			sendBody = body;
 			upsertHeader(sendHeaders, "Content-Type", SUB_CT[rawSub] ?? "text/plain");
 		} else if (bodyType === "form") {
 			sendBody = new URLSearchParams(formPairs.filter((p) => String(p.name ?? "").trim() !== "").map((p) => [p.name.trim(), String(p.value ?? "")])).toString();
 			upsertHeader(sendHeaders, "Content-Type", "application/x-www-form-urlencoded");
+		} else if (bodyType === "multipart") {
+			multipart = formPairs
+				.filter((p) => String(p.name ?? "").trim() !== "")
+				.map((p) => ({ name: p.name.trim(), value: String(p.value ?? "") }));
 		}
+		const sentMethod = method;
+		const sentUrl = url.trim();
+		const sentSnapshot = snapshot();
 		setSending(true);
 		api("api.send", {
 			method,
-			url: url.trim(),
+			url: sentUrl,
 			headers: sendHeaders,
 			body: sendBody,
+			...(multipart ? { multipart } : {}),
 		}).then((res) => {
 			setSending(false);
-			setResponse(res.ok ? res.value : { error: res.error });
+			const value = res.ok ? res.value : { error: res.error };
+			setResponse(value);
+			// Every settled send lands in the history (newest first, capped),
+			// carrying the full request so one click restores it.
+			const entry = {
+				id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+				ts: Date.now(),
+				method: sentMethod,
+				url: sentUrl,
+				status: value?.status,
+				ms: value?.ms,
+				error: value?.error ?? void 0,
+				request: sentSnapshot,
+			};
+			setHistory((prev) => {
+				const next = pushEntry(prev, entry, HIST_CAP);
+				storeList(HIST_KEY, next);
+				return next;
+			});
 		});
-	}, [method, url, headers, bodyType, rawSub, formPairs, body, sending]);
+	}, [method, url, headers, bodyType, rawSub, formPairs, body, sending, snapshot]);
 
 	const doImport = useCallback(() => {
 		const p = parseCurl(importText);
 		setMethod(p.method);
 		setUrl(p.url);
 		if (p.headers.length > 0) setHeaders(p.headers);
-		if (p.body !== "") {
+		if (p.multipart) {
+			setFormPairs(p.multipart);
+			setBodyType("multipart");
+		} else if (p.body !== "") {
 			setBody(p.body);
 			setBodyType("raw");
 		}
 		setImportText("");
 		setImportOpen(false);
 	}, [importText]);
+
+	const doSaveFavorite = useCallback(() => {
+		const name = saveName.trim();
+		if (name === "") return;
+		const entry = { id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, name, ts: Date.now(), request: snapshot() };
+		setSaved((prev) => {
+			// Same name replaces the old favorite (differing ids).
+			const next = [entry, ...prev.filter((e) => e && e.name !== name)].slice(0, SAVED_CAP);
+			storeList(SAVED_KEY, next);
+			return next;
+		});
+		setSaveName("");
+		setSaveOpen(false);
+		setHistTab("saved");
+		setHistOpen(true);
+	}, [saveName, snapshot]);
+
+	const removeHistory = useCallback((id) => {
+		setHistory((prev) => {
+			const next = prev.filter((e) => e && e.id !== id);
+			storeList(HIST_KEY, next);
+			return next;
+		});
+	}, []);
+	const removeSaved = useCallback((id) => {
+		setSaved((prev) => {
+			const next = prev.filter((e) => e && e.id !== id);
+			storeList(SAVED_KEY, next);
+			return next;
+		});
+	}, []);
+	const clearHistory = useCallback(() => {
+		setHistory([]);
+		storeList(HIST_KEY, []);
+	}, []);
 
 	const respJson = useMemo(() => {
 		if (!response || response.error || typeof response.text !== "string") return null;
@@ -278,8 +415,49 @@ export function ApiView({ t }) {
 				},
 			}),
 			h("button", { type: "button", className: "ce-sk-btn cea-send", disabled: sending || url.trim() === "", onClick: send }, sending ? t("api.sending") : t("api.send")),
-			h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost", title: t("api.importTitle"), onClick: () => setImportOpen(true) }, t("api.import")),
+			h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost", title: t("api.importTitle"), onClick: () => { setImportOpen(true); setHistOpen(false); setSaveOpen(false); } }, t("api.import")),
+			h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost", title: t("api.saveTitle"), onClick: () => { setSaveOpen(true); setHistOpen(false); setImportOpen(false); } }, t("api.saveBtn")),
+			h("button", { type: "button", className: `ce-sk-btn ce-sk-btn-ghost${histOpen ? " cea-btn-on" : ""}`, title: t("api.history"), onClick: () => { setHistOpen((v) => !v); setSaveOpen(false); setImportOpen(false); } }, `${t("api.history")}${history.length ? ` ${history.length}` : ""}`),
 		),
+		histOpen
+			? h("div", { className: "cea-hist" },
+				h("div", { className: "cea-hist-tabs" },
+					h("button", { type: "button", className: `cea-tab${histTab === "history" ? " cea-tab-on" : ""}`, onClick: () => setHistTab("history") }, `${t("api.history")} · ${history.length}`),
+					h("button", { type: "button", className: `cea-tab${histTab === "saved" ? " cea-tab-on" : ""}`, onClick: () => setHistTab("saved") }, `${t("api.saved")} · ${saved.length}`),
+					h("span", { className: "ce-spacer" }),
+					histTab === "history" && history.length > 0
+						? h("button", { type: "button", className: "ce-link", title: t("api.clear"), onClick: clearHistory }, t("api.clear"))
+						: null,
+					h("button", { type: "button", className: "ce-tool ce-tiny", title: t("close"), onClick: () => setHistOpen(false) }, "✕"),
+				),
+				h("div", { className: "cea-hist-list ce-scroll" },
+					histTab === "history"
+						? (history.length === 0
+							? h("div", { className: "ce-note" }, t("api.histEmpty"))
+							: history.map((e) => h("div", { key: e.id, className: "cea-hrow2" },
+								h("button", { type: "button", className: "cea-hmain", title: t("api.restoreTitle"), onClick: () => restoreRequest(e.request) },
+									h("span", { className: `cea-mbadge cea-m-${String(e.method ?? "get").toLowerCase()}` }, e.method),
+									h("span", { className: "cea-hurl" }, e.url),
+									e.error
+										? h("span", { className: "cea-hstatus cea-err" }, "✕")
+										: h("span", { className: `cea-hstatus ${statusClass(e.status ?? 0)}` }, String(e.status ?? "")),
+									h("span", { className: "cea-hts" }, `${relTimeAgo(e.ts)}${e.ms != null ? ` · ${e.ms}ms` : ""}`),
+								),
+								h("button", { type: "button", className: "ce-tool ce-tiny", title: t("api.delete"), onClick: () => removeHistory(e.id) }, "✕"),
+							)))
+						: (saved.length === 0
+							? h("div", { className: "ce-note" }, t("api.savedEmpty"))
+							: saved.map((e) => h("div", { key: e.id, className: "cea-hrow2" },
+								h("button", { type: "button", className: "cea-hmain", title: t("api.restoreTitle"), onClick: () => restoreRequest(e.request) },
+									h("span", { className: "cea-hname" }, `★ ${e.name}`),
+									h("span", { className: `cea-mbadge cea-m-${String(e.request?.method ?? "get").toLowerCase()}` }, e.request?.method),
+									h("span", { className: "cea-hurl" }, e.request?.url ?? ""),
+								),
+								h("button", { type: "button", className: "ce-tool ce-tiny", title: t("api.delete"), onClick: () => removeSaved(e.id) }, "✕"),
+							))),
+				),
+			)
+			: null,
 		h("div", { className: "cea-scroll ce-scroll" },
 			h("div", { className: "cea-sec" },
 				h("span", null, t("api.headers")),
@@ -296,6 +474,7 @@ export function ApiView({ t }) {
 				h("select", { className: "cea-method", value: bodyType, onChange: (e) => setBodyType(e.target.value) },
 					h("option", { value: "none" }, t("api.bodyNone")),
 					h("option", { value: "form" }, t("api.bodyForm")),
+					h("option", { value: "multipart" }, t("api.bodyMultipart")),
 					h("option", { value: "raw" }, t("api.bodyRaw")),
 				),
 				bodyType === "raw"
@@ -310,11 +489,11 @@ export function ApiView({ t }) {
 							: null,
 					)
 					: null,
-				bodyType === "form"
+				bodyType === "form" || bodyType === "multipart"
 					? h("button", { type: "button", className: "ce-tool ce-tiny", title: t("api.addHeader"), onClick: () => setFormPairs((prev) => [...prev, { name: "", value: "" }]) }, "+")
 					: null,
 			),
-			bodyType === "form"
+			bodyType === "form" || bodyType === "multipart"
 				? h(Fragment, null, formPairs.map((p, i) => h("div", { key: i, className: "cea-hrow" },
 					h("input", { className: "ce-input cea-hkey", placeholder: "key", value: p.name ?? "", onChange: (e) => setFormPairs((prev) => prev.map((x, j) => (j === i ? { ...x, name: e.target.value } : x))) }),
 					h("input", { className: "ce-input cea-hval", placeholder: "value", value: p.value ?? "", onChange: (e) => setFormPairs((prev) => prev.map((x, j) => (j === i ? { ...x, value: e.target.value } : x))) }),
@@ -357,6 +536,29 @@ export function ApiView({ t }) {
 				h("div", { className: "cea-bar" },
 					h("span", { className: "ce-spacer" }),
 					h("button", { type: "button", className: "ce-sk-btn", disabled: importText.trim() === "", onClick: doImport }, t("api.importBtn")),
+				),
+			)
+			: null,
+		saveOpen
+			? h("div", { className: "ce-overlay" },
+				h("div", { className: "ce-overlay-head" },
+					h("span", null, t("api.saveTitle")),
+					h("button", { type: "button", className: "ce-tool ce-tiny", onClick: () => setSaveOpen(false) }, "✕"),
+				),
+				h("div", { className: "cea-bar" },
+					h("input", {
+						className: "ce-input",
+						placeholder: t("api.savePlaceholder"),
+						value: saveName,
+						autoFocus: true,
+						onChange: (e) => setSaveName(e.target.value),
+						onKeyDown: (e) => {
+							e.stopPropagation();
+							if (e.key === "Enter") doSaveFavorite();
+							else if (e.key === "Escape") setSaveOpen(false);
+						},
+					}),
+					h("button", { type: "button", className: "ce-sk-btn", disabled: saveName.trim() === "", onClick: doSaveFavorite }, t("api.saveConfirm")),
 				),
 			)
 			: null,

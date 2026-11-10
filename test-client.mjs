@@ -214,6 +214,26 @@ const c3 = parseCurl("curl -G https://a.b/s -d 'q=1' -d 'r=2'");
 check("parseCurl -G appends query", c3.method === "GET" && c3.url === "https://a.b/s?q=1&r=2" && c3.body === "", c3);
 const c4 = parseCurl("curl --json '{\"a\":1}' https://a.b/j");
 check("parseCurl --json implies POST + content type", c4.method === "POST" && c4.headers.some((hd) => hd.name.toLowerCase() === "content-type" && hd.value === "application/json"), c4);
+const c5 = parseCurl("curl -F 'field=hello world' -F 'file=@/tmp/a.png' https://a.b/upload");
+check(
+	"parseCurl -F becomes multipart pairs",
+	c5.method === "POST" && Array.isArray(c5.multipart) && c5.multipart.length === 2 && c5.multipart[0].name === "field" && c5.multipart[0].value === "hello world" && c5.multipart[1].value === "@/tmp/a.png" && !c5.headers.some((hd) => hd.name.toLowerCase() === "content-type"),
+	c5,
+);
+const c6 = parseCurl("curl -d 'a=1' https://a.b/x");
+check("parseCurl -d has no multipart", c6.multipart === undefined && c6.body === "a=1", c6);
+
+// --- API history store helpers -----------------------------------------------------------------
+const { pushEntry, relTimeAgo } = await import("./src/client/apiclient.js");
+const h1 = pushEntry([], { id: "a", ts: 1 }, 30);
+const h2 = pushEntry(h1, { id: "b", ts: 2 }, 30);
+check("pushEntry prepends newest first", h2[0].id === "b" && h2[1].id === "a" && h2.length === 2, h2);
+const h3 = pushEntry(h2, { id: "a", ts: 3 }, 30);
+check("pushEntry dedupes by id", h3.length === 2 && h3[0].id === "a" && h3[0].ts === 3 && h3[1].id === "b", h3);
+const big = Array.from({ length: 40 }, (_, i) => ({ id: `x${i}` }));
+check("pushEntry caps the list", pushEntry(big, { id: "new" }, 30).length === 30, null);
+check("pushEntry tolerates garbage list", pushEntry(null, { id: "z" }, 30).length === 1, null);
+check("relTimeAgo buckets", relTimeAgo(Date.now() - 5000) === "5s" && relTimeAgo(Date.now() - 5 * 60000) === "5m" && relTimeAgo(Date.now() - 3 * 3600000) === "3h" && relTimeAgo(Date.now() - 2 * 86400000) === "2d", [relTimeAgo(Date.now() - 5000), relTimeAgo(Date.now() - 5 * 60000)]);
 
 // --- the generated bundle: registration + factory --------------------------------------
 

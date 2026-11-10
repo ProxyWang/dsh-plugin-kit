@@ -255,13 +255,27 @@ const srv = http.createServer((req, res) => {
 	req.on("end", () => {
 		const received = Buffer.concat(chunks).toString("utf8");
 		res.writeHead(200, { "content-type": "application/json" });
-		res.end(JSON.stringify({ method: req.method, body: received, header: req.headers["x-t"] ?? null }));
+		res.end(JSON.stringify({ method: req.method, body: received, header: req.headers["x-t"] ?? null, ct: req.headers["content-type"] ?? null }));
 	});
 });
 await new Promise((resolveListen) => srv.listen(0, "127.0.0.1", resolveListen));
 const echoPort = srv.address().port;
 const sRes = await call("api.send", { method: "POST", url: `http://127.0.0.1:${echoPort}/echo`, headers: [{ name: "X-T", value: "v1" }], body: "{\"hi\":1}" });
 check("api.send posts headers+body and reads json", sRes.ok && sRes.value.status === 200 && JSON.parse(sRes.value.text).header === "v1" && JSON.parse(sRes.value.text).body === "{\"hi\":1}", sRes);
+const mRes = await call("api.send", {
+	method: "POST",
+	url: `http://127.0.0.1:${echoPort}/upload`,
+	headers: [{ name: "Content-Type", value: "application/json" }],
+	multipart: [{ name: "field", value: "hello world" }, { name: "note", value: "n2" }, { name: "", value: "skipped" }],
+});
+const mEcho = mRes.ok && mRes.value.status === 200 ? JSON.parse(mRes.value.text) : null;
+check(
+	"api.send multipart encodes fields with boundary",
+	mEcho !== null && /name="field"/.test(mEcho.body) && mEcho.body.includes("hello world") && /name="note"/.test(mEcho.body) && !/name=""/.test(mEcho.body),
+	mEcho && mEcho.body.slice(0, 200),
+);
+const mCt = mEcho?.ct ?? "";
+check("api.send multipart sets its own content-type (user header dropped)", /multipart\/form-data; boundary=/i.test(mCt), mCt);
 const sBad = await call("api.send", { method: "GET", url: "ftp://x/y" });
 check("api.send rejects non-http schemes", sBad.ok === true && Boolean(sBad.value?.error), sBad);
 srv.close();
