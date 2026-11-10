@@ -301,6 +301,15 @@ var zh = {
   "search.ctx": "展开/收起上下文",
   "search.ctxLoad": "加载上下文…",
   "search.ctxFail": "无法读取上下文",
+  "search.replaceToggle": "替换模式",
+  "search.replacePlaceholder": "替换为…（regex 模式支持 $1 引用）",
+  "search.replaceAll": "全部替换",
+  "search.replaceConfirm": "确认替换 {n} 个文件？",
+  "search.replaceFile": "替换此文件中的全部匹配",
+  "search.replaceDone": "已替换 {hits} 处（{files} 个文件）",
+  "search.replaceNone": "没有可替换的匹配",
+  "search.replaceFail": "{n} 个文件替换失败",
+  "search.replaceCapped": "文件过多，仅处理前 200 个",
   "peek.defs": "定义",
   "peek.refs": "引用",
   "peek.tagDef": "声明",
@@ -562,6 +571,15 @@ var en = {
   "search.ctx": "Toggle context lines",
   "search.ctxLoad": "Loading context…",
   "search.ctxFail": "Cannot load context",
+  "search.replaceToggle": "Toggle replace",
+  "search.replacePlaceholder": "Replace with… ($1 refs in regex mode)",
+  "search.replaceAll": "Replace All",
+  "search.replaceConfirm": "Replace in {n} files?",
+  "search.replaceFile": "Replace all matches in this file",
+  "search.replaceDone": "Replaced {hits} occurrence(s) in {files} file(s)",
+  "search.replaceNone": "No replaceable matches",
+  "search.replaceFail": "{n} file(s) failed",
+  "search.replaceCapped": "Too many files; processed the first 200 only",
   "peek.defs": "definition",
   "peek.refs": "references",
   "peek.tagDef": "decl",
@@ -1992,6 +2010,40 @@ function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commitsOpen, 
   );
 }
 
+// src/client/replace.js
+function escapeReLocal(s) {
+  return String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+function buildReplaceRe(query, opts) {
+  if (!query) return null;
+  const insensitive = String(query) === String(query).toLowerCase();
+  let src = String(query);
+  if (!opts?.regex) src = escapeReLocal(src);
+  if (opts?.words) src = `\\b(?:${src})\\b`;
+  try {
+    return new RegExp(src, insensitive ? "gmi" : "gm");
+  } catch {
+    return null;
+  }
+}
+function replaceInText(text, query, replaceWith, opts) {
+  const re = buildReplaceRe(query, opts);
+  if (!re || typeof text !== "string") return { text, count: 0 };
+  const replacement = String(replaceWith ?? "");
+  if (opts?.regex) {
+    const found = text.match(re);
+    const count2 = found ? found.length : 0;
+    if (count2 === 0) return { text, count: 0 };
+    return { text: text.replace(re, replacement), count: count2 };
+  }
+  let count = 0;
+  const out = text.replace(re, () => {
+    count++;
+    return replacement;
+  });
+  return { text: out, count };
+}
+
 // src/client/overlays.js
 function matchRanges(text, query, regex) {
   const ranges = [];
@@ -2139,15 +2191,20 @@ function QuickOpen({ t, state, onQuery, onPick, onClose }) {
     )
   );
 }
-function SearchPanel({ t, cwd, state, onQuery, onInclude, onToggleRegex, onToggleWords, onSubmit, onPick, onClose }) {
+function SearchPanel({ t, cwd, state, onQuery, onInclude, onToggleRegex, onToggleWords, onSubmit, onPick, onClose, onNotify }) {
   const inputRef = useRef(null);
   const [expanded, setExpanded] = useState(() => /* @__PURE__ */ new Set());
   const [ctxCache, setCtxCache] = useState({});
+  const [replaceOpen, setReplaceOpen] = useState(false);
+  const [replaceText, setReplaceText] = useState("");
+  const [replaceBusy, setReplaceBusy] = useState(false);
+  const [confirmAll, setConfirmAll] = useState(false);
   useEffect(() => {
     inputRef.current?.focus();
   }, []);
   useEffect(() => {
     setExpanded(/* @__PURE__ */ new Set());
+    setConfirmAll(false);
   }, [state.results]);
   const ctxKey = (r) => `${r.path}:${r.line}`;
   const hl = (text) => highlightText(text, matchRanges(text, state.query ?? "", state.regex === true));
@@ -2175,6 +2232,37 @@ function SearchPanel({ t, cwd, state, onQuery, onInclude, onToggleRegex, onToggl
     else next.add(path);
     return next;
   });
+  const runReplace = async (paths) => {
+    if (replaceBusy || paths.length === 0) return;
+    setReplaceBusy(true);
+    let files = 0;
+    let hits = 0;
+    const errors = [];
+    const capped = paths.slice(0, 200);
+    for (const path of capped) {
+      const res = await api("fs.read", { cwd, path });
+      if (!res.ok || res.value.kind !== "text") {
+        errors.push(path);
+        continue;
+      }
+      const r = replaceInText(res.value.content, state.query, replaceText, { regex: state.regex === true, words: state.words === true });
+      if (r.count === 0) continue;
+      const w = await api("fs.write", { cwd, path, content: r.text, baseMtime: res.value.mtimeMs });
+      if (!w.ok) {
+        errors.push(`${path}: ${w.error}`);
+        continue;
+      }
+      files += 1;
+      hits += r.count;
+    }
+    setReplaceBusy(false);
+    setConfirmAll(false);
+    if (hits > 0) onNotify?.(t("search.replaceDone", { hits, files }));
+    else onNotify?.(t("search.replaceNone"), "error");
+    if (errors.length > 0) onNotify?.(`${t("search.replaceFail", { n: errors.length })}: ${errors[0]}`, "error");
+    if (paths.length > capped.length) onNotify?.(t("search.replaceCapped"), "error");
+    onSubmit();
+  };
   const toggleCtx = (r) => {
     const key = ctxKey(r);
     const next = new Set(expanded);
@@ -2224,6 +2312,7 @@ function SearchPanel({ t, cwd, state, onQuery, onInclude, onToggleRegex, onToggl
     h(
       "div",
       { className: "ce-search-box" },
+      h("button", { className: `ce-tool ce-tiny${replaceOpen ? " ce-tool-on" : ""}`, type: "button", title: t("search.replaceToggle"), onClick: () => setReplaceOpen((v) => !v) }, replaceOpen ? "▾" : "▸"),
       h("input", {
         ref: inputRef,
         className: "ce-input ce-search-q",
@@ -2248,6 +2337,45 @@ function SearchPanel({ t, cwd, state, onQuery, onInclude, onToggleRegex, onToggl
       h("button", { className: `ce-tool ce-tiny${state.words ? " ce-tool-on" : ""}`, type: "button", title: t("search.words"), onClick: onToggleWords }, "ab |"),
       h("button", { className: "ce-tool ce-tiny", type: "button", title: t("search.run"), onClick: onSubmit }, h(IconSearch))
     ),
+    replaceOpen ? h(
+      "div",
+      { className: "ce-search-box" },
+      h("input", {
+        className: "ce-input ce-search-q",
+        type: "text",
+        placeholder: t("search.replacePlaceholder"),
+        value: replaceText,
+        onChange: (event) => {
+          setReplaceText(event.target.value);
+          setConfirmAll(false);
+        },
+        onKeyDown: (event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            if (groups.length > 0) void runReplace(groups.map((g) => g.path));
+          } else if (event.key === "Escape") {
+            event.stopPropagation();
+            onClose();
+          }
+        },
+        spellcheck: false,
+        autoCapitalize: "off",
+        autoComplete: "off"
+      }),
+      h("button", {
+        className: "ce-sk-btn",
+        type: "button",
+        disabled: replaceBusy || groups.length === 0 || state.query.trim().length < 2,
+        title: t("search.replaceAll"),
+        onClick: () => {
+          if (!confirmAll) {
+            setConfirmAll(true);
+            return;
+          }
+          void runReplace(groups.map((g) => g.path));
+        }
+      }, replaceBusy ? "…" : confirmAll ? t("search.replaceConfirm", { n: groups.length }) : t("search.replaceAll"))
+    ) : null,
     h("input", {
       className: "ce-input ce-search-include",
       type: "text",
@@ -2279,17 +2407,28 @@ function SearchPanel({ t, cwd, state, onQuery, onInclude, onToggleRegex, onToggl
           Fragment,
           { key: g.path },
           h(
-            "button",
-            {
+            "div",
+            { className: "ce-sgroup-row" },
+            h(
+              "button",
+              {
+                type: "button",
+                className: "ce-sgroup",
+                title: g.path,
+                "aria-expanded": isCollapsed ? "false" : "true",
+                onClick: () => toggleGroup(g.path)
+              },
+              h("span", { className: `cet-tw${isCollapsed ? "" : " cet-tw-open"}` }, "▶"),
+              h("span", { className: "ce-sgroup-path" }, RelPath(cwd, g.path) || g.path),
+              h("span", { className: "ce-sgroup-count" }, String(g.items.length))
+            ),
+            replaceOpen ? h("button", {
               type: "button",
-              className: "ce-sgroup",
-              title: g.path,
-              "aria-expanded": isCollapsed ? "false" : "true",
-              onClick: () => toggleGroup(g.path)
-            },
-            h("span", { className: `cet-tw${isCollapsed ? "" : " cet-tw-open"}` }, "▶"),
-            h("span", { className: "ce-sgroup-path" }, RelPath(cwd, g.path) || g.path),
-            h("span", { className: "ce-sgroup-count" }, String(g.items.length))
+              className: "ce-tool ce-tiny ce-sgroup-rep",
+              title: t("search.replaceFile"),
+              disabled: replaceBusy || state.query.trim().length < 2,
+              onClick: () => void runReplace([g.path])
+            }, "⇄") : null
           ),
           isCollapsed ? null : g.items.map(
             (r) => h(
@@ -4048,7 +4187,8 @@ function CodeBody(props) {
           onToggleWords: () => setSearch((s) => s ? { ...s, words: !s.words } : s),
           onSubmit: () => runSearchNow(search.query, search.include, search),
           onPick: onSearchPick,
-          onClose: () => setSearchOpen(false)
+          onClose: () => setSearchOpen(false),
+          onNotify: (text, kind) => say(text, kind)
         }) : null
       )
     ),
@@ -4249,8 +4389,10 @@ var CSS = `
 .ce-search-meta{font-size:11px;color:var(--dsw-alias-label-tertiary,#778);flex:none;min-height:14px}
 .ce-search-results{flex:1;min-height:0;border:.5px solid var(--dsw-alias-border-l1,#333);border-radius:8px;background:var(--dsw-alias-bg-layer-1,#1e2126)}
 .ce-srow{display:flex;align-items:stretch;width:100%}
-.ce-sgroup{display:flex;gap:5px;align-items:center;width:100%;text-align:left;border:0;background:var(--dsw-alias-bg-layer-1,#1e2126);color:inherit;font:inherit;padding:4px 8px 3px;cursor:pointer;position:sticky;top:0;z-index:1;border-bottom:.5px solid var(--dsw-alias-border-l1,#2a2a2a)}
+.ce-sgroup-row{display:flex;align-items:center;gap:2px;width:100%;position:sticky;top:0;z-index:1;background:var(--dsw-alias-bg-layer-1,#1e2126);border-bottom:.5px solid var(--dsw-alias-border-l1,#2a2a2a)}
+.ce-sgroup{display:flex;gap:5px;align-items:center;flex:1;min-width:0;text-align:left;border:0;background:transparent;color:inherit;font:inherit;padding:4px 4px 3px 8px;cursor:pointer}
 .ce-sgroup:hover .ce-sgroup-path{color:var(--dsw-alias-label-primary,#eee)}
+.ce-sgroup-rep{flex:none;margin-right:6px}
 .ce-sgroup-path{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;font-weight:600;color:var(--dsw-alias-label-secondary,#bcc);font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
 .ce-sgroup-count{flex:none;font-size:10px;color:var(--dsw-alias-label-secondary,#999);background:var(--dsw-alias-bg-layer-2,#2a2d33);border-radius:8px;padding:0 7px;line-height:16px}
 .ce-shl{color:var(--dsw-alias-label-primary,#fff);background:color-mix(in srgb,var(--dsw-alias-state-warn-primary,#e3b341) 32%,transparent);border-radius:2px;font-weight:600}

@@ -1454,6 +1454,7 @@ export function CodeBody(props) {
 					onSubmit: () => runSearchNow(search.query, search.include, search),
 					onPick: onSearchPick,
 					onClose: () => setSearchOpen(false),
+					onNotify: (text, kind) => say(text, kind),
 				}) : null,
 			),
 		),

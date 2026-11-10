@@ -280,6 +280,31 @@ check("zero-length regex cannot loop", findRangesInLine("abc", compileFindRe("x*
 const litMeta = compileFindRe("a.c", {});
 check("literal mode treats metachars literally", findRangesInLine("abc a.c", litMeta).length === 1 && findRangesInLine("abc a.c", litMeta)[0].start === 4, findRangesInLine("abc a.c", litMeta));
 
+// --- workspace replace ---------------------------------------------------------------------------
+const { replaceInText, buildReplaceRe, escapeReLocal } = await import("./src/client/replace.js");
+check("escapeReLocal neutralizes metachars", escapeReLocal("a.b$c") === "a\\.b\\$c", escapeReLocal("a.b$c"));
+check("buildReplaceRe empty → null", buildReplaceRe("", {}) === null && buildReplaceRe("([", { regex: true }) === null, null);
+let rp = replaceInText("foo bar foo", "foo", "FOO", {});
+check("literal replace-all with smart-case", rp.count === 2 && rp.text === "FOO bar FOO", rp);
+rp = replaceInText("Foo foo", "Foo", "X", {});
+check("uppercase query stays case-sensitive", rp.count === 1 && rp.text === "X foo", rp);
+rp = replaceInText("price $5", "$5", "€5", {});
+check("literal $ in query is escaped", rp.count === 1 && rp.text === "price €5", rp);
+rp = replaceInText("x", "x", "$&$&", {});
+check("literal mode keeps $ literal in replacement", rp.count === 1 && rp.text === "$&$&", rp);
+rp = replaceInText("cat concat", "cat", "dog", { words: true });
+check("whole-word replace skips substrings", rp.count === 1 && rp.text === "dog concat", rp);
+rp = replaceInText("a1 b2", "(\\w)(\\d)", "$2$1", { regex: true });
+check("regex mode supports capture refs", rp.count === 2 && rp.text === "1a 2b", rp);
+rp = replaceInText("l1\nfoo\nl2", "^foo$", "bar", { regex: true });
+check("multiline anchors work across lines in regex mode", rp.count === 1 && rp.text === "l1\nbar\nl2", rp);
+rp = replaceInText("l1\n^foo$\nl2", "^foo$", "bar", {});
+check("literal mode treats anchors as text", rp.count === 1 && rp.text === "l1\nbar\nl2", rp);
+rp = replaceInText("abc", "zzz", "x", {});
+check("no match leaves text untouched", rp.count === 0 && rp.text === "abc", rp);
+rp = replaceInText("abc", "([", "x", { regex: true });
+check("invalid regex replace is a no-op", rp.count === 0 && rp.text === "abc", rp);
+
 // --- search match highlighting -----------------------------------------------------------------
 const { matchRanges, highlightText } = await import("./src/client/overlays.js");
 check("matchRanges literal smart-case finds all", JSON.stringify(matchRanges("foo Bar foo", "foo", false)) === JSON.stringify([[0, 3], [8, 11]]), matchRanges("foo Bar foo", "foo", false));

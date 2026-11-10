@@ -5,6 +5,7 @@ import { ROW } from "./constants.js";
 import { api } from "./api.js";
 import { IconSearch } from "./icons.js";
 import { RelPath } from "./pathtools.js";
+import { replaceInText } from "./replace.js";
 
 /**
  * Match ranges of `query` inside one result line, mirroring the host's
@@ -163,16 +164,21 @@ export function QuickOpen({ t, state, onQuery, onPick, onClose }) {
 	);
 }
 
-export function SearchPanel({ t, cwd, state, onQuery, onInclude, onToggleRegex, onToggleWords, onSubmit, onPick, onClose }) {
+export function SearchPanel({ t, cwd, state, onQuery, onInclude, onToggleRegex, onToggleWords, onSubmit, onPick, onClose, onNotify }) {
 	const inputRef = useRef(null);
 	const [expanded, setExpanded] = useState(() => new Set());
 	const [ctxCache, setCtxCache] = useState({}); // path -> {lines} | {loading} | {error}
+	const [replaceOpen, setReplaceOpen] = useState(false);
+	const [replaceText, setReplaceText] = useState("");
+	const [replaceBusy, setReplaceBusy] = useState(false);
+	const [confirmAll, setConfirmAll] = useState(false);
 	useEffect(() => {
 		inputRef.current?.focus();
 	}, []);
 	// A new result set invalidates expansions; cached file contents may stay.
 	useEffect(() => {
 		setExpanded(new Set());
+		setConfirmAll(false);
 	}, [state.results]);
 	const ctxKey = (r) => `${r.path}:${r.line}`;
 	// Highlight a line's matches with the same smart-case rule the engine used.
@@ -202,6 +208,41 @@ export function SearchPanel({ t, cwd, state, onQuery, onInclude, onToggleRegex, 
 		else next.add(path);
 		return next;
 	});
+	// Replace runner: per file read → replace → write with the mtime guard, so
+	// an external edit between search and replace is never silently clobbered.
+	// Literal queries keep "$" in the replacement literal; regex mode honors
+	// $1/$& capture references (see replace.js).
+	const runReplace = async (paths) => {
+		if (replaceBusy || paths.length === 0) return;
+		setReplaceBusy(true);
+		let files = 0;
+		let hits = 0;
+		const errors = [];
+		const capped = paths.slice(0, 200);
+		for (const path of capped) {
+			const res = await api("fs.read", { cwd, path });
+			if (!res.ok || res.value.kind !== "text") {
+				errors.push(path);
+				continue;
+			}
+			const r = replaceInText(res.value.content, state.query, replaceText, { regex: state.regex === true, words: state.words === true });
+			if (r.count === 0) continue;
+			const w = await api("fs.write", { cwd, path, content: r.text, baseMtime: res.value.mtimeMs });
+			if (!w.ok) {
+				errors.push(`${path}: ${w.error}`);
+				continue;
+			}
+			files += 1;
+			hits += r.count;
+		}
+		setReplaceBusy(false);
+		setConfirmAll(false);
+		if (hits > 0) onNotify?.(t("search.replaceDone", { hits, files }));
+		else onNotify?.(t("search.replaceNone"), "error");
+		if (errors.length > 0) onNotify?.(`${t("search.replaceFail", { n: errors.length })}: ${errors[0]}`, "error");
+		if (paths.length > capped.length) onNotify?.(t("search.replaceCapped"), "error");
+		onSubmit(); // refresh the result set
+	};
 	const toggleCtx = (r) => {
 		const key = ctxKey(r);
 		const next = new Set(expanded);
@@ -249,6 +290,7 @@ export function SearchPanel({ t, cwd, state, onQuery, onInclude, onToggleRegex, 
 		h(
 			"div",
 			{ className: "ce-search-box" },
+			h("button", { className: `ce-tool ce-tiny${replaceOpen ? " ce-tool-on" : ""}`, type: "button", title: t("search.replaceToggle"), onClick: () => setReplaceOpen((v) => !v) }, replaceOpen ? "▾" : "▸"),
 			h("input", {
 				ref: inputRef,
 				className: "ce-input ce-search-q",
@@ -273,6 +315,44 @@ export function SearchPanel({ t, cwd, state, onQuery, onInclude, onToggleRegex, 
 			h("button", { className: `ce-tool ce-tiny${state.words ? " ce-tool-on" : ""}`, type: "button", title: t("search.words"), onClick: onToggleWords }, "ab |"),
 			h("button", { className: "ce-tool ce-tiny", type: "button", title: t("search.run"), onClick: onSubmit }, h(IconSearch)),
 		),
+		replaceOpen
+			? h(
+				"div",
+				{ className: "ce-search-box" },
+				h("input", {
+					className: "ce-input ce-search-q",
+					type: "text",
+					placeholder: t("search.replacePlaceholder"),
+					value: replaceText,
+					onChange: (event) => { setReplaceText(event.target.value); setConfirmAll(false); },
+					onKeyDown: (event) => {
+						if (event.key === "Enter") {
+							event.preventDefault();
+							if (groups.length > 0) void runReplace(groups.map((g) => g.path));
+						} else if (event.key === "Escape") {
+							event.stopPropagation();
+							onClose();
+						}
+					},
+					spellcheck: false,
+					autoCapitalize: "off",
+					autoComplete: "off",
+				}),
+				h("button", {
+					className: "ce-sk-btn",
+					type: "button",
+					disabled: replaceBusy || groups.length === 0 || state.query.trim().length < 2,
+					title: t("search.replaceAll"),
+					onClick: () => {
+						if (!confirmAll) {
+							setConfirmAll(true);
+							return;
+						}
+						void runReplace(groups.map((g) => g.path));
+					},
+				}, replaceBusy ? "…" : confirmAll ? t("search.replaceConfirm", { n: groups.length }) : t("search.replaceAll")),
+			)
+			: null,
 		h("input", {
 			className: "ce-input ce-search-include",
 			type: "text",
@@ -310,17 +390,30 @@ export function SearchPanel({ t, cwd, state, onQuery, onInclude, onToggleRegex, 
 					Fragment,
 					{ key: g.path },
 					h(
-						"button",
-						{
-							type: "button",
-							className: "ce-sgroup",
-							title: g.path,
-							"aria-expanded": isCollapsed ? "false" : "true",
-							onClick: () => toggleGroup(g.path),
-						},
-						h("span", { className: `cet-tw${isCollapsed ? "" : " cet-tw-open"}` }, "▶"),
-						h("span", { className: "ce-sgroup-path" }, RelPath(cwd, g.path) || g.path),
-						h("span", { className: "ce-sgroup-count" }, String(g.items.length)),
+						"div",
+						{ className: "ce-sgroup-row" },
+						h(
+							"button",
+							{
+								type: "button",
+								className: "ce-sgroup",
+								title: g.path,
+								"aria-expanded": isCollapsed ? "false" : "true",
+								onClick: () => toggleGroup(g.path),
+							},
+							h("span", { className: `cet-tw${isCollapsed ? "" : " cet-tw-open"}` }, "▶"),
+							h("span", { className: "ce-sgroup-path" }, RelPath(cwd, g.path) || g.path),
+							h("span", { className: "ce-sgroup-count" }, String(g.items.length)),
+						),
+						replaceOpen
+							? h("button", {
+								type: "button",
+								className: "ce-tool ce-tiny ce-sgroup-rep",
+								title: t("search.replaceFile"),
+								disabled: replaceBusy || state.query.trim().length < 2,
+								onClick: () => void runReplace([g.path]),
+							}, "⇄")
+							: null,
 					),
 					isCollapsed
 						? null

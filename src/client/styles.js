@@ -164,8 +164,10 @@ export const CSS = `
 .ce-search-meta{font-size:11px;color:var(--dsw-alias-label-tertiary,#778);flex:none;min-height:14px}
 .ce-search-results{flex:1;min-height:0;border:.5px solid var(--dsw-alias-border-l1,#333);border-radius:8px;background:var(--dsw-alias-bg-layer-1,#1e2126)}
 .ce-srow{display:flex;align-items:stretch;width:100%}
-.ce-sgroup{display:flex;gap:5px;align-items:center;width:100%;text-align:left;border:0;background:var(--dsw-alias-bg-layer-1,#1e2126);color:inherit;font:inherit;padding:4px 8px 3px;cursor:pointer;position:sticky;top:0;z-index:1;border-bottom:.5px solid var(--dsw-alias-border-l1,#2a2a2a)}
+.ce-sgroup-row{display:flex;align-items:center;gap:2px;width:100%;position:sticky;top:0;z-index:1;background:var(--dsw-alias-bg-layer-1,#1e2126);border-bottom:.5px solid var(--dsw-alias-border-l1,#2a2a2a)}
+.ce-sgroup{display:flex;gap:5px;align-items:center;flex:1;min-width:0;text-align:left;border:0;background:transparent;color:inherit;font:inherit;padding:4px 4px 3px 8px;cursor:pointer}
 .ce-sgroup:hover .ce-sgroup-path{color:var(--dsw-alias-label-primary,#eee)}
+.ce-sgroup-rep{flex:none;margin-right:6px}
 .ce-sgroup-path{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;font-weight:600;color:var(--dsw-alias-label-secondary,#bcc);font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
 .ce-sgroup-count{flex:none;font-size:10px;color:var(--dsw-alias-label-secondary,#999);background:var(--dsw-alias-bg-layer-2,#2a2d33);border-radius:8px;padding:0 7px;line-height:16px}
 .ce-shl{color:var(--dsw-alias-label-primary,#fff);background:color-mix(in srgb,var(--dsw-alias-state-warn-primary,#e3b341) 32%,transparent);border-radius:2px;font-weight:600}
