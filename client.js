@@ -217,6 +217,10 @@ var zh = {
   "api.importTitle": "粘贴 curl 命令一键导入",
   "api.headers": "请求头",
   "api.addHeader": "添加请求头",
+  "api.params": "Query 参数",
+  "api.addParam": "添加参数",
+  "api.paramsHint": "发送时合并进 URL，同名覆盖",
+  "api.timeout": "超时 ms",
   "api.body": "请求体",
   "api.bodyNone": "无",
   "api.bodyForm": "form-urlencoded",
@@ -510,6 +514,10 @@ var en = {
   "api.importTitle": "Paste a curl command to import",
   "api.headers": "Headers",
   "api.addHeader": "Add header",
+  "api.params": "Query Params",
+  "api.addParam": "Add param",
+  "api.paramsHint": "Merged into the URL at send time; same names override",
+  "api.timeout": "Timeout ms",
   "api.body": "Body",
   "api.bodyNone": "none",
   "api.bodyForm": "form-urlencoded",
@@ -4939,6 +4947,9 @@ var CSS2 = `
 .cea-send{color:var(--dsw-alias-brand-primary,#6cb2ff);border-color:color-mix(in srgb,var(--dsw-alias-brand-primary,#59b7ff) 45%,transparent)}
 .cea-scroll{flex:1;min-height:0;display:flex;flex-direction:column;overflow:auto}
 .cea-sec{display:flex;align-items:center;gap:6px;padding:10px 8px 4px;color:var(--dsw-alias-label-tertiary,#889);font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;flex:none}
+.cea-tmo{display:flex;gap:4px;align-items:center;font-size:10px;color:var(--dsw-alias-label-tertiary,#889);text-transform:none;letter-spacing:0;font-weight:400;flex:none}
+.cea-tmo-in{width:64px;flex:none;font-size:11px;padding:2px 6px}
+.cea-hint{font-size:10px;color:var(--dsw-alias-label-tertiary,#778);text-transform:none;letter-spacing:0;font-weight:400}
 .cea-hrow{display:flex;gap:4px;padding:2px 8px;align-items:center;flex:none}
 .cea-hkey{flex:0 0 36%;min-width:0}
 .cea-hval{flex:1;min-width:0}
@@ -5654,6 +5665,20 @@ function buildEnvMap(pairs) {
   }
   return map;
 }
+function mergeParams(url, pairs) {
+  const raw = String(url ?? "");
+  const active = (pairs ?? []).filter((p) => String(p?.name ?? "").trim() !== "");
+  if (active.length === 0) return raw;
+  const hAt = raw.indexOf("#");
+  const frag = hAt >= 0 ? raw.slice(hAt) : "";
+  const work = hAt >= 0 ? raw.slice(0, hAt) : raw;
+  const qAt = work.indexOf("?");
+  const base = qAt >= 0 ? work.slice(0, qAt) : work;
+  const params = new URLSearchParams(qAt >= 0 ? work.slice(qAt + 1) : "");
+  for (const p of active) params.set(String(p.name).trim(), String(p.value ?? ""));
+  const qs = params.toString();
+  return `${base}${qs ? `?${qs}` : ""}${frag}`;
+}
 function prettySize(n) {
   if (n < 1024) return `${n}B`;
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)}KB`;
@@ -5714,6 +5739,9 @@ function ApiView({ t }) {
   const [envPairs, setEnvPairs] = useState(() => loadList(ENV_KEY));
   const [envOpen, setEnvOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [paramPairs, setParamPairs] = useState([]);
+  const [paramsOpen, setParamsOpen] = useState(false);
+  const [timeoutMs, setTimeoutMs] = useState(3e4);
   useEffect(() => {
     storeList(ENV_KEY, envPairs);
   }, [envPairs]);
@@ -5733,15 +5761,17 @@ function ApiView({ t }) {
       if (typeof d.rawSub === "string") setRawSub(d.rawSub);
       if (Array.isArray(d.formPairs)) setFormPairs(d.formPairs);
       if (typeof d.body === "string") setBody(d.body);
+      if (Array.isArray(d.paramPairs)) setParamPairs(d.paramPairs);
+      if (Number.isFinite(d.timeoutMs) && d.timeoutMs >= 1e3) setTimeoutMs(Math.min(12e4, d.timeoutMs));
     } catch {
     }
   }, []);
   useEffect(() => {
     try {
-      localStorage.setItem(DRAFT_KEY, JSON.stringify({ method, url, headers, bodyType, rawSub, formPairs, body }));
+      localStorage.setItem(DRAFT_KEY, JSON.stringify({ method, url, headers, bodyType, rawSub, formPairs, body, paramPairs, timeoutMs }));
     } catch {
     }
-  }, [method, url, headers, bodyType, rawSub, formPairs, body]);
+  }, [method, url, headers, bodyType, rawSub, formPairs, body, paramPairs, timeoutMs]);
   const beautify = useCallback(() => {
     try {
       setBody(JSON.stringify(JSON.parse(body), null, 2));
@@ -5751,8 +5781,8 @@ function ApiView({ t }) {
     }
   }, [body, t]);
   const snapshot = useCallback(
-    () => ({ method, url, headers, bodyType, rawSub, formPairs, body }),
-    [method, url, headers, bodyType, rawSub, formPairs, body]
+    () => ({ method, url, headers, bodyType, rawSub, formPairs, body, paramPairs, timeoutMs }),
+    [method, url, headers, bodyType, rawSub, formPairs, body, paramPairs, timeoutMs]
   );
   const restoreRequest = useCallback((req) => {
     if (!req || typeof req !== "object") return;
@@ -5763,6 +5793,8 @@ function ApiView({ t }) {
     if (typeof req.rawSub === "string") setRawSub(req.rawSub);
     if (Array.isArray(req.formPairs)) setFormPairs(req.formPairs);
     if (typeof req.body === "string") setBody(req.body);
+    if (Array.isArray(req.paramPairs)) setParamPairs(req.paramPairs);
+    if (Number.isFinite(req.timeoutMs) && req.timeoutMs >= 1e3) setTimeoutMs(Math.min(12e4, req.timeoutMs));
     setResponse(null);
     setHistOpen(false);
   }, []);
@@ -5782,7 +5814,7 @@ function ApiView({ t }) {
       multipart = formPairs.filter((p) => String(p.name ?? "").trim() !== "").map((p) => ({ name: p.name.trim(), value: substituteVars(String(p.value ?? ""), envMap) }));
     }
     const sentMethod = method;
-    const sentUrl = substituteVars(url.trim(), envMap);
+    const sentUrl = substituteVars(mergeParams(url.trim(), paramPairs), envMap);
     const sentSnapshot = snapshot();
     setSending(true);
     api("api.send", {
@@ -5790,6 +5822,7 @@ function ApiView({ t }) {
       url: sentUrl,
       headers: sendHeaders,
       body: sendBody,
+      timeoutMs: Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : void 0,
       ...multipart ? { multipart } : {}
     }).then((res) => {
       setSending(false);
@@ -5811,9 +5844,9 @@ function ApiView({ t }) {
         return next;
       });
     });
-  }, [method, url, headers, bodyType, rawSub, formPairs, body, sending, snapshot, envPairs]);
+  }, [method, url, headers, bodyType, rawSub, formPairs, body, sending, snapshot, envPairs, paramPairs, timeoutMs]);
   const copyCurl = useCallback(() => {
-    const text = toCurl({ method, url, headers, bodyType, rawSub, formPairs, body });
+    const text = toCurl({ method, url: mergeParams(url.trim(), paramPairs), headers, bodyType, rawSub, formPairs, body });
     const done = () => {
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
@@ -5825,7 +5858,7 @@ function ApiView({ t }) {
       else done();
     } catch {
     }
-  }, [method, url, headers, bodyType, rawSub, formPairs, body]);
+  }, [method, url, headers, bodyType, rawSub, formPairs, body, paramPairs]);
   const doImport = useCallback(() => {
     const p = parseCurl(importText);
     setMethod(p.method);
@@ -5884,6 +5917,7 @@ function ApiView({ t }) {
     }
   }, [response]);
   const setHeaderAt = (index, patch) => setHeaders((prev) => prev.map((hd, i) => i === index ? { ...hd, ...patch } : hd));
+  const activeParamCount = paramPairs.filter((p) => String(p?.name ?? "").trim() !== "").length;
   return h(
     "div",
     { className: "ce-root" },
@@ -5975,6 +6009,44 @@ function ApiView({ t }) {
     h(
       "div",
       { className: "cea-scroll ce-scroll" },
+      h(
+        "div",
+        { className: "cea-sec" },
+        h("button", { type: "button", className: "ce-tool ce-tiny", title: t("api.params"), onClick: () => setParamsOpen((v) => !v) }, paramsOpen ? "▾" : "▸"),
+        h("span", null, `${t("api.params")}${activeParamCount ? ` · ${activeParamCount}` : ""}`),
+        h("span", { className: "ce-spacer" }),
+        h(
+          "label",
+          { className: "cea-tmo" },
+          t("api.timeout"),
+          h("input", {
+            className: "ce-input cea-tmo-in",
+            type: "number",
+            min: 1e3,
+            max: 12e4,
+            step: 1e3,
+            value: timeoutMs,
+            onChange: (e) => setTimeoutMs(Math.max(1e3, Math.min(12e4, Number(e.target.value) || 3e4)))
+          })
+        )
+      ),
+      paramsOpen ? h(
+        Fragment,
+        null,
+        paramPairs.map((p, i) => h(
+          "div",
+          { key: i, className: "cea-hrow" },
+          h("input", { className: "ce-input cea-hkey", placeholder: "name", value: p.name ?? "", onChange: (e) => setParamPairs((prev) => prev.map((x, j) => j === i ? { ...x, name: e.target.value } : x)) }),
+          h("input", { className: "ce-input cea-hval", placeholder: "value", value: p.value ?? "", onChange: (e) => setParamPairs((prev) => prev.map((x, j) => j === i ? { ...x, value: e.target.value } : x)) }),
+          h("button", { type: "button", className: "ce-tool ce-tiny", onClick: () => setParamPairs((prev) => prev.filter((_, j) => j !== i)) }, "✕")
+        )),
+        h(
+          "div",
+          { className: "cea-hrow" },
+          h("button", { type: "button", className: "ce-tool ce-tiny", title: t("api.addParam"), onClick: () => setParamPairs((prev) => [...prev, { name: "", value: "" }]) }, "+"),
+          h("span", { className: "cea-hint" }, t("api.paramsHint"))
+        )
+      ) : null,
       h(
         "div",
         { className: "cea-sec" },

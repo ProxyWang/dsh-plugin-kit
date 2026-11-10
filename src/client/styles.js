@@ -345,6 +345,9 @@ export const CSS = `
 .cea-send{color:var(--dsw-alias-brand-primary,#6cb2ff);border-color:color-mix(in srgb,var(--dsw-alias-brand-primary,#59b7ff) 45%,transparent)}
 .cea-scroll{flex:1;min-height:0;display:flex;flex-direction:column;overflow:auto}
 .cea-sec{display:flex;align-items:center;gap:6px;padding:10px 8px 4px;color:var(--dsw-alias-label-tertiary,#889);font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;flex:none}
+.cea-tmo{display:flex;gap:4px;align-items:center;font-size:10px;color:var(--dsw-alias-label-tertiary,#889);text-transform:none;letter-spacing:0;font-weight:400;flex:none}
+.cea-tmo-in{width:64px;flex:none;font-size:11px;padding:2px 6px}
+.cea-hint{font-size:10px;color:var(--dsw-alias-label-tertiary,#778);text-transform:none;letter-spacing:0;font-weight:400}
 .cea-hrow{display:flex;gap:4px;padding:2px 8px;align-items:center;flex:none}
 .cea-hkey{flex:0 0 36%;min-width:0}
 .cea-hval{flex:1;min-width:0}

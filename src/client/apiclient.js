@@ -227,6 +227,27 @@ export function buildEnvMap(pairs) {
 	return map;
 }
 
+/**
+ * Merge query-param pairs into a URL (Postman Params-tab semantics): table
+ * entries override same-named params already in the URL, other existing
+ * params survive, empty values send `name=`, and a #fragment is preserved.
+ * Exported for tests.
+ */
+export function mergeParams(url, pairs) {
+	const raw = String(url ?? "");
+	const active = (pairs ?? []).filter((p) => String(p?.name ?? "").trim() !== "");
+	if (active.length === 0) return raw;
+	const hAt = raw.indexOf("#");
+	const frag = hAt >= 0 ? raw.slice(hAt) : "";
+	const work = hAt >= 0 ? raw.slice(0, hAt) : raw;
+	const qAt = work.indexOf("?");
+	const base = qAt >= 0 ? work.slice(0, qAt) : work;
+	const params = new URLSearchParams(qAt >= 0 ? work.slice(qAt + 1) : "");
+	for (const p of active) params.set(String(p.name).trim(), String(p.value ?? ""));
+	const qs = params.toString();
+	return `${base}${qs ? `?${qs}` : ""}${frag}`;
+}
+
 function prettySize(n) {
 	if (n < 1024) return `${n}B`;
 	if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)}KB`;
@@ -294,6 +315,9 @@ export function ApiView({ t }) {
 	const [envPairs, setEnvPairs] = useState(() => loadList(ENV_KEY));
 	const [envOpen, setEnvOpen] = useState(false);
 	const [copied, setCopied] = useState(false);
+	const [paramPairs, setParamPairs] = useState([]);
+	const [paramsOpen, setParamsOpen] = useState(false);
+	const [timeoutMs, setTimeoutMs] = useState(30000);
 
 	useEffect(() => {
 		storeList(ENV_KEY, envPairs);
@@ -314,13 +338,15 @@ export function ApiView({ t }) {
 			if (typeof d.rawSub === "string") setRawSub(d.rawSub);
 			if (Array.isArray(d.formPairs)) setFormPairs(d.formPairs);
 			if (typeof d.body === "string") setBody(d.body);
+			if (Array.isArray(d.paramPairs)) setParamPairs(d.paramPairs);
+			if (Number.isFinite(d.timeoutMs) && d.timeoutMs >= 1000) setTimeoutMs(Math.min(120000, d.timeoutMs));
 		} catch { /* corrupt draft: start clean */ }
 	}, []);
 	useEffect(() => {
 		try {
-			localStorage.setItem(DRAFT_KEY, JSON.stringify({ method, url, headers, bodyType, rawSub, formPairs, body }));
+			localStorage.setItem(DRAFT_KEY, JSON.stringify({ method, url, headers, bodyType, rawSub, formPairs, body, paramPairs, timeoutMs }));
 		} catch { /* storage unavailable */ }
-	}, [method, url, headers, bodyType, rawSub, formPairs, body]);
+	}, [method, url, headers, bodyType, rawSub, formPairs, body, paramPairs, timeoutMs]);
 
 	const beautify = useCallback(() => {
 		try {
@@ -333,8 +359,8 @@ export function ApiView({ t }) {
 
 	/** Full editor snapshot — what history rows and favorites restore. */
 	const snapshot = useCallback(
-		() => ({ method, url, headers, bodyType, rawSub, formPairs, body }),
-		[method, url, headers, bodyType, rawSub, formPairs, body],
+		() => ({ method, url, headers, bodyType, rawSub, formPairs, body, paramPairs, timeoutMs }),
+		[method, url, headers, bodyType, rawSub, formPairs, body, paramPairs, timeoutMs],
 	);
 
 	const restoreRequest = useCallback((req) => {
@@ -346,6 +372,8 @@ export function ApiView({ t }) {
 		if (typeof req.rawSub === "string") setRawSub(req.rawSub);
 		if (Array.isArray(req.formPairs)) setFormPairs(req.formPairs);
 		if (typeof req.body === "string") setBody(req.body);
+		if (Array.isArray(req.paramPairs)) setParamPairs(req.paramPairs);
+		if (Number.isFinite(req.timeoutMs) && req.timeoutMs >= 1000) setTimeoutMs(Math.min(120000, req.timeoutMs));
 		setResponse(null);
 		setHistOpen(false);
 	}, []);
@@ -374,7 +402,7 @@ export function ApiView({ t }) {
 				.map((p) => ({ name: p.name.trim(), value: substituteVars(String(p.value ?? ""), envMap) }));
 		}
 		const sentMethod = method;
-		const sentUrl = substituteVars(url.trim(), envMap);
+		const sentUrl = substituteVars(mergeParams(url.trim(), paramPairs), envMap);
 		const sentSnapshot = snapshot();
 		setSending(true);
 		api("api.send", {
@@ -382,6 +410,7 @@ export function ApiView({ t }) {
 			url: sentUrl,
 			headers: sendHeaders,
 			body: sendBody,
+			timeoutMs: Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : void 0,
 			...(multipart ? { multipart } : {}),
 		}).then((res) => {
 			setSending(false);
@@ -405,10 +434,10 @@ export function ApiView({ t }) {
 				return next;
 			});
 		});
-	}, [method, url, headers, bodyType, rawSub, formPairs, body, sending, snapshot, envPairs]);
+	}, [method, url, headers, bodyType, rawSub, formPairs, body, sending, snapshot, envPairs, paramPairs, timeoutMs]);
 
 	const copyCurl = useCallback(() => {
-		const text = toCurl({ method, url, headers, bodyType, rawSub, formPairs, body });
+		const text = toCurl({ method, url: mergeParams(url.trim(), paramPairs), headers, bodyType, rawSub, formPairs, body });
 		const done = () => {
 			setCopied(true);
 			setTimeout(() => setCopied(false), 1500);
@@ -418,7 +447,7 @@ export function ApiView({ t }) {
 			if (p && typeof p.then === "function") p.then(done, () => {});
 			else done();
 		} catch { /* clipboard unavailable */ }
-	}, [method, url, headers, bodyType, rawSub, formPairs, body]);
+	}, [method, url, headers, bodyType, rawSub, formPairs, body, paramPairs]);
 
 	const doImport = useCallback(() => {
 		const p = parseCurl(importText);
@@ -483,6 +512,7 @@ export function ApiView({ t }) {
 	}, [response]);
 
 	const setHeaderAt = (index, patch) => setHeaders((prev) => prev.map((hd, i) => (i === index ? { ...hd, ...patch } : hd)));
+	const activeParamCount = paramPairs.filter((p) => String(p?.name ?? "").trim() !== "").length;
 
 	return h("div", { className: "ce-root" },
 		h("div", { className: "cea-bar" },
@@ -544,6 +574,35 @@ export function ApiView({ t }) {
 			)
 			: null,
 		h("div", { className: "cea-scroll ce-scroll" },
+			h("div", { className: "cea-sec" },
+				h("button", { type: "button", className: "ce-tool ce-tiny", title: t("api.params"), onClick: () => setParamsOpen((v) => !v) }, paramsOpen ? "▾" : "▸"),
+				h("span", null, `${t("api.params")}${activeParamCount ? ` · ${activeParamCount}` : ""}`),
+				h("span", { className: "ce-spacer" }),
+				h("label", { className: "cea-tmo" }, t("api.timeout"),
+					h("input", {
+						className: "ce-input cea-tmo-in",
+						type: "number",
+						min: 1000,
+						max: 120000,
+						step: 1000,
+						value: timeoutMs,
+						onChange: (e) => setTimeoutMs(Math.max(1000, Math.min(120000, Number(e.target.value) || 30000))),
+					}),
+				),
+			),
+			paramsOpen
+				? h(Fragment, null,
+					paramPairs.map((p, i) => h("div", { key: i, className: "cea-hrow" },
+						h("input", { className: "ce-input cea-hkey", placeholder: "name", value: p.name ?? "", onChange: (e) => setParamPairs((prev) => prev.map((x, j) => (j === i ? { ...x, name: e.target.value } : x))) }),
+						h("input", { className: "ce-input cea-hval", placeholder: "value", value: p.value ?? "", onChange: (e) => setParamPairs((prev) => prev.map((x, j) => (j === i ? { ...x, value: e.target.value } : x))) }),
+						h("button", { type: "button", className: "ce-tool ce-tiny", onClick: () => setParamPairs((prev) => prev.filter((_, j) => j !== i)) }, "✕"),
+					)),
+					h("div", { className: "cea-hrow" },
+						h("button", { type: "button", className: "ce-tool ce-tiny", title: t("api.addParam"), onClick: () => setParamPairs((prev) => [...prev, { name: "", value: "" }]) }, "+"),
+						h("span", { className: "cea-hint" }, t("api.paramsHint")),
+					),
+				)
+				: null,
 			h("div", { className: "cea-sec" },
 				h("span", null, t("api.headers")),
 				h("span", { className: "ce-spacer" }),

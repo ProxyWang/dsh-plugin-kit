@@ -403,6 +403,15 @@ check("substituteVars replaces known names", substituteVars("{{base}}/x/{{ id }}
 check("substituteVars keeps unknown literal", substituteVars("{{nope}}/x", { base: "b" }) === "{{nope}}/x", null);
 check("substituteVars passthrough without braces", substituteVars("plain", {}) === "plain" && substituteVars(null, {}) === null, null);
 check("buildEnvMap skips empty names, last wins", JSON.stringify(buildEnvMap([{ name: "", value: "x" }, { name: "a", value: "1" }, { name: "a", value: "2" }])) === JSON.stringify({ a: "2" }), buildEnvMap([{ name: "a", value: "1" }, { name: "a", value: "2" }]));
+
+// --- query params merge ---------------------------------------------------------------------------
+const { mergeParams } = await import("./src/client/apiclient.js");
+check("mergeParams appends new param", mergeParams("https://a.b/x", [{ name: "q", value: "1" }]) === "https://a.b/x?q=1", mergeParams("https://a.b/x", [{ name: "q", value: "1" }]));
+check("mergeParams overrides same name, keeps others", mergeParams("https://a.b/x?q=1&r=2", [{ name: "q", value: "9" }]) === "https://a.b/x?q=9&r=2", mergeParams("https://a.b/x?q=1&r=2", [{ name: "q", value: "9" }]));
+check("mergeParams without active pairs is identity", mergeParams("https://a.b/x?q=1", []) === "https://a.b/x?q=1" && mergeParams("https://a.b/x", [{ name: " ", value: "1" }]) === "https://a.b/x", null);
+check("mergeParams preserves fragment", mergeParams("https://a.b/x#frag", [{ name: "q", value: "1" }]) === "https://a.b/x?q=1#frag", mergeParams("https://a.b/x#frag", [{ name: "q", value: "1" }]));
+check("mergeParams empty value sends bare name", mergeParams("https://a.b/x", [{ name: "q", value: "" }]) === "https://a.b/x?q=", mergeParams("https://a.b/x", [{ name: "q", value: "" }]));
+check("mergeParams encodes special chars", mergeParams("https://a.b/x", [{ name: "q", value: "a b&c" }]).includes("q=a+b%26c") || mergeParams("https://a.b/x", [{ name: "q", value: "a b&c" }]).includes("q=a%20b%26c"), mergeParams("https://a.b/x", [{ name: "q", value: "a b&c" }]));
 const c5 = parseCurl("curl -F 'field=hello world' -F 'file=@/tmp/a.png' https://a.b/upload");
 check(
 	"parseCurl -F becomes multipart pairs",
