@@ -6,6 +6,59 @@ import { api } from "./api.js";
 import { IconSearch } from "./icons.js";
 import { RelPath } from "./pathtools.js";
 
+/**
+ * Match ranges of `query` inside one result line, mirroring the host's
+ * smart-case rule (all-lowercase query ⇒ case-insensitive). Regex mode
+ * compiles the query with the same flags the engine used; an invalid
+ * pattern simply yields no highlight. Exported for tests.
+ */
+export function matchRanges(text, query, regex) {
+	const ranges = [];
+	if (!text || !query) return ranges;
+	const insensitive = query === query.toLowerCase();
+	if (regex) {
+		let re;
+		try {
+			re = new RegExp(query, insensitive ? "gi" : "g");
+		} catch {
+			return ranges;
+		}
+		let m;
+		let guard = 0;
+		while ((m = re.exec(text)) !== null && guard++ < 60) {
+			if (m[0] === "") {
+				re.lastIndex++;
+				continue;
+			}
+			ranges.push([m.index, m.index + m[0].length]);
+		}
+		return ranges;
+	}
+	const hay = insensitive ? text.toLowerCase() : text;
+	let at = hay.indexOf(query);
+	let guard = 0;
+	while (at !== -1 && guard++ < 60) {
+		ranges.push([at, at + query.length]);
+		at = hay.indexOf(query, at + query.length);
+	}
+	return ranges;
+}
+
+/** Split text into [plain, <b class=ce-shl>match</b>, …] children. Exported for tests. */
+export function highlightText(text, ranges) {
+	if (!ranges || ranges.length === 0) return text;
+	const out = [];
+	let last = 0;
+	for (const [s, e] of ranges) {
+		if (s < last) continue; // defensive: skip overlaps
+		if (s > last) out.push(text.slice(last, s));
+		out.push(h("b", { key: `m${s}`, className: "ce-shl" }, text.slice(s, e)));
+		last = e;
+	}
+	if (last < text.length) out.push(text.slice(last));
+	return out;
+}
+
 export function LocationList({ t, overlay, cwd, onPick, onClose }) {
 	return h(
 		"div",
@@ -122,6 +175,33 @@ export function SearchPanel({ t, cwd, state, onQuery, onInclude, onToggleRegex, 
 		setExpanded(new Set());
 	}, [state.results]);
 	const ctxKey = (r) => `${r.path}:${r.line}`;
+	// Highlight a line's matches with the same smart-case rule the engine used.
+	const hl = (text) => highlightText(text, matchRanges(text, state.query ?? "", state.regex === true));
+	// VSCode-style grouping: results by file with a collapsible sticky header.
+	const groups = useMemo(() => {
+		const out = [];
+		const byPath = new Map();
+		for (const r of state.results ?? []) {
+			let g = byPath.get(r.path);
+			if (!g) {
+				g = { path: r.path, items: [] };
+				byPath.set(r.path, g);
+				out.push(g);
+			}
+			g.items.push(r);
+		}
+		return out;
+	}, [state.results]);
+	const [collapsed, setCollapsed] = useState(() => new Set());
+	useEffect(() => {
+		setCollapsed(new Set());
+	}, [state.results]);
+	const toggleGroup = (path) => setCollapsed((prev) => {
+		const next = new Set(prev);
+		if (next.has(path)) next.delete(path);
+		else next.add(path);
+		return next;
+	});
 	const toggleCtx = (r) => {
 		const key = ctxKey(r);
 		const next = new Set(expanded);
@@ -158,7 +238,7 @@ export function SearchPanel({ t, cwd, state, onQuery, onInclude, onToggleRegex, 
 				onClick: () => onPick({ path: r.path, line: n }),
 			},
 			h("span", { className: "ce-sctx-no" }, String(n)),
-			h("span", { className: "ce-sctx-text" }, entry.lines[n - 1] ?? ""),
+			h("span", { className: "ce-sctx-text" }, hl(entry.lines[n - 1] ?? "")),
 			));
 		}
 		return h("div", { className: "ce-sctx" }, rows);
@@ -224,30 +304,52 @@ export function SearchPanel({ t, cwd, state, onQuery, onInclude, onToggleRegex, 
 		h(
 			"div",
 			{ className: "ce-search-results ce-scroll" },
-			(state.results ?? []).map((r, i) =>
-				h(
+			groups.map((g) => {
+				const isCollapsed = collapsed.has(g.path);
+				return h(
 					Fragment,
-					{ key: i },
+					{ key: g.path },
 					h(
-						"div",
-						{ className: "ce-srow" },
-						h("button", {
+						"button",
+						{
 							type: "button",
-							className: "ce-sctx-toggle",
-							title: t("search.ctx"),
-							"aria-expanded": expanded.has(ctxKey(r)) ? "true" : "false",
-							onClick: () => toggleCtx(r),
-						}, expanded.has(ctxKey(r)) ? "▾" : "▸"),
-						h(
-							"button",
-							{ type: "button", className: "ce-sresult", onClick: () => onPick(r) },
-							h("span", { className: "ce-sloc" }, `${RelPath(cwd, r.path) || r.path}:${r.line}`),
-							h("span", { className: "ce-stext" }, r.text),
-						),
+							className: "ce-sgroup",
+							title: g.path,
+							"aria-expanded": isCollapsed ? "false" : "true",
+							onClick: () => toggleGroup(g.path),
+						},
+						h("span", { className: `cet-tw${isCollapsed ? "" : " cet-tw-open"}` }, "▶"),
+						h("span", { className: "ce-sgroup-path" }, RelPath(cwd, g.path) || g.path),
+						h("span", { className: "ce-sgroup-count" }, String(g.items.length)),
 					),
-					expanded.has(ctxKey(r)) ? renderCtx(r) : null,
-				),
-			),
+					isCollapsed
+						? null
+						: g.items.map((r) =>
+							h(
+								Fragment,
+								{ key: `${r.path}:${r.line}` },
+								h(
+									"div",
+									{ className: "ce-srow" },
+									h("button", {
+										type: "button",
+										className: "ce-sctx-toggle",
+										title: t("search.ctx"),
+										"aria-expanded": expanded.has(ctxKey(r)) ? "true" : "false",
+										onClick: () => toggleCtx(r),
+									}, expanded.has(ctxKey(r)) ? "▾" : "▸"),
+									h(
+										"button",
+										{ type: "button", className: "ce-sresult", onClick: () => onPick(r) },
+										h("span", { className: "ce-sloc" }, `:${r.line}`),
+										h("span", { className: "ce-stext" }, hl(r.text)),
+									),
+								),
+								expanded.has(ctxKey(r)) ? renderCtx(r) : null,
+							),
+						),
+				);
+			}),
 		),
 	);
 }

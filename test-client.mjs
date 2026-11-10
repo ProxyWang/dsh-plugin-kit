@@ -262,6 +262,20 @@ check("computeWrapRows interleaves deletion bars at anchors", wrapDel.rows.lengt
 check("computeWrapRows propagates find + changed marks", String(wrapDel.rows[0].children[0].props.className).includes("ce-gline-find") && String(wrapDel.rows[2].props.className).includes("ce-line-changed"), [wrapDel.rows[0].children[0].props.className, wrapDel.rows[2].props.className]);
 check("WRAP_LINE_CAP is a sane perf cap", WRAP_LINE_CAP >= 1000 && WRAP_LINE_CAP <= 20000, WRAP_LINE_CAP);
 
+// --- search match highlighting -----------------------------------------------------------------
+const { matchRanges, highlightText } = await import("./src/client/overlays.js");
+check("matchRanges literal smart-case finds all", JSON.stringify(matchRanges("foo Bar foo", "foo", false)) === JSON.stringify([[0, 3], [8, 11]]), matchRanges("foo Bar foo", "foo", false));
+check("matchRanges uppercase query is case-sensitive", matchRanges("foo bar", "Foo", false).length === 0, matchRanges("foo bar", "Foo", false));
+check("matchRanges regex mode", JSON.stringify(matchRanges("abc abc", "a.c", true)) === JSON.stringify([[0, 3], [4, 7]]), matchRanges("abc abc", "a.c", true));
+check("matchRanges invalid regex degrades to none", matchRanges("abc", "([", true).length === 0, null);
+check("matchRanges zero-length regex cannot loop", matchRanges("abc", "x*", true).length <= 60, null);
+check("matchRanges empty inputs", matchRanges("", "a", false).length === 0 && matchRanges("a", "", false).length === 0, null);
+const hlOut = highlightText("aXa", [[1, 2]]);
+check("highlightText splits into before/mark/after", Array.isArray(hlOut) && hlOut.length === 3 && hlOut[0] === "a" && hlOut[1].props.className === "ce-shl" && hlOut[1].children[0] === "X" && hlOut[2] === "a", hlOut);
+check("highlightText no ranges returns raw string", highlightText("plain", []) === "plain", null);
+const hlFull = highlightText("xx", [[0, 2]]);
+check("highlightText full-range has no empty tails", Array.isArray(hlFull) && hlFull.length === 1, hlFull);
+
 // --- guide launcher contract ---------------------------------------------------------------
 const { collectBoxes, groupOf, makeLauncher } = await import("./src/client/launcher.js");
 check("groupOf mapping", groupOf("files") === "code" && groupOf("code-skills") === "skills" && groupOf("terminal") === "run" && groupOf("weird") === "more", [groupOf("files"), groupOf("code-skills"), groupOf("terminal"), groupOf("weird")]);

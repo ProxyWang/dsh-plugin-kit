@@ -1946,6 +1946,50 @@ function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commitsOpen, 
 }
 
 // src/client/overlays.js
+function matchRanges(text, query, regex) {
+  const ranges = [];
+  if (!text || !query) return ranges;
+  const insensitive = query === query.toLowerCase();
+  if (regex) {
+    let re;
+    try {
+      re = new RegExp(query, insensitive ? "gi" : "g");
+    } catch {
+      return ranges;
+    }
+    let m;
+    let guard2 = 0;
+    while ((m = re.exec(text)) !== null && guard2++ < 60) {
+      if (m[0] === "") {
+        re.lastIndex++;
+        continue;
+      }
+      ranges.push([m.index, m.index + m[0].length]);
+    }
+    return ranges;
+  }
+  const hay = insensitive ? text.toLowerCase() : text;
+  let at = hay.indexOf(query);
+  let guard = 0;
+  while (at !== -1 && guard++ < 60) {
+    ranges.push([at, at + query.length]);
+    at = hay.indexOf(query, at + query.length);
+  }
+  return ranges;
+}
+function highlightText(text, ranges) {
+  if (!ranges || ranges.length === 0) return text;
+  const out = [];
+  let last = 0;
+  for (const [s, e] of ranges) {
+    if (s < last) continue;
+    if (s > last) out.push(text.slice(last, s));
+    out.push(h("b", { key: `m${s}`, className: "ce-shl" }, text.slice(s, e)));
+    last = e;
+  }
+  if (last < text.length) out.push(text.slice(last));
+  return out;
+}
 function LocationList({ t, overlay, cwd, onPick, onClose }) {
   return h(
     "div",
@@ -2059,6 +2103,31 @@ function SearchPanel({ t, cwd, state, onQuery, onInclude, onToggleRegex, onToggl
     setExpanded(/* @__PURE__ */ new Set());
   }, [state.results]);
   const ctxKey = (r) => `${r.path}:${r.line}`;
+  const hl = (text) => highlightText(text, matchRanges(text, state.query ?? "", state.regex === true));
+  const groups = useMemo(() => {
+    const out = [];
+    const byPath2 = /* @__PURE__ */ new Map();
+    for (const r of state.results ?? []) {
+      let g = byPath2.get(r.path);
+      if (!g) {
+        g = { path: r.path, items: [] };
+        byPath2.set(r.path, g);
+        out.push(g);
+      }
+      g.items.push(r);
+    }
+    return out;
+  }, [state.results]);
+  const [collapsed, setCollapsed] = useState(() => /* @__PURE__ */ new Set());
+  useEffect(() => {
+    setCollapsed(/* @__PURE__ */ new Set());
+  }, [state.results]);
+  const toggleGroup = (path) => setCollapsed((prev) => {
+    const next = new Set(prev);
+    if (next.has(path)) next.delete(path);
+    else next.add(path);
+    return next;
+  });
   const toggleCtx = (r) => {
     const key = ctxKey(r);
     const next = new Set(expanded);
@@ -2097,7 +2166,7 @@ function SearchPanel({ t, cwd, state, onQuery, onInclude, onToggleRegex, onToggl
           onClick: () => onPick({ path: r.path, line: n })
         },
         h("span", { className: "ce-sctx-no" }, String(n)),
-        h("span", { className: "ce-sctx-text" }, entry.lines[n - 1] ?? "")
+        h("span", { className: "ce-sctx-text" }, hl(entry.lines[n - 1] ?? ""))
       ));
     }
     return h("div", { className: "ce-sctx" }, rows);
@@ -2157,30 +2226,50 @@ function SearchPanel({ t, cwd, state, onQuery, onInclude, onToggleRegex, onToggl
     h(
       "div",
       { className: "ce-search-results ce-scroll" },
-      (state.results ?? []).map(
-        (r, i) => h(
+      groups.map((g) => {
+        const isCollapsed = collapsed.has(g.path);
+        return h(
           Fragment,
-          { key: i },
+          { key: g.path },
           h(
-            "div",
-            { className: "ce-srow" },
-            h("button", {
+            "button",
+            {
               type: "button",
-              className: "ce-sctx-toggle",
-              title: t("search.ctx"),
-              "aria-expanded": expanded.has(ctxKey(r)) ? "true" : "false",
-              onClick: () => toggleCtx(r)
-            }, expanded.has(ctxKey(r)) ? "▾" : "▸"),
-            h(
-              "button",
-              { type: "button", className: "ce-sresult", onClick: () => onPick(r) },
-              h("span", { className: "ce-sloc" }, `${RelPath(cwd, r.path) || r.path}:${r.line}`),
-              h("span", { className: "ce-stext" }, r.text)
-            )
+              className: "ce-sgroup",
+              title: g.path,
+              "aria-expanded": isCollapsed ? "false" : "true",
+              onClick: () => toggleGroup(g.path)
+            },
+            h("span", { className: `cet-tw${isCollapsed ? "" : " cet-tw-open"}` }, "▶"),
+            h("span", { className: "ce-sgroup-path" }, RelPath(cwd, g.path) || g.path),
+            h("span", { className: "ce-sgroup-count" }, String(g.items.length))
           ),
-          expanded.has(ctxKey(r)) ? renderCtx(r) : null
-        )
-      )
+          isCollapsed ? null : g.items.map(
+            (r) => h(
+              Fragment,
+              { key: `${r.path}:${r.line}` },
+              h(
+                "div",
+                { className: "ce-srow" },
+                h("button", {
+                  type: "button",
+                  className: "ce-sctx-toggle",
+                  title: t("search.ctx"),
+                  "aria-expanded": expanded.has(ctxKey(r)) ? "true" : "false",
+                  onClick: () => toggleCtx(r)
+                }, expanded.has(ctxKey(r)) ? "▾" : "▸"),
+                h(
+                  "button",
+                  { type: "button", className: "ce-sresult", onClick: () => onPick(r) },
+                  h("span", { className: "ce-sloc" }, `:${r.line}`),
+                  h("span", { className: "ce-stext" }, hl(r.text))
+                )
+              ),
+              expanded.has(ctxKey(r)) ? renderCtx(r) : null
+            )
+          )
+        );
+      })
     )
   );
 }
@@ -4067,6 +4156,11 @@ var CSS = `
 .ce-search-meta{font-size:11px;color:var(--dsw-alias-label-tertiary,#778);flex:none;min-height:14px}
 .ce-search-results{flex:1;min-height:0;border:.5px solid var(--dsw-alias-border-l1,#333);border-radius:8px;background:var(--dsw-alias-bg-layer-1,#1e2126)}
 .ce-srow{display:flex;align-items:stretch;width:100%}
+.ce-sgroup{display:flex;gap:5px;align-items:center;width:100%;text-align:left;border:0;background:var(--dsw-alias-bg-layer-1,#1e2126);color:inherit;font:inherit;padding:4px 8px 3px;cursor:pointer;position:sticky;top:0;z-index:1;border-bottom:.5px solid var(--dsw-alias-border-l1,#2a2a2a)}
+.ce-sgroup:hover .ce-sgroup-path{color:var(--dsw-alias-label-primary,#eee)}
+.ce-sgroup-path{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;font-weight:600;color:var(--dsw-alias-label-secondary,#bcc);font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.ce-sgroup-count{flex:none;font-size:10px;color:var(--dsw-alias-label-secondary,#999);background:var(--dsw-alias-bg-layer-2,#2a2d33);border-radius:8px;padding:0 7px;line-height:16px}
+.ce-shl{color:var(--dsw-alias-label-primary,#fff);background:color-mix(in srgb,var(--dsw-alias-state-warn-primary,#e3b341) 32%,transparent);border-radius:2px;font-weight:600}
 .ce-sctx-toggle{flex:none;border:0;background:transparent;color:var(--dsw-alias-label-tertiary,#778);cursor:pointer;padding:4px 1px 4px 7px;font:inherit;font-size:10px;line-height:1}
 .ce-sctx-toggle:hover{color:var(--dsw-alias-label-primary,#ddd)}
 .ce-sresult{display:flex;gap:10px;align-items:baseline;flex:1;min-width:0;text-align:left;border:0;background:transparent;color:inherit;font:inherit;padding:4px 10px 4px 5px;cursor:pointer;white-space:nowrap}
