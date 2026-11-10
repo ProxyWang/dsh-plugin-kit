@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Dev Toolbox",
-    "description": "Right-sidebar development toolbox: workspace file tree, code editor with save (⌘S), full-text search (⇧⌘F), find-in-file (⌘F), gopls definition/references jumps, git & call diffs over the whole file (changed-line marks, folded deletion bars), skills manager (view/edit/create/delete SKILL.md), grouped sidebar launcher; forward/back via ⌘] / ⌘[."
+    "description": "Right-sidebar development toolbox: workspace file tree, code editor with save (⌘S), word wrap, go-to-line (⌘G), full-text search (⇧⌘F with regex/whole-word/context), find-in-file (⌘F), LSP definition/references jumps (Go/TS/Python), image & Markdown/SVG previews, git stage/commit/changes diffs over the whole file (changed-line marks, folded deletion bars), skills manager, API tester (history/favorites/multipart), grouped sidebar launcher."
   }
 }

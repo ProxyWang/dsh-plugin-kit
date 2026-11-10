@@ -1,7 +1,7 @@
 {
   "name": "dsh-plugin-kit",
-  "version": "1.1.0",
-  "description": "Harness dev toolbox panel: workspace file tree with create/rename/delete, code editor with save, full-text search, gopls jumps and blame column, git changes with whole-file diff marks and change rail, branch switcher, skills manager, and a Postman-style API tester with curl import.",
+  "version": "1.2.0",
+  "description": "Harness dev toolbox panel: workspace file tree with create/rename/delete, code editor with save, word wrap and go-to-line, full-text search with regex/context, multi-language LSP jumps (Go/TS/Python) and blame column, git stage/commit flow with whole-file diff marks and change rail, image & Markdown/SVG previews, branch switcher, skills manager, and a Postman-style API tester with curl import, history and favorites.",
   "license": "MIT",
   "repository": {
     "type": "git",

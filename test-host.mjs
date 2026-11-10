@@ -1,7 +1,9 @@
 // Drives the host half through a fake webServer to exercise every route.
 import { Readable } from "node:stream";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { mkdirSync, writeFileSync, appendFileSync, rmSync, symlinkSync, existsSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 
 const fixture = "/tmp/ce-test";
 const cleanupFixture = () => { try { rmSync(fixture, { recursive: true, force: true }); } catch {} };
@@ -78,6 +80,7 @@ function call(route, body) {
 const cwd = "/tmp/ce-test";
 let pass = 0;
 let fail = 0;
+let skipped = 0;
 function check(name, cond, extra) {
 	if (cond) {
 		pass++;
@@ -86,6 +89,25 @@ function check(name, cond, extra) {
 		fail++;
 		console.log(`FAIL  ${name}${extra ? ` → ${JSON.stringify(extra)}` : ""}`);
 	}
+}
+
+// gopls-backed assertions skip instead of failing where gopls is not
+// installed, so the suite runs anywhere; CI installs gopls to activate them.
+function hasGopls() {
+	try {
+		if (spawnSync("gopls", ["version"], { stdio: "ignore" }).status === 0) return true;
+	} catch {}
+	const home = homedir();
+	return [join(home, "gopath", "bin", "gopls"), join(home, "go", "bin", "gopls"), "/opt/homebrew/bin/gopls", "/usr/local/bin/gopls"].some((p) => existsSync(p));
+}
+const goplsOn = hasGopls();
+function checkLsp(name, cond, extra) {
+	if (!goplsOn) {
+		skipped++;
+		console.log(`  skip  ${name} (gopls not installed)`);
+		return;
+	}
+	check(name, cond, extra);
 }
 
 const listing = await call("fs.list", { cwd, path: "" });
@@ -111,17 +133,17 @@ const diffBranch = await call("git.diff", { cwd, path: "main.go", scope: "branch
 check("git.diff vs base", diffBranch.ok && diffBranch.value.diff.includes("@@") && diffBranch.value.base, diffBranch);
 
 const def = await call("lsp.request", { cwd, path: "main.go", kind: "definition", line: 11, col: 15 });
-check(
+checkLsp(
 	"lsp definition → helper",
 	def.ok && Array.isArray(def.value.targets) && def.value.targets.some((t) => t.path.endsWith("main.go") && t.line === 6) && def.value.status?.state === "ready",
 	def,
 );
 
 const refs = await call("lsp.request", { cwd, path: "main.go", kind: "references", line: 6, col: 6 });
-check("lsp references helper", refs.ok && refs.value.targets.length >= 1 && refs.value.targets.every((t) => t.snippet !== undefined), refs);
+checkLsp("lsp references helper", refs.ok && refs.value.targets.length >= 1 && refs.value.targets.every((t) => t.snippet !== undefined), refs);
 
 const hov = await call("lsp.request", { cwd, path: "pkg/svc.go", kind: "hover", line: 5, col: 13 });
-check("lsp hover hello", hov.ok && typeof hov.value.hover === "string", hov);
+checkLsp("lsp hover hello", hov.ok && typeof hov.value.hover === "string", hov);
 
 const nonGo = await call("lsp.request", { cwd, path: "go.mod", kind: "definition", line: 1, col: 1 });
 check("lsp non-go guarded", nonGo.ok && nonGo.value.targets.length === 0, nonGo);
@@ -130,12 +152,12 @@ const diag = await call("lsp.diagnostics", { cwd, path: "main.go" });
 check("lsp diagnostics shape", diag.ok && Array.isArray(diag.value.items), diag);
 
 const stat = await call("lsp.status", { cwd });
-check("lsp status ready", stat.ok && stat.value.state === "ready", stat);
+checkLsp("lsp status ready", stat.ok && stat.value.state === "ready", stat);
 check("lsp status carries progress field", stat.ok && typeof (stat.value.progress ?? "") === "string", stat);
 
 const sym = await call("lsp.request", { cwd, path: "main.go", kind: "symbol", line: 1, col: 1 });
-check("documentSymbol lists helper & main", sym.ok && sym.value.symbols.some((s) => s.name === "helper" && s.line === 6) && sym.value.symbols.some((s) => s.name === "main"), sym);
-check("lsp status carries server label", stat.ok && typeof stat.value.label === "string" && stat.value.label.length > 0, stat.value);
+checkLsp("documentSymbol lists helper & main", sym.ok && sym.value.symbols.some((s) => s.name === "helper" && s.line === 6) && sym.value.symbols.some((s) => s.name === "main"), sym);
+checkLsp("lsp status carries server label", stat.ok && typeof stat.value.label === "string" && stat.value.label.length > 0, stat.value);
 
 // Multi-language gating: uncovered types get a note; covered-but-missing servers fail gracefully.
 const mdLsp = await call("lsp.request", { cwd, path: "notes.md", kind: "definition", line: 1, col: 1 });
@@ -324,6 +346,24 @@ check("fs.delete removes dir recursive", dDel.ok && !dList.value.entries.some((e
 const dRoot = await call("fs.delete", { cwd, path: "." });
 check("fs.delete refuses workspace root", dRoot.value?.error === "cannot delete the workspace root", dRoot);
 
+// --- fence edges: symlinks refused, escapes refused -------------------------------------------
+writeFileSync("/tmp/ce-fence-secret.txt", "secret\n");
+symlinkSync("/tmp/ce-fence-secret.txt", `${cwd}/link.txt`);
+const symRead = await call("fs.read", { cwd, path: "link.txt" });
+check("fs.read refuses symlink", symRead.ok === false, symRead);
+const symWrite = await call("fs.write", { cwd, path: "link.txt", content: "x" });
+check("fs.write refuses symlink", symWrite.ok === false, symWrite);
+const symDel = await call("fs.delete", { cwd, path: "link.txt" });
+check("fs.delete refuses symlink", symDel.ok === false, symDel);
+check("fs.delete refusal left link and target intact", existsSync(`${cwd}/link.txt`) && existsSync("/tmp/ce-fence-secret.txt"), null);
+rmSync(`${cwd}/link.txt`, { force: true });
+rmSync("/tmp/ce-fence-secret.txt", { force: true });
+const cEsc = await call("fs.create", { cwd, path: "../evil.txt", kind: "file" });
+check("fs.create refuses fence escape", cEsc.ok === false || Boolean(cEsc.value?.error), cEsc);
+const rEsc = await call("fs.rename", { cwd, path: "main.go", to: "../stolen.go" });
+check("fs.rename refuses fence escape", rEsc.ok === false || Boolean(rEsc.value?.error), rEsc);
+check("fs.rename escape left source intact", existsSync(`${cwd}/main.go`) && !existsSync("/tmp/stolen.go"), null);
+
 // --- skills manager routes ---------------------------------------------------------------
 process.env.DSH_CE_HOME = `${cwd}-home`;
 mkdirSync("/tmp/ce-bundled-skills/office-fake", { recursive: true });
@@ -372,5 +412,5 @@ check("skills.delete on symlink removes link only", sDelLink.ok && !existsSync(`
 rmSync(`${cwd}-home`, { recursive: true, force: true });
 
 for (const cleanup of cleanups) cleanup();
-console.log(`\n${pass} passed, ${fail} failed`);
+console.log(`\n${pass} passed, ${fail} failed${skipped ? `, ${skipped} skipped` : ""}`);
 process.exit(fail ? 1 : 0);
