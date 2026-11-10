@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Dev Toolbox",
-    "description": "Right-sidebar development toolbox: workspace file tree, code editor with save (⌘S), word wrap, go-to-line (⌘G), full-text search (⇧⌘F with regex/whole-word/context), find-in-file (⌘F), LSP definition/references jumps (Go/TS/Python), image & Markdown/SVG previews, git stage/commit/changes diffs over the whole file (changed-line marks, folded deletion bars), skills manager, API tester (history/favorites/multipart), grouped sidebar launcher."
+    "description": "Right-sidebar development toolbox: workspace file tree (copy path), code editor with save (⌘S, external-edit conflict guard), word wrap, go-to-line (⌘G), full-text search (⇧⌘F with regex/whole-word/file grouping/match highlight/context), find-in-file (⌘F), LSP definition/references jumps (Go/TS/Python), image & Markdown/SVG previews, git stage/commit/amend/push with side-by-side diffs, word-level marks and live gutter marks, skills manager, API tester (curl import/export, history/favorites, environment variables, multipart), grouped sidebar launcher."
   }
 }
