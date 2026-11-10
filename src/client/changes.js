@@ -1,6 +1,7 @@
-/* ---------------- git changes panel (commit box + staged/unstaged + branch + commits) ---------------- */
+/* ---------------- git changes panel (commit box + staged/unstaged + branch + commits + stash) ---------------- */
 
-import { Fragment, h, useState } from "./react.js";
+import { Fragment, h, useCallback, useEffect, useState } from "./react.js";
+import { api } from "./api.js";
 import { IconRefresh } from "./icons.js";
 import { ChangeTree } from "./changetree.js";
 
@@ -9,10 +10,73 @@ export function isStagedXy(xy) {
 	return typeof xy === "string" && xy.length > 0 && xy[0] !== " " && xy[0] !== "?";
 }
 
-export function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commitsOpen, setCommitsOpen, onOpenCommit, onOpenDiff, onDiscard, onDiscardDir, onStage, onStageDir, onUnstage, onUnstageDir, onCommit, committing, refresh }) {
+export function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commitsOpen, setCommitsOpen, onOpenCommit, onOpenDiff, onDiscard, onDiscardDir, onStage, onStageDir, onUnstage, onUnstageDir, onCommit, committing, onNotify, refresh }) {
 	const [treeView, setTreeView] = useState(true);
 	const [message, setMessage] = useState("");
 	const [amend, setAmend] = useState(false);
+	// Stash section state — all hooks must run before the early returns below.
+	const [stashes, setStashes] = useState([]);
+	const [stashOpen, setStashOpen] = useState(false);
+	const [stashSaving, setStashSaving] = useState(false);
+	const [stashMsg, setStashMsg] = useState("");
+	const [stashUntracked, setStashUntracked] = useState(false);
+	const [stashBusy, setStashBusy] = useState(false);
+	const [stashConfirm, setStashConfirm] = useState(null);
+	const repoArgs = repoSel ? { cwd, repo: repoSel } : { cwd };
+	const isRepo = Boolean(git && git.repo);
+	const refreshStashes = useCallback(() => {
+		if (!cwd || !isRepo) return;
+		api("git.stash.list", repoSel ? { cwd, repo: repoSel } : { cwd })
+			.then((res) => {
+				if (res.ok && Array.isArray(res.value?.stashes)) setStashes(res.value.stashes);
+			})
+			.catch(() => {});
+	}, [cwd, repoSel, isRepo]);
+	useEffect(refreshStashes, [refreshStashes]);
+	const stashSave = () => {
+		if (stashBusy) return;
+		setStashBusy(true);
+		api("git.stash.save", { ...repoArgs, message: stashMsg.trim(), includeUntracked: stashUntracked })
+			.then((res) => {
+				setStashBusy(false);
+				const value = res.ok ? res.value ?? {} : { error: res.error };
+				if (Array.isArray(value.stashes)) setStashes(value.stashes);
+				setStashSaving(false);
+				setStashMsg("");
+				refresh?.();
+				if (value.error) onNotify?.(`${t("error")}: ${value.error}`, "error");
+				else onNotify?.(t("stash.saved"));
+			})
+			.catch(() => setStashBusy(false));
+	};
+	const stashApply = (ref, pop) => {
+		if (stashBusy) return;
+		setStashBusy(true);
+		api(pop ? "git.stash.pop" : "git.stash.apply", { ...repoArgs, ref })
+			.then((res) => {
+				setStashBusy(false);
+				const value = res.ok ? res.value ?? {} : { error: res.error };
+				if (Array.isArray(value.stashes)) setStashes(value.stashes);
+				refresh?.();
+				if (value.error) onNotify?.(`${t("error")}: ${value.error}`, "error");
+				else onNotify?.(pop ? t("stash.popped") : t("stash.applied"));
+			})
+			.catch(() => setStashBusy(false));
+	};
+	const stashDrop = (ref) => {
+		if (stashBusy) return;
+		setStashBusy(true);
+		api("git.stash.drop", { ...repoArgs, ref })
+			.then((res) => {
+				setStashBusy(false);
+				setStashConfirm(null);
+				const value = res.ok ? res.value ?? {} : { error: res.error };
+				if (Array.isArray(value.stashes)) setStashes(value.stashes);
+				if (value.error) onNotify?.(`${t("error")}: ${value.error}`, "error");
+				else onNotify?.(t("stash.dropped"));
+			})
+			.catch(() => setStashBusy(false));
+	};
 	const selector = repos && repos.length > 0
 		? h(
 			"select",
@@ -174,5 +238,53 @@ export function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commit
 					),
 			)
 			: h("div", { className: "ce-note" }, t("changes.baseNone")),
+		h(
+			"div",
+			{ className: "ce-section" },
+			h("span", null, `${t("stash.title")}${stashes.length ? ` · ${stashes.length}` : ""}`),
+			h("button", { className: "ce-link", type: "button", title: t("stash.saveTitle"), disabled: stashBusy, onClick: () => { setStashSaving((v) => !v); setStashOpen(true); } }, `+ ${t("stash.save")}`),
+			h("button", { className: "ce-tool ce-tiny", type: "button", title: t("stash.toggle"), "aria-expanded": stashOpen ? "true" : "false", onClick: () => setStashOpen((v) => !v) }, stashOpen ? "▾" : "▸"),
+		),
+		stashSaving
+			? h("div", { className: "ce-stash-save" },
+				h("input", {
+					className: "ce-input",
+					placeholder: t("stash.msgPlaceholder"),
+					value: stashMsg,
+					autoFocus: true,
+					onChange: (e) => setStashMsg(e.target.value),
+					onKeyDown: (e) => {
+						e.stopPropagation();
+						if (e.key === "Enter") stashSave();
+						else if (e.key === "Escape") setStashSaving(false);
+					},
+				}),
+				h("label", { className: "ce-stash-u", title: t("stash.untrackedTitle") },
+					h("input", { type: "checkbox", checked: stashUntracked, onChange: (e) => setStashUntracked(e.target.checked) }),
+					t("stash.untracked"),
+				),
+				h("button", { className: "ce-sk-btn", type: "button", disabled: stashBusy, onClick: stashSave }, stashBusy ? "…" : t("stash.save")),
+			)
+			: null,
+		stashOpen
+			? (stashes.length === 0
+				? h("div", { className: "ce-note" }, t("stash.none"))
+				: stashes.map((s) => h("div", { key: s.ref, className: "ce-stashrow" },
+					h("span", { className: "ce-stashref" }, s.ref.replace(/^stash@\{(\d+)\}$/, "#$1")),
+					h("span", { className: "ce-stashmsg", title: s.message }, s.message || "—"),
+					h("span", { className: "ce-stashacts" },
+						stashConfirm === s.ref
+							? h(Fragment, null,
+								h("button", { type: "button", className: "cet-act cet-act-show cet-act-danger", disabled: stashBusy, onClick: () => stashDrop(s.ref) }, t("stash.confirm")),
+								h("button", { type: "button", className: "cet-act cet-act-show", onClick: () => setStashConfirm(null) }, t("stash.cancel")),
+							)
+							: h(Fragment, null,
+								h("button", { type: "button", className: "ce-link", disabled: stashBusy, title: t("stash.applyTitle"), onClick: () => stashApply(s.ref, false) }, t("stash.apply")),
+								h("button", { type: "button", className: "ce-link", disabled: stashBusy, title: t("stash.popTitle"), onClick: () => stashApply(s.ref, true) }, t("stash.pop")),
+								h("button", { type: "button", className: "ce-tool ce-tiny", title: t("stash.drop"), disabled: stashBusy, onClick: () => setStashConfirm(s.ref) }, "✕"),
+							),
+					),
+				)))
+			: null,
 	);
 }

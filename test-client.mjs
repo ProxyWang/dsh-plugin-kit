@@ -237,6 +237,8 @@ const commitInput = collect(commitBox ?? []).find((n) => n.props?.className === 
 check("commit input placeholder for staged mode", commitInput?.props?.placeholder === "changes.commitPlaceholder", commitInput?.props);
 const amendBtn = collect(commitBox ?? []).find((n) => n.type === "button" && n.props?.title === "changes.amendTitle");
 check("commit box carries the amend toggle", Boolean(amendBtn) && amendBtn.children.includes("changes.amend"), amendBtn?.children);
+const sections = panelNodes.filter((n) => n.props?.className === "ce-section");
+check("changes panel renders the stash section", sections.some((s) => JSON.stringify(s.children ?? []).includes("stash.title")), sections.length);
 const panelNoStaged = ChangesPanel({
 	cwd: "/w", t: (k) => k,
 	git: { ...fakeGit, working: fakeGit.working.filter((f) => f.xy !== "M ") },

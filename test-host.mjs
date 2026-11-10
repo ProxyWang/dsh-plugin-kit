@@ -304,6 +304,37 @@ check("git.diff working still spans HEAD to worktree", wkDiff.ok && wkDiff.value
 await call("git.unstage", { cwd, path: "staged-scope.txt" });
 rmSync(`${cwd}/staged-scope.txt`);
 
+// --- git.stash.* flow -------------------------------------------------------------------------
+const stashEmpty = await call("git.stash.save", { cwd });
+check("stash.save refused with untracked-only changes (no -u)", stashEmpty.ok && stashEmpty.value?.error === "no local changes to stash", stashEmpty.value);
+appendFileSync(`${cwd}/main.go`, "// stash me\n");
+const stashSave = await call("git.stash.save", { cwd, message: "wip" });
+check(
+	"stash.save clears the worktree and lists the stash",
+	stashSave.ok && !stashSave.value.error && stashSave.value.stashes.length === 1 && /wip/.test(stashSave.value.stashes[0].message) && stashSave.value.stashes[0].ref === "stash@{0}" && !stashSave.value.status.working.some((f) => f.path === "main.go"),
+	stashSave.value,
+);
+const mainAfterStash = await call("fs.read", { cwd, path: "main.go" });
+check("stash.save restored HEAD content on disk", !mainAfterStash.value.content.includes("stash me"), null);
+const stashList = await call("git.stash.list", { cwd });
+check("stash.list shape", stashList.ok && stashList.value.stashes.length === 1 && stashList.value.stashes[0].ref === "stash@{0}", stashList.value);
+const stashApply = await call("git.stash.apply", { cwd, ref: "stash@{0}" });
+check("stash.apply brings changes back and keeps the stash", stashApply.ok && !stashApply.value.error && stashApply.value.status.working.some((f) => f.path === "main.go") && stashApply.value.stashes.length === 1, stashApply.value);
+await call("git.discard", { cwd, path: "main.go", ch: "M" });
+const stashBadRef = await call("git.stash.apply", { cwd, ref: "--all" });
+check("stash.apply refuses flag-like ref", stashBadRef.ok && stashBadRef.value?.error === "invalid stash ref", stashBadRef);
+const stashDrop = await call("git.stash.drop", { cwd, ref: "stash@{0}" });
+check("stash.drop empties the list", stashDrop.ok && stashDrop.value.stashes.length === 0, stashDrop.value);
+appendFileSync(`${cwd}/main.go`, "// pop me\n");
+await call("git.stash.save", { cwd, message: "to-pop" });
+const stashPop = await call("git.stash.pop", { cwd, ref: "stash@{0}" });
+check("stash.pop applies and removes", stashPop.ok && !stashPop.value.error && stashPop.value.stashes.length === 0 && stashPop.value.status.working.some((f) => f.path === "main.go"), stashPop.value);
+await call("git.discard", { cwd, path: "main.go", ch: "M" });
+const stashU = await call("git.stash.save", { cwd, message: "with-untracked", includeUntracked: true });
+check("stash.save -u sweeps untracked files", stashU.ok && !stashU.value.error && !existsSync(`${cwd}/extra.txt`) && stashU.value.stashes.length === 1, stashU.value);
+const popU = await call("git.stash.pop", { cwd, ref: "stash@{0}" });
+check("pop restores the untracked file", popU.ok && !popU.value.error && existsSync(`${cwd}/extra.txt`) && popU.value.stashes.length === 0, popU.value);
+
 // --- git.branches / git.checkout ------------------------------------------------------------
 const bList = await call("git.branches", { cwd });
 check("git.branches lists locals with current flag", bList.ok && bList.value.branches.some((b) => b.name === "feature" && b.current === true) && bList.value.branches.some((b) => b.name === "master" && b.current === false), bList.value?.branches);

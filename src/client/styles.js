@@ -161,6 +161,14 @@ export const CSS = `
 .ce-commitbox-btn{flex:none;border:0;border-radius:6px;background:var(--dsw-alias-brand-primary,#2f81f7);color:#fff;font:inherit;font-size:11px;font-weight:600;padding:5px 10px;cursor:pointer;white-space:nowrap}
 .ce-commitbox-btn:hover{filter:brightness(1.12)}
 .ce-commitbox-btn:disabled{opacity:.45;cursor:default;filter:none}
+.ce-stash-save{display:flex;gap:5px;align-items:center;padding:4px 8px;flex-wrap:wrap}
+.ce-stash-save .ce-input{flex:1;min-width:90px;font-size:11px;padding:4px 6px}
+.ce-stash-u{display:flex;gap:3px;align-items:center;font-size:10px;color:var(--dsw-alias-label-tertiary,#889);flex:none;cursor:pointer;user-select:none}
+.ce-stashrow{display:flex;gap:6px;align-items:center;padding:3px 8px;width:100%}
+.ce-stashrow:hover{background:var(--dsw-alias-interactive-bg-hover,#26292e)}
+.ce-stashref{flex:none;font-size:10px;font-weight:700;color:var(--dsw-alias-brand-primary,#6cb2ff);font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.ce-stashmsg{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:var(--dsw-alias-label-secondary,#bcc)}
+.ce-stashacts{flex:none;display:flex;gap:2px;align-items:center}
 .ce-search-meta{font-size:11px;color:var(--dsw-alias-label-tertiary,#778);flex:none;min-height:14px}
 .ce-search-results{flex:1;min-height:0;border:.5px solid var(--dsw-alias-border-l1,#333);border-radius:8px;background:var(--dsw-alias-bg-layer-1,#1e2126)}
 .ce-srow{display:flex;align-items:stretch;width:100%}

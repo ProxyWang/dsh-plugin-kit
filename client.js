@@ -153,6 +153,25 @@ var zh = {
   "changes.commitAllPlaceholder": "提交信息（Enter 将暂存全部变更并提交）",
   "changes.commitBusy": "正在提交…",
   "changes.committed": "已提交 {c}",
+  "stash.title": "贮藏",
+  "stash.save": "贮藏",
+  "stash.saveTitle": "贮藏当前变更（工作区恢复干净）",
+  "stash.toggle": "展开 / 收起贮藏列表",
+  "stash.msgPlaceholder": "贮藏信息（可空，Enter 确认）",
+  "stash.untracked": "含未跟踪",
+  "stash.untrackedTitle": "同时贮藏未跟踪文件（git stash -u）",
+  "stash.none": "没有贮藏",
+  "stash.apply": "应用",
+  "stash.applyTitle": "应用贮藏（保留副本）",
+  "stash.pop": "弹出",
+  "stash.popTitle": "应用并删除贮藏",
+  "stash.drop": "删除贮藏",
+  "stash.confirm": "确认删除",
+  "stash.cancel": "取消",
+  "stash.saved": "已贮藏",
+  "stash.applied": "已应用贮藏（副本保留）",
+  "stash.popped": "已弹出贮藏",
+  "stash.dropped": "已删除贮藏",
   "branch.title": "切换分支",
   "branch.search": "搜索分支…",
   "branch.local": "本地分支",
@@ -424,6 +443,25 @@ var en = {
   "changes.commitAllPlaceholder": "Message (Enter stages all changes and commits)",
   "changes.commitBusy": "Committing…",
   "changes.committed": "Committed {c}",
+  "stash.title": "Stash",
+  "stash.save": "Stash",
+  "stash.saveTitle": "Stash the current changes (the working tree becomes clean)",
+  "stash.toggle": "Expand / collapse the stash list",
+  "stash.msgPlaceholder": "Stash message (optional, Enter to confirm)",
+  "stash.untracked": "incl. untracked",
+  "stash.untrackedTitle": "Also stash untracked files (git stash -u)",
+  "stash.none": "No stashes",
+  "stash.apply": "Apply",
+  "stash.applyTitle": "Apply the stash (keeps the copy)",
+  "stash.pop": "Pop",
+  "stash.popTitle": "Apply and drop the stash",
+  "stash.drop": "Drop stash",
+  "stash.confirm": "Confirm drop",
+  "stash.cancel": "Cancel",
+  "stash.saved": "Changes stashed",
+  "stash.applied": "Stash applied (copy kept)",
+  "stash.popped": "Stash popped",
+  "stash.dropped": "Stash dropped",
   "branch.title": "Switch branch",
   "branch.search": "Search branches…",
   "branch.local": "Local",
@@ -1864,10 +1902,65 @@ function ChangeTree({ items, onOpen, onDiscard, onDiscardDir, onStage, onStageDi
 function isStagedXy(xy) {
   return typeof xy === "string" && xy.length > 0 && xy[0] !== " " && xy[0] !== "?";
 }
-function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commitsOpen, setCommitsOpen, onOpenCommit, onOpenDiff, onDiscard, onDiscardDir, onStage, onStageDir, onUnstage, onUnstageDir, onCommit, committing, refresh }) {
+function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commitsOpen, setCommitsOpen, onOpenCommit, onOpenDiff, onDiscard, onDiscardDir, onStage, onStageDir, onUnstage, onUnstageDir, onCommit, committing, onNotify, refresh }) {
   const [treeView, setTreeView] = useState(true);
   const [message, setMessage] = useState("");
   const [amend, setAmend] = useState(false);
+  const [stashes, setStashes] = useState([]);
+  const [stashOpen, setStashOpen] = useState(false);
+  const [stashSaving, setStashSaving] = useState(false);
+  const [stashMsg, setStashMsg] = useState("");
+  const [stashUntracked, setStashUntracked] = useState(false);
+  const [stashBusy, setStashBusy] = useState(false);
+  const [stashConfirm, setStashConfirm] = useState(null);
+  const repoArgs = repoSel ? { cwd, repo: repoSel } : { cwd };
+  const isRepo = Boolean(git && git.repo);
+  const refreshStashes = useCallback(() => {
+    if (!cwd || !isRepo) return;
+    api("git.stash.list", repoSel ? { cwd, repo: repoSel } : { cwd }).then((res) => {
+      if (res.ok && Array.isArray(res.value?.stashes)) setStashes(res.value.stashes);
+    }).catch(() => {
+    });
+  }, [cwd, repoSel, isRepo]);
+  useEffect(refreshStashes, [refreshStashes]);
+  const stashSave = () => {
+    if (stashBusy) return;
+    setStashBusy(true);
+    api("git.stash.save", { ...repoArgs, message: stashMsg.trim(), includeUntracked: stashUntracked }).then((res) => {
+      setStashBusy(false);
+      const value = res.ok ? res.value ?? {} : { error: res.error };
+      if (Array.isArray(value.stashes)) setStashes(value.stashes);
+      setStashSaving(false);
+      setStashMsg("");
+      refresh?.();
+      if (value.error) onNotify?.(`${t("error")}: ${value.error}`, "error");
+      else onNotify?.(t("stash.saved"));
+    }).catch(() => setStashBusy(false));
+  };
+  const stashApply = (ref, pop) => {
+    if (stashBusy) return;
+    setStashBusy(true);
+    api(pop ? "git.stash.pop" : "git.stash.apply", { ...repoArgs, ref }).then((res) => {
+      setStashBusy(false);
+      const value = res.ok ? res.value ?? {} : { error: res.error };
+      if (Array.isArray(value.stashes)) setStashes(value.stashes);
+      refresh?.();
+      if (value.error) onNotify?.(`${t("error")}: ${value.error}`, "error");
+      else onNotify?.(pop ? t("stash.popped") : t("stash.applied"));
+    }).catch(() => setStashBusy(false));
+  };
+  const stashDrop = (ref) => {
+    if (stashBusy) return;
+    setStashBusy(true);
+    api("git.stash.drop", { ...repoArgs, ref }).then((res) => {
+      setStashBusy(false);
+      setStashConfirm(null);
+      const value = res.ok ? res.value ?? {} : { error: res.error };
+      if (Array.isArray(value.stashes)) setStashes(value.stashes);
+      if (value.error) onNotify?.(`${t("error")}: ${value.error}`, "error");
+      else onNotify?.(t("stash.dropped"));
+    }).catch(() => setStashBusy(false));
+  };
   const selector = repos && repos.length > 0 ? h(
     "select",
     { className: "ce-input ce-repo", value: repoSel ?? "", onChange: (event) => onSelectRepo(event.target.value || null) },
@@ -2008,7 +2101,62 @@ function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commitsOpen, 
           h("span", { className: "ce-name" }, path)
         )
       )
-    ) : h("div", { className: "ce-note" }, t("changes.baseNone"))
+    ) : h("div", { className: "ce-note" }, t("changes.baseNone")),
+    h(
+      "div",
+      { className: "ce-section" },
+      h("span", null, `${t("stash.title")}${stashes.length ? ` · ${stashes.length}` : ""}`),
+      h("button", { className: "ce-link", type: "button", title: t("stash.saveTitle"), disabled: stashBusy, onClick: () => {
+        setStashSaving((v) => !v);
+        setStashOpen(true);
+      } }, `+ ${t("stash.save")}`),
+      h("button", { className: "ce-tool ce-tiny", type: "button", title: t("stash.toggle"), "aria-expanded": stashOpen ? "true" : "false", onClick: () => setStashOpen((v) => !v) }, stashOpen ? "▾" : "▸")
+    ),
+    stashSaving ? h(
+      "div",
+      { className: "ce-stash-save" },
+      h("input", {
+        className: "ce-input",
+        placeholder: t("stash.msgPlaceholder"),
+        value: stashMsg,
+        autoFocus: true,
+        onChange: (e) => setStashMsg(e.target.value),
+        onKeyDown: (e) => {
+          e.stopPropagation();
+          if (e.key === "Enter") stashSave();
+          else if (e.key === "Escape") setStashSaving(false);
+        }
+      }),
+      h(
+        "label",
+        { className: "ce-stash-u", title: t("stash.untrackedTitle") },
+        h("input", { type: "checkbox", checked: stashUntracked, onChange: (e) => setStashUntracked(e.target.checked) }),
+        t("stash.untracked")
+      ),
+      h("button", { className: "ce-sk-btn", type: "button", disabled: stashBusy, onClick: stashSave }, stashBusy ? "…" : t("stash.save"))
+    ) : null,
+    stashOpen ? stashes.length === 0 ? h("div", { className: "ce-note" }, t("stash.none")) : stashes.map((s) => h(
+      "div",
+      { key: s.ref, className: "ce-stashrow" },
+      h("span", { className: "ce-stashref" }, s.ref.replace(/^stash@\{(\d+)\}$/, "#$1")),
+      h("span", { className: "ce-stashmsg", title: s.message }, s.message || "—"),
+      h(
+        "span",
+        { className: "ce-stashacts" },
+        stashConfirm === s.ref ? h(
+          Fragment,
+          null,
+          h("button", { type: "button", className: "cet-act cet-act-show cet-act-danger", disabled: stashBusy, onClick: () => stashDrop(s.ref) }, t("stash.confirm")),
+          h("button", { type: "button", className: "cet-act cet-act-show", onClick: () => setStashConfirm(null) }, t("stash.cancel"))
+        ) : h(
+          Fragment,
+          null,
+          h("button", { type: "button", className: "ce-link", disabled: stashBusy, title: t("stash.applyTitle"), onClick: () => stashApply(s.ref, false) }, t("stash.apply")),
+          h("button", { type: "button", className: "ce-link", disabled: stashBusy, title: t("stash.popTitle"), onClick: () => stashApply(s.ref, true) }, t("stash.pop")),
+          h("button", { type: "button", className: "ce-tool ce-tiny", title: t("stash.drop"), disabled: stashBusy, onClick: () => setStashConfirm(s.ref) }, "✕")
+        )
+      )
+    )) : null
   );
 }
 
@@ -4026,6 +4174,7 @@ function CodeBody(props) {
         onUnstageDir: (dirPath) => void unstageChange(dirPath),
         onCommit: (msg, stageAll, amend) => commitChanges(msg, stageAll, amend),
         committing,
+        onNotify: (text, kind) => say(text, kind),
         refresh: refreshGit
       })) : null,
       railVisible ? h("div", { className: "ce-splitter", onMouseDown: startRailDrag, onDoubleClick: () => setRailVisible(false), title: "⇔ 拖动调宽 · 双击收起" }) : h("button", { type: "button", className: "ce-rail-tab", title: "展开侧栏 (⌘B / Ctrl+B)", onClick: () => setRailVisible(true) }, "▸"),
@@ -4388,6 +4537,14 @@ var CSS = `
 .ce-commitbox-btn{flex:none;border:0;border-radius:6px;background:var(--dsw-alias-brand-primary,#2f81f7);color:#fff;font:inherit;font-size:11px;font-weight:600;padding:5px 10px;cursor:pointer;white-space:nowrap}
 .ce-commitbox-btn:hover{filter:brightness(1.12)}
 .ce-commitbox-btn:disabled{opacity:.45;cursor:default;filter:none}
+.ce-stash-save{display:flex;gap:5px;align-items:center;padding:4px 8px;flex-wrap:wrap}
+.ce-stash-save .ce-input{flex:1;min-width:90px;font-size:11px;padding:4px 6px}
+.ce-stash-u{display:flex;gap:3px;align-items:center;font-size:10px;color:var(--dsw-alias-label-tertiary,#889);flex:none;cursor:pointer;user-select:none}
+.ce-stashrow{display:flex;gap:6px;align-items:center;padding:3px 8px;width:100%}
+.ce-stashrow:hover{background:var(--dsw-alias-interactive-bg-hover,#26292e)}
+.ce-stashref{flex:none;font-size:10px;font-weight:700;color:var(--dsw-alias-brand-primary,#6cb2ff);font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.ce-stashmsg{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:var(--dsw-alias-label-secondary,#bcc)}
+.ce-stashacts{flex:none;display:flex;gap:2px;align-items:center}
 .ce-search-meta{font-size:11px;color:var(--dsw-alias-label-tertiary,#778);flex:none;min-height:14px}
 .ce-search-results{flex:1;min-height:0;border:.5px solid var(--dsw-alias-border-l1,#333);border-radius:8px;background:var(--dsw-alias-bg-layer-1,#1e2126)}
 .ce-srow{display:flex;align-items:stretch;width:100%}

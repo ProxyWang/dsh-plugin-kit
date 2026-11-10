@@ -1289,6 +1289,7 @@ export function CodeBody(props) {
 						onUnstageDir: (dirPath) => void unstageChange(dirPath),
 						onCommit: (msg, stageAll, amend) => commitChanges(msg, stageAll, amend),
 						committing,
+						onNotify: (text, kind) => say(text, kind),
 						refresh: refreshGit,
 					}))
 				: null,
