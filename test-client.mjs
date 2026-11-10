@@ -412,6 +412,15 @@ check("mergeParams without active pairs is identity", mergeParams("https://a.b/x
 check("mergeParams preserves fragment", mergeParams("https://a.b/x#frag", [{ name: "q", value: "1" }]) === "https://a.b/x?q=1#frag", mergeParams("https://a.b/x#frag", [{ name: "q", value: "1" }]));
 check("mergeParams empty value sends bare name", mergeParams("https://a.b/x", [{ name: "q", value: "" }]) === "https://a.b/x?q=", mergeParams("https://a.b/x", [{ name: "q", value: "" }]));
 check("mergeParams encodes special chars", mergeParams("https://a.b/x", [{ name: "q", value: "a b&c" }]).includes("q=a+b%26c") || mergeParams("https://a.b/x", [{ name: "q", value: "a b&c" }]).includes("q=a%20b%26c"), mergeParams("https://a.b/x", [{ name: "q", value: "a b&c" }]));
+
+// --- editor tabs ----------------------------------------------------------------------------------
+const { addTabPath } = await import("./src/client/code.js");
+const tabBase = ["a", "b"];
+check("addTabPath appends new paths", JSON.stringify(addTabPath(tabBase, "c")) === JSON.stringify(["a", "b", "c"]), addTabPath(tabBase, "c"));
+check("addTabPath dedupes by identity", addTabPath(tabBase, "a") === tabBase, null);
+check("addTabPath rejects empty/non-string", addTabPath(tabBase, "") === tabBase && addTabPath(tabBase, null) === tabBase, null);
+check("addTabPath tolerates garbage list", JSON.stringify(addTabPath(null, "x")) === JSON.stringify(["x"]), null);
+check("addTabPath caps and drops the oldest", JSON.stringify(addTabPath(["1", "2", "3"], "4", 3)) === JSON.stringify(["2", "3", "4"]), addTabPath(["1", "2", "3"], "4", 3));
 const c5 = parseCurl("curl -F 'field=hello world' -F 'file=@/tmp/a.png' https://a.b/upload");
 check(
 	"parseCurl -F becomes multipart pairs",

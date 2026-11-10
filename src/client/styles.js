@@ -46,6 +46,14 @@ export const CSS = `
 .ce-badge-d,.ce-badge-r{color:var(--dsw-alias-state-error-primary,#f85149)}
 .ce-badge-c{color:var(--dsw-alias-brand-primary,#59b7ff)}
 .ce-editor{flex:1;min-width:0;display:flex;flex-direction:column;position:relative}
+.ce-tabs{display:flex;gap:2px;align-items:flex-end;flex:none;overflow-x:auto;overflow-y:hidden;padding:4px 6px 0;background:var(--dsw-alias-bg-base,#181818);border-bottom:.5px solid var(--dsw-alias-border-l1,#333);scrollbar-width:thin}
+.ce-tab{display:flex;gap:4px;align-items:center;flex:none;max-width:170px;padding:3px 5px 3px 8px;border:.5px solid transparent;border-bottom:0;border-radius:6px 6px 0 0;cursor:pointer;color:var(--dsw-alias-label-tertiary,#889);background:transparent;font-size:11.5px}
+.ce-tab:hover{background:var(--dsw-alias-interactive-bg-hover,#26292e)}
+.ce-tab-active{background:var(--dsw-alias-bg-layer-1,#1e2126);color:var(--dsw-alias-label-primary,#ddd);border-color:var(--dsw-alias-border-l1,#333)}
+.ce-tab-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ce-tab-dot{flex:none;width:9px;font-size:8px;line-height:1;color:var(--dsw-alias-state-warn-primary,#e3b341)}
+.ce-tab-x{border:0;background:transparent;color:inherit;font:inherit;font-size:9px;cursor:pointer;padding:1px 3px;border-radius:4px;opacity:.55;flex:none}
+.ce-tab-x:hover{opacity:1;background:var(--dsw-alias-interactive-bg-hover,#3a3d42)}
 .ce-head{display:flex;align-items:center;gap:6px;padding:5px 8px;border-bottom:.5px solid var(--dsw-alias-border-l1,#333);flex:none;min-width:0}
 .ce-head-path{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--dsw-alias-label-primary,#ddd)}
 .ce-chip{font-size:11px;padding:1px 7px;border-radius:99px;background:var(--dsw-alias-bg-layer-2,#24272c);color:var(--dsw-alias-label-secondary,#999);flex:none}

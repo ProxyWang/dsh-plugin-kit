@@ -283,6 +283,8 @@ var zh = {
   "editor.cancel": "取消",
   "editor.saved": "已保存",
   "editor.conflict": "磁盘上的文件已被外部修改，保存被拒绝 — 请刷新（⟳）后重试",
+  "editor.closeTab": "关闭标签（中键点击亦可）",
+  "editor.dirtyGuard": "有未保存的修改 — 请先保存（⌘S）或取消（Esc）",
   "editor.dirty": "未保存",
   "editor.tooBig": "文件过大，无法编辑",
   "editor.find": "文件内查找",
@@ -580,6 +582,8 @@ var en = {
   "editor.cancel": "Cancel",
   "editor.saved": "Saved",
   "editor.conflict": "The file changed on disk; the save was refused — refresh (⟳) and retry",
+  "editor.closeTab": "Close tab (middle-click also works)",
+  "editor.dirtyGuard": "Unsaved changes — save (⌘S) or cancel (Esc) first",
   "editor.dirty": "unsaved",
   "editor.tooBig": "File too large to edit",
   "editor.find": "Find in file",
@@ -3196,6 +3200,13 @@ var PREVIEW_RE = /\.(md|markdown|html?|svg)$/i;
 var MD_RE = /\.(md|markdown)$/i;
 var SVG_RE = /\.svg$/i;
 var LSP_RE = /\.(go|ts|tsx|js|jsx|mjs|cjs|py|pyi)$/i;
+function addTabPath(list, path, cap = 15) {
+  const prev = Array.isArray(list) ? list : [];
+  if (typeof path !== "string" || path === "" || prev.includes(path)) return prev;
+  const next = [...prev, path];
+  while (next.length > cap) next.shift();
+  return next;
+}
 function CodeBody(props) {
   const { useTabInfo, sessionId, useSessions, t } = props;
   const tabInfo = useTabInfo ? useTabInfo() : null;
@@ -3232,6 +3243,7 @@ function CodeBody(props) {
   const [wrapOn, setWrapOn] = useState(false);
   const [gotoOpen, setGotoOpen] = useState(false);
   const [fileHist, setFileHist] = useState(null);
+  const [tabs, setTabs] = useState([]);
   const [previewOn, setPreviewOn] = useState(false);
   const [delGroups, setDelGroups] = useState(null);
   const [delPreview, setDelPreview] = useState(null);
@@ -3260,6 +3272,7 @@ function CodeBody(props) {
   const latestPersistRef = useRef(null);
   const peekRef = useRef(null);
   const wrapOnRef = useRef(false);
+  const tabViewRef = useRef({});
   docRef.current = doc;
   cursorRef.current = cursor;
   peekRef.current = peek;
@@ -3568,6 +3581,54 @@ function CodeBody(props) {
     void openFile(next.path, next.line, next.col, false, next.word ? { line: next.line, col: next.col, word: next.word } : null);
   }, [openFile]);
   useEffect(() => {
+    const p = doc?.path;
+    if (typeof p !== "string" || p === "") return;
+    setTabs((prev) => addTabPath(prev, p));
+  }, [doc]);
+  useEffect(() => {
+    const p = doc?.path;
+    if (typeof p !== "string" || !cursor) return;
+    tabViewRef.current[p] = { line: cursor.line, col: cursor.col, scroll };
+  }, [doc, cursor, scroll]);
+  const switchTab = useCallback((path) => {
+    if (!path) return;
+    if (path === docRef.current?.path) {
+      if (diff && showDiffView && (diff.scope === "working" || diff.scope === "branch" || diff.scope === "staged")) setShowDiffView(false);
+      return;
+    }
+    if (editing && editText !== (docRef.current?.raw ?? "")) {
+      say(t("editor.dirtyGuard"), "error");
+      return;
+    }
+    const saved = tabViewRef.current[path];
+    void openFile(path, saved?.line ?? 1, saved?.col ?? 1, false);
+  }, [editing, editText, openFile, say, t, diff, showDiffView]);
+  const closeTab = useCallback((path) => {
+    const current = docRef.current;
+    if (editing && current?.path === path && editText !== (current?.raw ?? "")) {
+      say(t("editor.dirtyGuard"), "error");
+      return;
+    }
+    const idx = tabs.indexOf(path);
+    if (idx < 0) return;
+    const next = tabs.filter((p) => p !== path);
+    setTabs(next);
+    delete tabViewRef.current[path];
+    if (current?.path === path) {
+      const neighbor = next[Math.min(idx, next.length - 1)];
+      if (neighbor) {
+        const saved = tabViewRef.current[neighbor];
+        void openFile(neighbor, saved?.line ?? 1, saved?.col ?? 1, false);
+      } else {
+        setDoc(null);
+        setEditing(false);
+        setDiffMarks(null);
+        setDelGroups(null);
+        setDelPreview(null);
+      }
+    }
+  }, [tabs, editing, editText, openFile, say, t]);
+  useEffect(() => {
     if (!persistKey || !cwd || restoredFor.current === persistKey) return;
     restoredFor.current = persistKey;
     let blob = null;
@@ -3580,6 +3641,7 @@ function CodeBody(props) {
     if (typeof blob.railVisible === "boolean") setRailVisible(blob.railVisible);
     if (typeof blob.wrapOn === "boolean") setWrapOn(blob.wrapOn);
     if (blob.findOpts && typeof blob.findOpts === "object") setFindOpts({ regex: blob.findOpts.regex === true, caseSensitive: blob.findOpts.caseSensitive === true, words: blob.findOpts.words === true });
+    if (Array.isArray(blob.tabs)) setTabs(blob.tabs.filter((p) => typeof p === "string" && p !== "").slice(0, 15));
     if (typeof blob.mode === "string") setMode(blob.mode === "skills" ? "files" : blob.mode);
     if (blob.path && !docRef.current) {
       histRef.current = { back: Array.isArray(blob.back) ? blob.back : [], forward: Array.isArray(blob.forward) ? blob.forward : [] };
@@ -3604,6 +3666,7 @@ function CodeBody(props) {
       railVisible,
       wrapOn,
       findOpts,
+      tabs,
       back: histRef.current.back.slice(-40),
       forward: histRef.current.forward.slice(-40)
     };
@@ -3615,7 +3678,7 @@ function CodeBody(props) {
       } catch {
       }
     }, 700);
-  }, [persistKey, doc, cursor, scroll, mode, railW, railVisible, wrapOn, histTick]);
+  }, [persistKey, doc, cursor, scroll, mode, railW, railVisible, wrapOn, findOpts, tabs, histTick]);
   useEffect(() => () => {
     if (saveTimer.current) clearTimeout(saveTimer.current);
     const last = latestPersistRef.current;
@@ -4368,6 +4431,7 @@ function CodeBody(props) {
         refreshKey: treeKey,
         onNotify: (text, kind) => say(text, kind),
         onDeleted: (path) => {
+          setTabs((prev) => prev.filter((p) => p !== path && !p.startsWith(`${path}/`)));
           const open = docRef.current?.path;
           if (open && (open === path || open.startsWith(`${path}/`))) {
             setDoc(null);
@@ -4405,6 +4469,40 @@ function CodeBody(props) {
       h(
         "div",
         { className: "ce-editor" },
+        tabs.length > 0 ? h(
+          "div",
+          { className: "ce-tabs" },
+          tabs.map((p) => {
+            const active = doc?.path === p && (!diff || !showDiffView);
+            const dirty = active && editing && editText !== (doc?.raw ?? "");
+            return h(
+              "div",
+              {
+                key: p,
+                className: `ce-tab${active ? " ce-tab-active" : ""}`,
+                title: RelPath(cwd, p) || p,
+                onClick: () => switchTab(p),
+                onAuxClick: (e) => {
+                  if (e.button === 1) {
+                    e.preventDefault();
+                    closeTab(p);
+                  }
+                }
+              },
+              h("span", { className: `ce-tab-dot${dirty ? " ce-tab-dirty" : ""}` }, dirty ? "●" : ""),
+              h("span", { className: "ce-tab-name" }, p.split("/").pop()),
+              h("button", {
+                type: "button",
+                className: "ce-tab-x",
+                title: t("editor.closeTab"),
+                onClick: (e) => {
+                  e.stopPropagation();
+                  closeTab(p);
+                }
+              }, "✕")
+            );
+          })
+        ) : null,
         diff && showDiffView ? h(DiffView, {
           t,
           diff,
@@ -4648,6 +4746,14 @@ var CSS2 = `
 .ce-badge-d,.ce-badge-r{color:var(--dsw-alias-state-error-primary,#f85149)}
 .ce-badge-c{color:var(--dsw-alias-brand-primary,#59b7ff)}
 .ce-editor{flex:1;min-width:0;display:flex;flex-direction:column;position:relative}
+.ce-tabs{display:flex;gap:2px;align-items:flex-end;flex:none;overflow-x:auto;overflow-y:hidden;padding:4px 6px 0;background:var(--dsw-alias-bg-base,#181818);border-bottom:.5px solid var(--dsw-alias-border-l1,#333);scrollbar-width:thin}
+.ce-tab{display:flex;gap:4px;align-items:center;flex:none;max-width:170px;padding:3px 5px 3px 8px;border:.5px solid transparent;border-bottom:0;border-radius:6px 6px 0 0;cursor:pointer;color:var(--dsw-alias-label-tertiary,#889);background:transparent;font-size:11.5px}
+.ce-tab:hover{background:var(--dsw-alias-interactive-bg-hover,#26292e)}
+.ce-tab-active{background:var(--dsw-alias-bg-layer-1,#1e2126);color:var(--dsw-alias-label-primary,#ddd);border-color:var(--dsw-alias-border-l1,#333)}
+.ce-tab-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ce-tab-dot{flex:none;width:9px;font-size:8px;line-height:1;color:var(--dsw-alias-state-warn-primary,#e3b341)}
+.ce-tab-x{border:0;background:transparent;color:inherit;font:inherit;font-size:9px;cursor:pointer;padding:1px 3px;border-radius:4px;opacity:.55;flex:none}
+.ce-tab-x:hover{opacity:1;background:var(--dsw-alias-interactive-bg-hover,#3a3d42)}
 .ce-head{display:flex;align-items:center;gap:6px;padding:5px 8px;border-bottom:.5px solid var(--dsw-alias-border-l1,#333);flex:none;min-width:0}
 .ce-head-path{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--dsw-alias-label-primary,#ddd)}
 .ce-chip{font-size:11px;padding:1px 7px;border-radius:99px;background:var(--dsw-alias-bg-layer-2,#24272c);color:var(--dsw-alias-label-secondary,#999);flex:none}

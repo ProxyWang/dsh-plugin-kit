@@ -21,6 +21,15 @@ const SVG_RE = /\.svg$/i;
 /** File types with a host-side language server (Go, TS/JS, Python). */
 const LSP_RE = /\.(go|ts|tsx|js|jsx|mjs|cjs|py|pyi)$/i;
 
+/** Append a path to the open-tab list: dedup, oldest dropped past the cap. Exported for tests. */
+export function addTabPath(list, path, cap = 15) {
+	const prev = Array.isArray(list) ? list : [];
+	if (typeof path !== "string" || path === "" || prev.includes(path)) return prev;
+	const next = [...prev, path];
+	while (next.length > cap) next.shift();
+	return next;
+}
+
 export function CodeBody(props) {
 	const { useTabInfo, sessionId, useSessions, t } = props;
 	const tabInfo = useTabInfo ? useTabInfo() : null;
@@ -58,6 +67,7 @@ export function CodeBody(props) {
 	const [wrapOn, setWrapOn] = useState(false);
 	const [gotoOpen, setGotoOpen] = useState(false);
 	const [fileHist, setFileHist] = useState(null); // {path, commits?, busy?, error?}
+	const [tabs, setTabs] = useState([]); // open editor tabs, left-to-right
 	const [previewOn, setPreviewOn] = useState(false);
 	const [delGroups, setDelGroups] = useState(null);
 	const [delPreview, setDelPreview] = useState(null);
@@ -87,6 +97,7 @@ export function CodeBody(props) {
 	const latestPersistRef = useRef(null);
 	const peekRef = useRef(null);
 	const wrapOnRef = useRef(false);
+	const tabViewRef = useRef({}); // path → {line, col, scroll} restored when switching tabs
 
 	docRef.current = doc;
 	cursorRef.current = cursor;
@@ -430,6 +441,60 @@ export function CodeBody(props) {
 		void openFile(next.path, next.line, next.col, false, next.word ? { line: next.line, col: next.col, word: next.word } : null);
 	}, [openFile]);
 
+	// Editor tabs: every loaded doc joins the strip (deduped, capped); the
+	// per-path view state lets a tab switch restore cursor and scroll.
+	useEffect(() => {
+		const p = doc?.path;
+		if (typeof p !== "string" || p === "") return;
+		setTabs((prev) => addTabPath(prev, p));
+	}, [doc]);
+	useEffect(() => {
+		const p = doc?.path;
+		if (typeof p !== "string" || !cursor) return;
+		tabViewRef.current[p] = { line: cursor.line, col: cursor.col, scroll };
+	}, [doc, cursor, scroll]);
+
+	const switchTab = useCallback((path) => {
+		if (!path) return;
+		if (path === docRef.current?.path) {
+			// Clicking the active tab while its diff is shown returns to the source view.
+			if (diff && showDiffView && (diff.scope === "working" || diff.scope === "branch" || diff.scope === "staged")) setShowDiffView(false);
+			return;
+		}
+		if (editing && editText !== (docRef.current?.raw ?? "")) {
+			say(t("editor.dirtyGuard"), "error");
+			return;
+		}
+		const saved = tabViewRef.current[path];
+		void openFile(path, saved?.line ?? 1, saved?.col ?? 1, false);
+	}, [editing, editText, openFile, say, t, diff, showDiffView]);
+
+	const closeTab = useCallback((path) => {
+		const current = docRef.current;
+		if (editing && current?.path === path && editText !== (current?.raw ?? "")) {
+			say(t("editor.dirtyGuard"), "error");
+			return;
+		}
+		const idx = tabs.indexOf(path);
+		if (idx < 0) return;
+		const next = tabs.filter((p) => p !== path);
+		setTabs(next);
+		delete tabViewRef.current[path];
+		if (current?.path === path) {
+			const neighbor = next[Math.min(idx, next.length - 1)];
+			if (neighbor) {
+				const saved = tabViewRef.current[neighbor];
+				void openFile(neighbor, saved?.line ?? 1, saved?.col ?? 1, false);
+			} else {
+				setDoc(null);
+				setEditing(false);
+				setDiffMarks(null);
+				setDelGroups(null);
+				setDelPreview(null);
+			}
+		}
+	}, [tabs, editing, editText, openFile, say, t]);
+
 	/* P0-1: per-session navigation state survives tab churn */
 	useEffect(() => {
 		if (!persistKey || !cwd || restoredFor.current === persistKey) return;
@@ -443,6 +508,7 @@ export function CodeBody(props) {
 		if (typeof blob.railVisible === "boolean") setRailVisible(blob.railVisible);
 		if (typeof blob.wrapOn === "boolean") setWrapOn(blob.wrapOn);
 		if (blob.findOpts && typeof blob.findOpts === "object") setFindOpts({ regex: blob.findOpts.regex === true, caseSensitive: blob.findOpts.caseSensitive === true, words: blob.findOpts.words === true });
+		if (Array.isArray(blob.tabs)) setTabs(blob.tabs.filter((p) => typeof p === "string" && p !== "").slice(0, 15));
 		if (typeof blob.mode === "string") setMode(blob.mode === "skills" ? "files" : blob.mode);
 		if (blob.path && !docRef.current) {
 			histRef.current = { back: Array.isArray(blob.back) ? blob.back : [], forward: Array.isArray(blob.forward) ? blob.forward : [] };
@@ -468,6 +534,7 @@ export function CodeBody(props) {
 			railVisible,
 			wrapOn,
 			findOpts,
+			tabs,
 			back: histRef.current.back.slice(-40),
 			forward: histRef.current.forward.slice(-40),
 		};
@@ -478,7 +545,7 @@ export function CodeBody(props) {
 				localStorage.setItem(persistKey, JSON.stringify(payload));
 			} catch {}
 		}, 700);
-	}, [persistKey, doc, cursor, scroll, mode, railW, railVisible, wrapOn, histTick]);
+	}, [persistKey, doc, cursor, scroll, mode, railW, railVisible, wrapOn, findOpts, tabs, histTick]);
 
 	useEffect(() => () => {
 		if (saveTimer.current) clearTimeout(saveTimer.current);
@@ -1304,6 +1371,7 @@ export function CodeBody(props) {
 						refreshKey: treeKey,
 						onNotify: (text, kind) => say(text, kind),
 						onDeleted: (path) => {
+							setTabs((prev) => prev.filter((p) => p !== path && !p.startsWith(`${path}/`)));
 							const open = docRef.current?.path;
 							if (open && (open === path || open.startsWith(`${path}/`))) {
 								setDoc(null);
@@ -1345,6 +1413,40 @@ export function CodeBody(props) {
 			h(
 				"div",
 				{ className: "ce-editor" },
+				tabs.length > 0
+					? h("div", { className: "ce-tabs" },
+						tabs.map((p) => {
+							const active = doc?.path === p && (!diff || !showDiffView);
+							const dirty = active && editing && editText !== (doc?.raw ?? "");
+							return h(
+								"div",
+								{
+									key: p,
+									className: `ce-tab${active ? " ce-tab-active" : ""}`,
+									title: RelPath(cwd, p) || p,
+									onClick: () => switchTab(p),
+									onAuxClick: (e) => {
+										if (e.button === 1) {
+											e.preventDefault();
+											closeTab(p);
+										}
+									},
+								},
+								h("span", { className: `ce-tab-dot${dirty ? " ce-tab-dirty" : ""}` }, dirty ? "●" : ""),
+								h("span", { className: "ce-tab-name" }, p.split("/").pop()),
+								h("button", {
+									type: "button",
+									className: "ce-tab-x",
+									title: t("editor.closeTab"),
+									onClick: (e) => {
+										e.stopPropagation();
+										closeTab(p);
+									},
+								}, "✕"),
+							);
+						}),
+					)
+					: null,
 				diff && showDiffView
 					? h(DiffView, {
 						t,
