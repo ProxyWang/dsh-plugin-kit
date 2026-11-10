@@ -883,6 +883,342 @@ function MarkdownView({ text }) {
   );
 }
 
+// src/client/branchpick.js
+function BranchPalette({ cwd, repo, current, t, onDone, onClose, onFetch, onPull }) {
+  const [query, setQuery] = useState("");
+  const [list, setList] = useState(null);
+  const [error, setError] = useState("");
+  const [sel, setSel] = useState(0);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    api("git.branches", repo ? { cwd, repo } : { cwd }).then((res) => {
+      if (!alive) return;
+      if (!res.ok) {
+        setError(res.error);
+        setList([]);
+        return;
+      }
+      setList(res.value.branches ?? []);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [cwd, repo]);
+  const filtered = useMemo(() => {
+    const all = list ?? [];
+    const needle = query.trim().toLowerCase();
+    const hit = needle === "" ? all : all.filter((b) => b.name.toLowerCase().includes(needle));
+    return hit.slice(0, 200);
+  }, [list, query]);
+  const checkout = (branch) => {
+    if (busy || !branch) return;
+    setBusy(true);
+    api("git.checkout", repo ? { cwd, repo, branch } : { cwd, branch }).then((res) => {
+      setBusy(false);
+      const ok = res.ok && !res.value?.error;
+      onDone(ok, ok ? void 0 : res.value?.error ?? res.error);
+    });
+  };
+  const pick = (b) => checkout(b.remote ? b.name.slice(b.name.indexOf("/") + 1) : b.name);
+  const onKeyDown = (event) => {
+    event.stopPropagation();
+    if (event.key === "Escape") {
+      onClose();
+      return;
+    }
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setSel((s) => Math.min(filtered.length - 1, s + 1));
+      return;
+    }
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setSel((s) => Math.max(0, s - 1));
+      return;
+    }
+    if (event.key === "Enter") {
+      event.preventDefault();
+      const b = filtered[sel];
+      if (b && !b.current) pick(b);
+    }
+  };
+  const locals = filtered.filter((b) => !b.remote);
+  const remotes = filtered.filter((b) => b.remote);
+  let index = -1;
+  const row = (b) => {
+    index += 1;
+    const i = index;
+    return h(
+      "button",
+      {
+        key: b.name,
+        type: "button",
+        className: `ce-qitem${i === sel ? " ce-qitem-sel" : ""}`,
+        onClick: () => b.current ? onClose() : pick(b),
+        onMouseEnter: () => setSel(i)
+      },
+      h("span", { className: "ce-symglyph" }, b.current ? "•" : b.remote ? "☁" : "⎇"),
+      h("span", { className: "ce-qbase" }, b.name),
+      b.current ? h("span", { className: "ce-qdir" }, t("branch.current")) : h("span", { className: "ce-qdir" }, b.sha)
+    );
+  };
+  return h(
+    "div",
+    { className: "ce-palette ce-bp" },
+    h(
+      "div",
+      { className: "ce-palette-head" },
+      h("input", {
+        className: "ce-input",
+        placeholder: t("branch.search"),
+        value: query,
+        autoFocus: true,
+        onChange: (e) => {
+          setQuery(e.target.value);
+          setSel(0);
+        },
+        onKeyDown
+      }),
+      h("button", { type: "button", className: "ce-bp-act", title: t("branch.fetchTitle"), disabled: busy, onClick: onFetch }, t("branch.fetch")),
+      h("button", { type: "button", className: "ce-bp-act", title: t("branch.pullTitle"), disabled: busy, onClick: onPull }, t("branch.pull")),
+      h("button", { type: "button", className: "ce-tool ce-tiny", title: `${t("close")} (Esc)`, onClick: onClose }, "✕")
+    ),
+    h(
+      "div",
+      { className: "ce-palette-list ce-scroll" },
+      error ? h("div", { className: "ce-note" }, error) : null,
+      list === null ? h("div", { className: "ce-note" }, "…") : null,
+      list !== null && filtered.length === 0 ? h("div", { className: "ce-note" }, t("branch.none")) : null,
+      locals.length > 0 ? h("div", { className: "ce-section" }, t("branch.local")) : null,
+      locals.map(row),
+      remotes.length > 0 ? h("div", { className: "ce-section" }, t("branch.remote")) : null,
+      remotes.map(row)
+    )
+  );
+}
+
+// src/client/pathtools.js
+function relTime(epoch) {
+  const days = Math.floor((Date.now() / 1e3 - (epoch || 0)) / 86400);
+  if (days <= 0) return "<1d";
+  if (days < 30) return `${days}d`;
+  const months = Math.floor(days / 30);
+  if (months < 18) return `${months}mo`;
+  return `${Math.floor(months / 12)}y`;
+}
+function RelPath(cwd, path) {
+  if (typeof path !== "string") return "";
+  if (cwd && path.startsWith(cwd.endsWith("/") ? cwd : `${cwd}/`)) return path.slice(cwd.length + (cwd.endsWith("/") ? 0 : 1));
+  return path;
+}
+function toAbs(cwd, path) {
+  if (typeof path !== "string") return "";
+  return path.startsWith("/") || /^[A-Za-z]:[\\/]/.test(path) ? path.replace(/\\/g, "/") : `${cwd.replace(/\/+$/, "")}/${path.replace(/\\/g, "/")}`;
+}
+
+// src/client/tree.js
+function TreePanel({ cwd, t, onOpenFile, activePath, refreshKey, onNotify, onDeleted }) {
+  const [listing, setListing] = useState({});
+  const [expanded, setExpanded] = useState([]);
+  const [action, setAction] = useState(null);
+  const loadDir = useCallback((path) => {
+    setListing((current) => ({ ...current, [path]: { loading: true } }));
+    api("fs.list", { cwd, path }).then((res) => {
+      setListing((current) => ({ ...current, [path]: res.ok ? res.value : { error: res.error } }));
+    });
+  }, [cwd]);
+  useEffect(() => {
+    setListing({});
+    setExpanded([]);
+    setAction(null);
+    loadDir("");
+  }, [cwd, refreshKey, loadDir]);
+  const toggle = (path) => {
+    if (expanded.includes(path)) {
+      setExpanded(expanded.filter((p) => p !== path));
+      return;
+    }
+    setExpanded([...expanded, path]);
+    if (listing[path] === void 0) loadDir(path);
+  };
+  const parentOf = (path) => path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "";
+  const finish = (res, okMsg, touchedDir) => {
+    if (!res.ok || res.value?.error) {
+      onNotify?.(`${t("error")}: ${res.value?.error ?? res.error}`, "error");
+      return;
+    }
+    onNotify?.(okMsg);
+    loadDir(touchedDir);
+    setAction(null);
+  };
+  const cleanName = (name) => {
+    const clean = String(name ?? "").trim();
+    if (clean === "" || clean.includes("/") || clean === "." || clean === "..") {
+      onNotify?.(`${t("error")}: ${t("tree.badName")}`, "error");
+      return null;
+    }
+    return clean;
+  };
+  const runCreate = (dirPath, name, kind) => {
+    const clean = cleanName(name);
+    if (clean === null) return;
+    api("fs.create", { cwd, path: dirPath === "" ? clean : `${dirPath}/${clean}`, kind }).then((res) => finish(res, t("tree.created"), dirPath));
+  };
+  const runRename = (path, newName) => {
+    const clean = cleanName(newName);
+    if (clean === null) return;
+    const dir = parentOf(path);
+    api("fs.rename", { cwd, path, to: dir === "" ? clean : `${dir}/${clean}` }).then((res) => finish(res, t("tree.renamed"), dir));
+  };
+  const runDelete = (path) => {
+    api("fs.delete", { cwd, path }).then((res) => {
+      if (!res.ok || res.value?.error) {
+        onNotify?.(`${t("error")}: ${res.value?.error ?? res.error}`, "error");
+        setAction(null);
+        return;
+      }
+      onNotify?.(t("tree.deleted"));
+      onDeleted?.(path);
+      loadDir(parentOf(path));
+      setAction(null);
+    });
+  };
+  const depthOf = (path) => path === "" ? 0 : path.split("/").length;
+  const inputRow = (dirPath, kind, placeholder) => h(
+    "div",
+    {
+      key: `inp:${dirPath}:${kind}`,
+      className: "ce-row ctp-inputrow",
+      style: { paddingLeft: 6 + depthOf(dirPath) * 14 }
+    },
+    h("input", {
+      className: "ce-input",
+      placeholder,
+      autoFocus: true,
+      value: action?.value ?? "",
+      onChange: (e) => setAction({ ...action, value: e.target.value }),
+      onKeyDown: (e) => {
+        e.stopPropagation();
+        if (e.key === "Enter") {
+          if (kind === "rename") runRename(action.path, e.target.value);
+          else runCreate(dirPath, e.target.value, kind);
+        } else if (e.key === "Escape") setAction(null);
+      }
+    })
+  );
+  const acts = (path, isDir) => h(
+    "span",
+    { className: "ctp-acts" },
+    isDir ? h("button", {
+      type: "button",
+      className: "cet-act",
+      title: t("tree.newFile"),
+      onClick: (e) => {
+        e.stopPropagation();
+        if (!expanded.includes(path)) setExpanded([...expanded, path]);
+        if (listing[path] === void 0) loadDir(path);
+        setAction({ kind: "newfile", path, value: "" });
+      }
+    }, "+") : null,
+    h("button", {
+      type: "button",
+      className: "cet-act",
+      title: t("tree.rename"),
+      onClick: (e) => {
+        e.stopPropagation();
+        setAction({ kind: "rename", path, value: path.split("/").pop() });
+      }
+    }, "✎"),
+    action?.kind === "delete" && action.path === path ? h(
+      Fragment,
+      null,
+      h("button", {
+        type: "button",
+        className: "cet-act cet-act-show cet-act-danger",
+        onClick: (e) => {
+          e.stopPropagation();
+          runDelete(path);
+        }
+      }, t("changes.confirm")),
+      h("button", {
+        type: "button",
+        className: "cet-act cet-act-show",
+        onClick: (e) => {
+          e.stopPropagation();
+          setAction(null);
+        }
+      }, t("changes.cancel"))
+    ) : h("button", {
+      type: "button",
+      className: "cet-act",
+      title: t("tree.delete"),
+      onClick: (e) => {
+        e.stopPropagation();
+        setAction({ kind: "delete", path });
+      }
+    }, "✕")
+  );
+  const renderLevel = (path, depth) => {
+    const state = listing[path];
+    if (!state) return null;
+    if (state.loading) return h("div", { key: `${path}-l`, className: "ce-note", style: { paddingLeft: 8 + depth * 14 } }, t("loading"));
+    if (state.error) return h("div", { key: `${path}-l`, className: "ce-note", style: { paddingLeft: 8 + depth * 14 } }, `${t("tree.failed")}: ${state.error}`);
+    const entries = [...state.entries ?? []].sort((a, b) => a.type === b.type ? a.name.localeCompare(b.name) : a.type === "directory" ? -1 : 1);
+    const rows = [];
+    for (const entry of entries) {
+      const childPath = path === "" ? entry.name : `${path}/${entry.name}`;
+      if (entry.type === "directory") {
+        const open = expanded.includes(childPath);
+        rows.push(
+          h(
+            "button",
+            { key: childPath, className: "ce-row", style: { paddingLeft: 6 + depth * 14 }, onClick: () => toggle(childPath), type: "button" },
+            h("span", { className: "ce-ico" }, h(IconFolder, { open })),
+            h("span", { className: "ce-name" }, entry.name),
+            acts(childPath, true)
+          )
+        );
+        if (action?.kind === "rename" && action.path === childPath) rows.push(inputRow(childPath, "rename", t("tree.renamePlaceholder")));
+        if (open && action?.kind === "newfile" && action.path === childPath) rows.push(inputRow(childPath, "file", t("tree.newFilePlaceholder")));
+        if (open && action?.kind === "newdir" && action.path === childPath) rows.push(inputRow(childPath, "dir", t("tree.newDirPlaceholder")));
+        if (open) rows.push(renderLevel(childPath, depth + 1));
+      } else if (entry.type === "file") {
+        rows.push(
+          h(
+            "button",
+            {
+              key: childPath,
+              className: `ce-row${activePath && (activePath === childPath || activePath.endsWith(`/${childPath}`)) ? " ce-active" : ""}`,
+              style: { paddingLeft: 6 + depth * 14 },
+              type: "button",
+              onClick: () => onOpenFile(childPath, 1, 1)
+            },
+            h("span", { className: "ce-ico" }, h(IconFile)),
+            h("span", { className: "ce-name" }, entry.name),
+            acts(childPath, false)
+          )
+        );
+        if (action?.kind === "rename" && action.path === childPath) rows.push(inputRow(path, "rename", t("tree.renamePlaceholder")));
+      }
+    }
+    if (!rows.length) rows.push(h("div", { key: `${path}-e`, className: "ce-note", style: { paddingLeft: 8 + depth * 14 } }, t("tree.empty")));
+    return h(Fragment, { key: path }, rows);
+  };
+  return h(
+    "div",
+    { className: "ce-scroll ce-rail" },
+    h(
+      "div",
+      { className: "ctp-tools" },
+      h("button", { type: "button", className: "cet-act cet-act-show", title: t("tree.newFileRoot"), onClick: () => setAction({ kind: "newfile", path: "", value: "" }) }, `+ ${t("tree.fileWord")}`),
+      h("button", { type: "button", className: "cet-act cet-act-show", title: t("tree.newDirRoot"), onClick: () => setAction({ kind: "newdir", path: "", value: "" }) }, `+ ${t("tree.dirWord")}`)
+    ),
+    action !== null && (action.kind === "newfile" || action.kind === "newdir") && action.path === "" ? inputRow("", action.kind === "newdir" ? "dir" : "file", action.kind === "newdir" ? t("tree.newDirPlaceholder") : t("tree.newFilePlaceholder")) : null,
+    renderLevel("", 0)
+  );
+}
+
 // src/client/changetree.js
 function buildTree(items) {
   const root = { name: "", dirs: /* @__PURE__ */ new Map(), files: [], count: 0 };
@@ -1108,341 +1444,7 @@ function ChangeTree({ items, onOpen, onDiscard, onDiscardDir, keyPrefix, t }) {
   return h(Fragment, null, rows);
 }
 
-// src/client/branchpick.js
-function BranchPalette({ cwd, repo, current, t, onDone, onClose, onFetch, onPull }) {
-  const [query, setQuery] = useState("");
-  const [list, setList] = useState(null);
-  const [error, setError] = useState("");
-  const [sel, setSel] = useState(0);
-  const [busy, setBusy] = useState(false);
-  useEffect(() => {
-    let alive = true;
-    api("git.branches", repo ? { cwd, repo } : { cwd }).then((res) => {
-      if (!alive) return;
-      if (!res.ok) {
-        setError(res.error);
-        setList([]);
-        return;
-      }
-      setList(res.value.branches ?? []);
-    });
-    return () => {
-      alive = false;
-    };
-  }, [cwd, repo]);
-  const filtered = useMemo(() => {
-    const all = list ?? [];
-    const needle = query.trim().toLowerCase();
-    const hit = needle === "" ? all : all.filter((b) => b.name.toLowerCase().includes(needle));
-    return hit.slice(0, 200);
-  }, [list, query]);
-  const checkout = (branch) => {
-    if (busy || !branch) return;
-    setBusy(true);
-    api("git.checkout", repo ? { cwd, repo, branch } : { cwd, branch }).then((res) => {
-      setBusy(false);
-      const ok = res.ok && !res.value?.error;
-      onDone(ok, ok ? void 0 : res.value?.error ?? res.error);
-    });
-  };
-  const pick = (b) => checkout(b.remote ? b.name.slice(b.name.indexOf("/") + 1) : b.name);
-  const onKeyDown = (event) => {
-    event.stopPropagation();
-    if (event.key === "Escape") {
-      onClose();
-      return;
-    }
-    if (event.key === "ArrowDown") {
-      event.preventDefault();
-      setSel((s) => Math.min(filtered.length - 1, s + 1));
-      return;
-    }
-    if (event.key === "ArrowUp") {
-      event.preventDefault();
-      setSel((s) => Math.max(0, s - 1));
-      return;
-    }
-    if (event.key === "Enter") {
-      event.preventDefault();
-      const b = filtered[sel];
-      if (b && !b.current) pick(b);
-    }
-  };
-  const locals = filtered.filter((b) => !b.remote);
-  const remotes = filtered.filter((b) => b.remote);
-  let index = -1;
-  const row = (b) => {
-    index += 1;
-    const i = index;
-    return h(
-      "button",
-      {
-        key: b.name,
-        type: "button",
-        className: `ce-qitem${i === sel ? " ce-qitem-sel" : ""}`,
-        onClick: () => b.current ? onClose() : pick(b),
-        onMouseEnter: () => setSel(i)
-      },
-      h("span", { className: "ce-symglyph" }, b.current ? "•" : b.remote ? "☁" : "⎇"),
-      h("span", { className: "ce-qbase" }, b.name),
-      b.current ? h("span", { className: "ce-qdir" }, t("branch.current")) : h("span", { className: "ce-qdir" }, b.sha)
-    );
-  };
-  return h(
-    "div",
-    { className: "ce-palette ce-bp" },
-    h(
-      "div",
-      { className: "ce-palette-head" },
-      h("input", {
-        className: "ce-input",
-        placeholder: t("branch.search"),
-        value: query,
-        autoFocus: true,
-        onChange: (e) => {
-          setQuery(e.target.value);
-          setSel(0);
-        },
-        onKeyDown
-      }),
-      h("button", { type: "button", className: "ce-bp-act", title: t("branch.fetchTitle"), disabled: busy, onClick: onFetch }, t("branch.fetch")),
-      h("button", { type: "button", className: "ce-bp-act", title: t("branch.pullTitle"), disabled: busy, onClick: onPull }, t("branch.pull")),
-      h("button", { type: "button", className: "ce-tool ce-tiny", title: `${t("close")} (Esc)`, onClick: onClose }, "✕")
-    ),
-    h(
-      "div",
-      { className: "ce-palette-list ce-scroll" },
-      error ? h("div", { className: "ce-note" }, error) : null,
-      list === null ? h("div", { className: "ce-note" }, "…") : null,
-      list !== null && filtered.length === 0 ? h("div", { className: "ce-note" }, t("branch.none")) : null,
-      locals.length > 0 ? h("div", { className: "ce-section" }, t("branch.local")) : null,
-      locals.map(row),
-      remotes.length > 0 ? h("div", { className: "ce-section" }, t("branch.remote")) : null,
-      remotes.map(row)
-    )
-  );
-}
-
-// src/client/components.js
-var PREVIEW_RE = /\.(md|markdown|html?)$/i;
-var MD_RE = /\.(md|markdown)$/i;
-function relTime(epoch) {
-  const days = Math.floor((Date.now() / 1e3 - (epoch || 0)) / 86400);
-  if (days <= 0) return "<1d";
-  if (days < 30) return `${days}d`;
-  const months = Math.floor(days / 30);
-  if (months < 18) return `${months}mo`;
-  return `${Math.floor(months / 12)}y`;
-}
-function RelPath(cwd, path) {
-  if (typeof path !== "string") return "";
-  if (cwd && path.startsWith(cwd.endsWith("/") ? cwd : `${cwd}/`)) return path.slice(cwd.length + (cwd.endsWith("/") ? 0 : 1));
-  return path;
-}
-function toAbs(cwd, path) {
-  if (typeof path !== "string") return "";
-  return path.startsWith("/") || /^[A-Za-z]:[\\/]/.test(path) ? path.replace(/\\/g, "/") : `${cwd.replace(/\/+$/, "")}/${path.replace(/\\/g, "/")}`;
-}
-function TreePanel({ cwd, t, onOpenFile, activePath, refreshKey, onNotify, onDeleted }) {
-  const [listing, setListing] = useState({});
-  const [expanded, setExpanded] = useState([]);
-  const [action, setAction] = useState(null);
-  const loadDir = useCallback((path) => {
-    setListing((current) => ({ ...current, [path]: { loading: true } }));
-    api("fs.list", { cwd, path }).then((res) => {
-      setListing((current) => ({ ...current, [path]: res.ok ? res.value : { error: res.error } }));
-    });
-  }, [cwd]);
-  useEffect(() => {
-    setListing({});
-    setExpanded([]);
-    setAction(null);
-    loadDir("");
-  }, [cwd, refreshKey, loadDir]);
-  const toggle = (path) => {
-    if (expanded.includes(path)) {
-      setExpanded(expanded.filter((p) => p !== path));
-      return;
-    }
-    setExpanded([...expanded, path]);
-    if (listing[path] === void 0) loadDir(path);
-  };
-  const parentOf = (path) => path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "";
-  const finish = (res, okMsg, touchedDir) => {
-    if (!res.ok || res.value?.error) {
-      onNotify?.(`${t("error")}: ${res.value?.error ?? res.error}`, "error");
-      return;
-    }
-    onNotify?.(okMsg);
-    loadDir(touchedDir);
-    setAction(null);
-  };
-  const cleanName = (name) => {
-    const clean = String(name ?? "").trim();
-    if (clean === "" || clean.includes("/") || clean === "." || clean === "..") {
-      onNotify?.(`${t("error")}: ${t("tree.badName")}`, "error");
-      return null;
-    }
-    return clean;
-  };
-  const runCreate = (dirPath, name, kind) => {
-    const clean = cleanName(name);
-    if (clean === null) return;
-    api("fs.create", { cwd, path: dirPath === "" ? clean : `${dirPath}/${clean}`, kind }).then((res) => finish(res, t("tree.created"), dirPath));
-  };
-  const runRename = (path, newName) => {
-    const clean = cleanName(newName);
-    if (clean === null) return;
-    const dir = parentOf(path);
-    api("fs.rename", { cwd, path, to: dir === "" ? clean : `${dir}/${clean}` }).then((res) => finish(res, t("tree.renamed"), dir));
-  };
-  const runDelete = (path) => {
-    api("fs.delete", { cwd, path }).then((res) => {
-      if (!res.ok || res.value?.error) {
-        onNotify?.(`${t("error")}: ${res.value?.error ?? res.error}`, "error");
-        setAction(null);
-        return;
-      }
-      onNotify?.(t("tree.deleted"));
-      onDeleted?.(path);
-      loadDir(parentOf(path));
-      setAction(null);
-    });
-  };
-  const depthOf = (path) => path === "" ? 0 : path.split("/").length;
-  const inputRow = (dirPath, kind, placeholder) => h(
-    "div",
-    {
-      key: `inp:${dirPath}:${kind}`,
-      className: "ce-row ctp-inputrow",
-      style: { paddingLeft: 6 + depthOf(dirPath) * 14 }
-    },
-    h("input", {
-      className: "ce-input",
-      placeholder,
-      autoFocus: true,
-      value: action?.value ?? "",
-      onChange: (e) => setAction({ ...action, value: e.target.value }),
-      onKeyDown: (e) => {
-        e.stopPropagation();
-        if (e.key === "Enter") {
-          if (kind === "rename") runRename(action.path, e.target.value);
-          else runCreate(dirPath, e.target.value, kind);
-        } else if (e.key === "Escape") setAction(null);
-      }
-    })
-  );
-  const acts = (path, isDir) => h(
-    "span",
-    { className: "ctp-acts" },
-    isDir ? h("button", {
-      type: "button",
-      className: "cet-act",
-      title: t("tree.newFile"),
-      onClick: (e) => {
-        e.stopPropagation();
-        if (!expanded.includes(path)) setExpanded([...expanded, path]);
-        if (listing[path] === void 0) loadDir(path);
-        setAction({ kind: "newfile", path, value: "" });
-      }
-    }, "+") : null,
-    h("button", {
-      type: "button",
-      className: "cet-act",
-      title: t("tree.rename"),
-      onClick: (e) => {
-        e.stopPropagation();
-        setAction({ kind: "rename", path, value: path.split("/").pop() });
-      }
-    }, "✎"),
-    action?.kind === "delete" && action.path === path ? h(
-      Fragment,
-      null,
-      h("button", {
-        type: "button",
-        className: "cet-act cet-act-show cet-act-danger",
-        onClick: (e) => {
-          e.stopPropagation();
-          runDelete(path);
-        }
-      }, t("changes.confirm")),
-      h("button", {
-        type: "button",
-        className: "cet-act cet-act-show",
-        onClick: (e) => {
-          e.stopPropagation();
-          setAction(null);
-        }
-      }, t("changes.cancel"))
-    ) : h("button", {
-      type: "button",
-      className: "cet-act",
-      title: t("tree.delete"),
-      onClick: (e) => {
-        e.stopPropagation();
-        setAction({ kind: "delete", path });
-      }
-    }, "✕")
-  );
-  const renderLevel = (path, depth) => {
-    const state = listing[path];
-    if (!state) return null;
-    if (state.loading) return h("div", { key: `${path}-l`, className: "ce-note", style: { paddingLeft: 8 + depth * 14 } }, t("loading"));
-    if (state.error) return h("div", { key: `${path}-l`, className: "ce-note", style: { paddingLeft: 8 + depth * 14 } }, `${t("tree.failed")}: ${state.error}`);
-    const entries = [...state.entries ?? []].sort((a, b) => a.type === b.type ? a.name.localeCompare(b.name) : a.type === "directory" ? -1 : 1);
-    const rows = [];
-    for (const entry of entries) {
-      const childPath = path === "" ? entry.name : `${path}/${entry.name}`;
-      if (entry.type === "directory") {
-        const open = expanded.includes(childPath);
-        rows.push(
-          h(
-            "button",
-            { key: childPath, className: "ce-row", style: { paddingLeft: 6 + depth * 14 }, onClick: () => toggle(childPath), type: "button" },
-            h("span", { className: "ce-ico" }, h(IconFolder, { open })),
-            h("span", { className: "ce-name" }, entry.name),
-            acts(childPath, true)
-          )
-        );
-        if (action?.kind === "rename" && action.path === childPath) rows.push(inputRow(childPath, "rename", t("tree.renamePlaceholder")));
-        if (open && action?.kind === "newfile" && action.path === childPath) rows.push(inputRow(childPath, "file", t("tree.newFilePlaceholder")));
-        if (open && action?.kind === "newdir" && action.path === childPath) rows.push(inputRow(childPath, "dir", t("tree.newDirPlaceholder")));
-        if (open) rows.push(renderLevel(childPath, depth + 1));
-      } else if (entry.type === "file") {
-        rows.push(
-          h(
-            "button",
-            {
-              key: childPath,
-              className: `ce-row${activePath && (activePath === childPath || activePath.endsWith(`/${childPath}`)) ? " ce-active" : ""}`,
-              style: { paddingLeft: 6 + depth * 14 },
-              type: "button",
-              onClick: () => onOpenFile(childPath, 1, 1)
-            },
-            h("span", { className: "ce-ico" }, h(IconFile)),
-            h("span", { className: "ce-name" }, entry.name),
-            acts(childPath, false)
-          )
-        );
-        if (action?.kind === "rename" && action.path === childPath) rows.push(inputRow(path, "rename", t("tree.renamePlaceholder")));
-      }
-    }
-    if (!rows.length) rows.push(h("div", { key: `${path}-e`, className: "ce-note", style: { paddingLeft: 8 + depth * 14 } }, t("tree.empty")));
-    return h(Fragment, { key: path }, rows);
-  };
-  return h(
-    "div",
-    { className: "ce-scroll ce-rail" },
-    h(
-      "div",
-      { className: "ctp-tools" },
-      h("button", { type: "button", className: "cet-act cet-act-show", title: t("tree.newFileRoot"), onClick: () => setAction({ kind: "newfile", path: "", value: "" }) }, `+ ${t("tree.fileWord")}`),
-      h("button", { type: "button", className: "cet-act cet-act-show", title: t("tree.newDirRoot"), onClick: () => setAction({ kind: "newdir", path: "", value: "" }) }, `+ ${t("tree.dirWord")}`)
-    ),
-    action !== null && (action.kind === "newfile" || action.kind === "newdir") && action.path === "" ? inputRow("", action.kind === "newdir" ? "dir" : "file", action.kind === "newdir" ? t("tree.newDirPlaceholder") : t("tree.newFilePlaceholder")) : null,
-    renderLevel("", 0)
-  );
-}
+// src/client/changes.js
 function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commitsOpen, setCommitsOpen, onOpenCommit, onOpenDiff, onDiscard, onDiscardDir, refresh }) {
   const [treeView, setTreeView] = useState(true);
   const selector = repos && repos.length > 0 ? h(
@@ -1519,6 +1521,8 @@ function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commitsOpen, 
     ) : h("div", { className: "ce-note" }, t("changes.baseNone"))
   );
 }
+
+// src/client/overlays.js
 function LocationList({ t, overlay, cwd, onPick, onClose }) {
   return h(
     "div",
@@ -1851,6 +1855,132 @@ function SymbolPalette({ t, symbols, onPick, onClose }) {
     )
   );
 }
+
+// src/client/codeview.js
+function computeVisible({ doc, scroll, viewport, diagByLine, flash, diffMarks, delAnchors, delGroups, t, blameOn, blame, openCommit, onDelPreview }) {
+  if (!doc) return null;
+  const extraAt = (line) => {
+    let n = 0;
+    for (const a of delAnchors) {
+      if (a <= line) n++;
+      else break;
+    }
+    return n * ROW;
+  };
+  const yOf = (i) => i * ROW + extraAt(i + 1);
+  let lo = 0;
+  let hi = doc.lines.length;
+  const topTarget = scroll - 8 * ROW;
+  while (lo < hi) {
+    const mid = lo + hi >> 1;
+    if (yOf(mid) < topTarget) lo = mid + 1;
+    else hi = mid;
+  }
+  const start = Math.max(0, lo - 2);
+  const lang = langFor(doc.path);
+  const rows = [];
+  const blameRows = [];
+  for (let i = start; i < doc.lines.length && yOf(i) <= scroll + viewport + 8 * ROW; i++) {
+    const runs = tokenizeLine(doc.lines[i], lang, doc.states[i]);
+    const isGo = lang === "go";
+    const lineFlash = flash && flash.line === i + 1 ? flash : null;
+    const lineChanged = diffMarks !== null && diffMarks.has(i + 1);
+    const cells = runs.map((run, r) => {
+      const marked = lineFlash && lineFlash.col != null && run.startCol === lineFlash.col && lineFlash.word && run.s === lineFlash.word;
+      return run.cls === "ce-id" || run.cls === "ce-type" || run.cls === "ce-kw" ? h(
+        "span",
+        {
+          key: r,
+          className: `ce-t ${run.cls}${isGo ? " ce-jump" : ""}${marked ? " ce-mark" : ""}`,
+          ...isGo ? { "data-ce-l": i + 1, "data-ce-c": run.startCol ?? 1, "data-ce-w": run.word ?? "" } : {}
+        },
+        run.s
+      ) : h("span", { key: r, className: `ce-t ${run.cls}${marked ? " ce-mark" : ""}` }, run.s);
+    });
+    const lineDiags = diagByLine.get(i + 1);
+    const underlines = (lineDiags ?? []).map((item, d) => {
+      const endCol = item.endLine === item.line ? Math.min(item.endCol, item.startCol + 200) : item.startCol + 200;
+      return h("span", {
+        key: `u${d}`,
+        className: `ce-underline${item.severity === 2 ? " ce-underline-warn" : ""}`,
+        title: `${item.source ? `${item.source}: ` : ""}${item.message}`,
+        style: { left: `${(item.startCol - 1) * 7.8}px`, width: `${Math.min(1600, Math.max(6, (endCol - item.startCol) * 7.8))}px` }
+      });
+    });
+    rows.push(
+      h(
+        "div",
+        { key: i, className: `ce-line${lineFlash ? " ce-flash" : ""}${lineChanged ? " ce-line-changed" : ""}`, style: { transform: `translateY(${yOf(i)}px)` } },
+        cells.length ? cells : h("span", { className: "ce-t" }, " "),
+        ...underlines
+      )
+    );
+    if (blameOn && blame !== null) {
+      const info = blame.get(i + 1);
+      const prevInfo = blame.get(i);
+      const uncommitted = info !== void 0 && /^0{40}$/.test(info.sha);
+      const first = info !== void 0 && (prevInfo === void 0 || prevInfo.sha !== info.sha);
+      blameRows.push(h("button", {
+        key: i,
+        type: "button",
+        className: `ce-bline${uncommitted ? " ce-bline-uncommitted" : ""}`,
+        style: { transform: `translateY(${yOf(i)}px)` },
+        title: info ? `${info.author ?? ""} ${info.mail ?? ""} · ${info.summary ?? ""} · ${info.sha.slice(0, 8)}` : "",
+        ...info !== void 0 && !uncommitted ? { onClick: () => void openCommit({ hash: info.sha }) } : {}
+      }, uncommitted ? t("blame.uncommitted") : first ? `${info.author} · ${relTime(info.time)}` : ""));
+    }
+  }
+  delAnchors.forEach((a, idx) => {
+    const y = (a - 1) * ROW + idx * ROW;
+    if (y + ROW < scroll - 60 || y > scroll + viewport + 60) return;
+    const deleted = delGroups.get(a) ?? [];
+    rows.push(h("button", {
+      key: `del:${a}`,
+      type: "button",
+      className: "ce-delbar",
+      style: { transform: `translateY(${y}px)` },
+      title: t("diff.deletedAt"),
+      onClick: () => onDelPreview({ anchor: a, lines: deleted })
+    }, `− ${deleted.length} ${t("diff.deletedLines")}`));
+  });
+  return { rows, blameRows, start, end: doc.lines.length, total: (doc.lines.length + 2) * ROW + delAnchors.length * ROW };
+}
+function computeGutter({ doc, scroll, viewport, cursor, findLines, diffMarks, delAnchors }) {
+  if (!doc) return null;
+  const extraAt = (line) => {
+    let n = 0;
+    for (const a of delAnchors) {
+      if (a <= line) n++;
+      else break;
+    }
+    return n * ROW;
+  };
+  const yOf = (i) => i * ROW + extraAt(i + 1);
+  let lo = 0;
+  let hi = doc.lines.length;
+  const topTarget = scroll - 8 * ROW;
+  while (lo < hi) {
+    const mid = lo + hi >> 1;
+    if (yOf(mid) < topTarget) lo = mid + 1;
+    else hi = mid;
+  }
+  const start = Math.max(0, lo - 2);
+  const rows = [];
+  for (let i = start; i < doc.lines.length && yOf(i) <= scroll + viewport + 8 * ROW; i++) {
+    rows.push(
+      h(
+        "div",
+        { key: i, className: `ce-gline${cursor?.line === i + 1 ? " ce-gline-active" : ""}${findLines.has(i + 1) ? " ce-gline-find" : ""}${diffMarks !== null && diffMarks.has(i + 1) ? " ce-gline-changed" : ""}`, style: { transform: `translateY(${yOf(i)}px)` } },
+        String(i + 1)
+      )
+    );
+  }
+  return rows;
+}
+
+// src/client/code.js
+var PREVIEW_RE = /\.(md|markdown|html?)$/i;
+var MD_RE = /\.(md|markdown)$/i;
 function CodeBody(props) {
   const { useTabInfo, sessionId, useSessions, t } = props;
   const tabInfo = useTabInfo ? useTabInfo() : null;
@@ -2703,126 +2833,14 @@ function CodeBody(props) {
     setFlash({ line, col: 1, word: "" });
     setTimeout(() => setFlash((f) => f && f.line === line ? null : f), 1200);
   }, []);
-  const visible = useMemo(() => {
-    if (!doc) return null;
-    const extraAt = (line) => {
-      let n = 0;
-      for (const a of delAnchors) {
-        if (a <= line) n++;
-        else break;
-      }
-      return n * ROW;
-    };
-    const yOf = (i) => i * ROW + extraAt(i + 1);
-    let lo = 0;
-    let hi = doc.lines.length;
-    const topTarget = scroll - 8 * ROW;
-    while (lo < hi) {
-      const mid = lo + hi >> 1;
-      if (yOf(mid) < topTarget) lo = mid + 1;
-      else hi = mid;
-    }
-    const start = Math.max(0, lo - 2);
-    const lang = langFor(doc.path);
-    const rows = [];
-    const blameRows = [];
-    for (let i = start; i < doc.lines.length && yOf(i) <= scroll + viewport + 8 * ROW; i++) {
-      const runs = tokenizeLine(doc.lines[i], lang, doc.states[i]);
-      const isGo = lang === "go";
-      const lineFlash = flash && flash.line === i + 1 ? flash : null;
-      const lineChanged = diffMarks !== null && diffMarks.has(i + 1);
-      const cells = runs.map((run, r) => {
-        const marked = lineFlash && lineFlash.col != null && run.startCol === lineFlash.col && lineFlash.word && run.s === lineFlash.word;
-        return run.cls === "ce-id" || run.cls === "ce-type" || run.cls === "ce-kw" ? h(
-          "span",
-          {
-            key: r,
-            className: `ce-t ${run.cls}${isGo ? " ce-jump" : ""}${marked ? " ce-mark" : ""}`,
-            ...isGo ? { "data-ce-l": i + 1, "data-ce-c": run.startCol ?? 1, "data-ce-w": run.word ?? "" } : {}
-          },
-          run.s
-        ) : h("span", { key: r, className: `ce-t ${run.cls}${marked ? " ce-mark" : ""}` }, run.s);
-      });
-      const lineDiags = diagByLine.get(i + 1);
-      const underlines = (lineDiags ?? []).map((item, d) => {
-        const endCol = item.endLine === item.line ? Math.min(item.endCol, item.startCol + 200) : item.startCol + 200;
-        return h("span", {
-          key: `u${d}`,
-          className: `ce-underline${item.severity === 2 ? " ce-underline-warn" : ""}`,
-          title: `${item.source ? `${item.source}: ` : ""}${item.message}`,
-          style: { left: `${(item.startCol - 1) * 7.8}px`, width: `${Math.min(1600, Math.max(6, (endCol - item.startCol) * 7.8))}px` }
-        });
-      });
-      rows.push(
-        h(
-          "div",
-          { key: i, className: `ce-line${lineFlash ? " ce-flash" : ""}${lineChanged ? " ce-line-changed" : ""}`, style: { transform: `translateY(${yOf(i)}px)` } },
-          cells.length ? cells : h("span", { className: "ce-t" }, " "),
-          ...underlines
-        )
-      );
-      if (blameOn && blame !== null) {
-        const info = blame.get(i + 1);
-        const prevInfo = blame.get(i);
-        const uncommitted = info !== void 0 && /^0{40}$/.test(info.sha);
-        const first = info !== void 0 && (prevInfo === void 0 || prevInfo.sha !== info.sha);
-        blameRows.push(h("button", {
-          key: i,
-          type: "button",
-          className: `ce-bline${uncommitted ? " ce-bline-uncommitted" : ""}`,
-          style: { transform: `translateY(${yOf(i)}px)` },
-          title: info ? `${info.author ?? ""} ${info.mail ?? ""} · ${info.summary ?? ""} · ${info.sha.slice(0, 8)}` : "",
-          ...info !== void 0 && !uncommitted ? { onClick: () => void openCommit({ hash: info.sha }) } : {}
-        }, uncommitted ? t("blame.uncommitted") : first ? `${info.author} · ${relTime(info.time)}` : ""));
-      }
-    }
-    delAnchors.forEach((a, idx) => {
-      const y = (a - 1) * ROW + idx * ROW;
-      if (y + ROW < scroll - 60 || y > scroll + viewport + 60) return;
-      const deleted = delGroups.get(a) ?? [];
-      rows.push(h("button", {
-        key: `del:${a}`,
-        type: "button",
-        className: "ce-delbar",
-        style: { transform: `translateY(${y}px)` },
-        title: t("diff.deletedAt"),
-        onClick: () => setDelPreview({ anchor: a, lines: deleted })
-      }, `− ${deleted.length} ${t("diff.deletedLines")}`));
-    });
-    return { rows, blameRows, start, end: doc.lines.length, total: (doc.lines.length + 2) * ROW + delAnchors.length * ROW };
-  }, [doc, scroll, viewport, diagByLine, flash, diffMarks, delAnchors, delGroups, t, blameOn, blame, openCommit]);
-  const gutter = useMemo(() => {
-    if (!doc) return null;
-    const extraAt = (line) => {
-      let n = 0;
-      for (const a of delAnchors) {
-        if (a <= line) n++;
-        else break;
-      }
-      return n * ROW;
-    };
-    const yOf = (i) => i * ROW + extraAt(i + 1);
-    let lo = 0;
-    let hi = doc.lines.length;
-    const topTarget = scroll - 8 * ROW;
-    while (lo < hi) {
-      const mid = lo + hi >> 1;
-      if (yOf(mid) < topTarget) lo = mid + 1;
-      else hi = mid;
-    }
-    const start = Math.max(0, lo - 2);
-    const rows = [];
-    for (let i = start; i < doc.lines.length && yOf(i) <= scroll + viewport + 8 * ROW; i++) {
-      rows.push(
-        h(
-          "div",
-          { key: i, className: `ce-gline${cursor?.line === i + 1 ? " ce-gline-active" : ""}${findLines.has(i + 1) ? " ce-gline-find" : ""}${diffMarks !== null && diffMarks.has(i + 1) ? " ce-gline-changed" : ""}`, style: { transform: `translateY(${yOf(i)}px)` } },
-          String(i + 1)
-        )
-      );
-    }
-    return rows;
-  }, [doc, scroll, viewport, cursor, findLines, diffMarks, delAnchors]);
+  const visible = useMemo(
+    () => computeVisible({ doc, scroll, viewport, diagByLine, flash, diffMarks, delAnchors, delGroups, t, blameOn, blame, openCommit, onDelPreview: setDelPreview }),
+    [doc, scroll, viewport, diagByLine, flash, diffMarks, delAnchors, delGroups, t, blameOn, blame, openCommit]
+  );
+  const gutter = useMemo(
+    () => computeGutter({ doc, scroll, viewport, cursor, findLines, diffMarks, delAnchors }),
+    [doc, scroll, viewport, cursor, findLines, diffMarks, delAnchors]
+  );
   const statusTitle = (status.state === "error" ? `${t("status.error")}: ${status.message}` : status.state === "starting" ? t("status.starting") : status.state === "ready" ? t("status.ready") : t("status.off")) + (status.progress ? ` · ${status.progress}` : "");
   const previewActive = previewOn && doc !== null && PREVIEW_RE.test(doc.path);
   const canBack = histRef.current.back.length > 0;

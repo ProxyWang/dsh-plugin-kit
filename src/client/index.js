@@ -3,7 +3,7 @@
 import { h } from "./react.js";
 import { NS, TAB_ID, TAB_KIND, SKILLS_TAB_ID, SKILLS_TAB_KIND, API_TAB_ID, API_TAB_KIND } from "./constants.js";
 import { en, zh } from "./locale.js";
-import { CodeBody, CodeTitle } from "./components.js";
+import { CodeBody, CodeTitle } from "./code.js";
 import { definition, insertStyles, skillsDefinition, apiDefinition } from "./register.js";
 import { CallDiffRow } from "./calldiff.js";
 import { SkillsTabBody, SkillsTitle } from "./skills.js";
