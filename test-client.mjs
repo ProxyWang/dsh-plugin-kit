@@ -55,6 +55,33 @@ check("wordAt after-boundary", wordAt("helper(x)", 7)?.word === "helper", wordAt
 check("wordAt miss", wordAt("1 + 2", 3) === null, wordAt("1 + 2", 3));
 
 check("langFor mapping", langFor("a/b/main.go") === "go" && langFor("x.ts") === "js" && langFor("readme.md") === "text", [langFor("a/b/main.go"), langFor("x.ts"), langFor("readme.md")]);
+check(
+	"langFor extended mapping",
+	langFor("a.json") === "json" && langFor("b.yaml") === "yaml" && langFor("c.yml") === "yaml" && langFor("d.sh") === "sh" && langFor("e.toml") === "toml" && langFor("f.rs") === "rs" && langFor("g.java") === "java" && langFor("h.cpp") === "c" && langFor("i.sql") === "sql" && langFor("j.css") === "css" && langFor("k.pyi") === "py",
+	[langFor("a.json"), langFor("b.yaml"), langFor("d.sh"), langFor("k.pyi")],
+);
+
+// json: property names distinct from string values, literals as keywords
+const jsonRuns = tokenizeLine('{"name": "kit", "ok": true}', "json", 0);
+check("json property name class", jsonRuns.some((r) => r.cls === "ce-prop" && r.s === '"name"'), jsonRuns);
+check("json string value stays ce-str", jsonRuns.some((r) => r.cls === "ce-str" && r.s === '"kit"'), jsonRuns);
+check("json literal keyword", jsonRuns.some((r) => r.cls === "ce-kw" && r.s === "true"), jsonRuns);
+
+// yaml/sh: hash comments, and "http://" must NOT become a comment in hash langs
+const yamlRuns = tokenizeLine("url: http://example.com # trailing", "yaml", 0);
+check("yaml hash comment", yamlRuns.some((r) => r.cls === "ce-com" && r.s.includes("trailing")), yamlRuns);
+check("yaml url slashes are not a comment", !yamlRuns.some((r) => r.cls === "ce-com" && r.s.includes("example")), yamlRuns);
+const shRuns = tokenizeLine("if [ -f x ]; then echo hi; fi # done", "sh", 0);
+check("sh keywords", shRuns.filter((r) => r.cls === "ce-kw").length >= 3, shRuns.filter((r) => r.cls === "ce-kw"));
+check("sh hash comment", shRuns.some((r) => r.cls === "ce-com" && r.s === "# done"), shRuns);
+
+// sql: case-insensitive keywords
+const sqlRuns = tokenizeLine("SELECT name FROM users", "sql", 0);
+check("sql uppercase keywords", sqlRuns.some((r) => r.cls === "ce-kw" && r.s === "SELECT") && sqlRuns.some((r) => r.cls === "ce-kw" && r.s === "FROM"), sqlRuns);
+
+// buildLineStates: hash-comment langs never carry block-comment state
+check("hash lang states stay zero", buildLineStates(["x /* unclosed", "next line"], "sh").every((s) => s === 0), buildLineStates(["x /* unclosed", "next line"], "sh"));
+check("c-style lang still tracks block comments", buildLineStates(["x /* unclosed", "next line"], "go")[1] === 1, buildLineStates(["x /* unclosed", "next line"], "go"));
 
 const diff = `diff --git a/main.go b/main.go
 index 111..222 100644
@@ -195,6 +222,10 @@ const flashCells = buildTokenCells("x := helper(1)", "go", 0, 1, { line: 1, col:
 check("buildTokenCells flash marks the exact token", flashCells.some((c) => String(c.props.className).includes("ce-mark")), flashCells.map((c) => c.props.className));
 const textCells = buildTokenCells("hello world", "text", 0, 1, null);
 check("buildTokenCells plain text has no jump hooks", textCells.every((c) => c.props["data-ce-l"] === undefined), textCells.map((c) => c.props));
+const jsCells = buildTokenCells("const kit = 1;", "js", 0, 3, null);
+check("buildTokenCells js identifiers are jumpable", jsCells.some((c) => c.props["data-ce-w"] === "kit" && String(c.props.className).includes("ce-jump")), jsCells.map((c) => c.props));
+const jsonCells = buildTokenCells('{"a": 1}', "json", 0, 1, null);
+check("buildTokenCells json tokens are not jumpable", jsonCells.every((c) => c.props["data-ce-l"] === undefined), jsonCells.map((c) => c.props));
 const wrapDoc = { path: "a.go", lines: ["aa", "bb", "cc"], states: buildLineStates(["aa", "bb", "cc"]) };
 const wrap = computeWrapRows({ doc: wrapDoc, flash: null, diffMarks: null, delAnchors: [], delGroups: null, cursor: { line: 2 }, findLines: new Set(), t: (k) => k, onDelPreview: () => {} });
 check("computeWrapRows builds one flow row per line", wrap.rows.length === 3 && wrap.capped === false, wrap.rows.length);

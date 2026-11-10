@@ -3,7 +3,7 @@
 import { Fragment, h, useCallback, useEffect, useMemo, useRef, useState } from "./react.js";
 import { ROW } from "./constants.js";
 import { api } from "./api.js";
-import { buildLineStates, wordAt } from "./highlight.js";
+import { buildLineStates, langFor, wordAt } from "./highlight.js";
 import { IconArrowLeft, IconArrowRight, IconCode, IconRefresh, IconSearch, IconTextSearch } from "./icons.js";
 import { DiffView, changedNewLines, deletedGroups, changeBlobs } from "./diff.js";
 import { MarkdownView } from "./markdown.js";
@@ -18,6 +18,8 @@ import { computeGutter, computeVisible, computeWrapRows, WRAP_LINE_CAP } from ".
 const PREVIEW_RE = /\.(md|markdown|html?|svg)$/i;
 const MD_RE = /\.(md|markdown)$/i;
 const SVG_RE = /\.svg$/i;
+/** File types with a host-side language server (Go, TS/JS, Python). */
+const LSP_RE = /\.(go|ts|tsx|js|jsx|mjs|cjs|py|pyi)$/i;
 
 export function CodeBody(props) {
 	const { useTabInfo, sessionId, useSessions, t } = props;
@@ -166,7 +168,7 @@ export function CodeBody(props) {
 	const repoSelRef = useRef(null);
 
 	const fetchDiagnostics = useCallback((path, seq) => {
-		if (!cwd || !path.endsWith(".go")) return;
+		if (!cwd || !LSP_RE.test(path)) return;
 		const pull = () => {
 			if (openSeqRef.current !== seq) return;
 			api("lsp.diagnostics", { cwd, path }).then((res) => {
@@ -230,7 +232,7 @@ export function CodeBody(props) {
 			const text = res.value.content;
 			const lines = text.split("\n");
 			if (lines.length > 1 && lines[lines.length - 1] === "") lines.pop();
-			const entry = { path, lines, states: buildLineStates(lines), truncated: res.value.truncated, raw: text };
+			const entry = { path, lines, states: buildLineStates(lines, langFor(path)), truncated: res.value.truncated, raw: text };
 			const seq = ++openSeqRef.current;
 			peekNonce.current++;
 			setPeek(null);
@@ -250,7 +252,7 @@ export function CodeBody(props) {
 			setSymbols([]);
 			setScroll((0));
 			if (codeRef.current) codeRef.current.scrollTop = 0;
-			if (path.endsWith(".go")) {
+			if (LSP_RE.test(path)) {
 				fetchDiagnostics(path, seq);
 				api("lsp.request", { cwd, path, kind: "hover", line: 1, col: 1 })
 					.then((warm) => {
@@ -703,7 +705,7 @@ export function CodeBody(props) {
 
 	const openPeek = useCallback(
 		async (symbol, line, col) => {
-			if (!cwd || !docRef.current?.path.endsWith(".go")) return;
+			if (!cwd || !LSP_RE.test(docRef.current?.path ?? "")) return;
 			const path = docRef.current.path;
 			const nonce = ++peekNonce.current;
 			setPeek({ symbol, anchorLine: line, busy: true, def: [], refs: [] });
@@ -784,7 +786,7 @@ export function CodeBody(props) {
 			}
 			const lines = editText.split("\n");
 			if (lines.length > 1 && lines[lines.length - 1] === "") lines.pop();
-			setDoc({ ...doc, lines, states: buildLineStates(lines), raw: editText });
+			setDoc({ ...doc, lines, states: buildLineStates(lines, langFor(doc.path)), raw: editText });
 			setEditing(false);
 			say(t("editor.saved"));
 		});
@@ -846,7 +848,7 @@ export function CodeBody(props) {
 				return;
 			}
 			if ((event.metaKey || event.ctrlKey) && event.shiftKey && event.code === "KeyO") {
-				if (docRef.current?.path.endsWith(".go")) {
+				if (LSP_RE.test(docRef.current?.path ?? "")) {
 					event.preventDefault();
 					setSymPalette({});
 				}
@@ -910,7 +912,7 @@ export function CodeBody(props) {
 
 	const doJump = useCallback(
 		async (kind, pos) => {
-			if (!cwd || !docRef.current || !docRef.current.path.endsWith(".go")) return;
+			if (!cwd || !docRef.current || !LSP_RE.test(docRef.current.path)) return;
 			const cur = pos ?? cursorRef.current;
 			if (!cur) {
 				say(t("jump.noCursor"));
@@ -996,7 +998,7 @@ export function CodeBody(props) {
 			const at = { line, col: hit?.col ?? col };
 			setCursor({ line: at.line, col: at.col, word });
 			if (codeRef.current) codeRef.current.focus({ preventScroll: true });
-			if (!docRef.current.path.endsWith(".go") || !word) {
+			if (!LSP_RE.test(docRef.current.path) || !word) {
 				// VSCode-style: clicking blank space dismisses the reference overlay.
 				setPeek(null);
 				return;
@@ -1087,6 +1089,7 @@ export function CodeBody(props) {
 
 	const statusTitle = (status.state === "error" ? `${t("status.error")}: ${status.message}` : status.state === "starting" ? t("status.starting") : status.state === "ready" ? t("status.ready") : t("status.off")) + (status.progress ? ` · ${status.progress}` : "");
 	const previewActive = previewOn && doc !== null && PREVIEW_RE.test(doc.path);
+	const docLang = doc !== null && !doc.image ? langFor(doc.path) : "text";
 	const canBack = histRef.current.back.length > 0;
 	const canForward = histRef.current.forward.length > 0;
 	void histTick;
@@ -1266,11 +1269,11 @@ export function CodeBody(props) {
 							currentSymbol
 								? h(
 									"button",
-									{ type: "button", className: "ce-crumb", title: `${t("symbols.crumb")} (⌘⇧O)`, onClick: () => doc.path.endsWith(".go") && setSymPalette({}) },
+									{ type: "button", className: "ce-crumb", title: `${t("symbols.crumb")} (⌘⇧O)`, onClick: () => LSP_RE.test(doc.path) && setSymPalette({}) },
 									`› ${currentSymbol.name}`,
 								)
 								: null,
-							doc.path.endsWith(".go") ? h("span", { className: "ce-chip" }, t("editor.lang.go")) : null,
+							docLang !== "text" ? h("span", { className: "ce-chip" }, docLang) : null,
 							diffMarks
 								? h("button", { type: "button", className: "ce-chip ce-chip-mark", title: t("diff.marksClear"), onClick: () => setDiffMarks(null) }, `${t("diff.marksChip")} ${diffMarks.size}`)
 								: null,
@@ -1423,9 +1426,9 @@ export function CodeBody(props) {
 		h(
 			"div",
 			{ className: "ce-statusbar" },
-			h("span", null, notice.kind === "info" ? notice.text || (doc && !diagnostics.length && doc.path.endsWith(".go") ? t("nodiag") : "") : ""),
+			h("span", null, notice.kind === "info" ? notice.text || (doc && !diagnostics.length && LSP_RE.test(doc.path) ? t("nodiag") : "") : ""),
 			h("span", { className: "ce-spacer" }),
-			h("span", { className: "ce-prog" }, status.progress || (status.state === "error" ? "gopls ✕" : status.state === "ready" ? "gopls ✓" : status.state === "starting" ? "gopls …" : "")),
+			h("span", { className: "ce-prog" }, status.progress || (status.state === "error" ? `${status.label ?? "lsp"} ✕` : status.state === "ready" ? `${status.label ?? "lsp"} ✓` : status.state === "starting" ? `${status.label ?? "lsp"} …` : "")),
 		),
 	);
 }

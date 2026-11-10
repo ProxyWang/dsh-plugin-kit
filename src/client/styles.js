@@ -62,6 +62,7 @@ export const CSS = `
 .ce-kw{color:var(--ce-kw,var(--dsw-alias-brand-primary,#6cb2ff))}
 .ce-type{color:var(--ce-type,#7de3a4)}
 .ce-str{color:var(--ce-str,#e6b56d)}
+.ce-prop{color:var(--ce-prop,#9cdcfe)}
 .ce-num{color:var(--ce-num,#d19a66)}
 .ce-com{color:var(--ce-com,var(--dsw-alias-label-tertiary,#7a8490));font-style:italic}
 .ce-jump{cursor:pointer;text-decoration:underline dotted transparent;text-underline-offset:3px}

@@ -13,12 +13,13 @@ import { relTime } from "./pathtools.js";
 
 /**
  * Syntax-highlighted token spans for one source line, shared by the virtual
- * scroll view and the word-wrap flow view. Go identifiers/types/keywords get
- * data-ce-* hooks for click-to-jump; `flash` marks one exact token occurrence.
+ * scroll view and the word-wrap flow view. Identifiers of LSP-backed languages
+ * (Go, TS/JS, Python) get data-ce-* hooks for click-to-jump; `flash` marks one
+ * exact token occurrence.
  */
 export function buildTokenCells(text, lang, state, lineNo, flash) {
 	const runs = tokenizeLine(text, lang, state);
-	const isGo = lang === "go";
+	const jumpable = lang === "go" || lang === "js" || lang === "py";
 	return runs.map((run, r) => {
 		// word-level highlight when the flash names a token at this column
 		const marked = flash && flash.col != null && run.startCol === flash.col && flash.word && run.s === flash.word;
@@ -27,8 +28,8 @@ export function buildTokenCells(text, lang, state, lineNo, flash) {
 				"span",
 				{
 					key: r,
-					className: `ce-t ${run.cls}${isGo ? " ce-jump" : ""}${marked ? " ce-mark" : ""}`,
-					...(isGo ? { "data-ce-l": lineNo, "data-ce-c": run.startCol ?? 1, "data-ce-w": run.word ?? "" } : {}),
+					className: `ce-t ${run.cls}${jumpable ? " ce-jump" : ""}${marked ? " ce-mark" : ""}`,
+					...(jumpable ? { "data-ce-l": lineNo, "data-ce-c": run.startCol ?? 1, "data-ce-w": run.word ?? "" } : {}),
 				},
 				run.s,
 			)

@@ -135,6 +135,20 @@ check("lsp status carries progress field", stat.ok && typeof (stat.value.progres
 
 const sym = await call("lsp.request", { cwd, path: "main.go", kind: "symbol", line: 1, col: 1 });
 check("documentSymbol lists helper & main", sym.ok && sym.value.symbols.some((s) => s.name === "helper" && s.line === 6) && sym.value.symbols.some((s) => s.name === "main"), sym);
+check("lsp status carries server label", stat.ok && typeof stat.value.label === "string" && stat.value.label.length > 0, stat.value);
+
+// Multi-language gating: uncovered types get a note; covered-but-missing servers fail gracefully.
+const mdLsp = await call("lsp.request", { cwd, path: "notes.md", kind: "definition", line: 1, col: 1 });
+check("lsp.request uncovered type returns note without touching disk", mdLsp.ok && mdLsp.value.targets.length === 0 && typeof mdLsp.value.note === "string", mdLsp.value);
+writeFileSync(`${cwd}/app.ts`, "export const x = 1;\n");
+const tsLsp = await call("lsp.request", { cwd, path: "app.ts", kind: "definition", line: 1, col: 14 });
+check(
+	"lsp.request .ts: graceful error when no TS server installed, real answer otherwise",
+	(tsLsp.ok === false && String(tsLsp.error).length > 0) || (tsLsp.ok === true && Array.isArray(tsLsp.value?.targets)),
+	tsLsp.ok ? tsLsp.value : tsLsp.error,
+);
+const tsDiag = await call("lsp.diagnostics", { cwd, path: "app.ts" });
+check("lsp.diagnostics .ts never throws", tsDiag.ok && Array.isArray(tsDiag.value.items), tsDiag);
 
 const commits = (await call("git.status", { cwd })).value.commits;
 const cShas = commits.map((c) => c.hash);

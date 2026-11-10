@@ -73,7 +73,7 @@ var ROW = 22;
 var zh = {
   "type.label": "代码",
   "guide.title": "代码浏览器",
-  "guide.description": "工作区代码浏览、当前分支变更、gopls 跳转定义/引用",
+  "guide.description": "工作区代码浏览、当前分支变更、LSP 跳转定义/引用（Go/TS/Python）",
   "toolbar.files": "文件",
   "toolbar.changes": "变更",
   refresh: "刷新",
@@ -81,10 +81,10 @@ var zh = {
   "clickJump.off": "点击弹引用：关（⌥/⌘点击打开）",
   back: "后退 (⌘[)",
   forward: "前进 (⌘])",
-  "status.ready": "gopls 就绪",
-  "status.starting": "gopls 启动中…",
-  "status.off": "gopls 未启动",
-  "status.error": "gopls 错误",
+  "status.ready": "语言服务器就绪",
+  "status.starting": "语言服务器启动中…",
+  "status.off": "语言服务器未启动",
+  "status.error": "语言服务器错误",
   binary: "二进制文件，无法预览",
   "image.tooBig": "图片超过 10 MB，无法预览",
   truncated: "文件过大，已截断显示",
@@ -103,8 +103,8 @@ var zh = {
   "editor.placeholder": "从左侧文件树选择文件，或在“变更”中查看 diff",
   "editor.noSession": "没有可用会话：代码浏览器需要当前会话的工作目录。",
   "jump.noCursor": "先点击一个标识符（函数/变量/类型），再触发跳转",
-  "jump.noTarget": "gopls：未找到定义",
-  "jump.busy": "gopls 正在索引，稍后重试…",
+  "jump.noTarget": "未找到定义",
+  "jump.busy": "语言服务器正在索引，稍后重试…",
   "jump.peekTitle": "定义",
   "jump.refsTitle": "引用",
   "jump.implTitle": "实现",
@@ -258,7 +258,6 @@ var zh = {
   "launcher.skills": "Agent 扩展",
   "launcher.more": "更多",
   "hover.loading": "…",
-  "editor.lang.go": "Go · gopls",
   close: "关闭",
   "shortcut.noSession": "请先选择会话",
   "toolbar.search": "查询",
@@ -283,7 +282,7 @@ var zh = {
   "peek.defs": "定义",
   "peek.refs": "引用",
   "peek.tagDef": "声明",
-  "peek.empty": "gopls：未找到定义或引用",
+  "peek.empty": "未找到定义或引用",
   "peek.hint": "↑↓ 选择 · Enter 跳转 · Esc 关闭",
   "sync.fetching": "正在 fetch 远程…",
   "sync.pulling": "正在拉取（--ff-only）…",
@@ -299,7 +298,7 @@ var zh = {
   "sync.detached": "分离 HEAD，不能拉取",
   "sync.diverged": "本地与远程已分叉：未做任何修改（本面板只做快进拉取，请用「变更」视图核对后自行 rebase/merge）",
   "symbols.placeholder": "跳转到符号（函数 / 类型）",
-  "symbols.none": "无匹配符号（gopls 可能仍在索引）",
+  "symbols.none": "无匹配符号（语言服务器可能仍在索引）",
   "symbols.crumb": "当前符号 — 打开符号列表",
   "diff.scopeCommit": "提交",
   "diff.back": "返回文件",
@@ -309,7 +308,7 @@ var zh = {
 var en = {
   "type.label": "Code",
   "guide.title": "Code Explorer",
-  "guide.description": "Workspace browsing, branch changes, gopls definition/reference jumps",
+  "guide.description": "Workspace browsing, branch changes, LSP definition/reference jumps (Go/TS/Python)",
   "toolbar.files": "Files",
   "toolbar.changes": "Changes",
   refresh: "Refresh",
@@ -317,10 +316,10 @@ var en = {
   "clickJump.off": "Click pops references: off (⌥/⌘-click opens it)",
   back: "Back (⌘[)",
   forward: "Forward (⌘])",
-  "status.ready": "gopls ready",
-  "status.starting": "starting gopls…",
-  "status.off": "gopls not started",
-  "status.error": "gopls error",
+  "status.ready": "Language server ready",
+  "status.starting": "starting language server…",
+  "status.off": "language server not started",
+  "status.error": "language server error",
   binary: "Binary file, no preview",
   "image.tooBig": "Image exceeds the 10 MB preview cap",
   truncated: "File too large; display truncated",
@@ -339,8 +338,8 @@ var en = {
   "editor.placeholder": "Pick a file in the tree, or open a diff under Changes",
   "editor.noSession": "No session: the code explorer needs the current session workspace.",
   "jump.noCursor": "Click an identifier first, then jump",
-  "jump.noTarget": "gopls: no definition found",
-  "jump.busy": "gopls is indexing; retry shortly…",
+  "jump.noTarget": "no definition found",
+  "jump.busy": "language server is indexing; retry shortly…",
   "jump.peekTitle": "Definition",
   "jump.refsTitle": "References",
   "jump.implTitle": "Implementation",
@@ -494,7 +493,6 @@ var en = {
   "launcher.skills": "Agent extensions",
   "launcher.more": "More",
   "hover.loading": "…",
-  "editor.lang.go": "Go · gopls",
   close: "Close",
   "shortcut.noSession": "Select a session first",
   "toolbar.search": "Search",
@@ -519,7 +517,7 @@ var en = {
   "peek.defs": "definition",
   "peek.refs": "references",
   "peek.tagDef": "decl",
-  "peek.empty": "gopls: no definition or references found",
+  "peek.empty": "no definition or references found",
   "peek.hint": "↑↓ select · Enter jump · Esc close",
   "sync.fetching": "fetching remote…",
   "sync.pulling": "pulling (--ff-only)…",
@@ -535,7 +533,7 @@ var en = {
   "sync.detached": "Detached HEAD; cannot pull",
   "sync.diverged": "Local and remote diverged; nothing was changed (this panel only fast-forwards — rebase or merge manually after reviewing Changes)",
   "symbols.placeholder": "Go to symbol (function / type)",
-  "symbols.none": "No matching symbols (gopls may still be indexing)",
+  "symbols.none": "No matching symbols (server may still be indexing)",
   "symbols.crumb": "Current symbol — open symbol list",
   "diff.scopeCommit": "Commit",
   "diff.back": "Back to file",
@@ -568,17 +566,51 @@ var KEYWORDS = {
   ),
   py: new Set(
     "and as assert async await break class continue def del elif else except finally for from global if import in is lambda nonlocal not or pass raise return try while with yield None True False self".split(" ")
-  )
+  ),
+  json: /* @__PURE__ */ new Set(["true", "false", "null"]),
+  yaml: /* @__PURE__ */ new Set(["true", "false", "null"]),
+  toml: /* @__PURE__ */ new Set(["true", "false"]),
+  sh: new Set(
+    "if then else elif fi for while until do done case esac function select in time local export readonly declare typeset unset shift exit return source alias eval exec set trap wait true false".split(" ")
+  ),
+  rs: new Set(
+    "as async await break const continue crate dyn else enum extern false fn for if impl in let loop match mod move mut pub ref return self Self static struct super trait true type unsafe use where while union".split(" ")
+  ),
+  java: new Set(
+    "abstract assert boolean break byte case catch char class const continue default do double else enum extends final finally float for goto if implements import instanceof int interface long native new package private protected public return short static strictfp super switch synchronized this throw throws transient try void volatile while true false null var record sealed".split(" ")
+  ),
+  c: new Set(
+    "auto break case char const continue default do double else enum extern float for goto if inline int long register restrict return short signed sizeof static struct switch typedef union unsigned void volatile while NULL true false bool".split(" ")
+  ),
+  sql: new Set(
+    "select from where insert into values update set delete create table alter drop index view join left right inner outer full cross on group by order having limit offset distinct as and or not null is in exists between like case when then else end union all primary key foreign references default constraint unique check".split(" ")
+  ),
+  css: /* @__PURE__ */ new Set(["important", "media", "supports", "keyframes", "import", "charset", "namespace"])
 };
 var BLOCK_TYPES = /* @__PURE__ */ new Set(["string", "error", "int", "int64", "float64", "bool", "byte", "rune", "any", "interface", "struct", "map", "chan", "func", "uint", "uint64", "rune"]);
+var HASH_LANGS = /* @__PURE__ */ new Set(["py", "sh", "yaml", "toml"]);
+var EXT_LANG = [
+  [/\.go$/, "go"],
+  [/\.(ts|tsx|js|jsx|mjs|cjs)$/, "js"],
+  [/\.pyi?$/, "py"],
+  [/\.jsonc?$/i, "json"],
+  [/\.ya?ml$/i, "yaml"],
+  [/\.(sh|bash|zsh|ksh)$/, "sh"],
+  [/\.toml$/i, "toml"],
+  [/\.rs$/i, "rs"],
+  [/\.java$/i, "java"],
+  [/\.(c|h|cc|cpp|cxx|hpp)$/i, "c"],
+  [/\.sql$/i, "sql"],
+  [/\.css$/i, "css"]
+];
 function langFor(path) {
-  if (path.endsWith(".go")) return "go";
-  if (/\.(ts|tsx|js|jsx|mjs|cjs)$/.test(path)) return "js";
-  if (/\.(py)$/.test(path)) return "py";
+  const p = String(path);
+  for (const [re, lang] of EXT_LANG) if (re.test(p)) return lang;
   return "text";
 }
-function buildLineStates(lines2) {
+function buildLineStates(lines2, lang = "") {
   const states = new Uint8Array(lines2.length);
+  if (HASH_LANGS.has(lang)) return states;
   let state = 0;
   for (let i = 0; i < lines2.length; i++) {
     states[i] = state;
@@ -612,9 +644,12 @@ function buildLineStates(lines2) {
   }
   return states;
 }
-var TOKEN_RE = /(\/\*.*?(?:\*\/|$)|\/\/.*$|"(?:[^"\\\n]|\\.)*(?:"|$)|'(?:\\.|[^'\\\n])*'?|`[^`\n]*`?|0[xX][0-9a-fA-F]+|\d+(?:\.\d+)?(?:[eE][+-]?\d+)?|[A-Za-z_][A-Za-z0-9_]*)/g;
+var TOKEN_RE = /\/\*.*?(?:\*\/|$)|\/\/.*$|"(?:[^"\\\n]|\\.)*(?:"|$)|'(?:\\.|[^'\\\n])*'?|`[^`\n]*`?|0[xX][0-9a-fA-F]+|\d+(?:\.\d+)?(?:[eE][+-]?\d+)?|[A-Za-z_][A-Za-z0-9_]*/g;
+var TOKEN_RE_HASH = /#.*$|"(?:[^"\\\n]|\\.)*(?:"|$)|'(?:\\.|[^'\\\n])*'?|`[^`\n]*`?|0[xX][0-9a-fA-F]+|\d+(?:\.\d+)?(?:[eE][+-]?\d+)?|[A-Za-z_][A-Za-z0-9_]*/g;
 function tokenizeLine(text, lang, entryState) {
   if (lang === "text") return [{ cls: "", s: text }];
+  const hash = HASH_LANGS.has(lang);
+  const re = hash ? TOKEN_RE_HASH : TOKEN_RE;
   const runs = [];
   let rest = text;
   let consumed = 0;
@@ -626,9 +661,15 @@ function tokenizeLine(text, lang, entryState) {
     rest = rest.slice(end + 2);
   }
   const kws = KEYWORDS[lang] ?? KEYWORDS.js;
+  const kwClass = (word) => {
+    if (kws.has(word)) return "ce-kw";
+    if (lang === "sql" && kws.has(word.toLowerCase())) return "ce-kw";
+    if (lang === "go" && (BLOCK_TYPES.has(word) || /^[A-Z]/.test(word))) return "ce-type";
+    return "ce-id";
+  };
   let match;
   let index = 0;
-  TOKEN_RE.lastIndex = 0;
+  re.lastIndex = 0;
   const pushPlain = (chunk, base) => {
     if (!chunk) return;
     let m;
@@ -637,25 +678,26 @@ function tokenizeLine(text, lang, entryState) {
     while (m = ident.exec(chunk)) {
       if (m.index > last) runs.push({ cls: "", s: chunk.slice(last, m.index) });
       const word = m[0];
-      const cls = kws.has(word) ? "ce-kw" : lang === "go" && (BLOCK_TYPES.has(word) || /^[A-Z]/.test(word)) ? "ce-type" : "ce-id";
-      runs.push({ cls, s: word, word, startCol: consumed + base + m.index + 1 });
+      runs.push({ cls: kwClass(word), s: word, word, startCol: consumed + base + m.index + 1 });
       last = m.index + word.length;
     }
     if (last < chunk.length) runs.push({ cls: "", s: chunk.slice(last) });
   };
-  while (match = TOKEN_RE.exec(rest)) {
+  while (match = re.exec(rest)) {
     if (match.index > index) pushPlain(rest.slice(index, match.index), index);
     const token = match[0];
     index = match.index + token.length;
-    if (token.startsWith("//") || token.startsWith("/*")) runs.push({ cls: "ce-com", s: token });
-    else if (/^["'`]/.test(token)) runs.push({ cls: "ce-str", s: token });
-    else if (/^\d/.test(token)) runs.push({ cls: "ce-num", s: token });
+    if (token.startsWith("//") || token.startsWith("/*") || token.startsWith("#")) runs.push({ cls: "ce-com", s: token });
+    else if (/^["'`]/.test(token)) {
+      const cls = lang === "json" && /^\s*:/.test(rest.slice(index)) ? "ce-prop" : "ce-str";
+      runs.push({ cls, s: token });
+    } else if (/^\d/.test(token)) runs.push({ cls: "ce-num", s: token });
     else if (/^[A-Za-z_]/.test(token)) {
-      const cls = kws.has(token) ? "ce-kw" : lang === "go" && (BLOCK_TYPES.has(token) || /^[A-Z]/.test(token)) ? "ce-type" : "ce-id";
-      runs.push({ cls, s: token, word: token, startCol: consumed + match.index + 1 });
+      runs.push({ cls: kwClass(token), s: token, word: token, startCol: consumed + match.index + 1 });
     } else runs.push({ cls: "", s: token });
   }
   pushPlain(rest.slice(index), index);
+  re.lastIndex = 0;
   return runs;
 }
 function wordAt(text, col) {
@@ -2141,15 +2183,15 @@ function GotoLinePalette({ t, totalLines, initial, onGo, onClose }) {
 // src/client/codeview.js
 function buildTokenCells(text, lang, state, lineNo, flash) {
   const runs = tokenizeLine(text, lang, state);
-  const isGo = lang === "go";
+  const jumpable = lang === "go" || lang === "js" || lang === "py";
   return runs.map((run, r) => {
     const marked = flash && flash.col != null && run.startCol === flash.col && flash.word && run.s === flash.word;
     return run.cls === "ce-id" || run.cls === "ce-type" || run.cls === "ce-kw" ? h(
       "span",
       {
         key: r,
-        className: `ce-t ${run.cls}${isGo ? " ce-jump" : ""}${marked ? " ce-mark" : ""}`,
-        ...isGo ? { "data-ce-l": lineNo, "data-ce-c": run.startCol ?? 1, "data-ce-w": run.word ?? "" } : {}
+        className: `ce-t ${run.cls}${jumpable ? " ce-jump" : ""}${marked ? " ce-mark" : ""}`,
+        ...jumpable ? { "data-ce-l": lineNo, "data-ce-c": run.startCol ?? 1, "data-ce-w": run.word ?? "" } : {}
       },
       run.s
     ) : h("span", { key: r, className: `ce-t ${run.cls}${marked ? " ce-mark" : ""}` }, run.s);
@@ -2307,6 +2349,7 @@ function computeWrapRows({ doc, flash, diffMarks, delAnchors, delGroups, cursor,
 var PREVIEW_RE = /\.(md|markdown|html?|svg)$/i;
 var MD_RE = /\.(md|markdown)$/i;
 var SVG_RE = /\.svg$/i;
+var LSP_RE = /\.(go|ts|tsx|js|jsx|mjs|cjs|py|pyi)$/i;
 function CodeBody(props) {
   const { useTabInfo, sessionId, useSessions, t } = props;
   const tabInfo = useTabInfo ? useTabInfo() : null;
@@ -2438,7 +2481,7 @@ function CodeBody(props) {
   const [repoSel, setRepoSel] = useState(null);
   const repoSelRef = useRef(null);
   const fetchDiagnostics = useCallback((path, seq) => {
-    if (!cwd || !path.endsWith(".go")) return;
+    if (!cwd || !LSP_RE.test(path)) return;
     const pull = () => {
       if (openSeqRef.current !== seq) return;
       api("lsp.diagnostics", { cwd, path }).then((res) => {
@@ -2499,7 +2542,7 @@ function CodeBody(props) {
       const text = res.value.content;
       const lines2 = text.split("\n");
       if (lines2.length > 1 && lines2[lines2.length - 1] === "") lines2.pop();
-      const entry = { path, lines: lines2, states: buildLineStates(lines2), truncated: res.value.truncated, raw: text };
+      const entry = { path, lines: lines2, states: buildLineStates(lines2, langFor(path)), truncated: res.value.truncated, raw: text };
       const seq = ++openSeqRef.current;
       peekNonce.current++;
       setPeek(null);
@@ -2519,7 +2562,7 @@ function CodeBody(props) {
       setSymbols([]);
       setScroll(0);
       if (codeRef.current) codeRef.current.scrollTop = 0;
-      if (path.endsWith(".go")) {
+      if (LSP_RE.test(path)) {
         fetchDiagnostics(path, seq);
         api("lsp.request", { cwd, path, kind: "hover", line: 1, col: 1 }).then((warm) => {
           if (warm.ok && warm.value.status) setStatus((s) => ({ ...s, ...warm.value.status }));
@@ -2929,7 +2972,7 @@ function CodeBody(props) {
   );
   const openPeek = useCallback(
     async (symbol, line, col) => {
-      if (!cwd || !docRef.current?.path.endsWith(".go")) return;
+      if (!cwd || !LSP_RE.test(docRef.current?.path ?? "")) return;
       const path = docRef.current.path;
       const nonce = ++peekNonce.current;
       setPeek({ symbol, anchorLine: line, busy: true, def: [], refs: [] });
@@ -3007,7 +3050,7 @@ function CodeBody(props) {
       }
       const lines2 = editText.split("\n");
       if (lines2.length > 1 && lines2[lines2.length - 1] === "") lines2.pop();
-      setDoc({ ...doc, lines: lines2, states: buildLineStates(lines2), raw: editText });
+      setDoc({ ...doc, lines: lines2, states: buildLineStates(lines2, langFor(doc.path)), raw: editText });
       setEditing(false);
       say(t("editor.saved"));
     });
@@ -3066,7 +3109,7 @@ function CodeBody(props) {
         return;
       }
       if ((event.metaKey || event.ctrlKey) && event.shiftKey && event.code === "KeyO") {
-        if (docRef.current?.path.endsWith(".go")) {
+        if (LSP_RE.test(docRef.current?.path ?? "")) {
           event.preventDefault();
           setSymPalette({});
         }
@@ -3129,7 +3172,7 @@ function CodeBody(props) {
   );
   const doJump = useCallback(
     async (kind, pos) => {
-      if (!cwd || !docRef.current || !docRef.current.path.endsWith(".go")) return;
+      if (!cwd || !docRef.current || !LSP_RE.test(docRef.current.path)) return;
       const cur = pos ?? cursorRef.current;
       if (!cur) {
         say(t("jump.noCursor"));
@@ -3213,7 +3256,7 @@ function CodeBody(props) {
       const at = { line, col: hit?.col ?? col };
       setCursor({ line: at.line, col: at.col, word });
       if (codeRef.current) codeRef.current.focus({ preventScroll: true });
-      if (!docRef.current.path.endsWith(".go") || !word) {
+      if (!LSP_RE.test(docRef.current.path) || !word) {
         setPeek(null);
         return;
       }
@@ -3289,6 +3332,7 @@ function CodeBody(props) {
   );
   const statusTitle = (status.state === "error" ? `${t("status.error")}: ${status.message}` : status.state === "starting" ? t("status.starting") : status.state === "ready" ? t("status.ready") : t("status.off")) + (status.progress ? ` · ${status.progress}` : "");
   const previewActive = previewOn && doc !== null && PREVIEW_RE.test(doc.path);
+  const docLang = doc !== null && !doc.image ? langFor(doc.path) : "text";
   const canBack = histRef.current.back.length > 0;
   const canForward = histRef.current.forward.length > 0;
   void histTick;
@@ -3454,10 +3498,10 @@ function CodeBody(props) {
             h("span", { className: "ce-head-path" }, RelPath(cwd, doc.path) || doc.path),
             currentSymbol ? h(
               "button",
-              { type: "button", className: "ce-crumb", title: `${t("symbols.crumb")} (⌘⇧O)`, onClick: () => doc.path.endsWith(".go") && setSymPalette({}) },
+              { type: "button", className: "ce-crumb", title: `${t("symbols.crumb")} (⌘⇧O)`, onClick: () => LSP_RE.test(doc.path) && setSymPalette({}) },
               `› ${currentSymbol.name}`
             ) : null,
-            doc.path.endsWith(".go") ? h("span", { className: "ce-chip" }, t("editor.lang.go")) : null,
+            docLang !== "text" ? h("span", { className: "ce-chip" }, docLang) : null,
             diffMarks ? h("button", { type: "button", className: "ce-chip ce-chip-mark", title: t("diff.marksClear"), onClick: () => setDiffMarks(null) }, `${t("diff.marksChip")} ${diffMarks.size}`) : null,
             diff && !showDiffView && (diff.scope === "working" || diff.scope === "branch") ? h("button", { type: "button", className: "ce-tool ce-tiny", title: t("diff.showHunks"), onClick: () => setShowDiffView(true) }, "≡") : null,
             doc.truncated ? h("span", { className: "ce-chip" }, t("truncated")) : null,
@@ -3605,9 +3649,9 @@ function CodeBody(props) {
     h(
       "div",
       { className: "ce-statusbar" },
-      h("span", null, notice.kind === "info" ? notice.text || (doc && !diagnostics.length && doc.path.endsWith(".go") ? t("nodiag") : "") : ""),
+      h("span", null, notice.kind === "info" ? notice.text || (doc && !diagnostics.length && LSP_RE.test(doc.path) ? t("nodiag") : "") : ""),
       h("span", { className: "ce-spacer" }),
-      h("span", { className: "ce-prog" }, status.progress || (status.state === "error" ? "gopls ✕" : status.state === "ready" ? "gopls ✓" : status.state === "starting" ? "gopls …" : ""))
+      h("span", { className: "ce-prog" }, status.progress || (status.state === "error" ? `${status.label ?? "lsp"} ✕` : status.state === "ready" ? `${status.label ?? "lsp"} ✓` : status.state === "starting" ? `${status.label ?? "lsp"} …` : ""))
     )
   );
 }
@@ -3677,6 +3721,7 @@ var CSS = `
 .ce-kw{color:var(--ce-kw,var(--dsw-alias-brand-primary,#6cb2ff))}
 .ce-type{color:var(--ce-type,#7de3a4)}
 .ce-str{color:var(--ce-str,#e6b56d)}
+.ce-prop{color:var(--ce-prop,#9cdcfe)}
 .ce-num{color:var(--ce-num,#d19a66)}
 .ce-com{color:var(--ce-com,var(--dsw-alias-label-tertiary,#7a8490));font-style:italic}
 .ce-jump{cursor:pointer;text-decoration:underline dotted transparent;text-underline-offset:3px}
