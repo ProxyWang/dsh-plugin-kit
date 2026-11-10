@@ -86,6 +86,7 @@ var zh = {
   "status.off": "gopls 未启动",
   "status.error": "gopls 错误",
   binary: "二进制文件，无法预览",
+  "image.tooBig": "图片超过 10 MB，无法预览",
   truncated: "文件过大，已截断显示",
   "changes.working": "工作区变更（相对 HEAD）",
   "changes.branch": "分支已提交变更",
@@ -299,6 +300,7 @@ var en = {
   "status.off": "gopls not started",
   "status.error": "gopls error",
   binary: "Binary file, no preview",
+  "image.tooBig": "Image exceeds the 10 MB preview cap",
   truncated: "File too large; display truncated",
   "changes.working": "Working tree (vs HEAD)",
   "changes.branch": "Committed on branch",
@@ -2104,8 +2106,9 @@ function computeGutter({ doc, scroll, viewport, cursor, findLines, diffMarks, de
 }
 
 // src/client/code.js
-var PREVIEW_RE = /\.(md|markdown|html?)$/i;
+var PREVIEW_RE = /\.(md|markdown|html?|svg)$/i;
 var MD_RE = /\.(md|markdown)$/i;
+var SVG_RE = /\.svg$/i;
 function CodeBody(props) {
   const { useTabInfo, sessionId, useSessions, t } = props;
   const tabInfo = useTabInfo ? useTabInfo() : null;
@@ -2227,6 +2230,41 @@ function CodeBody(props) {
       if (!res.ok) {
         say(`${t("error")}: ${res.error}`, "error");
         return null;
+      }
+      if (res.value.kind === "image") {
+        openSeqRef.current++;
+        peekNonce.current++;
+        const entry2 = {
+          path,
+          lines: [],
+          states: new Uint8Array(0),
+          raw: "",
+          truncated: false,
+          image: {
+            mime: res.value.mime ?? "application/octet-stream",
+            base64: res.value.base64 ?? "",
+            size: res.value.size ?? 0,
+            truncated: res.value.truncated === true
+          }
+        };
+        setPeek(null);
+        setEditing(false);
+        setDiffMarks(null);
+        setDelGroups(null);
+        setDelPreview(null);
+        setPreviewOn(true);
+        setDoc(entry2);
+        modeRef.current = "code";
+        setDiff(null);
+        setCursor(null);
+        setDiagnostics([]);
+        setOverlay(null);
+        setHover(null);
+        setSymbols([]);
+        symbolNonce.current++;
+        setScroll(0);
+        if (codeRef.current) codeRef.current.scrollTop = 0;
+        return entry2;
       }
       if (res.value.kind !== "text") {
         say(t("binary"), "error");
@@ -2736,7 +2774,7 @@ function CodeBody(props) {
     setTimeout(() => setFlash((f) => f && f.line === m.line ? null : f), 1200);
   }, [findMatches, findIdx, findQuery]);
   const startEdit = useCallback(() => {
-    if (!doc || doc.truncated) return;
+    if (!doc || doc.truncated || doc.image) return;
     if (doc.raw.length > 2 * 1024 * 1024 || doc.lines.length > 5e4) {
       say(t("editor.tooBig"), "error");
       return;
@@ -3190,12 +3228,12 @@ function CodeBody(props) {
             diff && !showDiffView && (diff.scope === "working" || diff.scope === "branch") ? h("button", { type: "button", className: "ce-tool ce-tiny", title: t("diff.showHunks"), onClick: () => setShowDiffView(true) }, "≡") : null,
             doc.truncated ? h("span", { className: "ce-chip" }, t("truncated")) : null,
             doc && !diff && PREVIEW_RE.test(doc.path) ? h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost", title: t("editor.previewToggle"), onClick: () => setPreviewOn((v) => !v) }, previewOn ? t("editor.raw") : t("editor.preview")) : null,
-            doc && !diff && !editing ? h("button", { type: "button", className: "ce-tool ce-tiny", title: t("editor.edit"), onClick: startEdit }, "✎") : null,
+            doc && !diff && !editing && !doc.image ? h("button", { type: "button", className: "ce-tool ce-tiny", title: t("editor.edit"), onClick: startEdit }, "✎") : null,
             editing ? h("button", { type: "button", className: "ce-link", onClick: saveEdit }, t("editor.save")) : null,
             editing ? h("button", { type: "button", className: "ce-link", onClick: cancelEdit }, t("editor.cancel")) : null,
             editing && editText !== (doc?.raw ?? "") ? h("span", { className: "ce-chip ce-chip-warn" }, t("editor.dirty")) : null,
-            doc && !diff ? h("button", { type: "button", className: `ce-tool ce-tiny${findOpen ? " ce-tool-on" : ""}`, title: `${t("editor.find")} (⌘F / Ctrl+F)`, onClick: () => setFindOpen((v) => !v) }, "⌕") : null,
-            doc && !diff ? h("button", { type: "button", className: `ce-tool ce-tiny${blameOn ? " ce-tool-on" : ""}`, title: t("blame.toggle"), onClick: () => {
+            doc && !diff && !doc.image ? h("button", { type: "button", className: `ce-tool ce-tiny${findOpen ? " ce-tool-on" : ""}`, title: `${t("editor.find")} (⌘F / Ctrl+F)`, onClick: () => setFindOpen((v) => !v) }, "⌕") : null,
+            doc && !diff && !doc.image ? h("button", { type: "button", className: `ce-tool ce-tiny${blameOn ? " ce-tool-on" : ""}`, title: t("blame.toggle"), onClick: () => {
               setBlameOn((v) => !v);
               setBlame(null);
             } }, "B") : null,
@@ -3231,7 +3269,12 @@ function CodeBody(props) {
           h(
             "div",
             { className: "ce-code-wrap" },
-            editing ? h("textarea", { className: "ce-edit-ta", value: editText, spellcheck: false, onChange: (e) => setEditText(e.target.value) }) : previewActive ? MD_RE.test(doc.path) ? h(MarkdownView, { text: doc.raw }) : h("iframe", { className: "ce-htmlprev", sandbox: "", srcDoc: doc.raw, title: doc.path }) : h(
+            doc.image ? h(
+              "div",
+              { className: "ce-imgwrap ce-scroll" },
+              doc.image.base64 ? h("img", { className: "ce-img", src: `data:${doc.image.mime};base64,${doc.image.base64}`, alt: doc.path }) : h("div", { className: "ce-note" }, t("image.tooBig")),
+              h("div", { className: "ce-imgmeta" }, `${doc.image.mime} · ${(doc.image.size / 1024).toFixed(1)} KB${doc.image.truncated ? ` · ${t("image.tooBig")}` : ""}`)
+            ) : editing ? h("textarea", { className: "ce-edit-ta", value: editText, spellcheck: false, onChange: (e) => setEditText(e.target.value) }) : previewActive ? MD_RE.test(doc.path) ? h(MarkdownView, { text: doc.raw }) : SVG_RE.test(doc.path) ? h("div", { className: "ce-imgwrap ce-scroll" }, h("img", { className: "ce-img", src: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(doc.raw)}`, alt: doc.path })) : h("iframe", { className: "ce-htmlprev", sandbox: "", srcDoc: doc.raw, title: doc.path }) : h(
               Fragment,
               null,
               blameOn && blame !== null ? h("div", { className: "ce-blame" }, visible?.blameRows) : null,
@@ -3513,6 +3556,9 @@ var CSS = `
 .ce-sk-btn-ghost{background:transparent;color:var(--dsw-alias-label-secondary,#999)}
 .ce-sk-path{border:0;background:transparent;color:var(--dsw-alias-label-tertiary,#777);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;padding:0 4px;cursor:pointer;min-width:0;max-width:45%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ce-sk-path:hover{color:var(--dsw-alias-brand-primary,#6cb2ff);text-decoration:underline}
+.ce-imgwrap{flex:1;min-height:0;display:flex;flex-direction:column;align-items:center;gap:8px;padding:16px;overflow:auto}
+.ce-img{max-width:100%;object-fit:contain;border:.5px solid var(--dsw-alias-border-l1,#333);border-radius:6px;background:repeating-conic-gradient(#2b2b2b 0% 25%, #232323 0% 50%) 0 0/16px 16px}
+.ce-imgmeta{flex:none;font-size:11px;color:var(--dsw-alias-label-tertiary,#778);font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
 .ce-md{flex:1;min-height:0;overflow:auto;padding:14px 18px;font-size:13px;line-height:1.7;color:var(--dsw-alias-label-primary,#ddd)}
 .ce-md-h{font-weight:700;color:var(--dsw-alias-label-primary,#eee);margin:14px 0 6px}
 .ce-md-h1{font-size:19px}

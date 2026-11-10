@@ -14,9 +14,10 @@ import { ChangesPanel } from "./changes.js";
 import { LocationList, QuickOpen, SearchPanel, RefsPeek, SymbolPalette } from "./overlays.js";
 import { computeGutter, computeVisible } from "./codeview.js";
 
-/** Files that open in rendered preview by default: markdown and html. */
-const PREVIEW_RE = /\.(md|markdown|html?)$/i;
+/** Files that open in rendered preview by default: markdown, html and svg. */
+const PREVIEW_RE = /\.(md|markdown|html?|svg)$/i;
 const MD_RE = /\.(md|markdown)$/i;
+const SVG_RE = /\.svg$/i;
 
 export function CodeBody(props) {
 	const { useTabInfo, sessionId, useSessions, t } = props;
@@ -149,6 +150,43 @@ export function CodeBody(props) {
 			if (!res.ok) {
 				say(`${t("error")}: ${res.error}`, "error");
 				return null;
+			}
+			if (res.value.kind === "image") {
+				// Raster image: no text lines, rendered as <img> from base64.
+				// Bumping openSeq invalidates any in-flight diagnostics pulls.
+				openSeqRef.current++;
+				peekNonce.current++;
+				const entry = {
+					path,
+					lines: [],
+					states: new Uint8Array(0),
+					raw: "",
+					truncated: false,
+					image: {
+						mime: res.value.mime ?? "application/octet-stream",
+						base64: res.value.base64 ?? "",
+						size: res.value.size ?? 0,
+						truncated: res.value.truncated === true,
+					},
+				};
+				setPeek(null);
+				setEditing(false);
+				setDiffMarks(null);
+				setDelGroups(null);
+				setDelPreview(null);
+				setPreviewOn(true);
+				setDoc(entry);
+				modeRef.current = "code";
+				setDiff(null);
+				setCursor(null);
+				setDiagnostics([]);
+				setOverlay(null);
+				setHover(null);
+				setSymbols([]);
+				symbolNonce.current++;
+				setScroll(0);
+				if (codeRef.current) codeRef.current.scrollTop = 0;
+				return entry;
 			}
 			if (res.value.kind !== "text") {
 				say(t("binary"), "error");
@@ -703,7 +741,7 @@ export function CodeBody(props) {
 		setTimeout(() => setFlash((f) => (f && f.line === m.line ? null : f)), 1200);
 	}, [findMatches, findIdx, findQuery]);
 	const startEdit = useCallback(() => {
-		if (!doc || doc.truncated) return;
+		if (!doc || doc.truncated || doc.image) return;
 		if (doc.raw.length > 2 * 1024 * 1024 || doc.lines.length > 50000) {
 			say(t("editor.tooBig"), "error");
 			return;
@@ -1196,12 +1234,12 @@ export function CodeBody(props) {
 							doc && !diff && PREVIEW_RE.test(doc.path)
 								? h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost", title: t("editor.previewToggle"), onClick: () => setPreviewOn((v) => !v) }, previewOn ? t("editor.raw") : t("editor.preview"))
 								: null,
-							doc && !diff && !editing ? h("button", { type: "button", className: "ce-tool ce-tiny", title: t("editor.edit"), onClick: startEdit }, "✎") : null,
+							doc && !diff && !editing && !doc.image ? h("button", { type: "button", className: "ce-tool ce-tiny", title: t("editor.edit"), onClick: startEdit }, "✎") : null,
 							editing ? h("button", { type: "button", className: "ce-link", onClick: saveEdit }, t("editor.save")) : null,
 							editing ? h("button", { type: "button", className: "ce-link", onClick: cancelEdit }, t("editor.cancel")) : null,
 							editing && editText !== (doc?.raw ?? "") ? h("span", { className: "ce-chip ce-chip-warn" }, t("editor.dirty")) : null,
-							doc && !diff ? h("button", { type: "button", className: `ce-tool ce-tiny${findOpen ? " ce-tool-on" : ""}`, title: `${t("editor.find")} (⌘F / Ctrl+F)`, onClick: () => setFindOpen((v) => !v) }, "⌕") : null,
-							doc && !diff ? h("button", { type: "button", className: `ce-tool ce-tiny${blameOn ? " ce-tool-on" : ""}`, title: t("blame.toggle"), onClick: () => { setBlameOn((v) => !v); setBlame(null); } }, "B") : null,
+							doc && !diff && !doc.image ? h("button", { type: "button", className: `ce-tool ce-tiny${findOpen ? " ce-tool-on" : ""}`, title: `${t("editor.find")} (⌘F / Ctrl+F)`, onClick: () => setFindOpen((v) => !v) }, "⌕") : null,
+							doc && !diff && !doc.image ? h("button", { type: "button", className: `ce-tool ce-tiny${blameOn ? " ce-tool-on" : ""}`, title: t("blame.toggle"), onClick: () => { setBlameOn((v) => !v); setBlame(null); } }, "B") : null,
 							h("span", { className: "ce-spacer" }),
 							cursor ? h("span", { className: "ce-pos" }, `Ln ${cursor.line}, Col ${cursor.col}${cursor.word ? ` · ${cursor.word}` : ""}`) : null,
 							diagnostics.length ? h("span", { className: "ce-diag" }, `${diagnostics.length} ${t("diag.count")}`) : null,
@@ -1227,12 +1265,21 @@ export function CodeBody(props) {
 						h(
 							"div",
 							{ className: "ce-code-wrap" },
-							editing
+							doc.image
+								? h("div", { className: "ce-imgwrap ce-scroll" },
+									doc.image.base64
+										? h("img", { className: "ce-img", src: `data:${doc.image.mime};base64,${doc.image.base64}`, alt: doc.path })
+										: h("div", { className: "ce-note" }, t("image.tooBig")),
+									h("div", { className: "ce-imgmeta" }, `${doc.image.mime} · ${(doc.image.size / 1024).toFixed(1)} KB${doc.image.truncated ? ` · ${t("image.tooBig")}` : ""}`),
+								)
+								: editing
 								? h("textarea", { className: "ce-edit-ta", value: editText, spellcheck: false, onChange: (e) => setEditText(e.target.value) })
 								: previewActive
 									? (MD_RE.test(doc.path)
 										? h(MarkdownView, { text: doc.raw })
-										: h("iframe", { className: "ce-htmlprev", sandbox: "", srcDoc: doc.raw, title: doc.path }))
+										: SVG_RE.test(doc.path)
+											? h("div", { className: "ce-imgwrap ce-scroll" }, h("img", { className: "ce-img", src: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(doc.raw)}`, alt: doc.path }))
+											: h("iframe", { className: "ce-htmlprev", sandbox: "", srcDoc: doc.raw, title: doc.path }))
 									: h(
 										Fragment,
 										null,

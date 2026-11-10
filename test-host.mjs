@@ -156,6 +156,23 @@ const wmiss = await call("fs.write", { cwd, path: "nope.go", content: "x" });
 check("fs.write refuses missing file", wmiss.ok === false, wmiss);
 await call("fs.write", { cwd, path: "main.go", content: origMain });
 
+// --- fs.read image previews ------------------------------------------------------------------
+const pngBytes = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x01, 0x02, 0xff]);
+writeFileSync(`${cwd}/icon.png`, pngBytes);
+const imgRes = await call("fs.read", { cwd, path: "icon.png" });
+check(
+	"fs.read png returns base64 image",
+	imgRes.ok && imgRes.value.kind === "image" && imgRes.value.mime === "image/png" && imgRes.value.truncated === false && Buffer.from(imgRes.value.base64, "base64").equals(pngBytes) && imgRes.value.size === pngBytes.length,
+	imgRes.value && { kind: imgRes.value.kind, mime: imgRes.value.mime, size: imgRes.value.size },
+);
+writeFileSync(`${cwd}/logo.svg`, '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8"><rect width="8" height="8"/></svg>\n');
+const svgRes = await call("fs.read", { cwd, path: "logo.svg" });
+check("fs.read svg stays text for source editing", svgRes.ok && svgRes.value.kind === "text" && svgRes.value.content.includes("<svg"), svgRes.value?.kind);
+writeFileSync(`${cwd}/huge.png`, Buffer.alloc(11 * 1024 * 1024, 7));
+const hugeRes = await call("fs.read", { cwd, path: "huge.png" });
+check("fs.read oversize image reports kind without payload", hugeRes.ok && hugeRes.value.kind === "image" && hugeRes.value.truncated === true && hugeRes.value.base64 === undefined, hugeRes.value && Object.keys(hugeRes.value));
+rmSync(`${cwd}/huge.png`);
+
 // --- git.discard (revert changes, never delete) -------------------------------------------
 const curMain = (await call("fs.read", { cwd, path: "main.go" })).value.content;
 writeFileSync(`${cwd}/main.go`, `${curMain}// dirty again\n`);
