@@ -131,6 +131,19 @@ var zh = {
   "changes.discardedN": "已回退 {n} 个文件",
   "changes.toList": "平铺",
   "changes.toTree": "树状",
+  "changes.staged": "暂存的变更",
+  "changes.stage": "暂存变更",
+  "changes.stageDir": "暂存该目录下全部变更",
+  "changes.unstage": "取消暂存",
+  "changes.unstageDir": "取消暂存该目录下全部变更",
+  "changes.stageAll": "全部暂存",
+  "changes.unstageAll": "全部取消暂存",
+  "changes.commit": "提交",
+  "changes.commitAll": "全部暂存并提交",
+  "changes.commitPlaceholder": "提交信息（Enter 提交已暂存变更）",
+  "changes.commitAllPlaceholder": "提交信息（Enter 将暂存全部变更并提交）",
+  "changes.commitBusy": "正在提交…",
+  "changes.committed": "已提交 {c}",
   "branch.title": "切换分支",
   "branch.search": "搜索分支…",
   "branch.local": "本地分支",
@@ -331,6 +344,19 @@ var en = {
   "changes.discardedN": "Reverted {n} files",
   "changes.toList": "List",
   "changes.toTree": "Tree",
+  "changes.staged": "Staged Changes",
+  "changes.stage": "Stage changes",
+  "changes.stageDir": "Stage all changes in this directory",
+  "changes.unstage": "Unstage",
+  "changes.unstageDir": "Unstage all changes in this directory",
+  "changes.stageAll": "Stage All",
+  "changes.unstageAll": "Unstage All",
+  "changes.commit": "Commit",
+  "changes.commitAll": "Stage All & Commit",
+  "changes.commitPlaceholder": "Message (Enter commits the staged changes)",
+  "changes.commitAllPlaceholder": "Message (Enter stages all changes and commits)",
+  "changes.commitBusy": "Committing…",
+  "changes.committed": "Committed {c}",
   "branch.title": "Switch branch",
   "branch.search": "Search branches…",
   "branch.local": "Local",
@@ -1307,7 +1333,7 @@ function guideStyle(depth) {
     backgroundPosition: images.map((_, i) => `${7 + i * 14}px 0`).join(",")
   };
 }
-function ChangeTree({ items, onOpen, onDiscard, onDiscardDir, keyPrefix, t }) {
+function ChangeTree({ items, onOpen, onDiscard, onDiscardDir, onStage, onStageDir, onUnstage, onUnstageDir, keyPrefix, t }) {
   const [collapsed, setCollapsed] = useState(() => /* @__PURE__ */ new Set());
   const [confirmPath, setConfirmPath] = useState(null);
   const [confirmDir, setConfirmDir] = useState(null);
@@ -1348,6 +1374,24 @@ function ChangeTree({ items, onOpen, onDiscard, onDiscardDir, keyPrefix, t }) {
         h(
           "span",
           { className: "cet-right" },
+          onStageDir ? h("button", {
+            type: "button",
+            className: "cet-act",
+            title: t ? t("changes.stageDir") : "stage",
+            onClick: (e) => {
+              e.stopPropagation();
+              onStageDir(id);
+            }
+          }, "+") : null,
+          onUnstageDir ? h("button", {
+            type: "button",
+            className: "cet-act",
+            title: t ? t("changes.unstageDir") : "unstage",
+            onClick: (e) => {
+              e.stopPropagation();
+              onUnstageDir(id);
+            }
+          }, "−") : null,
           onDiscardDir ? confirmDir === id ? h(
             Fragment,
             null,
@@ -1406,6 +1450,24 @@ function ChangeTree({ items, onOpen, onDiscard, onDiscardDir, keyPrefix, t }) {
         h(
           "span",
           { className: "cet-right" },
+          onStage ? h("button", {
+            type: "button",
+            className: "cet-act",
+            title: t ? t("changes.stage") : "stage",
+            onClick: (e) => {
+              e.stopPropagation();
+              onStage(file);
+            }
+          }, "+") : null,
+          onUnstage ? h("button", {
+            type: "button",
+            className: "cet-act",
+            title: t ? t("changes.unstage") : "unstage",
+            onClick: (e) => {
+              e.stopPropagation();
+              onUnstage(file);
+            }
+          }, "−") : null,
           onDiscard && ["M", "D", "A"].includes(String(file.ch)) ? confirmPath === file.path ? h(
             Fragment,
             null,
@@ -1445,8 +1507,12 @@ function ChangeTree({ items, onOpen, onDiscard, onDiscardDir, keyPrefix, t }) {
 }
 
 // src/client/changes.js
-function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commitsOpen, setCommitsOpen, onOpenCommit, onOpenDiff, onDiscard, onDiscardDir, refresh }) {
+function isStagedXy(xy) {
+  return typeof xy === "string" && xy.length > 0 && xy[0] !== " " && xy[0] !== "?";
+}
+function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commitsOpen, setCommitsOpen, onOpenCommit, onOpenDiff, onDiscard, onDiscardDir, onStage, onStageDir, onUnstage, onUnstageDir, onCommit, committing, refresh }) {
   const [treeView, setTreeView] = useState(true);
+  const [message, setMessage] = useState("");
   const selector = repos && repos.length > 0 ? h(
     "select",
     { className: "ce-input ce-repo", value: repoSel ?? "", onChange: (event) => onSelectRepo(event.target.value || null) },
@@ -1457,6 +1523,23 @@ function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commitsOpen, 
   if (git.error) return h("div", { className: "ce-rail ce-scroll" }, selector, h("div", { className: "ce-note" }, git.error));
   if (!git.repo) return h("div", { className: "ce-rail ce-scroll" }, selector, repos && repos.length === 0 ? h("div", { className: "ce-note" }, t("changes.notRepo")) : null);
   const badge = (xy) => xy === "??" ? "U" : xy.trim()[0] === "A" || xy.trim()[0] === "?" ? "A" : xy.trim()[0] || "M";
+  const staged = git.working.filter((f) => isStagedXy(f.xy));
+  const unstaged = git.working.filter((f) => !isStagedXy(f.xy));
+  const flatRows = (files, prefix) => files.map(
+    (file) => h(
+      "button",
+      { key: `${prefix}:${file.path}`, className: "ce-row", type: "button", title: file.path, onClick: () => onOpenDiff(file.path, "working") },
+      h("span", { className: `ce-badge ce-badge-${badge(file.xy).toLowerCase()}` }, badge(file.xy)),
+      h("span", { className: "ce-name" }, file.path)
+    )
+  );
+  const submit = () => {
+    const m = message.trim();
+    if (!m || committing || git.working.length === 0) return;
+    Promise.resolve(onCommit(m, staged.length === 0)).then((ok) => {
+      if (ok) setMessage("");
+    });
+  };
   return h(
     "div",
     { className: "ce-rail ce-scroll" },
@@ -1464,27 +1547,69 @@ function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commitsOpen, 
     h("div", { className: "ce-note" }, git.upstream ? `${t("changes.vs")} ${git.upstream} · ↑${git.ahead ?? 0} ↓${git.behind ?? 0}${git.upstreamInferred ? " · auto" : ""}` : t("sync.noUpstream")),
     h(
       "div",
+      { className: "ce-commitbox" },
+      h("input", {
+        className: "ce-input ce-commitbox-msg",
+        type: "text",
+        placeholder: staged.length > 0 ? t("changes.commitPlaceholder") : t("changes.commitAllPlaceholder"),
+        value: message,
+        disabled: committing,
+        spellcheck: false,
+        autoComplete: "off",
+        onChange: (event) => setMessage(event.target.value),
+        onKeyDown: (event) => {
+          event.stopPropagation();
+          if (event.key === "Enter") {
+            event.preventDefault();
+            submit();
+          }
+        }
+      }),
+      h("button", {
+        type: "button",
+        className: "ce-commitbox-btn",
+        disabled: message.trim() === "" || committing || git.working.length === 0,
+        title: staged.length > 0 ? t("changes.commit") : t("changes.commitAll"),
+        onClick: submit
+      }, committing ? t("changes.commitBusy") : `✓ ${staged.length > 0 ? t("changes.commit") : t("changes.commitAll")}`)
+    ),
+    staged.length > 0 ? h(
+      Fragment,
+      null,
+      h(
+        "div",
+        { className: "ce-section" },
+        h("span", null, `${t("changes.staged")} · ${staged.length}`),
+        h("button", { className: "ce-link", type: "button", title: t("changes.unstageAll"), onClick: () => onUnstageDir && onUnstageDir("") }, t("changes.unstageAll"))
+      ),
+      treeView ? h(ChangeTree, {
+        items: staged.map((f) => ({ path: f.path, ch: badge(f.xy), from: f.from ?? void 0 })),
+        onOpen: (item) => onOpenDiff(item.path, "working"),
+        onUnstage: (item) => onUnstage && onUnstage(item),
+        onUnstageDir: (dirPath) => onUnstageDir && onUnstageDir(dirPath),
+        keyPrefix: "s",
+        t
+      }) : flatRows(staged, "s")
+    ) : null,
+    h(
+      "div",
       { className: "ce-section" },
-      h("span", null, `${t("changes.working")} · ${git.working.length}`),
+      h("span", null, `${t("changes.working")} · ${unstaged.length}`),
+      unstaged.length > 0 ? h("button", { className: "ce-link", type: "button", title: t("changes.stageAll"), onClick: () => onStageDir && onStageDir("") }, t("changes.stageAll")) : null,
       h("button", { className: "ce-link", type: "button", title: treeView ? t("changes.toList") : t("changes.toTree"), onClick: () => setTreeView((v) => !v) }, treeView ? t("changes.toList") : t("changes.toTree")),
       h("button", { className: "ce-tool ce-tiny", type: "button", title: t("refresh"), onClick: refresh }, h(IconRefresh))
     ),
     git.working.length === 0 && h("div", { className: "ce-note" }, t("changes.none")),
     treeView ? h(ChangeTree, {
-      items: git.working.map((f) => ({ path: f.path, ch: badge(f.xy), from: f.from ?? void 0 })),
+      items: unstaged.map((f) => ({ path: f.path, ch: badge(f.xy), from: f.from ?? void 0 })),
       onOpen: (item) => onOpenDiff(item.path, "working"),
       onDiscard: (item) => onDiscard && onDiscard(item),
       onDiscardDir: (dirItems) => onDiscardDir && onDiscardDir(dirItems),
+      onStage: (item) => onStage && onStage(item),
+      onStageDir: (dirPath) => onStageDir && onStageDir(dirPath),
       keyPrefix: "w",
       t
-    }) : git.working.map(
-      (file) => h(
-        "button",
-        { key: `w:${file.path}`, className: "ce-row", type: "button", title: file.path, onClick: () => onOpenDiff(file.path, "working") },
-        h("span", { className: `ce-badge ce-badge-${badge(file.xy).toLowerCase()}` }, badge(file.xy)),
-        h("span", { className: "ce-name" }, file.path)
-      )
-    ),
+    }) : flatRows(unstaged, "w"),
     h("div", { className: "ce-section" }, t("changes.branch")),
     git.base ? h(
       Fragment,
@@ -2389,6 +2514,55 @@ function CodeBody(props) {
     const openPath = docRef.current?.path;
     if (openPath && dirItems.some((i) => i.path === openPath)) void loadFile(openPath, cursorRef.current?.line ?? 1, cursorRef.current?.col ?? 1);
   }, [cwd, say, t, refreshGit, loadFile]);
+  const stageChange = useCallback(async (path) => {
+    if (!cwd) return false;
+    const repo = repoSelRef.current;
+    const res = await api("git.stage", repo ? { cwd, path, repo } : { cwd, path });
+    if (!res.ok || res.value?.error) {
+      say(`${t("error")}: ${res.value?.error ?? res.error}`, "error");
+      return false;
+    }
+    if (res.value.status) setGit(res.value.status);
+    return true;
+  }, [cwd, say, t]);
+  const unstageChange = useCallback(async (path) => {
+    if (!cwd) return false;
+    const repo = repoSelRef.current;
+    const res = await api("git.unstage", repo ? { cwd, path, repo } : { cwd, path });
+    if (!res.ok || res.value?.error) {
+      say(`${t("error")}: ${res.value?.error ?? res.error}`, "error");
+      return false;
+    }
+    if (res.value.status) setGit(res.value.status);
+    return true;
+  }, [cwd, say, t]);
+  const [committing, setCommitting] = useState(false);
+  const commitChanges = useCallback(async (message, stageAll) => {
+    if (!cwd || committing) return false;
+    setCommitting(true);
+    try {
+      const repo = repoSelRef.current;
+      if (stageAll) {
+        const sres = await api("git.stage", repo ? { cwd, path: "", repo } : { cwd, path: "" });
+        if (!sres.ok || sres.value?.error) {
+          say(`${t("error")}: ${sres.value?.error ?? sres.error}`, "error");
+          return false;
+        }
+        if (sres.value.status) setGit(sres.value.status);
+      }
+      const res = await api("git.commit", repo ? { cwd, message, repo } : { cwd, message });
+      const value = res.ok ? res.value ?? {} : { error: res.error };
+      if (value.status) setGit(value.status);
+      if (!res.ok || value.error) {
+        say(`${t("error")}: ${value.error ?? res.error}`, "error");
+        return false;
+      }
+      say(t("changes.committed", { c: value.commit ?? "" }));
+      return true;
+    } finally {
+      setCommitting(false);
+    }
+  }, [cwd, committing, say, t]);
   useEffect(() => {
     if (!blameOn || !doc || !cwd) return void 0;
     let alive = true;
@@ -2976,6 +3150,12 @@ function CodeBody(props) {
         onOpenDiff: (path, scope) => void (scope === "commit" ? openDiff(path, scope) : openChangeSource(path, scope)),
         onDiscard: (item) => void discardChange(item),
         onDiscardDir: (dirItems) => void discardMany(dirItems),
+        onStage: (item) => void stageChange(item.path),
+        onStageDir: (dirPath) => void stageChange(dirPath),
+        onUnstage: (item) => void unstageChange(item.path),
+        onUnstageDir: (dirPath) => void unstageChange(dirPath),
+        onCommit: (msg, stageAll) => commitChanges(msg, stageAll),
+        committing,
         refresh: refreshGit
       })) : null,
       railVisible ? h("div", { className: "ce-splitter", onMouseDown: startRailDrag, onDoubleClick: () => setRailVisible(false), title: "⇔ 拖动调宽 · 双击收起" }) : h("button", { type: "button", className: "ce-rail-tab", title: "展开侧栏 (⌘B / Ctrl+B)", onClick: () => setRailVisible(true) }, "▸"),
@@ -3289,6 +3469,11 @@ var CSS = `
 .ce-search-box{display:flex;gap:6px;align-items:center;flex:none}
 .ce-search-include{flex:none}
 .ce-repo{width:calc(100% - 16px);margin:4px 8px 2px;font-size:11px;padding:4px 6px;flex:none;align-self:flex-start}
+.ce-commitbox{display:flex;gap:6px;align-items:center;padding:6px 8px 2px;flex:none}
+.ce-commitbox-msg{flex:1;min-width:0;font-size:12px;padding:5px 8px}
+.ce-commitbox-btn{flex:none;border:0;border-radius:6px;background:var(--dsw-alias-brand-primary,#2f81f7);color:#fff;font:inherit;font-size:11px;font-weight:600;padding:5px 10px;cursor:pointer;white-space:nowrap}
+.ce-commitbox-btn:hover{filter:brightness(1.12)}
+.ce-commitbox-btn:disabled{opacity:.45;cursor:default;filter:none}
 .ce-search-meta{font-size:11px;color:var(--dsw-alias-label-tertiary,#778);flex:none;min-height:14px}
 .ce-search-results{flex:1;min-height:0;border:.5px solid var(--dsw-alias-border-l1,#333);border-radius:8px;background:var(--dsw-alias-bg-layer-1,#1e2126)}
 .ce-sresult{display:flex;gap:10px;align-items:baseline;width:100%;text-align:left;border:0;background:transparent;color:inherit;font:inherit;padding:4px 10px;cursor:pointer;white-space:nowrap}

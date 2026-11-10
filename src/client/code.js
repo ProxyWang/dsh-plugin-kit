@@ -455,6 +455,60 @@ export function CodeBody(props) {
 		const openPath = docRef.current?.path;
 		if (openPath && dirItems.some((i) => i.path === openPath)) void loadFile(openPath, cursorRef.current?.line ?? 1, cursorRef.current?.col ?? 1);
 	}, [cwd, say, t, refreshGit, loadFile]);
+	// Stage / unstage one path or a whole directory ("" = whole repo). Rows
+	// moving between the Staged/Changes sections is the feedback; only errors
+	// raise a notice.
+	const stageChange = useCallback(async (path) => {
+		if (!cwd) return false;
+		const repo = repoSelRef.current;
+		const res = await api("git.stage", repo ? { cwd, path, repo } : { cwd, path });
+		if (!res.ok || res.value?.error) {
+			say(`${t("error")}: ${res.value?.error ?? res.error}`, "error");
+			return false;
+		}
+		if (res.value.status) setGit(res.value.status);
+		return true;
+	}, [cwd, say, t]);
+	const unstageChange = useCallback(async (path) => {
+		if (!cwd) return false;
+		const repo = repoSelRef.current;
+		const res = await api("git.unstage", repo ? { cwd, path, repo } : { cwd, path });
+		if (!res.ok || res.value?.error) {
+			say(`${t("error")}: ${res.value?.error ?? res.error}`, "error");
+			return false;
+		}
+		if (res.value.status) setGit(res.value.status);
+		return true;
+	}, [cwd, say, t]);
+	const [committing, setCommitting] = useState(false);
+	// Commit the staged set; when nothing is staged the panel asks for a
+	// "stage all & commit" instead (stageAll), done here as two calls.
+	const commitChanges = useCallback(async (message, stageAll) => {
+		if (!cwd || committing) return false;
+		setCommitting(true);
+		try {
+			const repo = repoSelRef.current;
+			if (stageAll) {
+				const sres = await api("git.stage", repo ? { cwd, path: "", repo } : { cwd, path: "" });
+				if (!sres.ok || sres.value?.error) {
+					say(`${t("error")}: ${sres.value?.error ?? sres.error}`, "error");
+					return false;
+				}
+				if (sres.value.status) setGit(sres.value.status);
+			}
+			const res = await api("git.commit", repo ? { cwd, message, repo } : { cwd, message });
+			const value = res.ok ? res.value ?? {} : { error: res.error };
+			if (value.status) setGit(value.status);
+			if (!res.ok || value.error) {
+				say(`${t("error")}: ${value.error ?? res.error}`, "error");
+				return false;
+			}
+			say(t("changes.committed", { c: value.commit ?? "" }));
+			return true;
+		} finally {
+			setCommitting(false);
+		}
+	}, [cwd, committing, say, t]);
 	// Blame column data: refetched per open file while the toggle is on.
 	useEffect(() => {
 		if (!blameOn || !doc || !cwd) return void 0;
@@ -1091,6 +1145,12 @@ export function CodeBody(props) {
 						onOpenDiff: (path, scope) => void (scope === "commit" ? openDiff(path, scope) : openChangeSource(path, scope)),
 						onDiscard: (item) => void discardChange(item),
 						onDiscardDir: (dirItems) => void discardMany(dirItems),
+						onStage: (item) => void stageChange(item.path),
+						onStageDir: (dirPath) => void stageChange(dirPath),
+						onUnstage: (item) => void unstageChange(item.path),
+						onUnstageDir: (dirPath) => void unstageChange(dirPath),
+						onCommit: (msg, stageAll) => commitChanges(msg, stageAll),
+						committing,
 						refresh: refreshGit,
 					}))
 				: null,

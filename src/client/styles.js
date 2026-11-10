@@ -140,6 +140,11 @@ export const CSS = `
 .ce-search-box{display:flex;gap:6px;align-items:center;flex:none}
 .ce-search-include{flex:none}
 .ce-repo{width:calc(100% - 16px);margin:4px 8px 2px;font-size:11px;padding:4px 6px;flex:none;align-self:flex-start}
+.ce-commitbox{display:flex;gap:6px;align-items:center;padding:6px 8px 2px;flex:none}
+.ce-commitbox-msg{flex:1;min-width:0;font-size:12px;padding:5px 8px}
+.ce-commitbox-btn{flex:none;border:0;border-radius:6px;background:var(--dsw-alias-brand-primary,#2f81f7);color:#fff;font:inherit;font-size:11px;font-weight:600;padding:5px 10px;cursor:pointer;white-space:nowrap}
+.ce-commitbox-btn:hover{filter:brightness(1.12)}
+.ce-commitbox-btn:disabled{opacity:.45;cursor:default;filter:none}
 .ce-search-meta{font-size:11px;color:var(--dsw-alias-label-tertiary,#778);flex:none;min-height:14px}
 .ce-search-results{flex:1;min-height:0;border:.5px solid var(--dsw-alias-border-l1,#333);border-radius:8px;background:var(--dsw-alias-bg-layer-1,#1e2126)}
 .ce-sresult{display:flex;gap:10px;align-items:baseline;width:100%;text-align:left;border:0;background:transparent;color:inherit;font:inherit;padding:4px 10px;cursor:pointer;white-space:nowrap}

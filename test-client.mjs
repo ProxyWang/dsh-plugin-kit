@@ -131,6 +131,62 @@ check("tree compresses single-child chains", chain.dirs.get("m")?.name === "m/n/
 const { filesUnder } = await import("./src/client/changetree.js");
 check("filesUnder collects subtree items", filesUnder(tree).length === 4 && filesUnder(tree.dirs.get("a")).length === 3, filesUnder(tree).length);
 
+// --- changes panel: staged/unstaged split + commit box --------------------------------------
+const { ChangesPanel, isStagedXy } = await import("./src/client/changes.js");
+const { ChangeTree: ChangeTreeCmp } = await import("./src/client/changetree.js");
+check(
+	"isStagedXy classifies porcelain xy",
+	isStagedXy("M ") && isStagedXy("A ") && isStagedXy("MM") && isStagedXy("D ") && !isStagedXy(" M") && !isStagedXy(" D") && !isStagedXy("??"),
+	null,
+);
+const fakeGit = {
+	repo: true, root: "/w", branch: "main", base: null,
+	working: [
+		{ path: "a.go", xy: "M ", from: null },
+		{ path: "b.go", xy: " M", from: null },
+		{ path: "c.txt", xy: "??", from: null },
+	],
+	branchFiles: [], commits: [], upstream: null, ahead: 0, behind: 0,
+};
+const noop = () => {};
+const panel = ChangesPanel({
+	cwd: "/w", t: (k) => k, git: fakeGit, repos: null, repoSel: null, onSelectRepo: noop,
+	commitsOpen: false, setCommitsOpen: noop, onOpenCommit: noop, onOpenDiff: noop,
+	onDiscard: noop, onDiscardDir: noop, onStage: noop, onStageDir: noop,
+	onUnstage: noop, onUnstageDir: noop, onCommit: () => true, committing: false, refresh: noop,
+});
+const collect = (node, out = []) => {
+	if (Array.isArray(node)) { for (const n of node) collect(n, out); return out; }
+	if (!node || typeof node !== "object") return out;
+	if (node.type !== undefined) out.push(node);
+	collect(node.children, out);
+	return out;
+};
+const panelNodes = collect(panel);
+const trees = panelNodes.filter((n) => n.type === ChangeTreeCmp);
+const stagedTree = trees.find((n) => n.props.keyPrefix === "s");
+const workingTree = trees.find((n) => n.props.keyPrefix === "w");
+check("staged section tree has only the staged file", stagedTree && stagedTree.props.items.length === 1 && stagedTree.props.items[0].path === "a.go", stagedTree?.props?.items);
+check("staged tree offers unstage but not stage/discard", stagedTree && stagedTree.props.onUnstage && !stagedTree.props.onStage && !stagedTree.props.onDiscard, Object.keys(stagedTree?.props ?? {}));
+check("working tree has the two unstaged files", workingTree && workingTree.props.items.length === 2, workingTree?.props?.items);
+check("working tree offers stage + discard", workingTree && workingTree.props.onStage && workingTree.props.onDiscard, Object.keys(workingTree?.props ?? {}));
+const commitBox = panelNodes.find((n) => n.props?.className === "ce-commitbox");
+check("commit box rendered", Boolean(commitBox), null);
+const commitBtn = collect(commitBox ?? []).find((n) => n.props?.className === "ce-commitbox-btn");
+check("commit button targets the staged set", commitBtn && commitBtn.children.some((c) => String(c) === "✓ changes.commit"), commitBtn?.children);
+const commitInput = collect(commitBox ?? []).find((n) => n.props?.className === "ce-input ce-commitbox-msg");
+check("commit input placeholder for staged mode", commitInput?.props?.placeholder === "changes.commitPlaceholder", commitInput?.props);
+const panelNoStaged = ChangesPanel({
+	cwd: "/w", t: (k) => k,
+	git: { ...fakeGit, working: fakeGit.working.filter((f) => f.xy !== "M ") },
+	repos: null, repoSel: null, onSelectRepo: noop, commitsOpen: false, setCommitsOpen: noop,
+	onOpenCommit: noop, onOpenDiff: noop, onDiscard: noop, onDiscardDir: noop,
+	onStage: noop, onStageDir: noop, onUnstage: noop, onUnstageDir: noop,
+	onCommit: () => true, committing: false, refresh: noop,
+});
+const btnAll = collect(panelNoStaged).find((n) => n.props?.className === "ce-commitbox-btn");
+check("nothing staged → stage-all-and-commit label", btnAll && btnAll.children.some((c) => String(c) === "✓ changes.commitAll"), btnAll?.children);
+
 // --- guide launcher contract ---------------------------------------------------------------
 const { collectBoxes, groupOf, makeLauncher } = await import("./src/client/launcher.js");
 check("groupOf mapping", groupOf("files") === "code" && groupOf("code-skills") === "skills" && groupOf("terminal") === "run" && groupOf("weird") === "more", [groupOf("files"), groupOf("code-skills"), groupOf("terminal"), groupOf("weird")]);

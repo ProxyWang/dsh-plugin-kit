@@ -170,6 +170,50 @@ check("git.discard unstages added file without deleting", aRes.ok && existsSync(
 const dEsc = await call("git.discard", { cwd, path: "../evil.go", ch: "M" });
 check("git.discard fenced", dEsc.ok === false, dEsc);
 
+// --- git.discard of a deleted file + repo-relative paths (regression) ------------------------
+rmSync(`${cwd}/extra.txt`);
+writeFileSync(`${cwd}/gone.txt`, "tracked\n");
+git(["add", "gone.txt"]);
+git(["commit", "-qm", "add gone"]);
+rmSync(`${cwd}/gone.txt`);
+const dGone = await call("git.discard", { cwd, path: "gone.txt", ch: "D" });
+check("git.discard restores a deleted file", dGone.ok && !dGone.value?.error && existsSync(`${cwd}/gone.txt`), dGone);
+writeFileSync(`${cwd}/extra.txt`, "new untracked\n");
+
+// --- git.stage / git.unstage / git.commit ----------------------------------------------------
+const stStage = await call("git.stage", { cwd, path: "staged.go" });
+check("git.stage single file", stStage.ok && stStage.value.status.working.some((w) => w.path === "staged.go" && w.xy === "A "), stStage.value?.status?.working);
+const stAll = await call("git.stage", { cwd, path: "" });
+check("git.stage whole repo stages everything", stAll.ok && stAll.value.status.working.every((w) => w.xy !== "??" && w.xy[0] !== " "), stAll.value?.status?.working);
+const unOne = await call("git.unstage", { cwd, path: "extra.txt" });
+check("git.unstage returns entry to untracked", unOne.ok && unOne.value.status.working.some((w) => w.path === "extra.txt" && w.xy === "??"), unOne.value?.status?.working);
+const cmt = await call("git.commit", { cwd, message: "test: commit staged" });
+check(
+	"git.commit commits only the staged set",
+	cmt.ok && /test: commit staged/.test(cmt.value.commit ?? "") && cmt.value.status.working.length === 1 && cmt.value.status.working[0].path === "extra.txt",
+	cmt.value,
+);
+const cmtEmpty = await call("git.commit", { cwd, message: "   " });
+check("git.commit requires a message", cmtEmpty.ok && cmtEmpty.value?.error === "commit message is required", cmtEmpty);
+const cmtNone = await call("git.commit", { cwd, message: "nothing" });
+check("git.commit with nothing staged fails", cmtNone.ok && Boolean(cmtNone.value?.error) && Boolean(cmtNone.value?.status), cmtNone.value?.error);
+const stEsc = await call("git.stage", { cwd, path: "../evil.go" });
+check("git.stage fenced", stEsc.ok === false || Boolean(stEsc.value?.error), stEsc);
+const stAbs = await call("git.stage", { cwd, path: "/tmp/evil.go" });
+check("git.stage refuses absolute path", stAbs.ok === false || Boolean(stAbs.value?.error), stAbs);
+
+// Unborn HEAD (fresh repo): unstage must fall back to index removal; the worktree never changes.
+mkdirSync(`${cwd}/fresh`, { recursive: true });
+execFileSync("git", ["-C", `${cwd}/fresh`, "init", "-q", "-b", "main"]);
+writeFileSync(`${cwd}/fresh/x.txt`, "x");
+const fresh = `${cwd}/fresh`;
+await call("git.stage", { cwd, repo: fresh, path: "x.txt" });
+const unFresh = await call("git.unstage", { cwd, repo: fresh, path: "x.txt" });
+check("git.unstage on unborn HEAD keeps worktree file", unFresh.ok && existsSync(`${fresh}/x.txt`) && unFresh.value.status.working.some((w) => w.path === "x.txt" && w.xy === "??"), unFresh.value?.status?.working);
+const unFreshAll = await call("git.unstage", { cwd, repo: fresh, path: "" });
+check("git.unstage whole repo with empty index is a no-op", unFreshAll.ok && !unFreshAll.value?.error, unFreshAll);
+rmSync(fresh, { recursive: true, force: true });
+
 // --- git.branches / git.checkout ------------------------------------------------------------
 const bList = await call("git.branches", { cwd });
 check("git.branches lists locals with current flag", bList.ok && bList.value.branches.some((b) => b.name === "feature" && b.current === true) && bList.value.branches.some((b) => b.name === "master" && b.current === false), bList.value?.branches);

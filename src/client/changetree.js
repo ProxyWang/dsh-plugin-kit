@@ -103,8 +103,11 @@ function guideStyle(depth) {
 	};
 }
 
-/** Renders the tree as indented rows; folders toggle collapse, files call onOpen. */
-export function ChangeTree({ items, onOpen, onDiscard, onDiscardDir, keyPrefix, t }) {
+/** Renders the tree as indented rows; folders toggle collapse, files call onOpen.
+ * Optional row actions: onStage/onUnstage per file, onStageDir/onUnstageDir per
+ * folder (called with the folder's repo-relative path), and the two-step-confirm
+ * onDiscard/onDiscardDir pair. */
+export function ChangeTree({ items, onOpen, onDiscard, onDiscardDir, onStage, onStageDir, onUnstage, onUnstageDir, keyPrefix, t }) {
 	const [collapsed, setCollapsed] = useState(() => new Set());
 	const [confirmPath, setConfirmPath] = useState(null);
 	const [confirmDir, setConfirmDir] = useState(null);
@@ -142,6 +145,28 @@ export function ChangeTree({ items, onOpen, onDiscard, onDiscardDir, keyPrefix, 
 			h("span", { className: "cet-fico cet-fico-dir" }, h(FolderGlyph)),
 			h("span", { className: "ce-name cet-dirname" }, dir.name),
 			h("span", { className: "cet-right" },
+				onStageDir
+					? h("button", {
+						type: "button",
+						className: "cet-act",
+						title: t ? t("changes.stageDir") : "stage",
+						onClick: (e) => {
+							e.stopPropagation();
+							onStageDir(id);
+						},
+					}, "+")
+					: null,
+				onUnstageDir
+					? h("button", {
+						type: "button",
+						className: "cet-act",
+						title: t ? t("changes.unstageDir") : "unstage",
+						onClick: (e) => {
+							e.stopPropagation();
+							onUnstageDir(id);
+						},
+					}, "−")
+					: null,
 				onDiscardDir
 					? (confirmDir === id
 						? h(Fragment, null,
@@ -196,6 +221,28 @@ export function ChangeTree({ items, onOpen, onDiscard, onDiscardDir, keyPrefix, 
 				dup ? h("span", { className: "cet-dirhint" }, dirPart) : null,
 			),
 			h("span", { className: "cet-right" },
+				onStage
+					? h("button", {
+						type: "button",
+						className: "cet-act",
+						title: t ? t("changes.stage") : "stage",
+						onClick: (e) => {
+							e.stopPropagation();
+							onStage(file);
+						},
+					}, "+")
+					: null,
+				onUnstage
+					? h("button", {
+						type: "button",
+						className: "cet-act",
+						title: t ? t("changes.unstage") : "unstage",
+						onClick: (e) => {
+							e.stopPropagation();
+							onUnstage(file);
+						},
+					}, "−")
+					: null,
 				onDiscard && ["M", "D", "A"].includes(String(file.ch))
 					? (confirmPath === file.path
 						? h(Fragment, null,
