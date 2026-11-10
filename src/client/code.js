@@ -232,7 +232,7 @@ export function CodeBody(props) {
 			const text = res.value.content;
 			const lines = text.split("\n");
 			if (lines.length > 1 && lines[lines.length - 1] === "") lines.pop();
-			const entry = { path, lines, states: buildLineStates(lines, langFor(path)), truncated: res.value.truncated, raw: text };
+			const entry = { path, lines, states: buildLineStates(lines, langFor(path)), truncated: res.value.truncated, raw: text, mtimeMs: res.value.mtimeMs };
 			const seq = ++openSeqRef.current;
 			peekNonce.current++;
 			setPeek(null);
@@ -820,14 +820,18 @@ export function CodeBody(props) {
 	}, [doc, say, t]);
 	const saveEdit = useCallback(() => {
 		if (!doc || !editing) return;
-		api("fs.write", { cwd, path: doc.path, content: editText }).then((res) => {
+		// baseMtime gives optimistic concurrency: the host refuses the write
+		// when the file changed on disk since we loaded it.
+		const payload = { cwd, path: doc.path, content: editText };
+		if (typeof doc.mtimeMs === "number") payload.baseMtime = doc.mtimeMs;
+		api("fs.write", payload).then((res) => {
 			if (!res.ok) {
-				say(`${t("error")}: ${res.error}`, "error");
+				say(/modified on disk/i.test(res.error ?? "") ? t("editor.conflict") : `${t("error")}: ${res.error}`, "error");
 				return;
 			}
 			const lines = editText.split("\n");
 			if (lines.length > 1 && lines[lines.length - 1] === "") lines.pop();
-			setDoc({ ...doc, lines, states: buildLineStates(lines, langFor(doc.path)), raw: editText });
+			setDoc({ ...doc, lines, states: buildLineStates(lines, langFor(doc.path)), raw: editText, mtimeMs: res.value.mtimeMs ?? doc.mtimeMs });
 			setEditing(false);
 			say(t("editor.saved"));
 		});

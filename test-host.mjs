@@ -209,6 +209,18 @@ const hugeRes = await call("fs.read", { cwd, path: "huge.png" });
 check("fs.read oversize image reports kind without payload", hugeRes.ok && hugeRes.value.kind === "image" && hugeRes.value.truncated === true && hugeRes.value.base64 === undefined, hugeRes.value && Object.keys(hugeRes.value));
 rmSync(`${cwd}/huge.png`);
 
+// --- fs.write optimistic concurrency (mtime guard) ----------------------------------------------
+const mRead = await call("fs.read", { cwd, path: "main.go" });
+check("fs.read returns mtimeMs", mRead.ok && typeof mRead.value.mtimeMs === "number" && mRead.value.mtimeMs > 0, mRead.value && Object.keys(mRead.value));
+const wStale = await call("fs.write", { cwd, path: "main.go", content: "stale clobber\n", baseMtime: mRead.value.mtimeMs - 5000 });
+check("fs.write with stale baseMtime refused", wStale.ok === false && /modified on disk/i.test(wStale.error ?? ""), wStale);
+const untouched = await call("fs.read", { cwd, path: "main.go" });
+check("refused stale write left the file untouched", untouched.value.content === mRead.value.content && untouched.value.mtimeMs === mRead.value.mtimeMs, null);
+const wOk = await call("fs.write", { cwd, path: "main.go", content: mRead.value.content, baseMtime: mRead.value.mtimeMs });
+check("fs.write with fresh baseMtime succeeds and returns new mtime", wOk.ok && typeof wOk.value.mtimeMs === "number", wOk);
+const wCompat = await call("fs.write", { cwd, path: "main.go", content: mRead.value.content });
+check("fs.write without baseMtime stays backward compatible", wCompat.ok && wCompat.value.size > 0, wCompat);
+
 // --- git.discard (revert changes, never delete) -------------------------------------------
 const curMain = (await call("fs.read", { cwd, path: "main.go" })).value.content;
 writeFileSync(`${cwd}/main.go`, `${curMain}// dirty again\n`);

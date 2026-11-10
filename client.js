@@ -168,6 +168,8 @@ var zh = {
   "blame.toggle": "行追溯（blame）：谁在何时改的每行",
   "blame.uncommitted": "未提交",
   "tree.newFile": "新建文件",
+  "tree.copyPath": "复制路径（⌥/Alt 点击复制相对路径）",
+  "tree.copied": "路径已复制",
   "tree.newDir": "新建文件夹",
   "tree.newFileRoot": "根目录新建文件",
   "tree.newDirRoot": "根目录新建文件夹",
@@ -253,6 +255,7 @@ var zh = {
   "editor.save": "保存",
   "editor.cancel": "取消",
   "editor.saved": "已保存",
+  "editor.conflict": "磁盘上的文件已被外部修改，保存被拒绝 — 请刷新（⟳）后重试",
   "editor.dirty": "未保存",
   "editor.tooBig": "文件过大，无法编辑",
   "editor.find": "文件内查找",
@@ -422,6 +425,8 @@ var en = {
   "blame.toggle": "Toggle blame: who changed each line, when",
   "blame.uncommitted": "uncommitted",
   "tree.newFile": "New file",
+  "tree.copyPath": "Copy path (⌥/Alt-click copies the relative path)",
+  "tree.copied": "Path copied",
   "tree.newDir": "New folder",
   "tree.newFileRoot": "New file at root",
   "tree.newDirRoot": "New folder at root",
@@ -507,6 +512,7 @@ var en = {
   "editor.save": "Save",
   "editor.cancel": "Cancel",
   "editor.saved": "Saved",
+  "editor.conflict": "The file changed on disk; the save was refused — refresh (⟳) and retry",
   "editor.dirty": "unsaved",
   "editor.tooBig": "File too large to edit",
   "editor.find": "Find in file",
@@ -1410,6 +1416,18 @@ function TreePanel({ cwd, t, onOpenFile, activePath, refreshKey, onNotify, onDel
     });
   };
   const depthOf = (path) => path === "" ? 0 : path.split("/").length;
+  const copyPath = (path, event) => {
+    const text = event?.altKey ? path : toAbs(cwd, path);
+    const ok = () => onNotify?.(t("tree.copied"));
+    const bad = () => onNotify?.(`${t("error")}: clipboard`, "error");
+    try {
+      const p = navigator.clipboard?.writeText(text);
+      if (p && typeof p.then === "function") p.then(ok, bad);
+      else ok();
+    } catch {
+      bad();
+    }
+  };
   const inputRow = (dirPath, kind, placeholder) => h(
     "div",
     {
@@ -1446,6 +1464,15 @@ function TreePanel({ cwd, t, onOpenFile, activePath, refreshKey, onNotify, onDel
         setAction({ kind: "newfile", path, value: "" });
       }
     }, "+") : null,
+    h("button", {
+      type: "button",
+      className: "cet-act",
+      title: t("tree.copyPath"),
+      onClick: (e) => {
+        e.stopPropagation();
+        copyPath(path, e);
+      }
+    }, "📋"),
     h("button", {
       type: "button",
       className: "cet-act",
@@ -2853,7 +2880,7 @@ function CodeBody(props) {
       const text = res.value.content;
       const lines2 = text.split("\n");
       if (lines2.length > 1 && lines2[lines2.length - 1] === "") lines2.pop();
-      const entry = { path, lines: lines2, states: buildLineStates(lines2, langFor(path)), truncated: res.value.truncated, raw: text };
+      const entry = { path, lines: lines2, states: buildLineStates(lines2, langFor(path)), truncated: res.value.truncated, raw: text, mtimeMs: res.value.mtimeMs };
       const seq = ++openSeqRef.current;
       peekNonce.current++;
       setPeek(null);
@@ -3387,14 +3414,16 @@ function CodeBody(props) {
   }, [doc, say, t]);
   const saveEdit = useCallback(() => {
     if (!doc || !editing) return;
-    api("fs.write", { cwd, path: doc.path, content: editText }).then((res) => {
+    const payload = { cwd, path: doc.path, content: editText };
+    if (typeof doc.mtimeMs === "number") payload.baseMtime = doc.mtimeMs;
+    api("fs.write", payload).then((res) => {
       if (!res.ok) {
-        say(`${t("error")}: ${res.error}`, "error");
+        say(/modified on disk/i.test(res.error ?? "") ? t("editor.conflict") : `${t("error")}: ${res.error}`, "error");
         return;
       }
       const lines2 = editText.split("\n");
       if (lines2.length > 1 && lines2[lines2.length - 1] === "") lines2.pop();
-      setDoc({ ...doc, lines: lines2, states: buildLineStates(lines2, langFor(doc.path)), raw: editText });
+      setDoc({ ...doc, lines: lines2, states: buildLineStates(lines2, langFor(doc.path)), raw: editText, mtimeMs: res.value.mtimeMs ?? doc.mtimeMs });
       setEditing(false);
       say(t("editor.saved"));
     });

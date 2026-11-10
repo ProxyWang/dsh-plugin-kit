@@ -3,6 +3,7 @@
 import { Fragment, h, useCallback, useEffect, useState } from "./react.js";
 import { api } from "./api.js";
 import { IconFile, IconFolder } from "./icons.js";
+import { toAbs } from "./pathtools.js";
 
 export function TreePanel({ cwd, t, onOpenFile, activePath, refreshKey, onNotify, onDeleted }) {
 	const [listing, setListing] = useState({});
@@ -71,6 +72,19 @@ export function TreePanel({ cwd, t, onOpenFile, activePath, refreshKey, onNotify
 		});
 	};
 	const depthOf = (path) => (path === "" ? 0 : path.split("/").length);
+	// Clipboard copy: plain click → absolute path, ⌥/Alt-click → workspace-relative.
+	const copyPath = (path, event) => {
+		const text = event?.altKey ? path : toAbs(cwd, path);
+		const ok = () => onNotify?.(t("tree.copied"));
+		const bad = () => onNotify?.(`${t("error")}: clipboard`, "error");
+		try {
+			const p = navigator.clipboard?.writeText(text);
+			if (p && typeof p.then === "function") p.then(ok, bad);
+			else ok();
+		} catch {
+			bad();
+		}
+	};
 	const inputRow = (dirPath, kind, placeholder) => h("div", {
 		key: `inp:${dirPath}:${kind}`,
 		className: "ce-row ctp-inputrow",
@@ -103,6 +117,15 @@ export function TreePanel({ cwd, t, onOpenFile, activePath, refreshKey, onNotify
 				setAction({ kind: "newfile", path, value: "" });
 			},
 		}, "+") : null,
+		h("button", {
+			type: "button",
+			className: "cet-act",
+			title: t("tree.copyPath"),
+			onClick: (e) => {
+				e.stopPropagation();
+				copyPath(path, e);
+			},
+		}, "📋"),
 		h("button", {
 			type: "button",
 			className: "cet-act",
