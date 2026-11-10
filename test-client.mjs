@@ -262,6 +262,24 @@ check("computeWrapRows interleaves deletion bars at anchors", wrapDel.rows.lengt
 check("computeWrapRows propagates find + changed marks", String(wrapDel.rows[0].children[0].props.className).includes("ce-gline-find") && String(wrapDel.rows[2].props.className).includes("ce-line-changed"), [wrapDel.rows[0].children[0].props.className, wrapDel.rows[2].props.className]);
 check("WRAP_LINE_CAP is a sane perf cap", WRAP_LINE_CAP >= 1000 && WRAP_LINE_CAP <= 20000, WRAP_LINE_CAP);
 
+// --- find-in-file matcher -------------------------------------------------------------------------
+const { compileFindRe, findRangesInLine, escapeRe } = await import("./src/client/codeview.js");
+check("escapeRe neutralizes metachars", escapeRe("a.b*c") === "a\\.b\\*c", escapeRe("a.b*c"));
+check("compileFindRe empty query → null", compileFindRe("", {}) === null, null);
+check("compileFindRe invalid regex → false", compileFindRe("([", { regex: true }) === false, null);
+const litRe = compileFindRe("Foo", {});
+check("literal default is case-insensitive", findRangesInLine("foo FOO bar", litRe).length === 2, findRangesInLine("foo FOO bar", litRe));
+const csRe = compileFindRe("Foo", { caseSensitive: true });
+check("caseSensitive matches exact case only", findRangesInLine("foo FOO Foo", csRe).length === 1, findRangesInLine("foo FOO Foo", csRe));
+const wRe = compileFindRe("cat", { words: true });
+check("whole word skips substrings", findRangesInLine("cat concat cat", wRe).length === 2, findRangesInLine("cat concat cat", wRe));
+const rxRe = compileFindRe("f\\d+", { regex: true });
+const rxHits = findRangesInLine("f1 f22 x", rxRe);
+check("regex mode finds pattern matches", rxHits.length === 2 && rxHits[1].text === "f22" && rxHits[1].start === 3, rxHits);
+check("zero-length regex cannot loop", findRangesInLine("abc", compileFindRe("x*", { regex: true })).length === 0, null);
+const litMeta = compileFindRe("a.c", {});
+check("literal mode treats metachars literally", findRangesInLine("abc a.c", litMeta).length === 1 && findRangesInLine("abc a.c", litMeta)[0].start === 4, findRangesInLine("abc a.c", litMeta));
+
 // --- search match highlighting -----------------------------------------------------------------
 const { matchRanges, highlightText } = await import("./src/client/overlays.js");
 check("matchRanges literal smart-case finds all", JSON.stringify(matchRanges("foo Bar foo", "foo", false)) === JSON.stringify([[0, 3], [8, 11]]), matchRanges("foo Bar foo", "foo", false));

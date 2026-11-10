@@ -12,7 +12,7 @@ import { RelPath, toAbs } from "./pathtools.js";
 import { TreePanel } from "./tree.js";
 import { ChangesPanel } from "./changes.js";
 import { LocationList, QuickOpen, SearchPanel, RefsPeek, SymbolPalette, GotoLinePalette } from "./overlays.js";
-import { computeGutter, computeVisible, computeWrapRows, WRAP_LINE_CAP } from "./codeview.js";
+import { computeGutter, computeVisible, computeWrapRows, compileFindRe, findRangesInLine, WRAP_LINE_CAP } from "./codeview.js";
 
 /** Files that open in rendered preview by default: markdown, html and svg. */
 const PREVIEW_RE = /\.(md|markdown|html?|svg)$/i;
@@ -50,6 +50,7 @@ export function CodeBody(props) {
 	const [findOpen, setFindOpen] = useState(false);
 	const [findQuery, setFindQuery] = useState("");
 	const [findIdx, setFindIdx] = useState(0);
+	const [findOpts, setFindOpts] = useState({ regex: false, caseSensitive: false, words: false });
 	const [diffMarks, setDiffMarks] = useState(null);
 	const [branchPickOpen, setBranchPickOpen] = useState(false);
 	const [blameOn, setBlameOn] = useState(false);
@@ -440,6 +441,7 @@ export function CodeBody(props) {
 		if (Number.isFinite(blob.railW)) setRailW(Math.max(150, Math.min(760, blob.railW)));
 		if (typeof blob.railVisible === "boolean") setRailVisible(blob.railVisible);
 		if (typeof blob.wrapOn === "boolean") setWrapOn(blob.wrapOn);
+		if (blob.findOpts && typeof blob.findOpts === "object") setFindOpts({ regex: blob.findOpts.regex === true, caseSensitive: blob.findOpts.caseSensitive === true, words: blob.findOpts.words === true });
 		if (typeof blob.mode === "string") setMode(blob.mode === "skills" ? "files" : blob.mode);
 		if (blob.path && !docRef.current) {
 			histRef.current = { back: Array.isArray(blob.back) ? blob.back : [], forward: Array.isArray(blob.forward) ? blob.forward : [] };
@@ -464,6 +466,7 @@ export function CodeBody(props) {
 			railW,
 			railVisible,
 			wrapOn,
+			findOpts,
 			back: histRef.current.back.slice(-40),
 			forward: histRef.current.forward.slice(-40),
 		};
@@ -786,18 +789,20 @@ export function CodeBody(props) {
 		[closePeek, openFile],
 	);
 
+	// Find-widget matcher: literal by default, with VSCode-style Aa / ab| / .*
+	// toggles. compileFindRe returns false for an invalid regex (hint shown).
+	const findRe = useMemo(() => compileFindRe(findQuery, findOpts), [findQuery, findOpts]);
 	const findMatches = useMemo(() => {
-		if (!doc || !findQuery) return [];
+		if (!doc || !findRe) return [];
 		const out = [];
 		for (let i = 0; i < doc.lines.length && out.length < 2000; i++) {
-			let at = doc.lines[i].indexOf(findQuery);
-			while (at !== -1 && out.length < 2000) {
-				out.push({ line: i + 1, col: at + 1 });
-				at = doc.lines[i].indexOf(findQuery, at + findQuery.length);
+			for (const r of findRangesInLine(doc.lines[i], findRe)) {
+				out.push({ line: i + 1, col: r.start + 1, text: r.text });
+				if (out.length >= 2000) break;
 			}
 		}
 		return out;
-	}, [doc, findQuery]);
+	}, [doc, findRe]);
 	const findLines = useMemo(() => new Set(findMatches.map((m) => m.line)), [findMatches]);
 	const jumpFind = useCallback((delta) => {
 		if (findMatches.length === 0) return;
@@ -806,7 +811,7 @@ export function CodeBody(props) {
 		const m = findMatches[next];
 		setCursor((c) => ({ line: m.line, col: m.col, word: c?.word ?? "" }));
 		scrollAreaToLine(m.line);
-		setFlash({ line: m.line, col: m.col, word: findQuery });
+		setFlash({ line: m.line, col: m.col, word: m.text ?? findQuery });
 		setTimeout(() => setFlash((f) => (f && f.line === m.line ? null : f)), 1200);
 	}, [findMatches, findIdx, findQuery, scrollAreaToLine]);
 	const startEdit = useCallback(() => {
@@ -1353,7 +1358,12 @@ export function CodeBody(props) {
 									else if (e.key === "Escape") setFindOpen(false);
 								},
 							}),
-							h("span", { className: "ce-find-count" }, findQuery ? `${findMatches.length === 0 ? 0 : Math.min(findIdx + 1, findMatches.length)}/${findMatches.length}` : ""),
+							h("button", { type: "button", className: `ce-tool ce-tiny${findOpts.caseSensitive ? " ce-tool-on" : ""}`, title: t("find.case"), onClick: () => { setFindOpts((o) => ({ ...o, caseSensitive: !o.caseSensitive })); setFindIdx(0); } }, "Aa"),
+							h("button", { type: "button", className: `ce-tool ce-tiny${findOpts.words ? " ce-tool-on" : ""}`, title: t("find.words"), onClick: () => { setFindOpts((o) => ({ ...o, words: !o.words })); setFindIdx(0); } }, "ab|"),
+							h("button", { type: "button", className: `ce-tool ce-tiny${findOpts.regex ? " ce-tool-on" : ""}`, title: t("find.regex"), onClick: () => { setFindOpts((o) => ({ ...o, regex: !o.regex })); setFindIdx(0); } }, ".*"),
+							findRe === false
+								? h("span", { className: "ce-find-count cea-err" }, t("find.badRegex"))
+								: h("span", { className: "ce-find-count" }, findQuery ? `${findMatches.length === 0 ? 0 : Math.min(findIdx + 1, findMatches.length)}/${findMatches.length}` : ""),
 							h("button", { type: "button", className: "ce-tool ce-tiny", onClick: () => jumpFind(-1) }, "↑"),
 							h("button", { type: "button", className: "ce-tool ce-tiny", onClick: () => jumpFind(1) }, "↓"),
 							h("button", { type: "button", className: "ce-tool ce-tiny", onClick: () => setFindOpen(false) }, "✕"),

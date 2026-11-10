@@ -265,6 +265,10 @@ var zh = {
   "goto.placeholder": "跳转到行（1-{n}）",
   "goto.title": "跳转到行 (⌘G / Ctrl+G)",
   "editor.findPlaceholder": "查找…",
+  "find.case": "区分大小写",
+  "find.words": "全词匹配",
+  "find.regex": "正则表达式",
+  "find.badRegex": "正则无效",
   "editor.preview": "预览",
   "editor.raw": "原始",
   "editor.previewToggle": "预览 / 原始态切换",
@@ -522,6 +526,10 @@ var en = {
   "goto.placeholder": "Go to line (1-{n})",
   "goto.title": "Go to line (⌘G / Ctrl+G)",
   "editor.findPlaceholder": "Find…",
+  "find.case": "Match case",
+  "find.words": "Match whole word",
+  "find.regex": "Regular expression",
+  "find.badRegex": "Invalid regex",
   "editor.preview": "Preview",
   "editor.raw": "Raw",
   "editor.previewToggle": "Toggle preview / raw",
@@ -2682,6 +2690,35 @@ function computeWrapRows({ doc, flash, diffMarks, delAnchors, delGroups, cursor,
   while (delIdx < delAnchors.length) pushDelBar(delAnchors[delIdx++]);
   return { rows, capped: total > limit };
 }
+function escapeRe(s) {
+  return String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+function compileFindRe(query, opts) {
+  if (!query) return null;
+  let src = String(query);
+  if (!opts?.regex) src = escapeRe(src);
+  if (opts?.words) src = `\\b(?:${src})\\b`;
+  try {
+    return new RegExp(src, opts?.caseSensitive ? "g" : "gi");
+  } catch {
+    return false;
+  }
+}
+function findRangesInLine(line, re) {
+  const out = [];
+  if (!re || re === true || typeof re.exec !== "function") return out;
+  re.lastIndex = 0;
+  let m;
+  let guard = 0;
+  while ((m = re.exec(line)) !== null && guard++ < 500) {
+    if (m[0] === "") {
+      re.lastIndex++;
+      continue;
+    }
+    out.push({ start: m.index, end: m.index + m[0].length, text: m[0] });
+  }
+  return out;
+}
 
 // src/client/code.js
 var PREVIEW_RE = /\.(md|markdown|html?|svg)$/i;
@@ -2716,6 +2753,7 @@ function CodeBody(props) {
   const [findOpen, setFindOpen] = useState(false);
   const [findQuery, setFindQuery] = useState("");
   const [findIdx, setFindIdx] = useState(0);
+  const [findOpts, setFindOpts] = useState({ regex: false, caseSensitive: false, words: false });
   const [diffMarks, setDiffMarks] = useState(null);
   const [branchPickOpen, setBranchPickOpen] = useState(false);
   const [blameOn, setBlameOn] = useState(false);
@@ -3069,6 +3107,7 @@ function CodeBody(props) {
     if (Number.isFinite(blob.railW)) setRailW(Math.max(150, Math.min(760, blob.railW)));
     if (typeof blob.railVisible === "boolean") setRailVisible(blob.railVisible);
     if (typeof blob.wrapOn === "boolean") setWrapOn(blob.wrapOn);
+    if (blob.findOpts && typeof blob.findOpts === "object") setFindOpts({ regex: blob.findOpts.regex === true, caseSensitive: blob.findOpts.caseSensitive === true, words: blob.findOpts.words === true });
     if (typeof blob.mode === "string") setMode(blob.mode === "skills" ? "files" : blob.mode);
     if (blob.path && !docRef.current) {
       histRef.current = { back: Array.isArray(blob.back) ? blob.back : [], forward: Array.isArray(blob.forward) ? blob.forward : [] };
@@ -3092,6 +3131,7 @@ function CodeBody(props) {
       railW,
       railVisible,
       wrapOn,
+      findOpts,
       back: histRef.current.back.slice(-40),
       forward: histRef.current.forward.slice(-40)
     };
@@ -3380,18 +3420,18 @@ function CodeBody(props) {
     },
     [closePeek, openFile]
   );
+  const findRe = useMemo(() => compileFindRe(findQuery, findOpts), [findQuery, findOpts]);
   const findMatches = useMemo(() => {
-    if (!doc || !findQuery) return [];
+    if (!doc || !findRe) return [];
     const out = [];
     for (let i = 0; i < doc.lines.length && out.length < 2e3; i++) {
-      let at = doc.lines[i].indexOf(findQuery);
-      while (at !== -1 && out.length < 2e3) {
-        out.push({ line: i + 1, col: at + 1 });
-        at = doc.lines[i].indexOf(findQuery, at + findQuery.length);
+      for (const r of findRangesInLine(doc.lines[i], findRe)) {
+        out.push({ line: i + 1, col: r.start + 1, text: r.text });
+        if (out.length >= 2e3) break;
       }
     }
     return out;
-  }, [doc, findQuery]);
+  }, [doc, findRe]);
   const findLines = useMemo(() => new Set(findMatches.map((m) => m.line)), [findMatches]);
   const jumpFind = useCallback((delta) => {
     if (findMatches.length === 0) return;
@@ -3400,7 +3440,7 @@ function CodeBody(props) {
     const m = findMatches[next];
     setCursor((c) => ({ line: m.line, col: m.col, word: c?.word ?? "" }));
     scrollAreaToLine(m.line);
-    setFlash({ line: m.line, col: m.col, word: findQuery });
+    setFlash({ line: m.line, col: m.col, word: m.text ?? findQuery });
     setTimeout(() => setFlash((f) => f && f.line === m.line ? null : f), 1200);
   }, [findMatches, findIdx, findQuery, scrollAreaToLine]);
   const startEdit = useCallback(() => {
@@ -3913,7 +3953,19 @@ function CodeBody(props) {
                 } else if (e.key === "Escape") setFindOpen(false);
               }
             }),
-            h("span", { className: "ce-find-count" }, findQuery ? `${findMatches.length === 0 ? 0 : Math.min(findIdx + 1, findMatches.length)}/${findMatches.length}` : ""),
+            h("button", { type: "button", className: `ce-tool ce-tiny${findOpts.caseSensitive ? " ce-tool-on" : ""}`, title: t("find.case"), onClick: () => {
+              setFindOpts((o) => ({ ...o, caseSensitive: !o.caseSensitive }));
+              setFindIdx(0);
+            } }, "Aa"),
+            h("button", { type: "button", className: `ce-tool ce-tiny${findOpts.words ? " ce-tool-on" : ""}`, title: t("find.words"), onClick: () => {
+              setFindOpts((o) => ({ ...o, words: !o.words }));
+              setFindIdx(0);
+            } }, "ab|"),
+            h("button", { type: "button", className: `ce-tool ce-tiny${findOpts.regex ? " ce-tool-on" : ""}`, title: t("find.regex"), onClick: () => {
+              setFindOpts((o) => ({ ...o, regex: !o.regex }));
+              setFindIdx(0);
+            } }, ".*"),
+            findRe === false ? h("span", { className: "ce-find-count cea-err" }, t("find.badRegex")) : h("span", { className: "ce-find-count" }, findQuery ? `${findMatches.length === 0 ? 0 : Math.min(findIdx + 1, findMatches.length)}/${findMatches.length}` : ""),
             h("button", { type: "button", className: "ce-tool ce-tiny", onClick: () => jumpFind(-1) }, "↑"),
             h("button", { type: "button", className: "ce-tool ce-tiny", onClick: () => jumpFind(1) }, "↓"),
             h("button", { type: "button", className: "ce-tool ce-tiny", onClick: () => setFindOpen(false) }, "✕")

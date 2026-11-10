@@ -195,3 +195,46 @@ export function computeWrapRows({ doc, flash, diffMarks, delAnchors, delGroups, 
 	while (delIdx < delAnchors.length) pushDelBar(delAnchors[delIdx++]);
 	return { rows, capped: total > limit };
 }
+
+/* ---------------- find-in-file matcher (⌘F widget) ---------------- */
+
+/** Escape a literal string for use inside a RegExp. */
+export function escapeRe(s) {
+	return String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * Compile the find-widget query into a global RegExp.
+ * opts: {regex, caseSensitive, words}. Literal queries are escaped; `words`
+ * wraps the pattern in \b boundaries (both modes); case-insensitive unless
+ * caseSensitive. Returns null for an empty query, false for an invalid
+ * regex (the UI shows a hint instead of matching), else the RegExp.
+ */
+export function compileFindRe(query, opts) {
+	if (!query) return null;
+	let src = String(query);
+	if (!opts?.regex) src = escapeRe(src);
+	if (opts?.words) src = `\\b(?:${src})\\b`;
+	try {
+		return new RegExp(src, opts?.caseSensitive ? "g" : "gi");
+	} catch {
+		return false;
+	}
+}
+
+/** All non-overlapping match ranges [{start, end, text}] in one line; zero-length matches are skipped. */
+export function findRangesInLine(line, re) {
+	const out = [];
+	if (!re || re === true || typeof re.exec !== "function") return out;
+	re.lastIndex = 0;
+	let m;
+	let guard = 0;
+	while ((m = re.exec(line)) !== null && guard++ < 500) {
+		if (m[0] === "") {
+			re.lastIndex++;
+			continue;
+		}
+		out.push({ start: m.index, end: m.index + m[0].length, text: m[0] });
+	}
+	return out;
+}
