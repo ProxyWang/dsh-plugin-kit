@@ -52,6 +52,20 @@ check("text no-match ok", t3.ok && t3.value.results.length === 0, t3);
 const t4 = await call("search.text", { cwd, query: "fmt", include: "*.go" });
 check("text include filter", t4.ok && t4.value.results.every((r) => r.path.endsWith(".go")), t4);
 
+// --- regex / whole-word / multi-glob / engine errors ------------------------------------------
+const t5 = await call("search.text", { cwd, query: "Greet.r", regex: true });
+check("regex mode matches pattern", t5.ok && t5.value.results.some((r) => r.path === "main.go"), t5);
+const t6 = await call("search.text", { cwd, query: "Greet.r" });
+check("fixed mode does not interpret regex", t6.ok && t6.value.results.length === 0, t6);
+const t7 = await call("search.text", { cwd, query: "Greeter", words: true });
+check("whole-word mode keeps exact token", t7.ok && t7.value.results.some((r) => r.path === "main.go"), t7);
+const t8 = await call("search.text", { cwd, query: "([", regex: true });
+check("invalid regex surfaces as value.error", t8.ok && Array.isArray(t8.value.results) && t8.value.results.length === 0 && typeof t8.value.error === "string" && t8.value.error.length > 0, t8.value);
+const t9 = await call("search.text", { cwd, query: "untracked", include: "*.txt,*.md" });
+check("multi-glob include", t9.ok && t9.value.results.some((r) => r.path === "u.txt"), t9);
+const t10 = await call("search.text", { cwd, query: "Greeter", include: "!*.txt" });
+check("negated glob excludes", t10.ok && t10.value.results.every((r) => !r.path.endsWith(".txt")), t10);
+
 console.log(`\n${pass} passed, ${fail} failed`);
 cleanup();
 process.exit(fail ? 1 : 0);

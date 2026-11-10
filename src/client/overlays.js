@@ -2,6 +2,7 @@
 
 import { Fragment, h, useCallback, useEffect, useMemo, useRef, useState } from "./react.js";
 import { ROW } from "./constants.js";
+import { api } from "./api.js";
 import { IconSearch } from "./icons.js";
 import { RelPath } from "./pathtools.js";
 
@@ -109,11 +110,59 @@ export function QuickOpen({ t, state, onQuery, onPick, onClose }) {
 	);
 }
 
-export function SearchPanel({ t, cwd, state, onQuery, onInclude, onSubmit, onPick, onClose }) {
+export function SearchPanel({ t, cwd, state, onQuery, onInclude, onToggleRegex, onToggleWords, onSubmit, onPick, onClose }) {
 	const inputRef = useRef(null);
+	const [expanded, setExpanded] = useState(() => new Set());
+	const [ctxCache, setCtxCache] = useState({}); // path -> {lines} | {loading} | {error}
 	useEffect(() => {
 		inputRef.current?.focus();
 	}, []);
+	// A new result set invalidates expansions; cached file contents may stay.
+	useEffect(() => {
+		setExpanded(new Set());
+	}, [state.results]);
+	const ctxKey = (r) => `${r.path}:${r.line}`;
+	const toggleCtx = (r) => {
+		const key = ctxKey(r);
+		const next = new Set(expanded);
+		if (next.has(key)) {
+			next.delete(key);
+		} else {
+			next.add(key);
+			if (!ctxCache[r.path]) {
+				setCtxCache((c) => ({ ...c, [r.path]: { loading: true } }));
+				api("fs.read", { cwd, path: r.path }).then((res) => {
+					if (!res.ok || res.value.kind !== "text") {
+						setCtxCache((c) => ({ ...c, [r.path]: { error: res.error ?? t("search.ctxFail") } }));
+						return;
+					}
+					setCtxCache((c) => ({ ...c, [r.path]: { lines: res.value.content.split("\n") } }));
+				});
+			}
+		}
+		setExpanded(next);
+	};
+	const renderCtx = (r) => {
+		const entry = ctxCache[r.path];
+		if (!entry || entry.loading) return h("div", { className: "ce-sctx-note" }, t("search.ctxLoad"));
+		if (entry.error) return h("div", { className: "ce-sctx-note" }, `${t("search.ctxFail")}: ${entry.error}`);
+		const from = Math.max(1, r.line - 3);
+		const to = Math.min(entry.lines.length, r.line + 3);
+		const rows = [];
+		for (let n = from; n <= to; n++) {
+			rows.push(h("button", {
+				key: n,
+				type: "button",
+				className: `ce-sctx-line${n === r.line ? " ce-sctx-hit" : ""}`,
+				title: `${r.path}:${n}`,
+				onClick: () => onPick({ path: r.path, line: n }),
+			},
+			h("span", { className: "ce-sctx-no" }, String(n)),
+			h("span", { className: "ce-sctx-text" }, entry.lines[n - 1] ?? ""),
+			));
+		}
+		return h("div", { className: "ce-sctx" }, rows);
+	};
 	return h(
 		"div",
 		{ className: "ce-search" },
@@ -140,6 +189,8 @@ export function SearchPanel({ t, cwd, state, onQuery, onInclude, onSubmit, onPic
 				autoCapitalize: "off",
 				autoComplete: "off",
 			}),
+			h("button", { className: `ce-tool ce-tiny${state.regex ? " ce-tool-on" : ""}`, type: "button", title: t("search.regex"), onClick: onToggleRegex }, ".*"),
+			h("button", { className: `ce-tool ce-tiny${state.words ? " ce-tool-on" : ""}`, type: "button", title: t("search.words"), onClick: onToggleWords }, "ab |"),
 			h("button", { className: "ce-tool ce-tiny", type: "button", title: t("search.run"), onClick: onSubmit }, h(IconSearch)),
 		),
 		h("input", {
@@ -175,10 +226,26 @@ export function SearchPanel({ t, cwd, state, onQuery, onInclude, onSubmit, onPic
 			{ className: "ce-search-results ce-scroll" },
 			(state.results ?? []).map((r, i) =>
 				h(
-					"button",
-					{ key: i, type: "button", className: "ce-sresult", onClick: () => onPick(r) },
-					h("span", { className: "ce-sloc" }, `${RelPath(cwd, r.path) || r.path}:${r.line}`),
-					h("span", { className: "ce-stext" }, r.text),
+					Fragment,
+					{ key: i },
+					h(
+						"div",
+						{ className: "ce-srow" },
+						h("button", {
+							type: "button",
+							className: "ce-sctx-toggle",
+							title: t("search.ctx"),
+							"aria-expanded": expanded.has(ctxKey(r)) ? "true" : "false",
+							onClick: () => toggleCtx(r),
+						}, expanded.has(ctxKey(r)) ? "▾" : "▸"),
+						h(
+							"button",
+							{ type: "button", className: "ce-sresult", onClick: () => onPick(r) },
+							h("span", { className: "ce-sloc" }, `${RelPath(cwd, r.path) || r.path}:${r.line}`),
+							h("span", { className: "ce-stext" }, r.text),
+						),
+					),
+					expanded.has(ctxKey(r)) ? renderCtx(r) : null,
 				),
 			),
 		),

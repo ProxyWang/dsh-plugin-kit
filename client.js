@@ -249,7 +249,7 @@ var zh = {
   "quickopen.empty": "无匹配文件",
   "quickopen.loading": "索引中…",
   "search.placeholder": "全文搜索",
-  "search.include": "文件过滤，如 *.go",
+  "search.include": "文件过滤，如 *.go,*.ts；!前缀排除",
   "search.run": "搜索",
   "search.empty": "输入至少 2 个字符",
   "search.none": "无结果",
@@ -258,6 +258,11 @@ var zh = {
   "search.truncated": "结果过多，已截断",
   "search.searching": "搜索中…",
   "search.failed": "搜索失败",
+  "search.regex": "正则表达式",
+  "search.words": "全词匹配",
+  "search.ctx": "展开/收起上下文",
+  "search.ctxLoad": "加载上下文…",
+  "search.ctxFail": "无法读取上下文",
   "peek.defs": "定义",
   "peek.refs": "引用",
   "peek.tagDef": "声明",
@@ -463,7 +468,7 @@ var en = {
   "quickopen.empty": "No matching files",
   "quickopen.loading": "Indexing…",
   "search.placeholder": "Search across files",
-  "search.include": "files filter, e.g. *.go",
+  "search.include": "files filter, e.g. *.go,*.ts; ! prefix excludes",
   "search.run": "Search",
   "search.empty": "Type at least 2 characters",
   "search.none": "No results",
@@ -472,6 +477,11 @@ var en = {
   "search.truncated": "Too many results; truncated",
   "search.searching": "Searching…",
   "search.failed": "Search failed",
+  "search.regex": "Regular expression",
+  "search.words": "Match whole word",
+  "search.ctx": "Toggle context lines",
+  "search.ctxLoad": "Loading context…",
+  "search.ctxFail": "Cannot load context",
   "peek.defs": "definition",
   "peek.refs": "references",
   "peek.tagDef": "decl",
@@ -1752,11 +1762,60 @@ function QuickOpen({ t, state, onQuery, onPick, onClose }) {
     )
   );
 }
-function SearchPanel({ t, cwd, state, onQuery, onInclude, onSubmit, onPick, onClose }) {
+function SearchPanel({ t, cwd, state, onQuery, onInclude, onToggleRegex, onToggleWords, onSubmit, onPick, onClose }) {
   const inputRef = useRef(null);
+  const [expanded, setExpanded] = useState(() => /* @__PURE__ */ new Set());
+  const [ctxCache, setCtxCache] = useState({});
   useEffect(() => {
     inputRef.current?.focus();
   }, []);
+  useEffect(() => {
+    setExpanded(/* @__PURE__ */ new Set());
+  }, [state.results]);
+  const ctxKey = (r) => `${r.path}:${r.line}`;
+  const toggleCtx = (r) => {
+    const key = ctxKey(r);
+    const next = new Set(expanded);
+    if (next.has(key)) {
+      next.delete(key);
+    } else {
+      next.add(key);
+      if (!ctxCache[r.path]) {
+        setCtxCache((c) => ({ ...c, [r.path]: { loading: true } }));
+        api("fs.read", { cwd, path: r.path }).then((res) => {
+          if (!res.ok || res.value.kind !== "text") {
+            setCtxCache((c) => ({ ...c, [r.path]: { error: res.error ?? t("search.ctxFail") } }));
+            return;
+          }
+          setCtxCache((c) => ({ ...c, [r.path]: { lines: res.value.content.split("\n") } }));
+        });
+      }
+    }
+    setExpanded(next);
+  };
+  const renderCtx = (r) => {
+    const entry = ctxCache[r.path];
+    if (!entry || entry.loading) return h("div", { className: "ce-sctx-note" }, t("search.ctxLoad"));
+    if (entry.error) return h("div", { className: "ce-sctx-note" }, `${t("search.ctxFail")}: ${entry.error}`);
+    const from = Math.max(1, r.line - 3);
+    const to = Math.min(entry.lines.length, r.line + 3);
+    const rows = [];
+    for (let n = from; n <= to; n++) {
+      rows.push(h(
+        "button",
+        {
+          key: n,
+          type: "button",
+          className: `ce-sctx-line${n === r.line ? " ce-sctx-hit" : ""}`,
+          title: `${r.path}:${n}`,
+          onClick: () => onPick({ path: r.path, line: n })
+        },
+        h("span", { className: "ce-sctx-no" }, String(n)),
+        h("span", { className: "ce-sctx-text" }, entry.lines[n - 1] ?? "")
+      ));
+    }
+    return h("div", { className: "ce-sctx" }, rows);
+  };
   return h(
     "div",
     { className: "ce-search" },
@@ -1783,6 +1842,8 @@ function SearchPanel({ t, cwd, state, onQuery, onInclude, onSubmit, onPick, onCl
         autoCapitalize: "off",
         autoComplete: "off"
       }),
+      h("button", { className: `ce-tool ce-tiny${state.regex ? " ce-tool-on" : ""}`, type: "button", title: t("search.regex"), onClick: onToggleRegex }, ".*"),
+      h("button", { className: `ce-tool ce-tiny${state.words ? " ce-tool-on" : ""}`, type: "button", title: t("search.words"), onClick: onToggleWords }, "ab |"),
       h("button", { className: "ce-tool ce-tiny", type: "button", title: t("search.run"), onClick: onSubmit }, h(IconSearch))
     ),
     h("input", {
@@ -1812,10 +1873,26 @@ function SearchPanel({ t, cwd, state, onQuery, onInclude, onSubmit, onPick, onCl
       { className: "ce-search-results ce-scroll" },
       (state.results ?? []).map(
         (r, i) => h(
-          "button",
-          { key: i, type: "button", className: "ce-sresult", onClick: () => onPick(r) },
-          h("span", { className: "ce-sloc" }, `${RelPath(cwd, r.path) || r.path}:${r.line}`),
-          h("span", { className: "ce-stext" }, r.text)
+          Fragment,
+          { key: i },
+          h(
+            "div",
+            { className: "ce-srow" },
+            h("button", {
+              type: "button",
+              className: "ce-sctx-toggle",
+              title: t("search.ctx"),
+              "aria-expanded": expanded.has(ctxKey(r)) ? "true" : "false",
+              onClick: () => toggleCtx(r)
+            }, expanded.has(ctxKey(r)) ? "▾" : "▸"),
+            h(
+              "button",
+              { type: "button", className: "ce-sresult", onClick: () => onPick(r) },
+              h("span", { className: "ce-sloc" }, `${RelPath(cwd, r.path) || r.path}:${r.line}`),
+              h("span", { className: "ce-stext" }, r.text)
+            )
+          ),
+          expanded.has(ctxKey(r)) ? renderCtx(r) : null
         )
       )
     )
@@ -2670,16 +2747,16 @@ function CodeBody(props) {
     [closePalette, openFile]
   );
   const runSearchNow = useCallback(
-    (query, include) => {
+    (query, include, opts) => {
       if (!cwd) return;
       const nonce = ++searchNonce.current;
       setSearch((s) => s ? { ...s, busy: true, error: void 0 } : s);
-      api("search.text", { cwd, query, include: include || "" }).then((res) => {
+      api("search.text", { cwd, query, include: include || "", regex: opts?.regex === true, words: opts?.words === true }).then((res) => {
         if (searchNonce.current !== nonce) return;
         setSearch((s) => {
           if (!s) return s;
           if (!res.ok) return { ...s, results: [], busy: false, error: res.error };
-          return { ...s, results: res.value.results ?? [], engine: res.value.engine ?? "", truncated: res.value.truncated === true, timedOut: res.value.timedOut === true, busy: false };
+          return { ...s, results: res.value.results ?? [], engine: res.value.engine ?? "", truncated: res.value.truncated === true, timedOut: res.value.timedOut === true, busy: false, error: res.value.error };
         });
       });
     },
@@ -2687,7 +2764,7 @@ function CodeBody(props) {
   );
   const openSearch = useCallback(() => {
     setSearchOpen(true);
-    setSearch((s) => s ?? { query: "", include: "", results: void 0, engine: "", truncated: false, busy: false });
+    setSearch((s) => s ?? { query: "", include: "", regex: false, words: false, results: void 0, engine: "", truncated: false, busy: false });
   }, []);
   useEffect(() => {
     if (!searchOpen || !search) return void 0;
@@ -2697,7 +2774,7 @@ function CodeBody(props) {
       setSearch((s) => s ? { ...s, results: [], engine: "", busy: false, error: void 0 } : s);
       return void 0;
     }
-    const timer = setTimeout(() => runSearchNow(search.query, search.include), 400);
+    const timer = setTimeout(() => runSearchNow(search.query, search.include, search), 400);
     return () => clearTimeout(timer);
   }, [searchOpen, search, runSearchNow]);
   const onSearchPick = useCallback(
@@ -3334,7 +3411,9 @@ function CodeBody(props) {
           state: search,
           onQuery: (q) => setSearch((s) => s ? { ...s, query: q } : s),
           onInclude: (v) => setSearch((s) => s ? { ...s, include: v } : s),
-          onSubmit: () => runSearchNow(search.query, search.include),
+          onToggleRegex: () => setSearch((s) => s ? { ...s, regex: !s.regex } : s),
+          onToggleWords: () => setSearch((s) => s ? { ...s, words: !s.words } : s),
+          onSubmit: () => runSearchNow(search.query, search.include, search),
           onPick: onSearchPick,
           onClose: () => setSearchOpen(false)
         }) : null
@@ -3519,8 +3598,19 @@ var CSS = `
 .ce-commitbox-btn:disabled{opacity:.45;cursor:default;filter:none}
 .ce-search-meta{font-size:11px;color:var(--dsw-alias-label-tertiary,#778);flex:none;min-height:14px}
 .ce-search-results{flex:1;min-height:0;border:.5px solid var(--dsw-alias-border-l1,#333);border-radius:8px;background:var(--dsw-alias-bg-layer-1,#1e2126)}
-.ce-sresult{display:flex;gap:10px;align-items:baseline;width:100%;text-align:left;border:0;background:transparent;color:inherit;font:inherit;padding:4px 10px;cursor:pointer;white-space:nowrap}
+.ce-srow{display:flex;align-items:stretch;width:100%}
+.ce-sctx-toggle{flex:none;border:0;background:transparent;color:var(--dsw-alias-label-tertiary,#778);cursor:pointer;padding:4px 1px 4px 7px;font:inherit;font-size:10px;line-height:1}
+.ce-sctx-toggle:hover{color:var(--dsw-alias-label-primary,#ddd)}
+.ce-sresult{display:flex;gap:10px;align-items:baseline;flex:1;min-width:0;text-align:left;border:0;background:transparent;color:inherit;font:inherit;padding:4px 10px 4px 5px;cursor:pointer;white-space:nowrap}
 .ce-sresult:hover{background:var(--dsw-alias-interactive-bg-hover,#2b2b2b)}
+.ce-sctx{border-left:2px solid var(--dsw-alias-border-l2,#444);margin:0 6px 3px 15px;background:var(--dsw-alias-bg-layer-2,#1c1f24);border-radius:0 6px 6px 0;overflow:hidden}
+.ce-sctx-line{display:flex;gap:8px;width:100%;text-align:left;border:0;background:transparent;color:inherit;font:inherit;padding:1px 8px;cursor:pointer;white-space:nowrap}
+.ce-sctx-line:hover{background:var(--dsw-alias-interactive-bg-hover,#2b2b2b)}
+.ce-sctx-no{flex:none;min-width:30px;text-align:right;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:10px;color:var(--dsw-alias-label-tertiary,#667)}
+.ce-sctx-text{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;color:var(--dsw-alias-label-secondary,#999);overflow:hidden;text-overflow:ellipsis}
+.ce-sctx-hit{background:rgba(47,129,247,.10)}
+.ce-sctx-hit .ce-sctx-text{color:var(--dsw-alias-label-primary,#ddd)}
+.ce-sctx-note{padding:3px 10px 5px 24px;font-size:11px;color:var(--dsw-alias-label-tertiary,#778)}
 .ce-sloc{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;color:var(--dsw-alias-brand-primary,#6cb2ff);flex:none}
 .ce-stext{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;color:var(--dsw-alias-label-secondary,#999);overflow:hidden;text-overflow:ellipsis}
 .ce-calrow{display:flex;align-items:center;gap:8px;width:100%;border:.5px solid var(--dsw-alias-border-l1,#333);background:var(--dsw-alias-bg-layer-1,#1e2126);color:inherit;font:inherit;text-align:left;padding:4px 10px;cursor:pointer;border-radius:8px;margin:2px 0}

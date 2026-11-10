@@ -627,16 +627,16 @@ export function CodeBody(props) {
 	/* full-text search */
 
 	const runSearchNow = useCallback(
-		(query, include) => {
+		(query, include, opts) => {
 			if (!cwd) return;
 			const nonce = ++searchNonce.current;
 			setSearch((s) => (s ? { ...s, busy: true, error: undefined } : s));
-			api("search.text", { cwd, query, include: include || "" }).then((res) => {
+			api("search.text", { cwd, query, include: include || "", regex: opts?.regex === true, words: opts?.words === true }).then((res) => {
 				if (searchNonce.current !== nonce) return;
 				setSearch((s) => {
 					if (!s) return s;
 					if (!res.ok) return { ...s, results: [], busy: false, error: res.error };
-					return { ...s, results: res.value.results ?? [], engine: res.value.engine ?? "", truncated: res.value.truncated === true, timedOut: res.value.timedOut === true, busy: false };
+					return { ...s, results: res.value.results ?? [], engine: res.value.engine ?? "", truncated: res.value.truncated === true, timedOut: res.value.timedOut === true, busy: false, error: res.value.error };
 				});
 			});
 		},
@@ -645,10 +645,11 @@ export function CodeBody(props) {
 
 	const openSearch = useCallback(() => {
 		setSearchOpen(true);
-		setSearch((s) => s ?? { query: "", include: "", results: undefined, engine: "", truncated: false, busy: false });
+		setSearch((s) => s ?? { query: "", include: "", regex: false, words: false, results: undefined, engine: "", truncated: false, busy: false });
 	}, []);
 
-	// Debounced auto-search, VSCode-style, while the panel is open.
+	// Debounced auto-search, VSCode-style, while the panel is open. Flag
+	// toggles mutate the search object, so they retrigger this effect too.
 	useEffect(() => {
 		if (!searchOpen || !search) return undefined;
 		const query = (search.query ?? "").trim();
@@ -657,7 +658,7 @@ export function CodeBody(props) {
 			setSearch((s) => (s ? { ...s, results: [], engine: "", busy: false, error: undefined } : s));
 			return undefined;
 		}
-		const timer = setTimeout(() => runSearchNow(search.query, search.include), 400);
+		const timer = setTimeout(() => runSearchNow(search.query, search.include, search), 400);
 		return () => clearTimeout(timer);
 	}, [searchOpen, search, runSearchNow]);
 
@@ -1335,7 +1336,9 @@ export function CodeBody(props) {
 					state: search,
 					onQuery: (q) => setSearch((s) => (s ? { ...s, query: q } : s)),
 					onInclude: (v) => setSearch((s) => (s ? { ...s, include: v } : s)),
-					onSubmit: () => runSearchNow(search.query, search.include),
+					onToggleRegex: () => setSearch((s) => (s ? { ...s, regex: !s.regex } : s)),
+					onToggleWords: () => setSearch((s) => (s ? { ...s, words: !s.words } : s)),
+					onSubmit: () => runSearchNow(search.query, search.include, search),
 					onPick: onSearchPick,
 					onClose: () => setSearchOpen(false),
 				}) : null,
