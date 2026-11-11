@@ -252,7 +252,7 @@ const sections = panelNodes.filter((n) => n.props?.className === "ce-section");
 check("changes panel renders the stash section", sections.some((s) => JSON.stringify(s.children ?? []).includes("stash.title")), sections.length);
 
 const changesSearch = panelNodes.find((n) => n.props?.className === "ce-changes-search");
-check("changes panel offers changed-file filter and workspace search", Boolean(changesSearch) && collect(changesSearch).some((n) => n.type === "input" && n.props.type === "search") && collect(changesSearch).some((n) => n.type === "button" && String(n.children[0]).includes("changes.searchWorkspace")), null);
+check("changes panel keeps path filtering separate from shared toolbar search", Boolean(changesSearch) && collect(changesSearch).some((n) => n.type === "input" && n.props.type === "search") && !collect(changesSearch).some((n) => n.type === "button"), null);
 
 // --- file history overlay ------------------------------------------------------------------------
 const { FileHistoryOverlay } = await import("./src/client/overlays.js");

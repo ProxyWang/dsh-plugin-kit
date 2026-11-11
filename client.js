@@ -350,6 +350,7 @@ var zh = {
   close: "关闭",
   "shortcut.noSession": "请先选择会话",
   "toolbar.search": "查询",
+  "search.workspaceHint": "搜索整个工作区的代码内容（文件与变更页共用）",
   "quickopen.placeholder": "输入文件名以选择（模糊匹配）",
   "quickopen.empty": "无匹配文件",
   "quickopen.loading": "索引中…",
@@ -688,6 +689,7 @@ var en = {
   close: "Close",
   "shortcut.noSession": "Select a session first",
   "toolbar.search": "Search",
+  "search.workspaceHint": "Search code across the workspace (shared by Files and Changes)",
   "quickopen.placeholder": "Type a file name to open (fuzzy)",
   "quickopen.empty": "No matching files",
   "quickopen.loading": "Indexing…",
@@ -2374,7 +2376,7 @@ function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshKey, onN
 function isStagedXy(xy) {
   return typeof xy === "string" && xy.length > 0 && xy[0] !== " " && xy[0] !== "?";
 }
-function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commitsOpen, setCommitsOpen, onOpenCommit, onOpenDiff, onDiscard, onDiscardDir, onStage, onStageDir, onUnstage, onUnstageDir, onCommit, committing, onNotify, refresh, onSearch }) {
+function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commitsOpen, setCommitsOpen, onOpenCommit, onOpenDiff, onDiscard, onDiscardDir, onStage, onStageDir, onUnstage, onUnstageDir, onCommit, committing, onNotify, refresh }) {
   const [treeView, setTreeView] = useState(true);
   const [message, setMessage] = useState("");
   const [amend, setAmend] = useState(false);
@@ -2477,8 +2479,7 @@ function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commitsOpen, 
     h(
       "div",
       { className: "ce-changes-search" },
-      h("input", { className: "ce-input", type: "search", value: filterQuery, placeholder: t("changes.filterPlaceholder"), "aria-label": t("changes.filterPlaceholder"), onChange: (e) => setFilterQuery(e.target.value) }),
-      h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost", onClick: onSearch, title: t("changes.searchWorkspace") }, `⌕ ${t("changes.searchWorkspace")}`)
+      h("input", { className: "ce-input", type: "search", value: filterQuery, placeholder: t("changes.filterPlaceholder"), "aria-label": t("changes.filterPlaceholder"), onChange: (e) => setFilterQuery(e.target.value) })
     ),
     h(
       "div",
@@ -4879,7 +4880,7 @@ function CodeBody(props) {
       ) : null,
       h("span", { className: "ce-spacer" }),
       h("button", { type: "button", className: "ce-tool", title: `${t("quickopen.placeholder")} (⌘P / Ctrl+P)`, onClick: openPalette }, h(IconSearch)),
-      h("button", { type: "button", className: "ce-tool", title: `${t("toolbar.search")} (⇧⌘F / Ctrl+Shift+F)`, onClick: openSearch }, h(IconTextSearch)),
+      h("button", { type: "button", className: "ce-tool ce-workspace-search", title: `${t("search.workspaceHint")} (⇧⌘F / Ctrl+Shift+F)`, "aria-label": t("search.workspaceHint"), onClick: openSearch }, h(IconTextSearch), h("span", null, t("changes.searchWorkspace"))),
       h("button", { type: "button", className: "ce-tool", title: `${statusTitle}`, onClick: () => {
         refreshGit();
         setTreeKey((k) => k + 1);
@@ -4937,7 +4938,6 @@ function CodeBody(props) {
         onCommit: (msg, stageAll, amend) => commitChanges(msg, stageAll, amend),
         committing,
         onNotify: (text, kind) => say(text, kind),
-        onSearch: openSearch,
         refresh: refreshGit
       })) : null,
       railVisible ? h("div", { className: "ce-splitter", onMouseDown: startRailDrag, onDoubleClick: () => setRailVisible(false), title: "⇔ 拖动调宽 · 双击收起" }) : h("button", { type: "button", className: "ce-rail-tab", title: "展开侧栏 (⌘B / Ctrl+B)", onClick: () => setRailVisible(true) }, "▸"),
@@ -5182,6 +5182,8 @@ function CodeTitle({ useTabInfo }) {
 var CSS2 = `
 .ce-root{height:100%;min-height:0;display:flex;flex-direction:column;position:relative;color:var(--dsw-alias-label-primary,#ddd);font-size:13px;background:var(--dsw-alias-bg-base,#181818)}
 .ce-toolbar{display:flex;align-items:center;gap:6px;padding:6px 8px;border-bottom:.5px solid var(--dsw-alias-border-l1,#333);flex:none}
+.ce-tool.ce-workspace-search{width:auto;flex:none;gap:5px;padding:0 7px;white-space:nowrap;font:inherit;font-size:11px}
+.ce-workspace-search svg{width:14px;height:14px;flex:none}
 .ce-seg{display:flex;border-radius:var(--dsw-radius-sm,6px);overflow:hidden;border:.5px solid var(--dsw-alias-border-l2,#444)}
 .ce-seg-btn{border:0;background:transparent;color:var(--dsw-alias-label-secondary,#999);padding:3px 10px;cursor:pointer;font:inherit}
 .ce-seg-on{background:var(--dsw-alias-interactive-bg-hover,#2b2b2b);color:var(--dsw-alias-label-primary,#eee)}

@@ -1182,7 +1182,7 @@ export function CodeBody(props) {
 				: null,
 			h("span", { className: "ce-spacer" }),
 			h("button", { type: "button", className: "ce-tool", title: `${t("quickopen.placeholder")} (⌘P / Ctrl+P)`, onClick: openPalette }, h(IconSearch)),
-			h("button", { type: "button", className: "ce-tool", title: `${t("toolbar.search")} (⇧⌘F / Ctrl+Shift+F)`, onClick: openSearch }, h(IconTextSearch)),
+			h("button", { type: "button", className: "ce-tool ce-workspace-search", title: `${t("search.workspaceHint")} (⇧⌘F / Ctrl+Shift+F)`, "aria-label": t("search.workspaceHint"), onClick: openSearch }, h(IconTextSearch), h("span", null, t("changes.searchWorkspace"))),
 			h("button", { type: "button", className: "ce-tool", title: `${statusTitle}`, onClick: () => { refreshGit(); setTreeKey((k) => k + 1); if (docRef.current) void loadFile(docRef.current.path, cursorRef.current?.line ?? 1, cursorRef.current?.col ?? 1); } }, h(IconRefresh)),
 			h("span", { className: `ce-dot ce-dot-${status.state}`, title: statusTitle }),
 		),
@@ -1241,7 +1241,6 @@ export function CodeBody(props) {
 						onCommit: (msg, stageAll, amend) => commitChanges(msg, stageAll, amend),
 						committing,
 						onNotify: (text, kind) => say(text, kind),
-						onSearch: openSearch,
 						refresh: refreshGit,
 					}))
 				: null,
