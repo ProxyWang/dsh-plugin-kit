@@ -1,6 +1,6 @@
 /* ---------------- API tester: curl import, request editor, response view ---------------- */
 
-import { Fragment, h, useCallback, useEffect, useMemo, useState } from "./react.js";
+import { Fragment, h, useCallback, useEffect, useMemo, useRef, useState } from "./react.js";
 import { api } from "./api.js";
 import { SUB_CT, parseCurl, toCurl } from "./curl.js";
 
@@ -129,6 +129,15 @@ export function ApiView({ t }) {
 	const [requestTab, setRequestTab] = useState("params");
 	const [responseCopied, setResponseCopied] = useState(false);
 	const [timeoutMs, setTimeoutMs] = useState(30000);
+	const [requestShare, setRequestShare] = useState(42);
+	const workspaceRef = useRef(null);
+	const splitDrag = useRef(null);
+	const setSplit = (value) => setRequestShare(Math.max(24, Math.min(72, value)));
+	const splitPointer = (event) => {
+		const rect = workspaceRef.current?.getBoundingClientRect();
+		if (!rect || rect.height <= 0) return;
+		setSplit((event.clientY - rect.top) / rect.height * 100);
+	};
 
 	useEffect(() => {
 		storeList(ENV_KEY, envPairs);
@@ -398,7 +407,8 @@ export function ApiView({ t }) {
 				),
 			)
 			: null,
-		h("div", { className: "cea-scroll ce-scroll" },
+		h("div", { className: "cea-scroll cea-workspace", ref: workspaceRef, style: { gridTemplateRows: `minmax(0, ${requestShare}fr) 10px minmax(0, ${100 - requestShare}fr)` } },
+			h("section", { className: "cea-request", "aria-label": t("api.requestConfig") },
 			h("div", { className: "cea-request-tabs", role: "group", "aria-label": t("api.requestConfig") },
 				[ ["params", t("api.params"), activeParamCount], ["headers", t("api.headers"), headers.filter((p) => p.name?.trim()).length], ["body", t("api.body"), bodyType === "none" ? 0 : 1], ["settings", t("api.settings"), 0] ].map(([id, label, count]) =>
 					h("button", { type: "button", key: id, className: `cea-config-tab${requestTab === id ? " cea-config-tab-on" : ""}`, "aria-pressed": requestTab === id, onClick: () => { setRequestTab(id); if (id === "params" && paramPairs.length === 0) setParamPairs([{ name: "", value: "" }]); if (id === "headers" && headers.length === 0) setHeaders([{ name: "", value: "" }]); } }, label, count ? h("span", { className: "cea-tab-count" }, count) : null)),
@@ -484,6 +494,23 @@ export function ApiView({ t }) {
 			bodyType === "none" ? h("div", { className: "cea-empty" }, t("api.bodyEmpty")) : null,
 			) : null,
 			),
+			),
+			h("div", {
+				className: "cea-resizer", role: "separator", tabIndex: 0,
+				"aria-label": t("api.resizePanels"), "aria-orientation": "horizontal",
+				"aria-valuemin": 24, "aria-valuemax": 72, "aria-valuenow": Math.round(requestShare),
+				title: t("api.resizeHint"),
+				onPointerDown: (e) => { if (e.button !== 0) return; e.preventDefault(); e.currentTarget.setPointerCapture(e.pointerId); splitDrag.current = e.pointerId; splitPointer(e); },
+				onPointerMove: (e) => { if (splitDrag.current === e.pointerId) splitPointer(e); },
+				onPointerUp: (e) => { if (splitDrag.current !== e.pointerId) return; splitDrag.current = null; e.currentTarget.releasePointerCapture(e.pointerId); },
+				onLostPointerCapture: () => { splitDrag.current = null; },
+				onDoubleClick: () => setRequestShare(42),
+				onKeyDown: (e) => {
+					if (!["ArrowUp", "ArrowDown", "Home", "End"].includes(e.key)) return;
+					e.preventDefault(); e.stopPropagation();
+					setSplit(e.key === "Home" ? 24 : e.key === "End" ? 72 : requestShare + (e.key === "ArrowDown" ? 5 : -5));
+				},
+			}, h("span", { "aria-hidden": true })),
 			h("section", { className: "cea-response", "aria-label": t("api.resp"), "aria-busy": sending },
 			sending ? h("div", { className: "cea-response-wait", role: "status" }, t("api.sending")) : null,
 			response
@@ -502,13 +529,13 @@ export function ApiView({ t }) {
 								h("button", { type: "button", className: "ce-link", onClick: () => setShowRespHeaders((v) => !v) }, `${t("api.respHeaders")} ${showRespHeaders ? "▾" : "▸"}`),
 							),
 					),
-					showRespHeaders && !response.error
-						? h("div", { className: "cea-hlist" }, (response.headers ?? []).map((hd, i) =>
-							h("div", { key: i }, h("span", { className: "cea-hk" }, hd[0]), h("span", null, hd[1]))))
-						: null,
-					!response.error
-						? h("pre", { className: "cea-resp" }, respJson ?? response.text ?? "")
-						: null,
+					h("div", { className: "cea-response-content ce-scroll" },
+						showRespHeaders && !response.error
+							? h("div", { className: "cea-hlist" }, (response.headers ?? []).map((hd, i) =>
+								h("div", { key: i }, h("span", { className: "cea-hk" }, hd[0]), h("span", null, hd[1]))))
+							: null,
+						!response.error ? h("pre", { className: "cea-resp" }, respJson ?? response.text ?? "") : null,
+					),
 				)
 				: h("div", { className: "cea-empty" }, h("strong", null, t("api.responseEmpty")), h("span", null, t("api.sendShortcut"))),
 			),

@@ -184,11 +184,14 @@ export function SkillsView({ cwd, t, say }) {
 							contentTruncated ? h("span", { className: "ce-chip ce-chip-warn" }, t("skills.truncatedChip")) : null,
 							dirty ? h("span", { className: "ce-chip ce-chip-warn" }, t("skills.dirty")) : null,
 						),
+						h("details", { className: "ce-sk-install-details", key: sel.path || sel.name },
+							h("summary", null, t("skills.details")),
 						sel.description ? h("p", { className: "ce-sk-detail-desc" }, sel.description) : null,
 						sel.dir || sel.path ? h("button", { type: "button", className: "ce-sk-path", title: t("skills.copyPath"), onClick: async () => {
 							try { await navigator.clipboard.writeText(sel.dir ?? sel.path); say(t("skills.pathCopied")); }
 							catch { say(t("skills.copyFailed"), "error"); }
 						} }, sel.dir || sel.path) : null,
+						),
 					),
 					h("div", { className: "ce-sk-detail-tools" },
 						editMode ? h("span", { className: "ce-sk-edit-label" }, t("skills.editing")) : h("div", { className: "ce-sk-view-switch" },

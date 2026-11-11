@@ -128,6 +128,58 @@ export function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commit
 		h("div", { className: "ce-changes-search" },
 			h("input", { className: "ce-input", type: "search", value: filterQuery, placeholder: t("changes.filterPlaceholder"), "aria-label": t("changes.filterPlaceholder"), onChange: (e) => setFilterQuery(e.target.value) }),
 		),
+		h("section", { className: "ce-change-group" },
+		staged.length > 0
+			? h(
+				Fragment,
+				null,
+				h(
+					"div",
+					{ className: "ce-section" },
+					h("span", null, `${t("changes.staged")} · ${visibleStaged.length}${visibleStaged.length !== staged.length ? `/${staged.length}` : ""}`),
+					h("button", { className: "ce-link", type: "button", title: t("changes.unstageAll"), onClick: () => onUnstageDir && onUnstageDir("") }, t("changes.unstageAll")),
+				),
+				treeView
+					? h(ChangeTree, {
+						items: visibleStaged.map((f) => ({ path: f.path, ch: badge(f.xy), from: f.from ?? void 0 })),
+						onOpen: (item) => onOpenDiff(item.path, "staged"),
+						onUnstage: (item) => onUnstage && onUnstage(item),
+						onUnstageDir: (dirPath) => onUnstageDir && onUnstageDir(dirPath),
+						keyPrefix: "s",
+						t,
+					})
+					: flatRows(visibleStaged, "s", "staged"),
+			)
+			: null,
+		h(
+			"div",
+			{ className: "ce-section" },
+			h("span", null, `${t("changes.working")} · ${visibleUnstaged.length}${visibleUnstaged.length !== unstaged.length ? `/${unstaged.length}` : ""}`),
+			unstaged.length > 0
+				? h("button", { className: "ce-link", type: "button", title: t("changes.stageAll"), onClick: () => onStageDir && onStageDir("") }, t("changes.stageAll"))
+				: null,
+			h("button", { className: "ce-link", type: "button", title: treeView ? t("changes.toList") : t("changes.toTree"), onClick: () => setTreeView((v) => !v) }, treeView ? t("changes.toList") : t("changes.toTree")),
+			h("button", { className: "ce-tool ce-tiny", type: "button", title: t("refresh"), onClick: refresh }, h(IconRefresh)),
+		),
+		visibleUnstaged.length === 0 && h("div", { className: "ce-note" }, t(q ? "changes.noFilterMatches" : unstaged.length === 0 && staged.length > 0 ? "changes.allStaged" : "changes.none")),
+		treeView
+			? h(ChangeTree, {
+				items: visibleUnstaged.map((f) => ({ path: f.path, ch: badge(f.xy), from: f.from ?? void 0 })),
+				onOpen: (item) => onOpenDiff(item.path, "working"),
+				onDiscard: (item) => onDiscard && onDiscard(item),
+				onDiscardDir: (dirItems) => onDiscardDir && onDiscardDir(dirItems),
+				onStage: (item) => onStage && onStage(item),
+				onStageDir: (dirPath) => onStageDir && onStageDir(dirPath),
+				keyPrefix: "w",
+				t,
+			})
+			: flatRows(visibleUnstaged, "w", "working"),
+		),
+		h("details", { className: "ce-commit-disclosure" },
+			h("summary", { className: "ce-disclosure-summary" },
+				h("span", null, t("changes.compose")),
+				h("span", { className: "ce-disclosure-meta" }, staged.length ? t("changes.readyCount", { n: staged.length }) : t("changes.stageBeforeCommit")),
+			),
 		h("div", { className: "ce-commitbox" },
 			h("input", {
 				className: "ce-input ce-commitbox-msg",
@@ -165,55 +217,9 @@ export function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commit
 			}, committing ? t("changes.commitBusy") : `✓ ${commitLabel}`),
 			),
 		),
-		h("section", { className: "ce-change-group" },
-		staged.length > 0
-			? h(
-				Fragment,
-				null,
-				h(
-					"div",
-					{ className: "ce-section" },
-					h("span", null, `${t("changes.staged")} · ${visibleStaged.length}${visibleStaged.length !== staged.length ? `/${staged.length}` : ""}`),
-					h("button", { className: "ce-link", type: "button", title: t("changes.unstageAll"), onClick: () => onUnstageDir && onUnstageDir("") }, t("changes.unstageAll")),
-				),
-				treeView
-					? h(ChangeTree, {
-						items: visibleStaged.map((f) => ({ path: f.path, ch: badge(f.xy), from: f.from ?? void 0 })),
-						onOpen: (item) => onOpenDiff(item.path, "staged"),
-						onUnstage: (item) => onUnstage && onUnstage(item),
-						onUnstageDir: (dirPath) => onUnstageDir && onUnstageDir(dirPath),
-						keyPrefix: "s",
-						t,
-					})
-					: flatRows(visibleStaged, "s", "staged"),
-			)
-			: null,
-		h(
-			"div",
-			{ className: "ce-section" },
-			h("span", null, `${t("changes.working")} · ${visibleUnstaged.length}${visibleUnstaged.length !== unstaged.length ? `/${unstaged.length}` : ""}`),
-			unstaged.length > 0
-				? h("button", { className: "ce-link", type: "button", title: t("changes.stageAll"), onClick: () => onStageDir && onStageDir("") }, t("changes.stageAll"))
-				: null,
-			h("button", { className: "ce-link", type: "button", title: treeView ? t("changes.toList") : t("changes.toTree"), onClick: () => setTreeView((v) => !v) }, treeView ? t("changes.toList") : t("changes.toTree")),
-			h("button", { className: "ce-tool ce-tiny", type: "button", title: t("refresh"), onClick: refresh }, h(IconRefresh)),
 		),
-		git.working.length === 0 && h("div", { className: "ce-note" }, t("changes.none")),
-		treeView
-			? h(ChangeTree, {
-				items: visibleUnstaged.map((f) => ({ path: f.path, ch: badge(f.xy), from: f.from ?? void 0 })),
-				onOpen: (item) => onOpenDiff(item.path, "working"),
-				onDiscard: (item) => onDiscard && onDiscard(item),
-				onDiscardDir: (dirItems) => onDiscardDir && onDiscardDir(dirItems),
-				onStage: (item) => onStage && onStage(item),
-				onStageDir: (dirPath) => onStageDir && onStageDir(dirPath),
-				keyPrefix: "w",
-				t,
-			})
-			: flatRows(visibleUnstaged, "w", "working"),
-		),
-		h("section", { className: "ce-change-group" },
-		h("div", { className: "ce-section" }, t("changes.branch")),
+		h("details", { className: "ce-change-group ce-branch-history", ...(q ? { open: true } : {}) },
+		h("summary", { className: "ce-disclosure-summary" }, h("span", null, t("changes.branch")), h("span", { className: "ce-disclosure-meta" }, String(visibleBranchFiles.length))),
 		git.base
 			? h(
 				Fragment,

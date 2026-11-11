@@ -485,6 +485,24 @@ let apiTree = renderApi();
 const apiNodes = () => collect(apiTree);
 const apiNode = (predicate) => apiNodes().find(predicate);
 check("API request toolbar reserves one row for method/url/send", apiNode((n) => n.props.className === "cea-bar")?.children.length === 3, null);
+// The splitter changes pane proportions without changing request data or sending it.
+const resizeKey = (key) => ({ key, preventDefault() {}, stopPropagation() {} });
+apiNode((n) => n.props.role === "separator").props.onKeyDown(resizeKey("ArrowDown"));
+apiTree = renderApi();
+check("API separator keyboard resizes request region", apiNode((n) => n.props.role === "separator")?.props["aria-valuenow"] === 47, null);
+apiNode((n) => n.props.role === "separator").props.onKeyDown(resizeKey("Home")); apiTree = renderApi();
+check("API resize preserves minimum response and request space", apiNode((n) => n.props.role === "separator")?.props["aria-valuenow"] === 24, null);
+apiNode((n) => n.props.className === "cea-scroll cea-workspace").props.ref.current = { getBoundingClientRect: () => ({ top: 100, height: 400 }) };
+let captured = false;
+const splitterTarget = { setPointerCapture() { captured = true; }, releasePointerCapture() { captured = false; } };
+apiNode((n) => n.props.role === "separator").props.onPointerDown({ button: 0, pointerId: 3, clientY: 900, currentTarget: splitterTarget, preventDefault() {} });
+apiTree = renderApi();
+check("API pointer resize clamps large drag and captures pointer", captured && apiNode((n) => n.props.role === "separator")?.props["aria-valuenow"] === 72, null);
+apiNode((n) => n.props.role === "separator").props.onPointerUp({ pointerId: 3, currentTarget: splitterTarget });
+apiNode((n) => n.props.role === "separator").props.onPointerMove({ pointerId: 3, clientY: 0 }); apiTree = renderApi();
+check("API resize stops when pointer is released", !captured && apiNode((n) => n.props.role === "separator")?.props["aria-valuenow"] === 72, null);
+apiNode((n) => n.props.role === "separator").props.onDoubleClick(); apiTree = renderApi();
+check("API splitter resets to useful default without clearing URL", apiNode((n) => n.props.role === "separator")?.props["aria-valuenow"] === 42 && apiNode((n) => n.props.className === "ce-input cea-url")?.props.value === "", null);
 apiNode((n) => n.props.className?.startsWith("cea-config-tab") && n.children[0] === "api.body").props.onClick();
 apiTree = renderApi();
 check("API config tabs show only the selected editor", !apiNode((n) => n.props.placeholder === "Header") && Boolean(apiNode((n) => n.type === "select" && n.props.value === "none")), null);
@@ -518,6 +536,35 @@ try {
 	apiTree = renderApi();
 	check("settled API response appears and Send becomes available", Boolean(apiNode((n) => n.props.className === "cea-resp")) && apiNode((n) => n.props.className === "ce-sk-btn cea-send")?.props.disabled === false, null);
 } finally { globalThis.fetch = savedFetch; }
+
+// --- Task layout: narrow code navigation and review-first changes ---------------------------
+const { CodeBody } = await import("./src/client/code.js");
+const { TreePanel: TreePanelCmp } = await import("./src/client/tree.js");
+const navGlobals = { fetch: globalThis.fetch, requestAnimationFrame: globalThis.requestAnimationFrame, setTimeout: globalThis.setTimeout };
+const navRequests = [];
+globalThis.fetch = async (url, options) => {
+	navRequests.push({ url, body: JSON.parse(options.body) });
+	return { json: async () => ({ ok: true, value: { kind: "text", content: "hello\nworld\n", mtimeMs: 1 } }) };
+};
+globalThis.requestAnimationFrame = (fn) => { fn(); return 0; };
+globalThis.setTimeout = () => 0;
+try {
+	const renderCode = createHookRenderer(CodeBody, { sessionId: "layout", useSessions: (select) => select({ byId: { layout: { cwd: "/w" } } }), t: (k) => k });
+	let codeTree = renderCode();
+	const getCode = (test) => collect(codeTree).find(test);
+	check("narrow code navigation starts on file list with one search entry", codeTree.props["data-mobile-view"] === "files" && collect(codeTree).filter((n) => n.props.className === "ce-rail-search").length === 1 && !getCode((n) => n.props.className === "ce-tool ce-workspace-search"), null);
+	getCode((n) => n.type === TreePanelCmp).props.onOpenFile("readme.txt", 1, 1);
+	await new Promise((resolve) => setImmediate(resolve)); codeTree = renderCode();
+	check("opening a file switches narrow workspace to editor", codeTree.props["data-mobile-view"] === "editor", codeTree.props["data-mobile-view"]);
+	getCode((n) => n.props.className === "ce-mobile-back").props.onClick(); codeTree = renderCode();
+	check("back to files retains the open editor document", codeTree.props["data-mobile-view"] === "files" && Boolean(getCode((n) => n.props.className === "ce-mobile-open-editor ce-link")), null);
+	getCode((n) => n.props.className === "ce-mobile-open-editor ce-link").props.onClick(); codeTree = renderCode();
+	check("return to editor does not reload or lose current document", codeTree.props["data-mobile-view"] === "editor" && navRequests.filter((r) => r.url.endsWith("/fs.read")).length === 1, navRequests);
+} finally {
+	for (const [key, value] of Object.entries(navGlobals)) { if (value === undefined) delete globalThis[key]; else globalThis[key] = value; }
+}
+const composerDetails = panelNodes.find((n) => n.type === "details" && n.props.className === "ce-commit-disclosure");
+check("changes review shows file tree before collapsed commit form", Boolean(composerDetails) && !composerDetails.props.open && panelNodes.indexOf(workingTree) < panelNodes.indexOf(composerDetails), null);
 
 // --- Skills navigation, read races, and editor protections -----------------------------------
 const { SkillsView, skillScope } = await import("./src/client/skills.js");
@@ -557,6 +604,8 @@ try {
 	pendingSkillReads.get(skillFixtures[0].path)({ ok: true, value: { content: "# Stale Alpha", truncated: false } });
 	await settleSkills();
 	check("late previous selection cannot overwrite the selected skill", skillNode((n) => n.type === MarkdownView)?.props.text === "# Beta", null);
+	const installDetails = skillNode((n) => n.props.className === "ce-sk-install-details");
+	check("skill metadata is collapsed without hiding the preview", installDetails?.type === "details" && !installDetails.props.open && Boolean(skillNode((n) => n.type === MarkdownView)), null);
 	skillNode((n) => n.type === "button" && n.children[0] === "editor.edit").props.onClick(); skillsTree = renderSkills();
 	skillNode((n) => n.props.className === "ce-sk-ta").props.onChange({ target: { value: "# Beta edited" } }); skillsTree = renderSkills();
 	skillRow("alpha").props.onClick(); skillsTree = renderSkills();

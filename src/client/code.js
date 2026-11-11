@@ -77,6 +77,7 @@ export function CodeBody(props) {
 	const [showDiffView, setShowDiffView] = useState(true); // {symbol, anchorLine, busy, def, refs, error}
 	const [railW, setRailW] = useState(230);
 	const [railVisible, setRailVisible] = useState(true);
+	const [mobileView, setMobileView] = useState("files");
 	const [symbols, setSymbols] = useState([]);
 	const [symPalette, setSymPalette] = useState(null); // {query}
 	const [commitsOpen, setCommitsOpen] = useState(false);
@@ -230,6 +231,7 @@ export function CodeBody(props) {
 				setSymPalette(null);
 				setPreviewOn(true);
 				setDoc(entry);
+				setMobileView("editor");
 				modeRef.current = "code";
 				setDiff(null);
 				setCursor(null);
@@ -262,6 +264,7 @@ export function CodeBody(props) {
 			setSymPalette(null);
 			setPreviewOn(PREVIEW_RE.test(path));
 			setDoc(entry);
+			setMobileView("editor");
 			modeRef.current = "code";
 			setDiff(null);
 			const clampLine = Math.min(Math.max(1, line), Math.max(1, lines.length));
@@ -473,6 +476,7 @@ export function CodeBody(props) {
 			const res = await api("git.diff", repo ? { cwd, path, scope, repo } : { cwd, path, scope });
 			const value = res.ok ? res.value : { error: res.error };
 			modeRef.current = "diff";
+			setMobileView("editor");
 			setShowDiffView(true);
 			setDiff({ path, scope, text: value.diff ?? "", error: value.error, base: value.base, untracked: value.untracked, note: value.note });
 			setOverlay(null);
@@ -529,6 +533,7 @@ export function CodeBody(props) {
 				return;
 			}
 			modeRef.current = "diff";
+			setMobileView("editor");
 			setDiff({ path: `${t("diff.scopeCommit")} ${commit.hash}`, scope: "commit", commit: value.commit, text: value.diff ?? "" });
 			setShowDiffView(true);
 			setOverlay(null);
@@ -569,6 +574,7 @@ export function CodeBody(props) {
 			}
 			setFileHist(null);
 			modeRef.current = "diff";
+			setMobileView("editor");
 			setDiff({ path: `${commit.hash} · ${path}`, scope: "commit", commit: value.commit, text: value.diff ?? "" });
 			setShowDiffView(true);
 			setOverlay(null);
@@ -1135,6 +1141,7 @@ export function CodeBody(props) {
 			setOverlay(null);
 			setHover(null);
 			modeRef.current = "diff";
+			setMobileView("editor");
 			setShowDiffView(true);
 			setDiff({
 				path: detail.path ?? "",
@@ -1154,16 +1161,17 @@ export function CodeBody(props) {
 
 	return h(
 		"div",
-		{ className: "ce-root", onKeyDown: onRootKeyDown },
+		{ className: "ce-root ce-code-root", "data-mobile-view": (doc || diff) && (!railVisible || mobileView === "editor") ? "editor" : "files", onKeyDown: onRootKeyDown },
 		h(
 			"div",
 			{ className: "ce-toolbar" },
 			h(
 				"div",
 				{ className: "ce-seg" },
-				h("button", { type: "button", className: `ce-seg-btn${mode === "files" ? " ce-seg-on" : ""}`, onClick: () => setMode("files") }, t("toolbar.files")),
-				h("button", { type: "button", className: `ce-seg-btn${mode === "changes" ? " ce-seg-on" : ""}`, onClick: () => { setMode("changes"); refreshGit(); } }, `${t("toolbar.changes")}${git?.repo ? ` · ${git.working.length}` : ""}`),
+				h("button", { type: "button", className: `ce-seg-btn${mode === "files" ? " ce-seg-on" : ""}`, onClick: () => { setMode("files"); setRailVisible(true); setMobileView("files"); } }, t("toolbar.files")),
+				h("button", { type: "button", className: `ce-seg-btn${mode === "changes" ? " ce-seg-on" : ""}`, onClick: () => { setMode("changes"); setRailVisible(true); setMobileView("files"); refreshGit(); } }, `${t("toolbar.changes")}${git?.repo ? ` · ${git.working.length}` : ""}`),
 			),
+			(doc || diff) ? h("button", { type: "button", className: "ce-mobile-open-editor ce-link", onClick: () => setMobileView("editor") }, t("layout.backEditor")) : null,
 			git?.repo
 				? h(
 					"button",
@@ -1181,8 +1189,8 @@ export function CodeBody(props) {
 				)
 				: null,
 			h("span", { className: "ce-spacer" }),
-			h("button", { type: "button", className: "ce-tool", title: `${t("quickopen.placeholder")} (⌘P / Ctrl+P)`, onClick: openPalette }, h(IconSearch)),
-			h("button", { type: "button", className: "ce-tool ce-workspace-search", title: `${t("search.workspaceHint")} (⇧⌘F / Ctrl+Shift+F)`, "aria-label": t("search.workspaceHint"), onClick: openSearch }, h(IconTextSearch), h("span", null, t("changes.searchWorkspace"))),
+			!railVisible ? h("button", { type: "button", className: "ce-tool", title: `${t("quickopen.placeholder")} (⌘P / Ctrl+P)`, onClick: openPalette }, h(IconSearch)) : null,
+			!railVisible ? h("button", { type: "button", className: "ce-tool ce-workspace-search", title: `${t("search.workspaceHint")} (⇧⌘F / Ctrl+Shift+F)`, "aria-label": t("search.workspaceHint"), onClick: openSearch }, h(IconTextSearch), h("span", null, t("changes.searchWorkspace"))) : null,
 			h("button", { type: "button", className: "ce-tool", title: `${statusTitle}`, onClick: () => { refreshGit(); setTreeKey((k) => k + 1); if (docRef.current) void loadFile(docRef.current.path, cursorRef.current?.line ?? 1, cursorRef.current?.col ?? 1); } }, h(IconRefresh)),
 			h("span", { className: `ce-dot ce-dot-${status.state}`, title: statusTitle }),
 		),
@@ -1199,8 +1207,9 @@ export function CodeBody(props) {
 			{ className: "ce-main", ref: mainRef },
 			railVisible
 				? h("div", { className: "ce-rail-wrap ce-rail-with-search", style: { width: `${railW}px` } },
-					h("button", { type: "button", className: "ce-rail-search", title: `${t("search.workspaceHint")} (⇧⌘F / Ctrl+Shift+F)`, onClick: openSearch },
-						h(IconTextSearch), h("span", null, t("changes.searchWorkspace")),
+					h("div", { className: "ce-rail-navigation" },
+						h("button", { type: "button", className: "ce-rail-search", title: `${t("search.workspaceHint")} (⇧⌘F / Ctrl+Shift+F)`, onClick: openSearch }, h(IconTextSearch), h("span", null, t("changes.searchWorkspace"))),
+						h("button", { type: "button", className: "ce-tool ce-rail-quickopen", "aria-label": t("quickopen.placeholder"), title: `${t("quickopen.placeholder")} (⌘P / Ctrl+P)`, onClick: openPalette }, h(IconSearch)),
 					),
 					mode === "files"
 					? h(TreePanel, {
@@ -1254,6 +1263,7 @@ export function CodeBody(props) {
 			h(
 				"div",
 				{ className: "ce-editor" },
+				h("button", { type: "button", className: "ce-mobile-back", onClick: () => { setRailVisible(true); setMobileView("files"); } }, `← ${t("layout.backFiles")}`),
 				tabs.length > 0
 					? h("div", { className: "ce-tabs", ref: tabsRef },
 						tabs.map((p) => {

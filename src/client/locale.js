@@ -1,6 +1,17 @@
 /* ---------------- locale ---------------- */
 
 export const zh = {
+	"layout.backEditor": "返回代码",
+	"layout.backFiles": "文件与变更",
+	"changes.compose": "提交更改",
+	"changes.readyCount": "已暂存 {n} 个文件",
+	"changes.stageBeforeCommit": "填写信息后提交",
+	"changes.noFilterMatches": "没有匹配此筛选条件的文件",
+	"changes.allStaged": "所有更改已暂存",
+	"api.resizePanels": "调整请求与响应区域高度",
+	"api.resizeHint": "拖动调整高度 · 方向键微调 · 双击恢复",
+	"skills.details": "说明与安装位置",
+
 	"type.label": "代码",
 	"guide.title": "代码浏览器",
 	"guide.description": "工作区代码浏览、当前分支变更、LSP 跳转定义/引用（Go/TS/Python）",
@@ -340,6 +351,17 @@ export const zh = {
 	"quickopen.command": "快速打开文件（代码浏览器）",
 };
 export const en = {
+	"layout.backEditor": "Back to editor",
+	"layout.backFiles": "Files & Changes",
+	"changes.compose": "Commit changes",
+	"changes.readyCount": "{n} staged files",
+	"changes.stageBeforeCommit": "Write a message to commit",
+	"changes.noFilterMatches": "No files match this filter",
+	"changes.allStaged": "All changes are staged",
+	"api.resizePanels": "Resize request and response panes",
+	"api.resizeHint": "Drag to resize · Arrow keys to adjust · Double-click to reset",
+	"skills.details": "Description & installation",
+
 	"type.label": "Code",
 	"guide.title": "Code Explorer",
 	"guide.description": "Workspace browsing, branch changes, LSP definition/reference jumps (Go/TS/Python)",
