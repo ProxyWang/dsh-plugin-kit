@@ -223,6 +223,14 @@ var zh = {
   "api.params": "Query 参数",
   "api.addParam": "添加参数",
   "api.paramsHint": "发送时合并进 URL，同名覆盖",
+  "api.method": "请求方法",
+  "api.environment": "环境变量",
+  "api.requestConfig": "请求配置",
+  "api.settings": "设置",
+  "api.sendShortcut": "⌘ / Ctrl + Enter 发送请求",
+  "api.bodyEmpty": "此请求不发送请求体",
+  "api.responseEmpty": "发送请求后，在这里查看响应",
+  "api.copyResponse": "复制响应",
   "api.timeout": "超时 ms",
   "api.body": "请求体",
   "api.bodyNone": "无",
@@ -528,6 +536,14 @@ var en = {
   "api.params": "Query Params",
   "api.addParam": "Add param",
   "api.paramsHint": "Merged into the URL at send time; same names override",
+  "api.method": "Request method",
+  "api.environment": "Environment",
+  "api.requestConfig": "Request configuration",
+  "api.settings": "Settings",
+  "api.sendShortcut": "⌘ / Ctrl + Enter to send",
+  "api.bodyEmpty": "This request has no body",
+  "api.responseEmpty": "Send a request to see the response here",
+  "api.copyResponse": "Copy response",
   "api.timeout": "Timeout ms",
   "api.body": "Body",
   "api.bodyNone": "none",
@@ -5347,6 +5363,36 @@ var CSS2 = `
 .cea-hurl{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:var(--dsw-alias-label-primary,#ccc);font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
 .cea-hname{flex:none;max-width:34%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:var(--dsw-alias-state-warn-primary,#e3b341)}
 .cea-hstatus{flex:none;font-size:11px}
+.cea-root{container-type:inline-size;overflow:hidden}
+.cea-root>.cea-bar{display:grid;grid-template-columns:88px minmax(0,1fr) auto;gap:0;padding:12px 12px 8px;border:0}
+.cea-root>.cea-bar .cea-request-method{width:88px;height:36px;border-radius:6px 0 0 6px;font-weight:700}
+.cea-root>.cea-bar .cea-url{width:100%;height:36px;box-sizing:border-box;border-radius:0 6px 6px 0;border-left:0;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px}
+.cea-root>.cea-bar .cea-send{margin-left:8px;min-height:36px;padding:6px 16px;background:var(--dsw-alias-brand-primary,#2f81f7);border-color:transparent;color:#fff;font-weight:600}
+.cea-tools{display:flex;flex-wrap:wrap;align-items:center;gap:4px;padding:0 12px 8px;border-bottom:.5px solid var(--dsw-alias-border-l1,#333);flex:none}
+.cea-tools .ce-sk-btn{border-color:transparent;padding:4px 8px;font-size:11px}
+.cea-tools .ce-sk-btn:hover{background:var(--dsw-alias-interactive-bg-hover,#26292e)}
+.cea-request-tabs{display:flex;gap:16px;padding:0 12px;overflow-x:auto;flex:none;border-bottom:.5px solid var(--dsw-alias-border-l1,#333)}
+.cea-config-tab{display:inline-flex;align-items:center;gap:6px;flex:none;border:0;border-bottom:2px solid transparent;padding:10px 0 8px;background:transparent;color:var(--dsw-alias-label-secondary,#999);font:inherit;font-size:12px;cursor:pointer}
+.cea-config-tab-on{color:var(--dsw-alias-label-primary,#ddd);border-bottom-color:var(--dsw-alias-brand-primary,#59b7ff);font-weight:600}
+.cea-tab-count{font-size:10px;color:var(--dsw-alias-label-tertiary,#889)}
+.cea-root button:focus-visible,.cea-root select:focus-visible,.cea-root textarea:focus-visible{outline:2px solid var(--dsw-alias-brand-primary,#59b7ff);outline-offset:-2px}
+.cea-request-panel{flex:0 0 auto;min-height:160px;max-height:55%;overflow:auto;padding:8px 4px 12px;box-sizing:border-box}
+.cea-root .cea-sec{flex-wrap:wrap;padding:8px;color:var(--dsw-alias-label-secondary,#999);text-transform:none;letter-spacing:normal;font-weight:500}
+.cea-settings{padding:12px 8px}
+.cea-settings .cea-tmo{font-size:12px;gap:12px}
+.cea-settings .cea-tmo-in{box-sizing:border-box;width:100px}
+.cea-root .cea-body:not(.cea-import){min-height:180px;max-height:none;resize:vertical;border:0;margin:4px 0 0;padding:12px;background:var(--dsw-alias-bg-base,#181818)}
+.cea-response{display:flex;flex-direction:column;flex:1 0 160px;min-height:160px;border-top:.5px solid var(--dsw-alias-border-l1,#333);position:relative}
+.cea-response>.cea-sec{font-weight:600;flex:none}
+.cea-response .cea-resp{flex:1;min-height:100px}
+.cea-root .cea-status{flex-wrap:wrap;padding:4px 12px 8px}
+.cea-response-wait{padding:8px 12px;color:var(--dsw-alias-brand-primary,#59b7ff);font-size:12px}
+.cea-response[aria-busy="true"] .cea-resp{opacity:.5}
+.cea-empty{display:flex;flex-direction:column;justify-content:center;align-items:center;gap:8px;min-height:110px;padding:16px;text-align:center;color:var(--dsw-alias-label-secondary,#999);font-size:12px;line-height:1.5}
+.cea-empty strong{font-weight:500}
+.cea-empty span{font-size:11px;color:var(--dsw-alias-label-tertiary,#889)}
+.cea-root .cea-hist{top:94px}
+@container (max-width:380px){.cea-root>.cea-bar{grid-template-columns:76px minmax(0,1fr)}.cea-root>.cea-bar .cea-request-method{width:76px}.cea-root>.cea-bar .cea-send{grid-column:1/-1;margin:8px 0 0}.cea-tools{gap:2px}.cea-request-tabs{gap:12px}.cea-root .cea-hist{top:138px}}
 .cea-hts{flex:none;font-size:10px;color:var(--dsw-alias-label-tertiary,#778);font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
 .ce-htmlprev{flex:1;min-height:0;width:100%;border:0;background:#fff}
 .ctp-tools{display:flex;gap:6px;padding:4px 8px;border-bottom:.5px solid var(--dsw-alias-border-l1,#333);flex:none}
@@ -6133,8 +6179,9 @@ function ApiView({ t }) {
   const [envPairs, setEnvPairs] = useState(() => loadList(ENV_KEY));
   const [envOpen, setEnvOpen] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [paramPairs, setParamPairs] = useState([]);
-  const [paramsOpen, setParamsOpen] = useState(false);
+  const [paramPairs, setParamPairs] = useState([{ name: "", value: "" }]);
+  const [requestTab, setRequestTab] = useState("params");
+  const [responseCopied, setResponseCopied] = useState(false);
   const [timeoutMs, setTimeoutMs] = useState(3e4);
   useEffect(() => {
     storeList(ENV_KEY, envPairs);
@@ -6151,7 +6198,10 @@ function ApiView({ t }) {
       if (typeof d.method === "string") setMethod(d.method);
       if (typeof d.url === "string") setUrl(d.url);
       if (Array.isArray(d.headers)) setHeaders(d.headers);
-      if (typeof d.bodyType === "string") setBodyType(d.bodyType);
+      if (typeof d.bodyType === "string") {
+        setBodyType(d.bodyType);
+        if (d.bodyType !== "none") setRequestTab("body");
+      }
       if (typeof d.rawSub === "string") setRawSub(d.rawSub);
       if (Array.isArray(d.formPairs)) setFormPairs(d.formPairs);
       if (typeof d.body === "string") setBody(d.body);
@@ -6183,7 +6233,10 @@ function ApiView({ t }) {
     if (typeof req.method === "string") setMethod(req.method);
     if (typeof req.url === "string") setUrl(req.url);
     if (Array.isArray(req.headers)) setHeaders(req.headers);
-    if (typeof req.bodyType === "string") setBodyType(req.bodyType);
+    if (typeof req.bodyType === "string") {
+      setBodyType(req.bodyType);
+      setRequestTab(req.bodyType === "none" ? "params" : "body");
+    }
     if (typeof req.rawSub === "string") setRawSub(req.rawSub);
     if (Array.isArray(req.formPairs)) setFormPairs(req.formPairs);
     if (typeof req.body === "string") setBody(req.body);
@@ -6211,6 +6264,7 @@ function ApiView({ t }) {
     const sentUrl = substituteVars(mergeParams(url.trim(), paramPairs), envMap);
     const sentSnapshot = snapshot();
     setSending(true);
+    setResponseCopied(false);
     api("api.send", {
       method,
       url: sentUrl,
@@ -6257,7 +6311,13 @@ function ApiView({ t }) {
     const p = parseCurl(importText);
     setMethod(p.method);
     setUrl(p.url);
-    if (p.headers.length > 0) setHeaders(p.headers);
+    setHeaders(p.headers);
+    setParamPairs([]);
+    setBody(p.body ?? "");
+    setFormPairs(p.multipart ?? []);
+    setBodyType("none");
+    setResponse(null);
+    setRequestTab(p.multipart || p.body !== "" ? "body" : "params");
     if (p.multipart) {
       setFormPairs(p.multipart);
       setBodyType("multipart");
@@ -6314,25 +6374,40 @@ function ApiView({ t }) {
   const activeParamCount = paramPairs.filter((p) => String(p?.name ?? "").trim() !== "").length;
   return h(
     "div",
-    { className: "ce-root" },
+    { className: "ce-root cea-root", onKeyDown: (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "Enter" && !importOpen && !saveOpen && !envOpen) {
+        e.preventDefault();
+        e.stopPropagation();
+        send();
+      }
+    } },
     h(
       "div",
       { className: "cea-bar" },
       h(
         "select",
-        { className: "cea-method", value: method, onChange: (e) => setMethod(e.target.value) },
-        ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"].map((m) => h("option", { key: m, value: m }, m))
+        { className: `cea-method cea-request-method cea-m-${method.toLowerCase()}`, "aria-label": t("api.method"), value: method, onChange: (e) => setMethod(e.target.value) },
+        ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"].map((m) => h("option", { key: m, value: m }, m))
       ),
       h("input", {
         className: "ce-input cea-url",
         placeholder: t("api.urlPlaceholder"),
+        "aria-label": t("api.urlPlaceholder"),
         value: url,
         onChange: (e) => setUrl(e.target.value),
         onKeyDown: (e) => {
-          if (e.key === "Enter") send();
+          if (e.key === "Enter") {
+            e.preventDefault();
+            e.stopPropagation();
+            send();
+          }
         }
       }),
-      h("button", { type: "button", className: "ce-sk-btn cea-send", disabled: sending || url.trim() === "", onClick: send }, sending ? t("api.sending") : t("api.send")),
+      h("button", { type: "button", className: "ce-sk-btn cea-send", title: t("api.sendShortcut"), disabled: sending || url.trim() === "", onClick: send }, sending ? t("api.sending") : t("api.send"))
+    ),
+    h(
+      "div",
+      { className: "cea-tools" },
       h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost", title: t("api.importTitle"), onClick: () => {
         setImportOpen(true);
         setHistOpen(false);
@@ -6345,7 +6420,7 @@ function ApiView({ t }) {
         setHistOpen(false);
         setSaveOpen(false);
         setImportOpen(false);
-      } }, `{{}}${envPairs.length ? ` ${envPairs.length}` : ""}`),
+      } }, `${t("api.environment")}${envPairs.length ? ` ${envPairs.length}` : ""}`),
       h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost", title: t("api.saveTitle"), onClick: () => {
         setSaveOpen(true);
         setHistOpen(false);
@@ -6405,11 +6480,17 @@ function ApiView({ t }) {
       { className: "cea-scroll ce-scroll" },
       h(
         "div",
-        { className: "cea-sec" },
-        h("button", { type: "button", className: "ce-tool ce-tiny", title: t("api.params"), onClick: () => setParamsOpen((v) => !v) }, paramsOpen ? "▾" : "▸"),
-        h("span", null, `${t("api.params")}${activeParamCount ? ` · ${activeParamCount}` : ""}`),
-        h("span", { className: "ce-spacer" }),
-        h(
+        { className: "cea-request-tabs", role: "group", "aria-label": t("api.requestConfig") },
+        [["params", t("api.params"), activeParamCount], ["headers", t("api.headers"), headers.filter((p) => p.name?.trim()).length], ["body", t("api.body"), bodyType === "none" ? 0 : 1], ["settings", t("api.settings"), 0]].map(([id, label, count]) => h("button", { type: "button", key: id, className: `cea-config-tab${requestTab === id ? " cea-config-tab-on" : ""}`, "aria-pressed": requestTab === id, onClick: () => {
+          setRequestTab(id);
+          if (id === "params" && paramPairs.length === 0) setParamPairs([{ name: "", value: "" }]);
+          if (id === "headers" && headers.length === 0) setHeaders([{ name: "", value: "" }]);
+        } }, label, count ? h("span", { className: "cea-tab-count" }, count) : null))
+      ),
+      h(
+        "div",
+        { className: "cea-request-panel" },
+        requestTab === "settings" ? h("div", { className: "cea-settings" }, h(
           "label",
           { className: "cea-tmo" },
           t("api.timeout"),
@@ -6422,98 +6503,133 @@ function ApiView({ t }) {
             value: timeoutMs,
             onChange: (e) => setTimeoutMs(Math.max(1e3, Math.min(12e4, Number(e.target.value) || 3e4)))
           })
-        )
-      ),
-      paramsOpen ? h(
-        Fragment,
-        null,
-        paramPairs.map((p, i) => h(
-          "div",
-          { key: i, className: "cea-hrow" },
-          h("input", { className: "ce-input cea-hkey", placeholder: "name", value: p.name ?? "", onChange: (e) => setParamPairs((prev) => prev.map((x, j) => j === i ? { ...x, name: e.target.value } : x)) }),
-          h("input", { className: "ce-input cea-hval", placeholder: "value", value: p.value ?? "", onChange: (e) => setParamPairs((prev) => prev.map((x, j) => j === i ? { ...x, value: e.target.value } : x)) }),
-          h("button", { type: "button", className: "ce-tool ce-tiny", onClick: () => setParamPairs((prev) => prev.filter((_, j) => j !== i)) }, "✕")
-        )),
-        h(
-          "div",
-          { className: "cea-hrow" },
-          h("button", { type: "button", className: "ce-tool ce-tiny", title: t("api.addParam"), onClick: () => setParamPairs((prev) => [...prev, { name: "", value: "" }]) }, "+"),
-          h("span", { className: "cea-hint" }, t("api.paramsHint"))
-        )
-      ) : null,
-      h(
-        "div",
-        { className: "cea-sec" },
-        h("span", null, t("api.headers")),
-        h("span", { className: "ce-spacer" }),
-        h("button", { type: "button", className: "ce-tool ce-tiny", title: t("api.addHeader"), onClick: () => setHeaders((prev) => [...prev, { name: "", value: "" }]) }, "+")
-      ),
-      headers.map((hd, i) => h(
-        "div",
-        { key: i, className: "cea-hrow" },
-        h("input", { className: "ce-input cea-hkey", placeholder: "Header", value: hd.name ?? "", onChange: (e) => setHeaderAt(i, { name: e.target.value }) }),
-        h("input", { className: "ce-input cea-hval", placeholder: "Value", value: hd.value ?? "", onChange: (e) => setHeaderAt(i, { value: e.target.value }) }),
-        h("button", { type: "button", className: "ce-tool ce-tiny", onClick: () => setHeaders((prev) => prev.filter((_, j) => j !== i)) }, "✕")
-      )),
-      h(
-        "div",
-        { className: "cea-sec" },
-        h("span", null, t("api.body")),
-        h(
-          "select",
-          { className: "cea-method", value: bodyType, onChange: (e) => setBodyType(e.target.value) },
-          h("option", { value: "none" }, t("api.bodyNone")),
-          h("option", { value: "form" }, t("api.bodyForm")),
-          h("option", { value: "multipart" }, t("api.bodyMultipart")),
-          h("option", { value: "raw" }, t("api.bodyRaw"))
-        ),
-        bodyType === "raw" ? h(
+        )) : null,
+        requestTab === "params" ? h(
+          Fragment,
+          null,
+          paramPairs.map((p, i) => h(
+            "div",
+            { key: i, className: "cea-hrow" },
+            h("input", { className: "ce-input cea-hkey", placeholder: "name", value: p.name ?? "", onChange: (e) => setParamPairs((prev) => prev.map((x, j) => j === i ? { ...x, name: e.target.value } : x)) }),
+            h("input", { className: "ce-input cea-hval", placeholder: "value", value: p.value ?? "", onChange: (e) => setParamPairs((prev) => prev.map((x, j) => j === i ? { ...x, value: e.target.value } : x)) }),
+            h("button", { type: "button", className: "ce-tool ce-tiny", onClick: () => setParamPairs((prev) => prev.filter((_, j) => j !== i)) }, "✕")
+          )),
+          h(
+            "div",
+            { className: "cea-hrow" },
+            h("button", { type: "button", className: "ce-tool ce-tiny", title: t("api.addParam"), onClick: () => setParamPairs((prev) => [...prev, { name: "", value: "" }]) }, "+"),
+            h("span", { className: "cea-hint" }, t("api.paramsHint"))
+          )
+        ) : null,
+        requestTab === "headers" ? h(
           Fragment,
           null,
           h(
-            "select",
-            { className: "cea-method", value: rawSub, onChange: (e) => setRawSub(e.target.value) },
-            ["json", "text", "html", "xml"].map((s) => h("option", { key: s, value: s }, s))
-          ),
-          rawSub === "json" ? h(
-            Fragment,
-            null,
-            h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost", onClick: beautify }, t("api.beautify")),
-            beautifyErr ? h("span", { className: "cea-err" }, beautifyErr) : null
-          ) : null
-        ) : null,
-        bodyType === "form" || bodyType === "multipart" ? h("button", { type: "button", className: "ce-tool ce-tiny", title: t("api.addHeader"), onClick: () => setFormPairs((prev) => [...prev, { name: "", value: "" }]) }, "+") : null
-      ),
-      bodyType === "form" || bodyType === "multipart" ? h(Fragment, null, formPairs.map((p, i) => h(
-        "div",
-        { key: i, className: "cea-hrow" },
-        h("input", { className: "ce-input cea-hkey", placeholder: "key", value: p.name ?? "", onChange: (e) => setFormPairs((prev) => prev.map((x, j) => j === i ? { ...x, name: e.target.value } : x)) }),
-        h("input", { className: "ce-input cea-hval", placeholder: "value", value: p.value ?? "", onChange: (e) => setFormPairs((prev) => prev.map((x, j) => j === i ? { ...x, value: e.target.value } : x)) }),
-        h("button", { type: "button", className: "ce-tool ce-tiny", onClick: () => setFormPairs((prev) => prev.filter((_, j) => j !== i)) }, "✕")
-      ))) : null,
-      bodyType === "raw" ? h("textarea", { className: "cea-body", value: body, spellcheck: false, onChange: (e) => {
-        setBody(e.target.value);
-        setBeautifyErr("");
-      } }) : null,
-      response ? h(
-        Fragment,
-        null,
-        h("div", { className: "cea-sec" }, h("span", null, t("api.resp"))),
-        h(
-          "div",
-          { className: "cea-status" },
-          response.error ? h("span", { className: "cea-err" }, `${t("api.err")}: ${response.error}`) : h(
-            Fragment,
-            null,
-            h("span", { className: statusClass(response.status) }, `${response.status} ${response.statusText ?? ""}`),
-            h("span", { className: "cea-meta" }, `${response.ms ?? 0}ms · ${prettySize(response.size ?? 0)}${response.truncated ? " · truncated" : ""}`),
+            "div",
+            { className: "cea-sec" },
+            h("span", null, t("api.headers")),
             h("span", { className: "ce-spacer" }),
-            h("button", { type: "button", className: "ce-link", onClick: () => setShowRespHeaders((v) => !v) }, `${t("api.respHeaders")} ${showRespHeaders ? "▾" : "▸"}`)
-          )
-        ),
-        showRespHeaders && !response.error ? h("div", { className: "cea-hlist" }, (response.headers ?? []).map((hd, i) => h("div", { key: i }, h("span", { className: "cea-hk" }, hd[0]), h("span", null, hd[1])))) : null,
-        !response.error ? h("pre", { className: "cea-resp" }, respJson ?? response.text ?? "") : null
-      ) : null
+            h("button", { type: "button", className: "ce-tool ce-tiny", title: t("api.addHeader"), onClick: () => setHeaders((prev) => [...prev, { name: "", value: "" }]) }, "+")
+          ),
+          headers.map((hd, i) => h(
+            "div",
+            { key: i, className: "cea-hrow" },
+            h("input", { className: "ce-input cea-hkey", placeholder: "Header", value: hd.name ?? "", onChange: (e) => setHeaderAt(i, { name: e.target.value }) }),
+            h("input", { className: "ce-input cea-hval", placeholder: "Value", value: hd.value ?? "", onChange: (e) => setHeaderAt(i, { value: e.target.value }) }),
+            h("button", { type: "button", className: "ce-tool ce-tiny", onClick: () => setHeaders((prev) => prev.filter((_, j) => j !== i)) }, "✕")
+          ))
+        ) : null,
+        requestTab === "body" ? h(
+          Fragment,
+          null,
+          h(
+            "div",
+            { className: "cea-sec" },
+            h("span", null, t("api.body")),
+            h(
+              "select",
+              { className: "cea-method", value: bodyType, onChange: (e) => setBodyType(e.target.value) },
+              h("option", { value: "none" }, t("api.bodyNone")),
+              h("option", { value: "form" }, t("api.bodyForm")),
+              h("option", { value: "multipart" }, t("api.bodyMultipart")),
+              h("option", { value: "raw" }, t("api.bodyRaw"))
+            ),
+            bodyType === "raw" ? h(
+              Fragment,
+              null,
+              h(
+                "select",
+                { className: "cea-method", value: rawSub, onChange: (e) => setRawSub(e.target.value) },
+                ["json", "text", "html", "xml"].map((s) => h("option", { key: s, value: s }, s))
+              ),
+              rawSub === "json" ? h(
+                Fragment,
+                null,
+                h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost", onClick: beautify }, t("api.beautify")),
+                beautifyErr ? h("span", { className: "cea-err" }, beautifyErr) : null
+              ) : null
+            ) : null,
+            bodyType === "form" || bodyType === "multipart" ? h("button", { type: "button", className: "ce-tool ce-tiny", title: t("api.addHeader"), onClick: () => setFormPairs((prev) => [...prev, { name: "", value: "" }]) }, "+") : null
+          ),
+          bodyType === "form" || bodyType === "multipart" ? h(Fragment, null, formPairs.map((p, i) => h(
+            "div",
+            { key: i, className: "cea-hrow" },
+            h("input", { className: "ce-input cea-hkey", placeholder: "key", value: p.name ?? "", onChange: (e) => setFormPairs((prev) => prev.map((x, j) => j === i ? { ...x, name: e.target.value } : x)) }),
+            h("input", { className: "ce-input cea-hval", placeholder: "value", value: p.value ?? "", onChange: (e) => setFormPairs((prev) => prev.map((x, j) => j === i ? { ...x, value: e.target.value } : x)) }),
+            h("button", { type: "button", className: "ce-tool ce-tiny", onClick: () => setFormPairs((prev) => prev.filter((_, j) => j !== i)) }, "✕")
+          ))) : null,
+          bodyType === "raw" ? h("textarea", { className: "cea-body", "aria-label": t("api.body"), placeholder: rawSub === "json" ? '{\n  "key": "value"\n}' : t("api.body"), value: body, spellcheck: false, onKeyDown: (e) => {
+            if (e.key !== "Tab" || e.shiftKey) return;
+            e.preventDefault();
+            const el = e.currentTarget;
+            const start = el.selectionStart;
+            const end = el.selectionEnd;
+            setBody(body.slice(0, start) + "  " + body.slice(end));
+            requestAnimationFrame(() => el.setSelectionRange(start + 2, start + 2));
+          }, onChange: (e) => {
+            setBody(e.target.value);
+            setBeautifyErr("");
+          } }) : null,
+          bodyType === "none" ? h("div", { className: "cea-empty" }, t("api.bodyEmpty")) : null
+        ) : null
+      ),
+      h(
+        "section",
+        { className: "cea-response", "aria-label": t("api.resp"), "aria-busy": sending },
+        sending ? h("div", { className: "cea-response-wait", role: "status" }, t("api.sending")) : null,
+        response ? h(
+          Fragment,
+          null,
+          h(
+            "div",
+            { className: "cea-sec" },
+            h("span", null, t("api.resp")),
+            h("span", { className: "ce-spacer" }),
+            !response.error ? h("button", { type: "button", className: "ce-link", onClick: async () => {
+              try {
+                await navigator.clipboard.writeText(respJson ?? response.text ?? "");
+                setResponseCopied(true);
+              } catch {
+                setResponseCopied(false);
+              }
+            } }, responseCopied ? t("api.copied") : t("api.copyResponse")) : null
+          ),
+          h(
+            "div",
+            { className: "cea-status" },
+            response.error ? h("span", { className: "cea-err" }, `${t("api.err")}: ${response.error}`) : h(
+              Fragment,
+              null,
+              h("span", { className: statusClass(response.status) }, `${response.status} ${response.statusText ?? ""}`),
+              h("span", { className: "cea-meta" }, `${response.ms ?? 0}ms · ${prettySize(response.size ?? 0)}${response.truncated ? " · truncated" : ""}`),
+              h("span", { className: "ce-spacer" }),
+              h("button", { type: "button", className: "ce-link", onClick: () => setShowRespHeaders((v) => !v) }, `${t("api.respHeaders")} ${showRespHeaders ? "▾" : "▸"}`)
+            )
+          ),
+          showRespHeaders && !response.error ? h("div", { className: "cea-hlist" }, (response.headers ?? []).map((hd, i) => h("div", { key: i }, h("span", { className: "cea-hk" }, hd[0]), h("span", null, hd[1])))) : null,
+          !response.error ? h("pre", { className: "cea-resp" }, respJson ?? response.text ?? "") : null
+        ) : h("div", { className: "cea-empty" }, h("strong", null, t("api.responseEmpty")), h("span", null, t("api.sendShortcut")))
+      )
     ),
     importOpen ? h(
       "div",

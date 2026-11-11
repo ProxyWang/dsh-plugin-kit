@@ -474,6 +474,48 @@ check("pushEntry caps the list", pushEntry(big, { id: "new" }, 30).length === 30
 check("pushEntry tolerates garbage list", pushEntry(null, { id: "z" }, 30).length === 1, null);
 check("relTimeAgo buckets", relTimeAgo(Date.now() - 5000) === "5s" && relTimeAgo(Date.now() - 5 * 60000) === "5m" && relTimeAgo(Date.now() - 3 * 3600000) === "3h" && relTimeAgo(Date.now() - 2 * 86400000) === "2d", [relTimeAgo(Date.now() - 5000), relTimeAgo(Date.now() - 5 * 60000)]);
 
+// --- API event/state regressions (effects skipped; real browser layout checked separately) ----
+const { createHookRenderer } = await import("./test-support/react-stub.mjs");
+const { ApiView } = await import("./src/client/apiclient.js");
+const renderApi = createHookRenderer(ApiView, { t: (k) => k });
+let apiTree = renderApi();
+const apiNodes = () => collect(apiTree);
+const apiNode = (predicate) => apiNodes().find(predicate);
+check("API request toolbar reserves one row for method/url/send", apiNode((n) => n.props.className === "cea-bar")?.children.length === 3, null);
+apiNode((n) => n.props.className?.startsWith("cea-config-tab") && n.children[0] === "api.body").props.onClick();
+apiTree = renderApi();
+check("API config tabs show only the selected editor", !apiNode((n) => n.props.placeholder === "Header") && Boolean(apiNode((n) => n.type === "select" && n.props.value === "none")), null);
+apiNode((n) => n.type === "select" && n.props.value === "none").props.onChange({ target: { value: "raw" } });
+apiTree = renderApi();
+apiNode((n) => n.type === "textarea" && n.props.className === "cea-body").props.onChange({ target: { value: '{"old":true}' } });
+apiTree = renderApi();
+apiNode((n) => n.props.title === "api.importTitle").props.onClick();
+apiTree = renderApi();
+apiNode((n) => n.props.className === "cea-body cea-import").props.onChange({ target: { value: "curl https://example.test/new" } });
+apiTree = renderApi();
+apiNode((n) => n.type === "button" && n.children[0] === "api.importBtn").props.onClick();
+apiTree = renderApi();
+check("curl GET import returns to params and removes stale body configuration", apiNode((n) => n.props.className === "ce-input cea-url")?.props.value === "https://example.test/new" && apiNode((n) => n.props.className === "cea-config-tab cea-config-tab-on")?.children[0] === "api.params", null);
+const savedFetch = globalThis.fetch;
+const sentApiRequests = [];
+globalThis.fetch = async (_url, opts) => {
+	sentApiRequests.push(JSON.parse(opts.body));
+	return { json: async () => ({ ok: true, value: { status: 200, text: "ok", headers: [], ms: 1, size: 2 } }) };
+};
+try {
+	let stopped = false;
+	const keyboardEvent = { key: "Enter", ctrlKey: true, preventDefault() {}, stopPropagation() { stopped = true; } };
+	apiNode((n) => n.props.className === "ce-input cea-url").props.onKeyDown(keyboardEvent);
+	if (!stopped) apiTree.props.onKeyDown(keyboardEvent);
+	check("Ctrl+Enter in URL sends exactly once instead of bubbling twice", stopped && sentApiRequests.length === 1, sentApiRequests.length);
+	check("imported GET does not send the previous raw request body", sentApiRequests[0]?.body === undefined, sentApiRequests[0]);
+	apiTree = renderApi();
+	check("in-flight API request disables Send", apiNode((n) => n.props.className === "ce-sk-btn cea-send")?.props.disabled === true, null);
+	await new Promise((resolve) => setImmediate(resolve));
+	apiTree = renderApi();
+	check("settled API response appears and Send becomes available", Boolean(apiNode((n) => n.props.className === "cea-resp")) && apiNode((n) => n.props.className === "ce-sk-btn cea-send")?.props.disabled === false, null);
+} finally { globalThis.fetch = savedFetch; }
+
 // --- the generated bundle: registration + factory --------------------------------------
 
 const bundle = await readFile(new URL("./client.js", import.meta.url), "utf8");

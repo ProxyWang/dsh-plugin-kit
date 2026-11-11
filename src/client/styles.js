@@ -409,6 +409,36 @@ export const CSS = `
 .cea-hurl{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:var(--dsw-alias-label-primary,#ccc);font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
 .cea-hname{flex:none;max-width:34%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:var(--dsw-alias-state-warn-primary,#e3b341)}
 .cea-hstatus{flex:none;font-size:11px}
+.cea-root{container-type:inline-size;overflow:hidden}
+.cea-root>.cea-bar{display:grid;grid-template-columns:88px minmax(0,1fr) auto;gap:0;padding:12px 12px 8px;border:0}
+.cea-root>.cea-bar .cea-request-method{width:88px;height:36px;border-radius:6px 0 0 6px;font-weight:700}
+.cea-root>.cea-bar .cea-url{width:100%;height:36px;box-sizing:border-box;border-radius:0 6px 6px 0;border-left:0;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px}
+.cea-root>.cea-bar .cea-send{margin-left:8px;min-height:36px;padding:6px 16px;background:var(--dsw-alias-brand-primary,#2f81f7);border-color:transparent;color:#fff;font-weight:600}
+.cea-tools{display:flex;flex-wrap:wrap;align-items:center;gap:4px;padding:0 12px 8px;border-bottom:.5px solid var(--dsw-alias-border-l1,#333);flex:none}
+.cea-tools .ce-sk-btn{border-color:transparent;padding:4px 8px;font-size:11px}
+.cea-tools .ce-sk-btn:hover{background:var(--dsw-alias-interactive-bg-hover,#26292e)}
+.cea-request-tabs{display:flex;gap:16px;padding:0 12px;overflow-x:auto;flex:none;border-bottom:.5px solid var(--dsw-alias-border-l1,#333)}
+.cea-config-tab{display:inline-flex;align-items:center;gap:6px;flex:none;border:0;border-bottom:2px solid transparent;padding:10px 0 8px;background:transparent;color:var(--dsw-alias-label-secondary,#999);font:inherit;font-size:12px;cursor:pointer}
+.cea-config-tab-on{color:var(--dsw-alias-label-primary,#ddd);border-bottom-color:var(--dsw-alias-brand-primary,#59b7ff);font-weight:600}
+.cea-tab-count{font-size:10px;color:var(--dsw-alias-label-tertiary,#889)}
+.cea-root button:focus-visible,.cea-root select:focus-visible,.cea-root textarea:focus-visible{outline:2px solid var(--dsw-alias-brand-primary,#59b7ff);outline-offset:-2px}
+.cea-request-panel{flex:0 0 auto;min-height:160px;max-height:55%;overflow:auto;padding:8px 4px 12px;box-sizing:border-box}
+.cea-root .cea-sec{flex-wrap:wrap;padding:8px;color:var(--dsw-alias-label-secondary,#999);text-transform:none;letter-spacing:normal;font-weight:500}
+.cea-settings{padding:12px 8px}
+.cea-settings .cea-tmo{font-size:12px;gap:12px}
+.cea-settings .cea-tmo-in{box-sizing:border-box;width:100px}
+.cea-root .cea-body:not(.cea-import){min-height:180px;max-height:none;resize:vertical;border:0;margin:4px 0 0;padding:12px;background:var(--dsw-alias-bg-base,#181818)}
+.cea-response{display:flex;flex-direction:column;flex:1 0 160px;min-height:160px;border-top:.5px solid var(--dsw-alias-border-l1,#333);position:relative}
+.cea-response>.cea-sec{font-weight:600;flex:none}
+.cea-response .cea-resp{flex:1;min-height:100px}
+.cea-root .cea-status{flex-wrap:wrap;padding:4px 12px 8px}
+.cea-response-wait{padding:8px 12px;color:var(--dsw-alias-brand-primary,#59b7ff);font-size:12px}
+.cea-response[aria-busy="true"] .cea-resp{opacity:.5}
+.cea-empty{display:flex;flex-direction:column;justify-content:center;align-items:center;gap:8px;min-height:110px;padding:16px;text-align:center;color:var(--dsw-alias-label-secondary,#999);font-size:12px;line-height:1.5}
+.cea-empty strong{font-weight:500}
+.cea-empty span{font-size:11px;color:var(--dsw-alias-label-tertiary,#889)}
+.cea-root .cea-hist{top:94px}
+@container (max-width:380px){.cea-root>.cea-bar{grid-template-columns:76px minmax(0,1fr)}.cea-root>.cea-bar .cea-request-method{width:76px}.cea-root>.cea-bar .cea-send{grid-column:1/-1;margin:8px 0 0}.cea-tools{gap:2px}.cea-request-tabs{gap:12px}.cea-root .cea-hist{top:138px}}
 .cea-hts{flex:none;font-size:10px;color:var(--dsw-alias-label-tertiary,#778);font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
 .ce-htmlprev{flex:1;min-height:0;width:100%;border:0;background:#fff}
 .ctp-tools{display:flex;gap:6px;padding:4px 8px;border-bottom:.5px solid var(--dsw-alias-border-l1,#333);flex:none}
