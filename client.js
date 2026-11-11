@@ -4897,49 +4897,59 @@ function CodeBody(props) {
     h(
       "div",
       { className: "ce-main", ref: mainRef },
-      railVisible ? h("div", { className: "ce-rail-wrap", style: { width: `${railW}px` } }, mode === "files" ? h(TreePanel, {
-        cwd,
-        t,
-        onOpenFile: (path, line, col) => void openFile(path, line, col),
-        activePath: doc?.path ?? diff?.path,
-        revealPath: doc?.path ?? null,
-        refreshKey: treeKey,
-        onNotify: (text, kind) => say(text, kind),
-        onDeleted: (path) => {
-          setTabs((prev) => prev.filter((p) => p !== path && !p.startsWith(`${path}/`)));
-          const open = docRef.current?.path;
-          if (open && (open === path || open.startsWith(`${path}/`))) {
-            setDoc(null);
-            setEditing(false);
-            setDiffMarks(null);
+      railVisible ? h(
+        "div",
+        { className: "ce-rail-wrap ce-rail-with-search", style: { width: `${railW}px` } },
+        h(
+          "button",
+          { type: "button", className: "ce-rail-search", title: `${t("search.workspaceHint")} (⇧⌘F / Ctrl+Shift+F)`, onClick: openSearch },
+          h(IconTextSearch),
+          h("span", null, t("changes.searchWorkspace"))
+        ),
+        mode === "files" ? h(TreePanel, {
+          cwd,
+          t,
+          onOpenFile: (path, line, col) => void openFile(path, line, col),
+          activePath: doc?.path ?? diff?.path,
+          revealPath: doc?.path ?? null,
+          refreshKey: treeKey,
+          onNotify: (text, kind) => say(text, kind),
+          onDeleted: (path) => {
+            setTabs((prev) => prev.filter((p) => p !== path && !p.startsWith(`${path}/`)));
+            const open = docRef.current?.path;
+            if (open && (open === path || open.startsWith(`${path}/`))) {
+              setDoc(null);
+              setEditing(false);
+              setDiffMarks(null);
+            }
           }
-        }
-      }) : h(ChangesPanel, {
-        cwd,
-        t,
-        git,
-        repos,
-        repoSel,
-        onSelectRepo: (root) => {
-          repoSelRef.current = root;
-          setRepoSel(root);
-          if (!root) refreshGit();
-        },
-        commitsOpen,
-        setCommitsOpen,
-        onOpenCommit: (commit) => void openCommit(commit),
-        onOpenDiff: (path, scope) => void (scope === "commit" ? openDiff(path, scope) : openChangeSource(path, scope)),
-        onDiscard: (item) => void discardChange(item),
-        onDiscardDir: (dirItems) => void discardMany(dirItems),
-        onStage: (item) => void stageChange(item.path),
-        onStageDir: (dirPath) => void stageChange(dirPath),
-        onUnstage: (item) => void unstageChange(item.path),
-        onUnstageDir: (dirPath) => void unstageChange(dirPath),
-        onCommit: (msg, stageAll, amend) => commitChanges(msg, stageAll, amend),
-        committing,
-        onNotify: (text, kind) => say(text, kind),
-        refresh: refreshGit
-      })) : null,
+        }) : h(ChangesPanel, {
+          cwd,
+          t,
+          git,
+          repos,
+          repoSel,
+          onSelectRepo: (root) => {
+            repoSelRef.current = root;
+            setRepoSel(root);
+            if (!root) refreshGit();
+          },
+          commitsOpen,
+          setCommitsOpen,
+          onOpenCommit: (commit) => void openCommit(commit),
+          onOpenDiff: (path, scope) => void (scope === "commit" ? openDiff(path, scope) : openChangeSource(path, scope)),
+          onDiscard: (item) => void discardChange(item),
+          onDiscardDir: (dirItems) => void discardMany(dirItems),
+          onStage: (item) => void stageChange(item.path),
+          onStageDir: (dirPath) => void stageChange(dirPath),
+          onUnstage: (item) => void unstageChange(item.path),
+          onUnstageDir: (dirPath) => void unstageChange(dirPath),
+          onCommit: (msg, stageAll, amend) => commitChanges(msg, stageAll, amend),
+          committing,
+          onNotify: (text, kind) => say(text, kind),
+          refresh: refreshGit
+        })
+      ) : null,
       railVisible ? h("div", { className: "ce-splitter", onMouseDown: startRailDrag, onDoubleClick: () => setRailVisible(false), title: "⇔ 拖动调宽 · 双击收起" }) : h("button", { type: "button", className: "ce-rail-tab", title: "展开侧栏 (⌘B / Ctrl+B)", onClick: () => setRailVisible(true) }, "▸"),
       h(
         "div",
@@ -5208,6 +5218,12 @@ var CSS2 = `
 .ce-dot-error{background:var(--dsw-alias-state-error-primary,#f85149)}
 .ce-main{flex:1;min-height:0;display:flex}
 .ce-rail-wrap{width:230px;min-width:150px;flex:none;display:flex;border-right:.5px solid var(--dsw-alias-border-l1,#333)}
+.ce-rail-with-search{flex-direction:column;min-height:0}
+.ce-rail-with-search>.ce-rail{min-height:0}
+.ce-rail-search{display:flex;align-items:center;gap:8px;flex:none;align-self:stretch;min-height:32px;margin:8px;padding:6px 8px;border:1px solid var(--dsw-alias-border-l2,#444);border-radius:6px;background:var(--dsw-alias-bg-layer-1,#1e2126);color:var(--dsw-alias-label-secondary,#aaa);font:inherit;font-size:12px;text-align:left;cursor:pointer}
+.ce-rail-search svg{width:14px;height:14px;flex:none}
+.ce-rail-search:hover{background:var(--dsw-alias-interactive-bg-hover,#26292e);color:var(--dsw-alias-label-primary,#ddd)}
+.ce-rail-search:focus-visible{outline:2px solid var(--dsw-alias-brand-primary,#59b7ff);outline-offset:1px}
 .ce-rail{flex:1;min-width:0}
 .ce-scroll{overflow:auto;scrollbar-gutter:stable}
 .ce-row{display:flex;align-items:center;gap:6px;width:100%;border:0;background:transparent;color:inherit;font:inherit;text-align:left;padding:4px 8px;cursor:pointer;border-radius:4px;min-width:0}

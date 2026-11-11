@@ -1198,7 +1198,11 @@ export function CodeBody(props) {
 			"div",
 			{ className: "ce-main", ref: mainRef },
 			railVisible
-				? h("div", { className: "ce-rail-wrap", style: { width: `${railW}px` } }, mode === "files"
+				? h("div", { className: "ce-rail-wrap ce-rail-with-search", style: { width: `${railW}px` } },
+					h("button", { type: "button", className: "ce-rail-search", title: `${t("search.workspaceHint")} (⇧⌘F / Ctrl+Shift+F)`, onClick: openSearch },
+						h(IconTextSearch), h("span", null, t("changes.searchWorkspace")),
+					),
+					mode === "files"
 					? h(TreePanel, {
 						cwd,
 						t,

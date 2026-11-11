@@ -31,6 +31,12 @@ export const CSS = `
 .ce-dot-error{background:var(--dsw-alias-state-error-primary,#f85149)}
 .ce-main{flex:1;min-height:0;display:flex}
 .ce-rail-wrap{width:230px;min-width:150px;flex:none;display:flex;border-right:.5px solid var(--dsw-alias-border-l1,#333)}
+.ce-rail-with-search{flex-direction:column;min-height:0}
+.ce-rail-with-search>.ce-rail{min-height:0}
+.ce-rail-search{display:flex;align-items:center;gap:8px;flex:none;align-self:stretch;min-height:32px;margin:8px;padding:6px 8px;border:1px solid var(--dsw-alias-border-l2,#444);border-radius:6px;background:var(--dsw-alias-bg-layer-1,#1e2126);color:var(--dsw-alias-label-secondary,#aaa);font:inherit;font-size:12px;text-align:left;cursor:pointer}
+.ce-rail-search svg{width:14px;height:14px;flex:none}
+.ce-rail-search:hover{background:var(--dsw-alias-interactive-bg-hover,#26292e);color:var(--dsw-alias-label-primary,#ddd)}
+.ce-rail-search:focus-visible{outline:2px solid var(--dsw-alias-brand-primary,#59b7ff);outline-offset:1px}
 .ce-rail{flex:1;min-width:0}
 .ce-scroll{overflow:auto;scrollbar-gutter:stable}
 .ce-row{display:flex;align-items:center;gap:6px;width:100%;border:0;background:transparent;color:inherit;font:inherit;text-align:left;padding:4px 8px;cursor:pointer;border-radius:4px;min-width:0}
