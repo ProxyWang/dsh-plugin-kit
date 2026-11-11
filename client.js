@@ -5492,8 +5492,8 @@ var CSS2 = `
 .ce-sk-view-switch{display:flex;align-items:center;gap:2px;margin-right:auto}
 .ce-sk-edit-label{margin-right:auto;font-size:12px;color:var(--dsw-alias-label-secondary,#999)}
 .ce-sk-root .ce-sk-view-on{background:var(--dsw-alias-interactive-bg-hover,#2c313a);color:var(--dsw-alias-label-primary,#ddd)}
-.ce-sk-root .ce-sk-primary{background:var(--dsw-alias-brand-primary,#2f81f7);border-color:transparent;color:#fff}
-.ce-sk-root .ce-sk-primary:hover{background:var(--dsw-alias-brand-primary,#2f81f7);filter:brightness(1.05)}
+.ce-sk-root .ce-sk-primary{background:var(--dsw-alias-button-primary-fill,var(--dsw-alias-brand-primary,#2f81f7));border-color:transparent;color:var(--dsw-alias-label-on-color,#fff)}
+.ce-sk-root .ce-sk-primary:hover{background:var(--dsw-alias-button-primary-hover,var(--dsw-alias-button-primary-fill,var(--dsw-alias-brand-primary,#2f81f7)));filter:none}
 .ce-sk-root .ce-sk-btn{min-height:28px;white-space:normal}
 .ce-sk-name-hint{flex-basis:100%;font-size:11px;line-height:1.5;color:var(--dsw-alias-label-secondary,#999)}
 .ce-sk-edit .ce-md-pre,.ce-sk-edit .ce-md-code{background:var(--dsw-alias-bg-layer-2,#24272c);color:var(--dsw-alias-label-primary,#ddd)}
@@ -5682,7 +5682,8 @@ var CSS2 = `
 .cea-root>.cea-bar{display:grid;grid-template-columns:88px minmax(0,1fr) auto;gap:0;padding:12px 12px 8px;border:0}
 .cea-root>.cea-bar .cea-request-method{width:88px;height:36px;border-radius:6px 0 0 6px;font-weight:700}
 .cea-root>.cea-bar .cea-url{width:100%;height:36px;box-sizing:border-box;border-radius:0 6px 6px 0;border-left:0;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px}
-.cea-root>.cea-bar .cea-send{margin-left:8px;min-height:36px;padding:6px 16px;background:var(--dsw-alias-brand-primary,#2f81f7);border-color:transparent;color:#fff;font-weight:600}
+.cea-root>.cea-bar .cea-send{margin-left:8px;min-height:36px;padding:6px 16px;background:var(--dsw-alias-button-primary-fill,var(--dsw-alias-brand-primary,#2f81f7));border-color:transparent;color:var(--dsw-alias-label-on-color,#fff);font-weight:600}
+.cea-root>.cea-bar .cea-send:hover{background:var(--dsw-alias-button-primary-hover,var(--dsw-alias-button-primary-fill,var(--dsw-alias-brand-primary,#2f81f7)))}
 .cea-tools{display:flex;flex-wrap:wrap;align-items:center;gap:4px;padding:0 12px 8px;border-bottom:.5px solid var(--dsw-alias-border-l1,#333);flex:none}
 .cea-tools .ce-sk-btn{border-color:transparent;padding:4px 8px;font-size:11px}
 .cea-tools .ce-sk-btn:hover{background:var(--dsw-alias-interactive-bg-hover,#26292e)}
