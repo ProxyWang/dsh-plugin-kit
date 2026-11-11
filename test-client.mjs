@@ -379,6 +379,39 @@ const Launch = makeLauncher({ registry: fakeRegistry, sidebarRight: { openTab: (
 check("launcher renders element", Launch({}) != null, null);
 check("launcher null on empty registry", makeLauncher({ registry: { entries: () => [] }, sidebarRight: { openTab: () => {} }, getShortcuts: () => null, t: (k) => k })({}) === null, null);
 
+// --- browser launch reuse, including existing multi-instance tabs ------------------------------
+const { makeBrowserOpener } = await import("./src/client/launcher.js");
+let browserSession = "A";
+let browserTime = 0;
+const browserTabs = new Map([["A", []], ["B", []]]);
+const browserOpens = [];
+const browserFocuses = [];
+const browserSidebar = {
+	mounted: { getSnapshot: () => browserSession },
+	tabsIn: (id) => browserTabs.get(id),
+	focus: (id) => browserFocuses.push(id),
+	openTab: (kind, options) => browserOpens.push({ session: browserSession, kind, options }),
+};
+const openBrowser = makeBrowserOpener(browserSidebar, () => browserTime);
+openBrowser(); openBrowser();
+check("rapid browser clicks allocate only one page before inventory catches up", browserOpens.length === 1 && browserOpens[0].options.params.url === "https://www.doubao.com/", browserOpens);
+browserTabs.set("A", [{ id: "existing-browser", kind: "browser", contentId: "sidebar://browser/old-uuid" }]);
+browserTime = 1000; openBrowser();
+check("browser launcher reuses historical UUID tab without resetting its URL", browserOpens.length === 1 && browserFocuses.at(-1) === "existing-browser", browserFocuses);
+browserSession = "B"; openBrowser();
+check("browser reuse is scoped to the current session", browserOpens.length === 2 && browserOpens[1].session === "B", browserOpens);
+browserSession = "A"; browserTabs.set("A", []); browserTime = 2000; openBrowser();
+check("closing existing browser permits a new browser launch", browserOpens.length === 3, browserOpens);
+const inventoryFocus = [];
+const inventoryOpen = makeBrowserOpener({ mounted: { getSnapshot: () => "A" }, openTabs: { getSnapshot: () => [{ sessionId: "B", kind: "browser", tabId: "foreign" }, { sessionId: "A", kind: "browser", tabId: "floated" }] }, focus: (id) => inventoryFocus.push(id), openTab: () => { throw new Error("must focus existing browser"); } });
+inventoryOpen();
+check("browser reuse falls back to public open-tab inventory", inventoryFocus[0] === "floated", inventoryFocus);
+let browserAttempts = 0;
+const retryBrowser = makeBrowserOpener({ openTab: () => { if (++browserAttempts === 1) throw new Error("not ready"); } }, () => 0);
+try { retryBrowser(); } catch {}
+retryBrowser();
+check("failed browser open can retry immediately", browserAttempts === 2, browserAttempts);
+
 // --- curl parser -----------------------------------------------------------------------------
 const { parseCurl, toCurl, shellQuote } = await import("./src/client/curl.js");
 const { substituteVars, buildEnvMap } = await import("./src/client/apiclient.js");

@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased — browser launcher reuse
+
+- The toolbox Browser launcher now focuses an existing browser in the on-screen session, including older UUID-backed tabs, instead of always creating another page. Existing navigation is preserved; Doubao is only the initial URL when creating a new page.
+- Repeated clicks before the sidebar inventory updates are suppressed. Reuse does not cross sessions or close existing pages.
+- This change belongs to the plugin launcher; links that explicitly open a new browser page and Chromium renderer processes retain their host behavior.
+
 ## Unreleased — scoped code search
 
 - Files search the workspace by default, with an explicit directory field and a folder context-menu action.

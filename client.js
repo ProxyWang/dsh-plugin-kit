@@ -7514,7 +7514,33 @@ function bindingLabel(cat) {
   }
   return "";
 }
+function makeBrowserOpener(sidebarRight, now = Date.now) {
+  let pendingSession;
+  let openedAt = -Infinity;
+  return () => {
+    const sessionId = sidebarRight.mounted?.getSnapshot?.();
+    if (sessionId !== void 0 && typeof sidebarRight.focus === "function") {
+      const tabs = typeof sidebarRight.tabsIn === "function" ? sidebarRight.tabsIn(sessionId) : sidebarRight.openTabs?.getSnapshot?.()?.filter((tab) => tab.sessionId === sessionId) ?? [];
+      const existing = tabs.find((tab) => tab.kind === "browser");
+      if (existing) {
+        sidebarRight.focus(existing.id ?? existing.tabId);
+        return;
+      }
+    }
+    const time = now();
+    if (pendingSession === sessionId && time - openedAt < 500) return;
+    pendingSession = sessionId;
+    openedAt = time;
+    try {
+      sidebarRight.openTab("browser", { params: { url: "https://www.doubao.com/" } });
+    } catch (error) {
+      openedAt = -Infinity;
+      throw error;
+    }
+  };
+}
 function makeLauncher({ registry, sidebarRight, getShortcuts, t }) {
+  const openBrowser = makeBrowserOpener(sidebarRight);
   return function Launcher() {
     const boxes = collectBoxes(registry);
     if (boxes.length === 0) return null;
@@ -7538,7 +7564,7 @@ function makeLauncher({ registry, sidebarRight, getShortcuts, t }) {
           title: typeof entry.description === "function" ? entry.description() : "",
           onClick: () => {
             try {
-              if (kind === "browser") sidebarRight.openTab(kind, { params: { url: "https://www.doubao.com/" } });
+              if (kind === "browser") openBrowser();
               else sidebarRight.openTab(kind);
             } catch (error) {
               console.warn("code-explorer: launcher open failed", error);
