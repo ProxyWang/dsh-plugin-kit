@@ -516,6 +516,69 @@ try {
 	check("settled API response appears and Send becomes available", Boolean(apiNode((n) => n.props.className === "cea-resp")) && apiNode((n) => n.props.className === "ce-sk-btn cea-send")?.props.disabled === false, null);
 } finally { globalThis.fetch = savedFetch; }
 
+// --- Skills navigation, read races, and editor protections -----------------------------------
+const { SkillsView, skillScope } = await import("./src/client/skills.js");
+const { MarkdownView } = await import("./src/client/markdown.js");
+check("skill scopes combine installation roots without making provided skills editable", skillScope("project-agents") === "project" && skillScope("user-dsh") === "user" && skillScope("other") === "provided", null);
+const skillFixtures = [
+	{ name: "alpha", source: "user-agents", path: "/skills/alpha/SKILL.md", description: "HTTP request tools" },
+	{ name: "beta", source: "project-agents", path: "/skills/beta/SKILL.md", description: "Project conventions" },
+	{ name: "office", source: "other", path: "/skills/office/SKILL.md", description: "Office documents" },
+];
+const pendingSkillReads = new Map();
+const skillRequests = [];
+const skillNotices = [];
+const previousSkillsFetch = globalThis.fetch;
+globalThis.fetch = async (url, opts) => {
+	const body = JSON.parse(opts.body);
+	skillRequests.push({ url, body });
+	if (url.endsWith("/skills.list")) return { json: async () => ({ ok: true, value: { skills: skillFixtures } }) };
+	if (url.endsWith("/skills.read")) return { json: () => new Promise((resolve) => pendingSkillReads.set(body.path, resolve)) };
+	return { json: async () => ({ ok: true, value: { path: body.path } }) };
+};
+const renderSkills = createHookRenderer(SkillsView, { cwd: "/skills", t: (k) => k, say: (...args) => skillNotices.push(args) });
+let skillsTree = renderSkills();
+const skillNode = (test) => collect(skillsTree).find(test);
+const skillRow = (name) => skillNode((n) => n.props.className?.startsWith("ce-sk-row") && n.type === "button" && n.children[0]?.children?.[0] === name);
+const settleSkills = async () => { await new Promise((resolve) => setImmediate(resolve)); skillsTree = renderSkills(); };
+try {
+	check("skills creation form is hidden until explicitly opened", !skillNode((n) => n.props.className === "ce-sk-create"), null);
+	skillNode((n) => n.props.title === "skills.refresh").props.onClick();
+	await settleSkills();
+	check("skills list loads project user and provided entries", Boolean(skillRow("alpha") && skillRow("beta") && skillRow("office")), null);
+	skillRow("alpha").props.onClick(); await settleSkills();
+	check("pending skill read clears the previous preview", !skillNode((n) => n.type === MarkdownView), null);
+	skillRow("beta").props.onClick(); await settleSkills();
+	pendingSkillReads.get(skillFixtures[1].path)({ ok: true, value: { content: "# Beta", truncated: false } });
+	await settleSkills();
+	pendingSkillReads.get(skillFixtures[0].path)({ ok: true, value: { content: "# Stale Alpha", truncated: false } });
+	await settleSkills();
+	check("late previous selection cannot overwrite the selected skill", skillNode((n) => n.type === MarkdownView)?.props.text === "# Beta", null);
+	skillNode((n) => n.type === "button" && n.children[0] === "editor.edit").props.onClick(); skillsTree = renderSkills();
+	skillNode((n) => n.props.className === "ce-sk-ta").props.onChange({ target: { value: "# Beta edited" } }); skillsTree = renderSkills();
+	skillRow("alpha").props.onClick(); skillsTree = renderSkills();
+	check("skills navigation guards unsaved edits", skillNode((n) => n.props.className === "ce-sk-ta")?.props.value === "# Beta edited" && skillNotices.at(-1)?.[0] === "editor.dirtyGuard", skillNotices);
+	skillNode((n) => n.type === "button" && n.children[0] === "editor.save").props.onClick(); await settleSkills();
+	check("skills save writes the edited file and returns to preview", skillRequests.some((r) => r.url.endsWith("/skills.write") && r.body.path === skillFixtures[1].path && r.body.content === "# Beta edited") && skillNode((n) => n.type === MarkdownView)?.props.text === "# Beta edited", null);
+	skillRow("alpha").props.onClick(); await settleSkills();
+	pendingSkillReads.get(skillFixtures[0].path)({ ok: true, value: { content: "# Prefix", truncated: true } }); await settleSkills();
+	check("truncated skills expose no edit or save action", !skillNode((n) => n.type === "button" && ["editor.edit", "editor.save"].includes(n.children[0])), null);
+	skillRow("office").props.onClick(); await settleSkills();
+	pendingSkillReads.get(skillFixtures[2].path)({ ok: true, value: { content: "# Office", truncated: false } }); await settleSkills();
+	check("provided skills offer preview and source without write/delete actions", Boolean(skillNode((n) => n.type === "button" && n.children[0] === "skills.source")) && !skillNode((n) => n.type === "button" && ["editor.edit", "skills.delete", "editor.save"].includes(n.children[0])), null);
+	skillNode((n) => n.props.type === "search").props.onChange({ target: { value: "HTTP" } }); skillsTree = renderSkills();
+	check("skill search matches descriptions as well as names", Boolean(skillRow("alpha")) && !skillRow("beta") && !skillRow("office"), null);
+	skillNode((n) => n.type === "select" && n.props.value === "all").props.onChange({ target: { value: "provided" } }); skillsTree = renderSkills();
+	check("skill scope filter combines with search and presents no-match state", !skillRow("alpha") && Boolean(skillNode((n) => n.children[0] === "skills.noMatch")), null);
+	skillNode((n) => n.type === "button" && n.props["aria-expanded"] === false).props.onClick(); skillsTree = renderSkills();
+	skillNode((n) => n.props.className === "ce-input ce-sk-name-input").props.onChange({ target: { value: "Invalid Name" } }); skillsTree = renderSkills();
+	check("invalid skill names show feedback and disable create", skillNode((n) => n.type === "button" && n.children[0] === "skills.createAction")?.props.disabled === true && Boolean(skillNode((n) => n.props.className === "ce-sk-name-hint")), null);
+	skillNode((n) => n.props.className === "ce-input ce-sk-name-input").props.onChange({ target: { value: "my-skill" } }); skillsTree = renderSkills();
+	skillNode((n) => n.type === "select" && n.props.value === "user").props.onChange({ target: { value: "project" } }); skillsTree = renderSkills();
+	skillNode((n) => n.type === "button" && n.children[0] === "skills.createAction").props.onClick(); await settleSkills();
+	check("inline creation uses the chosen scope and collapses after success", skillRequests.some((r) => r.url.endsWith("/skills.create") && r.body.name === "my-skill" && r.body.scope === "project") && !skillNode((n) => n.props.className === "ce-sk-create"), null);
+} finally { globalThis.fetch = previousSkillsFetch; }
+
 // --- the generated bundle: registration + factory --------------------------------------
 
 const bundle = await readFile(new URL("./client.js", import.meta.url), "utf8");

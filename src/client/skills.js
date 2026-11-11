@@ -1,10 +1,14 @@
-/* ---------------- skills manager: list / view / edit / create / delete ---------------- */
+/* ---------------- skills manager: browse / inspect / edit / create / delete ---------------- */
 
 import { Fragment, h, useCallback, useEffect, useMemo, useRef, useState } from "./react.js";
 import { api } from "./api.js";
 import { MarkdownView } from "./markdown.js";
 
-const SOURCE_ORDER = ["project-dsh", "project-agents", "user-dsh", "user-agents", "bundled", "other"];
+/** Group installation sources into the three scopes users choose between. */
+export function skillScope(source) {
+	return String(source ?? "").startsWith("project") ? "project"
+		: String(source ?? "").startsWith("user") ? "user" : "provided";
+}
 
 export function SkillsView({ cwd, t, say }) {
 	const [skills, setSkills] = useState(null);
@@ -13,228 +17,201 @@ export function SkillsView({ cwd, t, say }) {
 	const [content, setContent] = useState("");
 	const [savedContent, setSavedContent] = useState("");
 	const [busy, setBusy] = useState(false);
+	const [listing, setListing] = useState(false);
+	const [reading, setReading] = useState(false);
+	const [readError, setReadError] = useState("");
 	const [confirmDel, setConfirmDel] = useState(false);
 	const [newName, setNewName] = useState("");
 	const [scope, setScope] = useState("user");
+	const [createOpen, setCreateOpen] = useState(false);
+	const [query, setQuery] = useState("");
+	const [filter, setFilter] = useState("all");
 	const [editMode, setEditMode] = useState(false);
+	const [rawPreview, setRawPreview] = useState(false);
 	const [contentTruncated, setContentTruncated] = useState(false);
-	const readonly = sel !== null && (sel.source === "bundled" || sel.source === "other");
+	const readSeq = useRef(0);
+	const listSeq = useRef(0);
+	const readonly = sel !== null && skillScope(sel.source) === "provided";
 	const dirty = content !== savedContent;
+	const sourceLabel = (source) => t(`skills.scope.${skillScope(source)}`);
 
 	const load = useCallback(() => {
-		setBusy(true);
+		const seq = ++listSeq.current;
+		setListing(true);
 		api("skills.list", { cwd }).then((res) => {
-			setBusy(false);
-			if (!res.ok) {
-				setError(res.error);
-				setSkills([]);
-				return;
-			}
+			if (seq !== listSeq.current) return;
+			setListing(false);
+			if (!res.ok) { setError(res.error); return; }
 			setError("");
 			setSkills(res.value.skills ?? []);
 		});
 	}, [cwd]);
 	useEffect(() => {
+		setSkills(null); setError(""); setSel(null); setContent(""); setSavedContent("");
+		setEditMode(false); setReading(false); setReadError(""); setBusy(false);
 		load();
+		return () => { ++listSeq.current; ++readSeq.current; };
 	}, [load]);
 
-	const open = useCallback((skill) => {
-		setSel(skill);
-		setConfirmDel(false);
-		setEditMode(false);
-		if (!skill.path) {
-			setContent("");
-			setSavedContent("");
-			setContentTruncated(false);
-			return;
-		}
+	const canLeave = () => {
+		if (!dirty) return true;
+		say(t("editor.dirtyGuard"), "error");
+		return false;
+	};
+	const open = (skill) => {
+		if (!canLeave()) return;
+		const seq = ++readSeq.current;
+		setSel(skill); setConfirmDel(false); setEditMode(false); setRawPreview(false);
+		setContent(""); setSavedContent(""); setContentTruncated(false); setReadError("");
+		if (!skill.path) { setReading(false); return; }
+		setReading(true);
 		api("skills.read", { cwd, path: skill.path }).then((res) => {
-			if (!res.ok) {
-				say(`${t("error")}: ${res.error}`, "error");
-				return;
-			}
-			setContent(res.value.content);
-			setSavedContent(res.value.content);
+			// A slow response for the previous selection must never replace the current skill.
+			if (seq !== readSeq.current) return;
+			setReading(false);
+			if (!res.ok) { setReadError(res.error); return; }
+			setContent(res.value.content); setSavedContent(res.value.content);
 			setContentTruncated(res.value.truncated === true);
-			if (res.value.truncated === true) say(t("skills.truncatedNoSave"), "error");
 		});
-	}, [cwd, say, t]);
-
-	const save = useCallback(() => {
-		if (!sel || !dirty) return;
-		// A truncated read must never be written back: it would silently drop
-		// everything past the 1 MiB cap.
-		if (contentTruncated) {
-			say(t("skills.truncatedNoSave"), "error");
-			return;
-		}
+	};
+	const save = () => {
+		if (!sel || !editMode || readonly || reading || readError || contentTruncated || !dirty || busy) return;
+		const seq = readSeq.current;
 		setBusy(true);
 		api("skills.write", { cwd, path: sel.path, content }).then((res) => {
+			if (seq !== readSeq.current) return;
 			setBusy(false);
-			if (!res.ok) {
-				say(`${t("error")}: ${res.error}`, "error");
-				return;
-			}
-			setSavedContent(content);
-			setEditMode(false);
-			say(t("skills.saved"));
-			load();
+			if (!res.ok) { say(`${t("error")}: ${res.error}`, "error"); return; }
+			setSavedContent(content); setEditMode(false);
+			say(t("skills.saved")); load();
 		});
-	}, [sel, dirty, content, contentTruncated, cwd, say, t, load]);
-
-	const remove = useCallback(() => {
-		if (!sel) return;
+	};
+	const remove = () => {
+		if (!sel || readonly || busy || !confirmDel) return;
+		const seq = readSeq.current;
 		setBusy(true);
 		api("skills.delete", { cwd, path: sel.path }).then((res) => {
+			if (seq !== readSeq.current) return;
 			setBusy(false);
-			if (!res.ok) {
-				say(`${t("error")}: ${res.error}`, "error");
-				return;
-			}
-			setSel(null);
-			setContent("");
-			setSavedContent("");
-			say(t("skills.deleted"));
-			load();
+			if (!res.ok) { say(`${t("error")}: ${res.error}`, "error"); return; }
+			++readSeq.current;
+			setSel(null); setContent(""); setSavedContent(""); setConfirmDel(false);
+			say(t("skills.deleted")); load();
 		});
-	}, [sel, cwd, say, t, load]);
-
-	const create = useCallback(() => {
-		const name = newName.trim();
-		if (!name) return;
+	};
+	const validName = /^[a-z0-9][a-z0-9._-]{0,63}$/.test(newName.trim());
+	const create = () => {
+		if (!validName || busy || !canLeave()) return;
+		const seq = readSeq.current;
 		setBusy(true);
-		api("skills.create", { cwd, name, scope }).then((res) => {
+		api("skills.create", { cwd, name: newName.trim(), scope }).then((res) => {
+			if (seq !== readSeq.current) return;
 			setBusy(false);
-			if (!res.ok) {
-				say(`${t("error")}: ${res.error}`, "error");
-				return;
-			}
-			setNewName("");
-			load();
+			if (!res.ok) { say(`${t("error")}: ${res.error}`, "error"); return; }
+			setNewName(""); setCreateOpen(false); setQuery(""); setFilter("all"); load();
 			if (res.value.skill) open(res.value.skill);
 		});
-	}, [newName, cwd, scope, say, t, load, open]);
-
-	const onKeyDown = useCallback((event) => {
+	};
+	const onKeyDown = (event) => {
 		if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s") {
-			event.preventDefault();
-			save();
+			event.preventDefault(); event.stopPropagation(); save();
 		}
-	}, [save]);
-
+	};
 	const grouped = useMemo(() => {
-		const groups = [];
-		for (const source of SOURCE_ORDER) {
-			const items = (skills ?? []).filter((s) => s.source === source);
-			if (items.length > 0) groups.push({ source, items });
-		}
-		return groups;
-	}, [skills]);
-	const sourceLabel = (source) => (source.startsWith("project")
-		? t("skills.project")
-		: source === "bundled" ? t("skills.bundled")
-		: source === "other" ? t("skills.other")
-		: t("skills.user"));
+		const q = query.trim().toLowerCase();
+		return ["project", "user", "provided"].map((group) => ({
+			source: group,
+			items: (skills ?? []).filter((skill) => skillScope(skill.source) === group
+				&& (filter === "all" || filter === group)
+				&& (!q || [skill.name, skill.description, skill.path, skill.provider].some((s) => String(s ?? "").toLowerCase().includes(q)))),
+		})).filter((group) => group.items.length > 0);
+	}, [skills, query, filter]);
+	const visibleCount = grouped.reduce((sum, group) => sum + group.items.length, 0);
+	const back = () => { if (canLeave()) { ++readSeq.current; setReading(false); setSel(null); setReadError(""); } };
+	const cancelEdit = () => { setContent(savedContent); setEditMode(false); };
 
-	return h("div", { className: "ce-sk-root" },
-		h("div", { className: "ce-sk-list ce-scroll" },
-			h("div", { className: "ce-sk-head2" },
-				h("span", { className: "ce-sk-title" }, t("skills.title")),
-				skills ? h("span", { className: "ce-chip" }, String(skills.length)) : null,
-				h("span", { className: "ce-spacer" }),
-				h("button", { type: "button", className: "ce-tool ce-tiny", title: t("skills.refresh"), onClick: load }, "⟳"),
+	return h("div", { className: `ce-sk-root${sel ? " ce-sk-has-selection" : ""}` },
+		h("header", { className: "ce-sk-top" },
+			h("div", { className: "ce-sk-heading" },
+				h("h2", null, t("skills.manager")),
+				h("span", { className: "ce-sk-total" }, skills === null ? "…" : t("skills.total", { n: skills.length })),
 			),
-			h("div", { className: "ce-sk-create" },
-				h("input", {
-					className: "ce-input ce-sk-name-input",
-					placeholder: t("skills.createPlaceholder"),
-					value: newName,
-					onChange: (e) => setNewName(e.target.value),
-					onKeyDown: (e) => {
-						if (e.key === "Enter") create();
-					},
-				}),
-				h("select", { className: "ce-sk-scope", value: scope, onChange: (e) => setScope(e.target.value), title: t("skills.scopeTitle") },
-					h("option", { value: "user" }, t("skills.user")),
-					h("option", { value: "project" }, t("skills.project")),
-				),
-				h("button", { type: "button", className: "ce-tool ce-tiny", title: t("skills.new"), disabled: busy || newName.trim() === "", onClick: create }, "+"),
-			),
-			error ? h("div", { className: "ce-note" }, error) : null,
-			skills === null ? h("div", { className: "ce-note" }, "…") : null,
-			skills !== null && skills.length === 0 ? h("div", { className: "ce-empty" }, t("skills.empty")) : null,
-			grouped.map((group) => h("div", { key: group.source },
-				h("div", { className: "ce-sk-section" }, `${sourceLabel(group.source)} · ${group.items.length}`),
-				group.items.map((skill) => h("button", {
-					key: skill.path || skill.name,
-					type: "button",
-					className: `ce-sk-row${sel && sel.name === skill.name ? " ce-sk-row-on" : ""}`,
-					onClick: () => open(skill),
-					title: skill.provider ? `${skill.path || skill.name} · ${skill.provider}` : skill.path,
-				},
-				h("span", { className: "ce-sk-row-name" }, skill.name),
-				h("span", { className: "ce-sk-row-desc" }, skill.description || t("skills.noDesc")),
-				)),
-			)),
+			h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost", title: t("skills.refresh"), "aria-label": t("skills.refresh"), disabled: listing || busy, onClick: load }, "⟳"),
+			h("button", { type: "button", className: "ce-sk-btn ce-sk-primary", "aria-expanded": createOpen, disabled: busy, onClick: () => { if (canLeave()) setCreateOpen((v) => !v); } }, `+ ${t("skills.new")}`),
 		),
-		h("div", { className: "ce-sk-edit" },
-			!sel
-				? h("div", { className: "ce-empty" }, t("skills.pick"))
-				: h(
-					Fragment,
-					null,
-					h("div", { className: "ce-head" },
-						h("span", { className: "ce-head-path", title: sel.path }, sel.name),
-						h("span", { className: "ce-chip" }, sel.source),
-						readonly ? h("span", { className: "ce-chip ce-chip-warn" }, t("skills.readonly")) : null,
-						contentTruncated ? h("span", { className: "ce-chip ce-chip-warn", title: t("skills.truncatedNoSave") }, t("skills.truncatedChip")) : null,
-						sel.dir || sel.path ? h("button", {
-							type: "button",
-							className: "ce-sk-path",
-							title: `${sel.dir ?? sel.path} · ${t("skills.copyPath")}`,
-							onClick: () => {
-								try {
-									void navigator.clipboard?.writeText(sel.dir ?? sel.path);
-									say(t("skills.pathCopied"));
-								} catch { /* clipboard unavailable */ }
-							},
-						}, sel.dir || sel.path) : null,
-						dirty ? h("span", { className: "ce-chip ce-chip-warn" }, t("skills.dirty")) : null,
-						h("span", { className: "ce-spacer" }),
-						readonly
-							? null
-							: editMode
-								? h(Fragment, null,
-									h("button", { type: "button", className: "ce-sk-btn", disabled: !dirty || busy, title: "⌘S / Ctrl+S", onClick: save }, t("editor.save")),
-									h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost", onClick: () => { setContent(savedContent); setEditMode(false); } }, t("editor.cancel")),
-								)
-								: h("button", { type: "button", className: "ce-sk-btn", onClick: () => setEditMode(true) }, t("editor.edit")),
-						readonly
-							? null
-							: confirmDel
-							? h(Fragment, null,
-								h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-danger", disabled: busy, onClick: remove }, t("skills.deleteConfirm")),
-								h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost", onClick: () => setConfirmDel(false) }, t("skills.cancel")),
-							)
-							: h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost", onClick: () => setConfirmDel(true) }, t("skills.delete")),
-						h("button", {
-							type: "button",
-							className: "ce-sk-btn",
-							disabled: !dirty || busy,
-							title: "⌘S / Ctrl+S",
-							onClick: save,
-						}, t("skills.save")),
-					),
-					h("textarea", {
-						className: "ce-sk-ta",
-						style: { display: editMode ? void 0 : "none" },
-						value: content,
-						spellcheck: false,
-						onChange: (e) => setContent(e.target.value),
-						onKeyDown,
-					}),
-					editMode ? null : h(MarkdownView, { text: content }),
+		createOpen ? h("div", { className: "ce-sk-create" },
+			h("input", { className: "ce-input ce-sk-name-input", "aria-label": t("skills.createPlaceholder"), placeholder: t("skills.createPlaceholder"), value: newName, disabled: busy, autoFocus: true,
+				onChange: (e) => setNewName(e.target.value), onKeyDown: (e) => { e.stopPropagation(); if (e.key === "Enter") create(); if (e.key === "Escape") setCreateOpen(false); } }),
+			h("select", { className: "ce-sk-scope", "aria-label": t("skills.scopeTitle"), value: scope, disabled: busy, onChange: (e) => setScope(e.target.value) },
+				h("option", { value: "user" }, t("skills.user")), h("option", { value: "project" }, t("skills.project"))),
+			h("button", { type: "button", className: "ce-sk-btn ce-sk-primary", disabled: busy || !validName, onClick: create }, busy ? "…" : t("skills.createAction")),
+			h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost", disabled: busy, onClick: () => setCreateOpen(false) }, t("skills.cancel")),
+			newName.trim() && !validName ? h("span", { className: "ce-sk-name-hint", role: "status" }, t("skills.nameHint")) : null,
+		) : null,
+		h("div", { className: "ce-sk-workspace" },
+			h("aside", { className: "ce-sk-list", "aria-label": t("skills.title") },
+				h("div", { className: "ce-sk-searchbar" },
+					h("input", { className: "ce-input", type: "search", "aria-label": t("skills.search"), placeholder: t("skills.search"), value: query, onChange: (e) => setQuery(e.target.value) }),
+					h("select", { className: "ce-sk-scope", "aria-label": t("skills.filter"), value: filter, onChange: (e) => setFilter(e.target.value) },
+						["all", "project", "user", "provided"].map((id) => h("option", { key: id, value: id }, t(`skills.scope.${id}`)))),
 				),
+				h("div", { className: "ce-sk-results ce-scroll", "aria-busy": listing },
+					error ? h("div", { className: "ce-sk-feedback", role: "alert" }, error) : null,
+					skills === null && !error ? h("div", { className: "ce-sk-feedback", role: "status" }, t("loading")) : null,
+					skills !== null && visibleCount === 0 ? h("div", { className: "ce-sk-feedback" }, t(skills.length === 0 ? "skills.empty" : "skills.noMatch")) : null,
+					grouped.map((group) => h("section", { key: group.source },
+						h("h3", { className: "ce-sk-section" }, h("span", null, t(`skills.scope.${group.source}`)), h("span", null, String(group.items.length))),
+						group.items.map((skill) => h("button", { key: skill.path || skill.name, type: "button", disabled: busy,
+							className: `ce-sk-row${sel && (sel.path ? sel.path === skill.path : sel.name === skill.name) ? " ce-sk-row-on" : ""}`,
+							"aria-pressed": Boolean(sel && (sel.path ? sel.path === skill.path : sel.name === skill.name)), onClick: () => open(skill), title: skill.description || skill.name },
+							h("span", { className: "ce-sk-row-name" }, skill.name),
+							h("span", { className: "ce-sk-row-desc" }, skill.description || t("skills.noDesc")),
+						)),
+					)),
+				),
+			),
+			h("section", { className: "ce-sk-edit", "aria-label": sel?.name ?? t("skills.pick") },
+				!sel ? h("div", { className: "ce-sk-welcome" },
+					h(SkillsGlyph), h("h3", null, t("skills.welcome")), h("p", null, t("skills.pick")),
+					h("p", { className: "ce-sk-welcome-note" }, t("skills.scopeHint")),
+				) : h(Fragment, null,
+					h("header", { className: "ce-sk-detail-head" },
+						h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost ce-sk-back", onClick: back, disabled: busy }, `← ${t("skills.backList")}`),
+						h("h3", { className: "ce-sk-detail-title" }, sel.name),
+						h("div", { className: "ce-sk-meta" },
+							h("span", null, sourceLabel(sel.source)),
+							readonly ? h("span", { className: "ce-chip" }, t("skills.readonly")) : null,
+							contentTruncated ? h("span", { className: "ce-chip ce-chip-warn" }, t("skills.truncatedChip")) : null,
+							dirty ? h("span", { className: "ce-chip ce-chip-warn" }, t("skills.dirty")) : null,
+						),
+						sel.description ? h("p", { className: "ce-sk-detail-desc" }, sel.description) : null,
+						sel.dir || sel.path ? h("button", { type: "button", className: "ce-sk-path", title: t("skills.copyPath"), onClick: async () => {
+							try { await navigator.clipboard.writeText(sel.dir ?? sel.path); say(t("skills.pathCopied")); }
+							catch { say(t("skills.copyFailed"), "error"); }
+						} }, sel.dir || sel.path) : null,
+					),
+					h("div", { className: "ce-sk-detail-tools" },
+						editMode ? h("span", { className: "ce-sk-edit-label" }, t("skills.editing")) : h("div", { className: "ce-sk-view-switch" },
+							h("button", { type: "button", className: `ce-sk-btn ce-sk-btn-ghost${!rawPreview ? " ce-sk-view-on" : ""}`, "aria-pressed": !rawPreview, onClick: () => setRawPreview(false) }, t("skills.preview")),
+							h("button", { type: "button", className: `ce-sk-btn ce-sk-btn-ghost${rawPreview ? " ce-sk-view-on" : ""}`, "aria-pressed": rawPreview, onClick: () => setRawPreview(true) }, t("skills.source"))),
+						!readonly && !reading && !readError && !contentTruncated ? (editMode ? h(Fragment, null,
+							h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost", disabled: busy, onClick: cancelEdit }, t("editor.cancel")),
+							h("button", { type: "button", className: "ce-sk-btn ce-sk-primary", disabled: !dirty || busy, title: "⌘S / Ctrl+S", onClick: save }, t("editor.save")),
+						) : h("button", { type: "button", className: "ce-sk-btn", disabled: busy, onClick: () => setEditMode(true) }, t("editor.edit"))) : null,
+						!readonly && !editMode ? h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost", disabled: busy, onClick: () => setConfirmDel((v) => !v) }, t("skills.delete")) : null,
+					),
+					confirmDel ? h("div", { className: "ce-sk-delete-confirm", role: "alert" },
+						h("span", null, t("skills.deleteQuestion", { name: sel.name })),
+						h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-danger", disabled: busy, onClick: remove }, t("skills.deleteConfirm")),
+						h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost", disabled: busy, onClick: () => setConfirmDel(false) }, t("skills.cancel"))) : null,
+					reading ? h("div", { className: "ce-sk-feedback", role: "status" }, t("loading"))
+						: readError ? h("div", { className: "ce-sk-feedback", role: "alert" }, readError,
+							h("button", { type: "button", className: "ce-sk-btn", onClick: () => open(sel) }, t("skills.retry")))
+						: editMode ? h("textarea", { className: "ce-sk-ta", "aria-label": sel.name, value: content, disabled: busy, spellcheck: false, onChange: (e) => setContent(e.target.value), onKeyDown })
+						: rawPreview ? h("pre", { className: "ce-sk-source ce-scroll" }, content)
+						: h(MarkdownView, { text: content }),
+				),
+			),
 		),
 	);
 }

@@ -35,6 +35,7 @@ export function useEffect(effect) {
 }
 
 export function useRef(initial) {
+	if (renderState) return useState(() => ({ current: initial }))[0];
 	return { current: initial };
 }
 

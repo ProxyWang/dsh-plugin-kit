@@ -267,6 +267,26 @@ var zh = {
   "toolrow.nopath": "（无路径）",
   "toolrow.hint": "点击在右侧查看 diff",
   "toolbar.skills": "技能",
+  "skills.nameHint": "首字符为小写字母或数字；可包含 . _ -，最多 64 个字符。",
+  "skills.manager": "技能管理",
+  "skills.total": "{n} 个技能",
+  "skills.scope.all": "全部来源",
+  "skills.scope.project": "项目技能",
+  "skills.scope.user": "用户技能",
+  "skills.scope.provided": "内置与插件",
+  "skills.search": "搜索技能名称或说明…",
+  "skills.filter": "筛选技能来源",
+  "skills.createAction": "创建",
+  "skills.noMatch": "没有匹配的技能，试试其他关键词或来源。",
+  "skills.welcome": "浏览你的技能库",
+  "skills.scopeHint": "项目技能随工作区使用；用户技能跨项目可用。内置与插件技能支持预览和查看源文件。",
+  "skills.backList": "技能列表",
+  "skills.copyFailed": "复制失败，请重试",
+  "skills.editing": "编辑中 · ⌘ / Ctrl + S 保存",
+  "skills.preview": "预览",
+  "skills.source": "源文件",
+  "skills.deleteQuestion": "确认删除「{name}」？",
+  "skills.retry": "重试加载",
   "skills.title": "技能列表",
   "skills.project": "项目级",
   "skills.user": "用户级",
@@ -276,14 +296,14 @@ var zh = {
   "skills.truncatedNoSave": "文件超过 1MB 已被截断，禁止保存以防丢失内容",
   "skills.truncatedChip": "已截断 · 禁止保存",
   "skills.refresh": "刷新",
-  "skills.new": "新建 skill",
-  "skills.createPlaceholder": "新 skill 名称（kebab-case）",
+  "skills.new": "新建技能",
+  "skills.createPlaceholder": "技能名称，例如 my-skill",
   "skills.empty": "没有发现 skill",
   "skills.noDesc": "（无描述）",
   "skills.scopeTitle": "新建到哪个根",
   "skills.copyPath": "点击复制路径",
   "skills.pathCopied": "路径已复制",
-  "skills.pick": "选择左侧 skill 查看与编辑",
+  "skills.pick": "从列表选择一个技能，查看说明或编辑内容。",
   "skills.save": "保存",
   "skills.saved": "已保存",
   "skills.deleted": "已删除",
@@ -580,6 +600,26 @@ var en = {
   "toolrow.nopath": "(no path)",
   "toolrow.hint": "Click to view diff in side panel",
   "toolbar.skills": "Skills",
+  "skills.nameHint": "Start with a lowercase letter or digit; use . _ - if needed, up to 64 characters.",
+  "skills.manager": "Skills",
+  "skills.total": "{n} skills",
+  "skills.scope.all": "All sources",
+  "skills.scope.project": "Project skills",
+  "skills.scope.user": "User skills",
+  "skills.scope.provided": "Built-in & plugins",
+  "skills.search": "Search names or descriptions…",
+  "skills.filter": "Filter by source",
+  "skills.createAction": "Create",
+  "skills.noMatch": "No matching skills. Try another keyword or source.",
+  "skills.welcome": "Explore your skill library",
+  "skills.scopeHint": "Project skills belong to this workspace; user skills work across projects. Built-in and plugin skills can be previewed or viewed as source.",
+  "skills.backList": "Skill list",
+  "skills.copyFailed": "Could not copy. Please try again.",
+  "skills.editing": "Editing · ⌘ / Ctrl + S to save",
+  "skills.preview": "Preview",
+  "skills.source": "Source",
+  "skills.deleteQuestion": "Delete “{name}”?",
+  "skills.retry": "Retry loading",
   "skills.title": "SKILLS",
   "skills.project": "Project",
   "skills.user": "User",
@@ -596,7 +636,7 @@ var en = {
   "skills.scopeTitle": "Which root to create in",
   "skills.copyPath": "Click to copy path",
   "skills.pathCopied": "Path copied",
-  "skills.pick": "Pick a skill on the left to view or edit",
+  "skills.pick": "Select a skill to read its instructions or edit its content.",
   "skills.save": "Save",
   "skills.saved": "Saved",
   "skills.deleted": "Deleted",
@@ -5193,27 +5233,60 @@ var CSS2 = `
 .ce-cal-hint{flex:none;font-size:11px;color:var(--dsw-alias-brand-primary,#6cb2ff);opacity:0;transition:opacity .12s}
 .ce-calrow:hover .ce-cal-hint{opacity:1}
 .ce-cal-hint-on{opacity:1;color:var(--dsw-alias-label-tertiary,#889)}
-.ce-sk-root{flex:1;min-height:0;display:flex}
-.ce-sk-list{width:320px;flex:none;border-right:.5px solid var(--dsw-alias-border-l1,#333);display:flex;flex-direction:column;overflow:auto}
-.ce-sk-head2{display:flex;align-items:center;gap:6px;padding:8px 10px 4px;flex:none}
-.ce-sk-title{font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--dsw-alias-label-secondary,#999)}
-.ce-sk-create{display:flex;gap:6px;padding:6px 8px;border-bottom:.5px solid var(--dsw-alias-border-l1,#333);flex:none;align-items:center}
-.ce-sk-name-input{flex:1;min-width:0}
-.ce-sk-scope{flex:none;width:auto;border:.5px solid var(--dsw-alias-border-l2,#444);background:var(--dsw-alias-bg-layer-2,#24272c);color:var(--dsw-alias-label-secondary,#999);border-radius:6px;font:inherit;font-size:11px;padding:3px 6px}
-.ce-sk-section{padding:10px 10px 3px;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--dsw-alias-label-tertiary,#889)}
-.ce-sk-row{display:flex;flex-direction:column;gap:2px;width:100%;border:0;background:transparent;color:inherit;font:inherit;text-align:left;padding:6px 10px 6px 12px;cursor:pointer;border-left:2px solid transparent}
+.ce-sk-root{flex:1;min-width:0;min-height:0;display:flex;flex-direction:column;container-type:inline-size;overflow:hidden}
+.ce-sk-top{display:flex;gap:8px;align-items:center;flex:none;padding:12px 16px;border-bottom:.5px solid var(--dsw-alias-border-l1,#333)}
+.ce-sk-heading{display:flex;align-items:baseline;gap:8px;flex:1;min-width:0;flex-wrap:wrap}
+.ce-sk-heading h2{font-size:14px;font-weight:600;margin:0;color:var(--dsw-alias-label-primary,#ddd)}
+.ce-sk-total{font-size:11px;color:var(--dsw-alias-label-tertiary,#889)}
+.ce-sk-workspace{display:grid;grid-template-columns:clamp(210px,30%,280px) minmax(0,1fr);flex:1;min-height:0;min-width:0}
+.ce-sk-list{min-width:0;min-height:0;border-right:.5px solid var(--dsw-alias-border-l1,#333);display:flex;flex-direction:column;overflow:hidden}
+.ce-sk-searchbar{display:flex;flex-direction:column;gap:8px;padding:12px;flex:none;border-bottom:.5px solid var(--dsw-alias-border-l1,#333)}
+.ce-sk-searchbar .ce-input{width:100%;box-sizing:border-box;flex:none;font-size:12px;min-height:32px}
+.ce-sk-scope{min-width:0;border:.5px solid var(--dsw-alias-border-l2,#444);background:var(--dsw-alias-bg-layer-1,#1e2126);color:var(--dsw-alias-label-secondary,#999);border-radius:6px;font:inherit;font-size:11px;padding:6px 8px;min-height:30px}
+.ce-sk-results{flex:1;min-height:0;overflow:auto;padding-bottom:12px}
+.ce-sk-section{display:flex;justify-content:space-between;gap:8px;margin:0;padding:16px 16px 8px;font-size:11px;font-weight:600;color:var(--dsw-alias-label-tertiary,#889)}
+.ce-sk-section>span:last-child{font-weight:400;font-variant-numeric:tabular-nums}
+.ce-sk-row{display:flex;flex-direction:column;gap:4px;width:calc(100% - 12px);margin:0 6px 4px;border:0;border-radius:6px;background:transparent;color:inherit;font:inherit;text-align:left;padding:10px;cursor:pointer}
 .ce-sk-row:hover{background:var(--dsw-alias-interactive-bg-hover,#26292e)}
-.ce-sk-row-on{background:var(--dsw-alias-interactive-bg-hover,#2c313a);border-left-color:var(--dsw-alias-brand-primary,#59b7ff)}
-.ce-sk-row-name{font-size:12.5px;font-weight:600;color:var(--dsw-alias-label-primary,#ddd);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.ce-sk-row-desc{font-size:11px;color:var(--dsw-alias-label-tertiary,#777);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.ce-sk-edit{flex:1;min-width:0;display:flex;flex-direction:column}
-.ce-sk-ta{flex:1;min-height:0;resize:none;border:0;outline:none;background:transparent;color:var(--dsw-alias-label-primary,#ddd);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;line-height:1.6;padding:10px 12px;white-space:pre;overflow:auto}
+.ce-sk-row-on{background:var(--dsw-alias-interactive-bg-hover,#2c313a)}
+.ce-sk-row-on .ce-sk-row-name{color:var(--dsw-alias-brand-primary,#59b7ff)}
+.ce-sk-row-name{max-width:100%;font-size:12px;line-height:1.4;font-weight:600;color:var(--dsw-alias-label-primary,#ddd);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ce-sk-row-desc{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-size:11px;line-height:1.5;color:var(--dsw-alias-label-secondary,#999);overflow-wrap:anywhere}
+.ce-sk-row:disabled{cursor:default;opacity:.65}
+.ce-sk-edit{min-width:0;min-height:0;display:flex;flex-direction:column;overflow:hidden}
+.ce-sk-detail-head{flex:none;max-height:42%;overflow:auto;padding:20px 20px 12px}
+.ce-sk-detail-title{margin:0 0 8px;font-size:18px;line-height:1.4;font-weight:600;overflow-wrap:anywhere;color:var(--dsw-alias-label-primary,#ddd)}
+.ce-sk-meta{display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:11px;color:var(--dsw-alias-label-tertiary,#889)}
+.ce-sk-detail-desc{margin:12px 0 8px;font-size:12px;line-height:1.6;color:var(--dsw-alias-label-secondary,#999);overflow-wrap:anywhere}
+.ce-sk-detail-tools{flex:none;display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:8px 16px;border-top:.5px solid var(--dsw-alias-border-l1,#333);border-bottom:.5px solid var(--dsw-alias-border-l1,#333)}
+.ce-sk-view-switch{display:flex;align-items:center;gap:2px;margin-right:auto}
+.ce-sk-edit-label{margin-right:auto;font-size:12px;color:var(--dsw-alias-label-secondary,#999)}
+.ce-sk-root .ce-sk-view-on{background:var(--dsw-alias-interactive-bg-hover,#2c313a);color:var(--dsw-alias-label-primary,#ddd)}
+.ce-sk-root .ce-sk-primary{background:var(--dsw-alias-brand-primary,#2f81f7);border-color:transparent;color:#fff}
+.ce-sk-root .ce-sk-primary:hover{background:var(--dsw-alias-brand-primary,#2f81f7);filter:brightness(1.05)}
+.ce-sk-root .ce-sk-btn{min-height:28px;white-space:normal}
+.ce-sk-name-hint{flex-basis:100%;font-size:11px;line-height:1.5;color:var(--dsw-alias-label-secondary,#999)}
+.ce-sk-edit .ce-md-pre,.ce-sk-edit .ce-md-code{background:var(--dsw-alias-bg-layer-2,#24272c);color:var(--dsw-alias-label-primary,#ddd)}
+.ce-sk-back{display:none;margin-bottom:12px}
+.ce-sk-create{display:flex;flex-wrap:wrap;gap:8px;padding:12px 16px;border-bottom:.5px solid var(--dsw-alias-border-l1,#333);flex:none;align-items:center}
+.ce-sk-name-input{flex:1 1 180px;min-width:0;font-size:12px}
+.ce-sk-welcome{display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:12px;flex:1;padding:32px;max-width:440px;align-self:center;color:var(--dsw-alias-label-secondary,#999)}
+.ce-sk-welcome>svg{width:28px;height:28px;color:var(--dsw-alias-label-tertiary,#889);margin-bottom:4px}
+.ce-sk-welcome h3{margin:0;font-size:16px;font-weight:600;color:var(--dsw-alias-label-primary,#ddd)}
+.ce-sk-welcome p{margin:0;font-size:12px;line-height:1.7}
+.ce-sk-welcome-note{color:var(--dsw-alias-label-tertiary,#889)}
+.ce-sk-feedback{padding:20px 16px;font-size:12px;line-height:1.6;color:var(--dsw-alias-label-secondary,#999);overflow-wrap:anywhere;display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap}
+.ce-sk-delete-confirm{display:flex;align-items:center;flex-wrap:wrap;gap:8px;padding:12px 16px;background:var(--dsw-alias-bg-layer-1,#1e2126);border-bottom:.5px solid var(--dsw-alias-border-l1,#333);font-size:12px}
+.ce-sk-delete-confirm>span{flex:1 1 180px;overflow-wrap:anywhere}
+.ce-sk-ta,.ce-sk-source{flex:1;min-height:0;resize:none;border:0;outline:none;margin:0;background:transparent;color:var(--dsw-alias-label-primary,#ddd);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;line-height:1.6;padding:16px 20px;white-space:pre;overflow:auto}
+.ce-sk-root button:focus-visible,.ce-sk-root select:focus-visible,.ce-sk-root textarea:focus-visible{outline:2px solid var(--dsw-alias-brand-primary,#59b7ff);outline-offset:-2px}
+@container (max-width:620px){.ce-sk-workspace{grid-template-columns:minmax(0,1fr)}.ce-sk-list{border-right:0}.ce-sk-edit{display:none}.ce-sk-has-selection .ce-sk-list{display:none}.ce-sk-has-selection .ce-sk-edit{display:flex}.ce-sk-back{display:inline-flex}.ce-sk-searchbar{flex-direction:row;flex-wrap:wrap}.ce-sk-searchbar .ce-input{flex:1 1 160px;width:auto;min-width:0}.ce-sk-searchbar .ce-sk-scope{flex:1 1 100px}.ce-sk-top{padding:12px}.ce-sk-detail-head{padding:16px}.ce-sk-detail-title{font-size:16px}.ce-sk-name-input{flex-basis:100%}}
 .ce-sk-btn{border:.5px solid var(--dsw-alias-border-l2,#444);background:var(--dsw-alias-bg-layer-2,#24272c);color:var(--dsw-alias-label-primary,#ddd);border-radius:6px;font:inherit;font-size:11px;padding:3px 10px;cursor:pointer;flex:none}
 .ce-sk-btn:hover{background:var(--dsw-alias-interactive-bg-hover,#2b2b2b)}
 .ce-sk-btn:disabled{opacity:.45;cursor:default}
 .ce-sk-btn-danger{color:var(--dsw-alias-state-error-primary,#f85149);border-color:color-mix(in srgb,var(--dsw-alias-state-error-primary,#f85149) 45%,transparent)}
 .ce-sk-btn-ghost{background:transparent;color:var(--dsw-alias-label-secondary,#999)}
-.ce-sk-path{border:0;background:transparent;color:var(--dsw-alias-label-tertiary,#777);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;padding:0 4px;cursor:pointer;min-width:0;max-width:45%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ce-sk-path{display:block;width:100%;border:0;background:transparent;color:var(--dsw-alias-label-tertiary,#777);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:10px;padding:4px 0;cursor:pointer;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left}
 .ce-sk-path:hover{color:var(--dsw-alias-brand-primary,#6cb2ff);text-decoration:underline}
 .ce-imgwrap{flex:1;min-height:0;display:flex;flex-direction:column;align-items:center;gap:8px;padding:16px;overflow:auto}
 .ce-img{max-width:100%;object-fit:contain;border:.5px solid var(--dsw-alias-border-l1,#333);border-radius:6px;background:repeating-conic-gradient(#2b2b2b 0% 25%, #232323 0% 50%) 0 0/16px 16px}
@@ -5628,7 +5701,9 @@ function CallDiffRow(props) {
 }
 
 // src/client/skills.js
-var SOURCE_ORDER = ["project-dsh", "project-agents", "user-dsh", "user-agents", "bundled", "other"];
+function skillScope(source) {
+  return String(source ?? "").startsWith("project") ? "project" : String(source ?? "").startsWith("user") ? "user" : "provided";
+}
 function SkillsView({ cwd, t, say }) {
   const [skills, setSkills] = useState(null);
   const [error, setError] = useState("");
@@ -5636,20 +5711,31 @@ function SkillsView({ cwd, t, say }) {
   const [content, setContent] = useState("");
   const [savedContent, setSavedContent] = useState("");
   const [busy, setBusy] = useState(false);
+  const [listing, setListing] = useState(false);
+  const [reading, setReading] = useState(false);
+  const [readError, setReadError] = useState("");
   const [confirmDel, setConfirmDel] = useState(false);
   const [newName, setNewName] = useState("");
   const [scope, setScope] = useState("user");
+  const [createOpen, setCreateOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState("all");
   const [editMode, setEditMode] = useState(false);
+  const [rawPreview, setRawPreview] = useState(false);
   const [contentTruncated, setContentTruncated] = useState(false);
-  const readonly = sel !== null && (sel.source === "bundled" || sel.source === "other");
+  const readSeq = useRef(0);
+  const listSeq = useRef(0);
+  const readonly = sel !== null && skillScope(sel.source) === "provided";
   const dirty = content !== savedContent;
+  const sourceLabel = (source) => t(`skills.scope.${skillScope(source)}`);
   const load = useCallback(() => {
-    setBusy(true);
+    const seq = ++listSeq.current;
+    setListing(true);
     api("skills.list", { cwd }).then((res) => {
-      setBusy(false);
+      if (seq !== listSeq.current) return;
+      setListing(false);
       if (!res.ok) {
         setError(res.error);
-        setSkills([]);
         return;
       }
       setError("");
@@ -5657,37 +5743,60 @@ function SkillsView({ cwd, t, say }) {
     });
   }, [cwd]);
   useEffect(() => {
+    setSkills(null);
+    setError("");
+    setSel(null);
+    setContent("");
+    setSavedContent("");
+    setEditMode(false);
+    setReading(false);
+    setReadError("");
+    setBusy(false);
     load();
+    return () => {
+      ++listSeq.current;
+      ++readSeq.current;
+    };
   }, [load]);
-  const open = useCallback((skill) => {
+  const canLeave = () => {
+    if (!dirty) return true;
+    say(t("editor.dirtyGuard"), "error");
+    return false;
+  };
+  const open = (skill) => {
+    if (!canLeave()) return;
+    const seq = ++readSeq.current;
     setSel(skill);
     setConfirmDel(false);
     setEditMode(false);
+    setRawPreview(false);
+    setContent("");
+    setSavedContent("");
+    setContentTruncated(false);
+    setReadError("");
     if (!skill.path) {
-      setContent("");
-      setSavedContent("");
-      setContentTruncated(false);
+      setReading(false);
       return;
     }
+    setReading(true);
     api("skills.read", { cwd, path: skill.path }).then((res) => {
+      if (seq !== readSeq.current) return;
+      setReading(false);
       if (!res.ok) {
-        say(`${t("error")}: ${res.error}`, "error");
+        setReadError(res.error);
         return;
       }
       setContent(res.value.content);
       setSavedContent(res.value.content);
       setContentTruncated(res.value.truncated === true);
-      if (res.value.truncated === true) say(t("skills.truncatedNoSave"), "error");
     });
-  }, [cwd, say, t]);
-  const save = useCallback(() => {
-    if (!sel || !dirty) return;
-    if (contentTruncated) {
-      say(t("skills.truncatedNoSave"), "error");
-      return;
-    }
+  };
+  const save = () => {
+    if (!sel || !editMode || readonly || reading || readError || contentTruncated || !dirty || busy) return;
+    const seq = readSeq.current;
     setBusy(true);
     api("skills.write", { cwd, path: sel.path, content }).then((res) => {
+      if (seq !== readSeq.current) return;
       setBusy(false);
       if (!res.ok) {
         say(`${t("error")}: ${res.error}`, "error");
@@ -5698,167 +5807,228 @@ function SkillsView({ cwd, t, say }) {
       say(t("skills.saved"));
       load();
     });
-  }, [sel, dirty, content, contentTruncated, cwd, say, t, load]);
-  const remove = useCallback(() => {
-    if (!sel) return;
+  };
+  const remove = () => {
+    if (!sel || readonly || busy || !confirmDel) return;
+    const seq = readSeq.current;
     setBusy(true);
     api("skills.delete", { cwd, path: sel.path }).then((res) => {
+      if (seq !== readSeq.current) return;
       setBusy(false);
       if (!res.ok) {
         say(`${t("error")}: ${res.error}`, "error");
         return;
       }
+      ++readSeq.current;
       setSel(null);
       setContent("");
       setSavedContent("");
+      setConfirmDel(false);
       say(t("skills.deleted"));
       load();
     });
-  }, [sel, cwd, say, t, load]);
-  const create = useCallback(() => {
-    const name = newName.trim();
-    if (!name) return;
+  };
+  const validName = /^[a-z0-9][a-z0-9._-]{0,63}$/.test(newName.trim());
+  const create = () => {
+    if (!validName || busy || !canLeave()) return;
+    const seq = readSeq.current;
     setBusy(true);
-    api("skills.create", { cwd, name, scope }).then((res) => {
+    api("skills.create", { cwd, name: newName.trim(), scope }).then((res) => {
+      if (seq !== readSeq.current) return;
       setBusy(false);
       if (!res.ok) {
         say(`${t("error")}: ${res.error}`, "error");
         return;
       }
       setNewName("");
+      setCreateOpen(false);
+      setQuery("");
+      setFilter("all");
       load();
       if (res.value.skill) open(res.value.skill);
     });
-  }, [newName, cwd, scope, say, t, load, open]);
-  const onKeyDown = useCallback((event) => {
+  };
+  const onKeyDown = (event) => {
     if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s") {
       event.preventDefault();
+      event.stopPropagation();
       save();
     }
-  }, [save]);
+  };
   const grouped = useMemo(() => {
-    const groups = [];
-    for (const source of SOURCE_ORDER) {
-      const items = (skills ?? []).filter((s) => s.source === source);
-      if (items.length > 0) groups.push({ source, items });
+    const q = query.trim().toLowerCase();
+    return ["project", "user", "provided"].map((group) => ({
+      source: group,
+      items: (skills ?? []).filter((skill) => skillScope(skill.source) === group && (filter === "all" || filter === group) && (!q || [skill.name, skill.description, skill.path, skill.provider].some((s) => String(s ?? "").toLowerCase().includes(q))))
+    })).filter((group) => group.items.length > 0);
+  }, [skills, query, filter]);
+  const visibleCount = grouped.reduce((sum, group) => sum + group.items.length, 0);
+  const back = () => {
+    if (canLeave()) {
+      ++readSeq.current;
+      setReading(false);
+      setSel(null);
+      setReadError("");
     }
-    return groups;
-  }, [skills]);
-  const sourceLabel = (source) => source.startsWith("project") ? t("skills.project") : source === "bundled" ? t("skills.bundled") : source === "other" ? t("skills.other") : t("skills.user");
+  };
+  const cancelEdit = () => {
+    setContent(savedContent);
+    setEditMode(false);
+  };
   return h(
     "div",
-    { className: "ce-sk-root" },
+    { className: `ce-sk-root${sel ? " ce-sk-has-selection" : ""}` },
     h(
-      "div",
-      { className: "ce-sk-list ce-scroll" },
+      "header",
+      { className: "ce-sk-top" },
       h(
         "div",
-        { className: "ce-sk-head2" },
-        h("span", { className: "ce-sk-title" }, t("skills.title")),
-        skills ? h("span", { className: "ce-chip" }, String(skills.length)) : null,
-        h("span", { className: "ce-spacer" }),
-        h("button", { type: "button", className: "ce-tool ce-tiny", title: t("skills.refresh"), onClick: load }, "⟳")
+        { className: "ce-sk-heading" },
+        h("h2", null, t("skills.manager")),
+        h("span", { className: "ce-sk-total" }, skills === null ? "…" : t("skills.total", { n: skills.length }))
       ),
-      h(
-        "div",
-        { className: "ce-sk-create" },
-        h("input", {
-          className: "ce-input ce-sk-name-input",
-          placeholder: t("skills.createPlaceholder"),
-          value: newName,
-          onChange: (e) => setNewName(e.target.value),
-          onKeyDown: (e) => {
-            if (e.key === "Enter") create();
-          }
-        }),
-        h(
-          "select",
-          { className: "ce-sk-scope", value: scope, onChange: (e) => setScope(e.target.value), title: t("skills.scopeTitle") },
-          h("option", { value: "user" }, t("skills.user")),
-          h("option", { value: "project" }, t("skills.project"))
-        ),
-        h("button", { type: "button", className: "ce-tool ce-tiny", title: t("skills.new"), disabled: busy || newName.trim() === "", onClick: create }, "+")
-      ),
-      error ? h("div", { className: "ce-note" }, error) : null,
-      skills === null ? h("div", { className: "ce-note" }, "…") : null,
-      skills !== null && skills.length === 0 ? h("div", { className: "ce-empty" }, t("skills.empty")) : null,
-      grouped.map((group) => h(
-        "div",
-        { key: group.source },
-        h("div", { className: "ce-sk-section" }, `${sourceLabel(group.source)} · ${group.items.length}`),
-        group.items.map((skill) => h(
-          "button",
-          {
-            key: skill.path || skill.name,
-            type: "button",
-            className: `ce-sk-row${sel && sel.name === skill.name ? " ce-sk-row-on" : ""}`,
-            onClick: () => open(skill),
-            title: skill.provider ? `${skill.path || skill.name} · ${skill.provider}` : skill.path
-          },
-          h("span", { className: "ce-sk-row-name" }, skill.name),
-          h("span", { className: "ce-sk-row-desc" }, skill.description || t("skills.noDesc"))
-        ))
-      ))
+      h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost", title: t("skills.refresh"), "aria-label": t("skills.refresh"), disabled: listing || busy, onClick: load }, "⟳"),
+      h("button", { type: "button", className: "ce-sk-btn ce-sk-primary", "aria-expanded": createOpen, disabled: busy, onClick: () => {
+        if (canLeave()) setCreateOpen((v) => !v);
+      } }, `+ ${t("skills.new")}`)
     ),
+    createOpen ? h(
+      "div",
+      { className: "ce-sk-create" },
+      h("input", {
+        className: "ce-input ce-sk-name-input",
+        "aria-label": t("skills.createPlaceholder"),
+        placeholder: t("skills.createPlaceholder"),
+        value: newName,
+        disabled: busy,
+        autoFocus: true,
+        onChange: (e) => setNewName(e.target.value),
+        onKeyDown: (e) => {
+          e.stopPropagation();
+          if (e.key === "Enter") create();
+          if (e.key === "Escape") setCreateOpen(false);
+        }
+      }),
+      h(
+        "select",
+        { className: "ce-sk-scope", "aria-label": t("skills.scopeTitle"), value: scope, disabled: busy, onChange: (e) => setScope(e.target.value) },
+        h("option", { value: "user" }, t("skills.user")),
+        h("option", { value: "project" }, t("skills.project"))
+      ),
+      h("button", { type: "button", className: "ce-sk-btn ce-sk-primary", disabled: busy || !validName, onClick: create }, busy ? "…" : t("skills.createAction")),
+      h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost", disabled: busy, onClick: () => setCreateOpen(false) }, t("skills.cancel")),
+      newName.trim() && !validName ? h("span", { className: "ce-sk-name-hint", role: "status" }, t("skills.nameHint")) : null
+    ) : null,
     h(
       "div",
-      { className: "ce-sk-edit" },
-      !sel ? h("div", { className: "ce-empty" }, t("skills.pick")) : h(
-        Fragment,
-        null,
+      { className: "ce-sk-workspace" },
+      h(
+        "aside",
+        { className: "ce-sk-list", "aria-label": t("skills.title") },
         h(
           "div",
-          { className: "ce-head" },
-          h("span", { className: "ce-head-path", title: sel.path }, sel.name),
-          h("span", { className: "ce-chip" }, sel.source),
-          readonly ? h("span", { className: "ce-chip ce-chip-warn" }, t("skills.readonly")) : null,
-          contentTruncated ? h("span", { className: "ce-chip ce-chip-warn", title: t("skills.truncatedNoSave") }, t("skills.truncatedChip")) : null,
-          sel.dir || sel.path ? h("button", {
-            type: "button",
-            className: "ce-sk-path",
-            title: `${sel.dir ?? sel.path} · ${t("skills.copyPath")}`,
-            onClick: () => {
+          { className: "ce-sk-searchbar" },
+          h("input", { className: "ce-input", type: "search", "aria-label": t("skills.search"), placeholder: t("skills.search"), value: query, onChange: (e) => setQuery(e.target.value) }),
+          h(
+            "select",
+            { className: "ce-sk-scope", "aria-label": t("skills.filter"), value: filter, onChange: (e) => setFilter(e.target.value) },
+            ["all", "project", "user", "provided"].map((id) => h("option", { key: id, value: id }, t(`skills.scope.${id}`)))
+          )
+        ),
+        h(
+          "div",
+          { className: "ce-sk-results ce-scroll", "aria-busy": listing },
+          error ? h("div", { className: "ce-sk-feedback", role: "alert" }, error) : null,
+          skills === null && !error ? h("div", { className: "ce-sk-feedback", role: "status" }, t("loading")) : null,
+          skills !== null && visibleCount === 0 ? h("div", { className: "ce-sk-feedback" }, t(skills.length === 0 ? "skills.empty" : "skills.noMatch")) : null,
+          grouped.map((group) => h(
+            "section",
+            { key: group.source },
+            h("h3", { className: "ce-sk-section" }, h("span", null, t(`skills.scope.${group.source}`)), h("span", null, String(group.items.length))),
+            group.items.map((skill) => h(
+              "button",
+              {
+                key: skill.path || skill.name,
+                type: "button",
+                disabled: busy,
+                className: `ce-sk-row${sel && (sel.path ? sel.path === skill.path : sel.name === skill.name) ? " ce-sk-row-on" : ""}`,
+                "aria-pressed": Boolean(sel && (sel.path ? sel.path === skill.path : sel.name === skill.name)),
+                onClick: () => open(skill),
+                title: skill.description || skill.name
+              },
+              h("span", { className: "ce-sk-row-name" }, skill.name),
+              h("span", { className: "ce-sk-row-desc" }, skill.description || t("skills.noDesc"))
+            ))
+          ))
+        )
+      ),
+      h(
+        "section",
+        { className: "ce-sk-edit", "aria-label": sel?.name ?? t("skills.pick") },
+        !sel ? h(
+          "div",
+          { className: "ce-sk-welcome" },
+          h(SkillsGlyph),
+          h("h3", null, t("skills.welcome")),
+          h("p", null, t("skills.pick")),
+          h("p", { className: "ce-sk-welcome-note" }, t("skills.scopeHint"))
+        ) : h(
+          Fragment,
+          null,
+          h(
+            "header",
+            { className: "ce-sk-detail-head" },
+            h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost ce-sk-back", onClick: back, disabled: busy }, `← ${t("skills.backList")}`),
+            h("h3", { className: "ce-sk-detail-title" }, sel.name),
+            h(
+              "div",
+              { className: "ce-sk-meta" },
+              h("span", null, sourceLabel(sel.source)),
+              readonly ? h("span", { className: "ce-chip" }, t("skills.readonly")) : null,
+              contentTruncated ? h("span", { className: "ce-chip ce-chip-warn" }, t("skills.truncatedChip")) : null,
+              dirty ? h("span", { className: "ce-chip ce-chip-warn" }, t("skills.dirty")) : null
+            ),
+            sel.description ? h("p", { className: "ce-sk-detail-desc" }, sel.description) : null,
+            sel.dir || sel.path ? h("button", { type: "button", className: "ce-sk-path", title: t("skills.copyPath"), onClick: async () => {
               try {
-                void navigator.clipboard?.writeText(sel.dir ?? sel.path);
+                await navigator.clipboard.writeText(sel.dir ?? sel.path);
                 say(t("skills.pathCopied"));
               } catch {
+                say(t("skills.copyFailed"), "error");
               }
-            }
-          }, sel.dir || sel.path) : null,
-          dirty ? h("span", { className: "ce-chip ce-chip-warn" }, t("skills.dirty")) : null,
-          h("span", { className: "ce-spacer" }),
-          readonly ? null : editMode ? h(
-            Fragment,
-            null,
-            h("button", { type: "button", className: "ce-sk-btn", disabled: !dirty || busy, title: "⌘S / Ctrl+S", onClick: save }, t("editor.save")),
-            h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost", onClick: () => {
-              setContent(savedContent);
-              setEditMode(false);
-            } }, t("editor.cancel"))
-          ) : h("button", { type: "button", className: "ce-sk-btn", onClick: () => setEditMode(true) }, t("editor.edit")),
-          readonly ? null : confirmDel ? h(
-            Fragment,
-            null,
+            } }, sel.dir || sel.path) : null
+          ),
+          h(
+            "div",
+            { className: "ce-sk-detail-tools" },
+            editMode ? h("span", { className: "ce-sk-edit-label" }, t("skills.editing")) : h(
+              "div",
+              { className: "ce-sk-view-switch" },
+              h("button", { type: "button", className: `ce-sk-btn ce-sk-btn-ghost${!rawPreview ? " ce-sk-view-on" : ""}`, "aria-pressed": !rawPreview, onClick: () => setRawPreview(false) }, t("skills.preview")),
+              h("button", { type: "button", className: `ce-sk-btn ce-sk-btn-ghost${rawPreview ? " ce-sk-view-on" : ""}`, "aria-pressed": rawPreview, onClick: () => setRawPreview(true) }, t("skills.source"))
+            ),
+            !readonly && !reading && !readError && !contentTruncated ? editMode ? h(
+              Fragment,
+              null,
+              h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost", disabled: busy, onClick: cancelEdit }, t("editor.cancel")),
+              h("button", { type: "button", className: "ce-sk-btn ce-sk-primary", disabled: !dirty || busy, title: "⌘S / Ctrl+S", onClick: save }, t("editor.save"))
+            ) : h("button", { type: "button", className: "ce-sk-btn", disabled: busy, onClick: () => setEditMode(true) }, t("editor.edit")) : null,
+            !readonly && !editMode ? h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost", disabled: busy, onClick: () => setConfirmDel((v) => !v) }, t("skills.delete")) : null
+          ),
+          confirmDel ? h(
+            "div",
+            { className: "ce-sk-delete-confirm", role: "alert" },
+            h("span", null, t("skills.deleteQuestion", { name: sel.name })),
             h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-danger", disabled: busy, onClick: remove }, t("skills.deleteConfirm")),
-            h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost", onClick: () => setConfirmDel(false) }, t("skills.cancel"))
-          ) : h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost", onClick: () => setConfirmDel(true) }, t("skills.delete")),
-          h("button", {
-            type: "button",
-            className: "ce-sk-btn",
-            disabled: !dirty || busy,
-            title: "⌘S / Ctrl+S",
-            onClick: save
-          }, t("skills.save"))
-        ),
-        h("textarea", {
-          className: "ce-sk-ta",
-          style: { display: editMode ? void 0 : "none" },
-          value: content,
-          spellcheck: false,
-          onChange: (e) => setContent(e.target.value),
-          onKeyDown
-        }),
-        editMode ? null : h(MarkdownView, { text: content })
+            h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost", disabled: busy, onClick: () => setConfirmDel(false) }, t("skills.cancel"))
+          ) : null,
+          reading ? h("div", { className: "ce-sk-feedback", role: "status" }, t("loading")) : readError ? h(
+            "div",
+            { className: "ce-sk-feedback", role: "alert" },
+            readError,
+            h("button", { type: "button", className: "ce-sk-btn", onClick: () => open(sel) }, t("skills.retry"))
+          ) : editMode ? h("textarea", { className: "ce-sk-ta", "aria-label": sel.name, value: content, disabled: busy, spellcheck: false, onChange: (e) => setContent(e.target.value), onKeyDown }) : rawPreview ? h("pre", { className: "ce-sk-source ce-scroll" }, content) : h(MarkdownView, { text: content })
+        )
       )
     )
   );
