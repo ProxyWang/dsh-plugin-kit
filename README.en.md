@@ -2,7 +2,33 @@
 
 English | [简体中文](README.md)
 
-A comprehensive development toolbox plugin for the DeepSeek Harness (DSH) right sidebar. One bundle provides three top-level tabs plus a grouped launcher:
+**Browse code, review changes, test APIs, and manage skills while chatting with your Agent in DeepSeek Harness (DSH).**
+
+`dsh-plugin-kit` adds three tools to the DSH right sidebar: **Code Explorer, API Tester, and Skills Manager**. It also organizes the Start page into task-based groups, keeping common development actions within the current session.
+
+![Development toolbox Start page, shown in Chinese: Code & Files, Terminal & Web, and Agent Extensions](docs/images/toolbox-launcher.webp)
+
+## What does this plugin do?
+
+| Start-page group | Tool | What you can do |
+| --- | --- | --- |
+| Code & Files | Workspace files | Open the built-in DSH file browser for the current session workspace. |
+| Code & Files | **Code Explorer** | Browse and edit code, search files and code snippets, jump to definitions/references, review Git diffs, stage, commit, push, and manage stashes. |
+| Code & Files | **API Tester** | Import or copy curl, edit URLs, params, headers, bodies and environment variables, send HTTP requests, inspect responses, and save history and favorites. |
+| Terminal & Web | New terminal | Open the built-in DSH terminal to run commands in the session workspace. |
+| Terminal & Web | Browser | Open the built-in DSH browser. The launcher currently starts at Doubao; you can navigate to another URL afterward. |
+| Agent Extensions | **Skills Manager** | Search, preview, edit, create and delete installed Agent skills; filter by project, user, built-in and plugin sources. |
+
+**Scope:** this plugin provides Code Explorer, API Tester, Skills Manager and the grouped launcher. Workspace files, Terminal and Browser use the built-in capabilities installed in your DSH profile; their entries depend on that profile. This is a DSH plugin, not a standalone IDE.
+
+## Getting started
+
+After installing, select a session in DSH, open **Start** in the right sidebar, and choose a tool:
+
+- **Review Agent changes:** open Code Explorer → Changes, then select a file for marked source or side-by-side diffs. You can also click an edit/write tool call in chat to inspect that specific change.
+- **Find code:** use quick file open, find-in-file or workspace full-text search. Go, TS/JS and Python support definition/reference jumps when the matching language server is installed.
+- **Test an API:** import curl or enter a request, edit the Params / Headers / Body / Settings tabs, then press `⌘/Ctrl+Enter` to send and inspect the response.
+- **Maintain skills:** search and select a skill, switch between preview and source, and save editable skills with `⌘/Ctrl+S`. Built-in and plugin-provided skills remain read-only.
 
 ## Features
 
