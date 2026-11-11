@@ -2396,7 +2396,7 @@ function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshKey, onN
 function isStagedXy(xy) {
   return typeof xy === "string" && xy.length > 0 && xy[0] !== " " && xy[0] !== "?";
 }
-function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commitsOpen, setCommitsOpen, onOpenCommit, onOpenDiff, onDiscard, onDiscardDir, onStage, onStageDir, onUnstage, onUnstageDir, onCommit, committing, onNotify, refresh }) {
+function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commitsOpen, setCommitsOpen, onOpenCommit, onOpenDiff, onDiscard, onDiscardDir, onStage, onStageDir, onUnstage, onUnstageDir, onCommit, committing, onNotify, refresh, onSearch }) {
   const [treeView, setTreeView] = useState(true);
   const [message, setMessage] = useState("");
   const [amend, setAmend] = useState(false);
@@ -2499,7 +2499,8 @@ function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commitsOpen, 
     h(
       "div",
       { className: "ce-changes-search" },
-      h("input", { className: "ce-input", type: "search", value: filterQuery, placeholder: t("changes.filterPlaceholder"), "aria-label": t("changes.filterPlaceholder"), onChange: (e) => setFilterQuery(e.target.value) })
+      h("input", { className: "ce-input", type: "search", value: filterQuery, placeholder: t("changes.filterPlaceholder"), "aria-label": t("changes.filterPlaceholder"), onChange: (e) => setFilterQuery(e.target.value) }),
+      onSearch ? h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost", onClick: onSearch, title: t("changes.searchChangedFiles") }, `⌕ ${t("changes.searchChangedFiles")}`) : null
     ),
     h(
       "section",
@@ -4393,6 +4394,7 @@ function CodeBody(props) {
   );
   const openPalette = useCallback(() => {
     if (!cwd) return;
+    setMobileView("editor");
     setPalette({ query: "", results: [], busy: true });
     api("search.files", { cwd, query: "", limit: 80 }).then((res) => {
       setPalette((p) => p && p.query === "" ? { ...p, results: res.ok ? res.value.matches ?? [] : [], busy: false } : p);
@@ -4438,10 +4440,17 @@ function CodeBody(props) {
     },
     [cwd]
   );
-  const openSearch = useCallback(() => {
+  const openSearch = useCallback((initialInclude = "") => {
+    setMobileView("editor");
     setSearchOpen(true);
-    setSearch((s) => s ?? { query: "", include: "", regex: false, words: false, results: void 0, engine: "", truncated: false, busy: false });
+    const include = typeof initialInclude === "string" ? initialInclude : "";
+    setSearch((s) => ({ ...s ?? { query: "", regex: false, words: false, results: void 0, engine: "", truncated: false, busy: false }, include }));
   }, []);
+  const changedSearchInclude = useMemo(() => {
+    if (!git?.repo) return "";
+    const paths = [.../* @__PURE__ */ new Set([...(git.working ?? []).map((f) => f.path), ...git.branchFiles ?? []])].filter(Boolean);
+    return paths.join(",");
+  }, [git]);
   useEffect(() => {
     if (!searchOpen || !search) return void 0;
     const query = (search.query ?? "").trim();
@@ -4910,7 +4919,7 @@ function CodeBody(props) {
   }
   return h(
     "div",
-    { className: "ce-root ce-code-root", "data-mobile-view": (doc || diff) && (!railVisible || mobileView === "editor") ? "editor" : "files", onKeyDown: onRootKeyDown },
+    { className: "ce-root ce-code-root", "data-mobile-view": (doc || diff || searchOpen || palette) && (!railVisible || mobileView === "editor") ? "editor" : "files", onKeyDown: onRootKeyDown },
     h(
       "div",
       { className: "ce-toolbar" },
@@ -4919,11 +4928,15 @@ function CodeBody(props) {
         { className: "ce-seg" },
         h("button", { type: "button", className: `ce-seg-btn${mode === "files" ? " ce-seg-on" : ""}`, onClick: () => {
           setMode("files");
+          setSearchOpen(false);
+          closePalette();
           setRailVisible(true);
           setMobileView("files");
         } }, t("toolbar.files")),
         h("button", { type: "button", className: `ce-seg-btn${mode === "changes" ? " ce-seg-on" : ""}`, onClick: () => {
           setMode("changes");
+          setSearchOpen(false);
+          closePalette();
           setRailVisible(true);
           setMobileView("files");
           refreshGit();
@@ -5011,6 +5024,7 @@ function CodeBody(props) {
           onUnstage: (item) => void unstageChange(item.path),
           onUnstageDir: (dirPath) => void unstageChange(dirPath),
           onCommit: (msg, stageAll, amend) => commitChanges(msg, stageAll, amend),
+          onSearch: () => openSearch(changedSearchInclude),
           committing,
           onNotify: (text, kind) => say(text, kind),
           refresh: refreshGit
@@ -5021,6 +5035,8 @@ function CodeBody(props) {
         "div",
         { className: "ce-editor" },
         h("button", { type: "button", className: "ce-mobile-back", onClick: () => {
+          setSearchOpen(false);
+          closePalette();
           setRailVisible(true);
           setMobileView("files");
         } }, `← ${t("layout.backFiles")}`),
@@ -5882,11 +5898,10 @@ var CSS2 = `
 .ce-disclosure-summary:focus-visible{outline:2px solid var(--ce-accent);outline-offset:-2px}
 .ce-commit-disclosure .ce-commitbox{border:0}
 .ce-branch-history{padding:0}
-.ce-changes .ce-section{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start}
-.ce-changes .ce-section>span:first-child{grid-column:1/-1;line-height:1.5}
-.ce-changes .ce-section>.ce-tool{justify-self:end}
-.ce-changes .ce-section>.ce-link{justify-self:start}
-.ce-changes .ce-section>.ce-link+.ce-link{justify-self:end}
+.ce-changes .ce-section{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px}
+.ce-changes .ce-section>span:first-child{flex:1 0 100%;line-height:1.5}
+.ce-changes .ce-section>.ce-tool{margin-left:auto}
+.ce-changes .ce-section>.ce-link{flex:none}
 .cea-scroll.cea-workspace{display:grid;flex:1;min-height:0;overflow:hidden;gap:0}
 .cea-request{display:flex;flex-direction:column;min-height:0;min-width:0;overflow:hidden}
 .cea-workspace .cea-request-panel{flex:1;min-height:0;max-height:none;overflow:auto;padding:8px}

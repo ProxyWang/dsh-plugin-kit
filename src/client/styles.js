@@ -625,11 +625,10 @@ export const CSS = `
 .ce-disclosure-summary:focus-visible{outline:2px solid var(--ce-accent);outline-offset:-2px}
 .ce-commit-disclosure .ce-commitbox{border:0}
 .ce-branch-history{padding:0}
-.ce-changes .ce-section{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start}
-.ce-changes .ce-section>span:first-child{grid-column:1/-1;line-height:1.5}
-.ce-changes .ce-section>.ce-tool{justify-self:end}
-.ce-changes .ce-section>.ce-link{justify-self:start}
-.ce-changes .ce-section>.ce-link+.ce-link{justify-self:end}
+.ce-changes .ce-section{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px}
+.ce-changes .ce-section>span:first-child{flex:1 0 100%;line-height:1.5}
+.ce-changes .ce-section>.ce-tool{margin-left:auto}
+.ce-changes .ce-section>.ce-link{flex:none}
 .cea-scroll.cea-workspace{display:grid;flex:1;min-height:0;overflow:hidden;gap:0}
 .cea-request{display:flex;flex-direction:column;min-height:0;min-width:0;overflow:hidden}
 .cea-workspace .cea-request-panel{flex:1;min-height:0;max-height:none;overflow:auto;padding:8px}

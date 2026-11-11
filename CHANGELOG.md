@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased — task-oriented layouts
+
+- Code: full-width list/editor navigation below 620 px, retained document state on Back, search and quick-open grouped in the rail.
+- Changes: review files before expanding the commit composer; branch history becomes a disclosure and expands for filtering.
+- API: independently scrolling request/response panes with a draggable, keyboard-accessible separator and reset.
+- Skills: descriptions and installation paths are disclosed on demand so instructions appear sooner.
+- Added layout interaction regression coverage and light/dark, narrow/wide component preview checks; details and examples are in `docs/ui-system.md`.
+
 ## 1.5.0 (2026-11-11)
 
 ### Changed — unified UI system

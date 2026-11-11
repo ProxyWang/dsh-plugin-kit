@@ -588,6 +588,7 @@ export function CodeBody(props) {
 
 	const openPalette = useCallback(() => {
 		if (!cwd) return;
+		setMobileView("editor");
 		setPalette({ query: "", results: [], busy: true });
 		api("search.files", { cwd, query: "", limit: 80 }).then((res) => {
 			setPalette((p) => (p && p.query === "" ? { ...p, results: res.ok ? res.value.matches ?? [] : [], busy: false } : p));
@@ -640,10 +641,17 @@ export function CodeBody(props) {
 		[cwd],
 	);
 
-	const openSearch = useCallback(() => {
+	const openSearch = useCallback((initialInclude = "") => {
+		setMobileView("editor");
 		setSearchOpen(true);
-		setSearch((s) => s ?? { query: "", include: "", regex: false, words: false, results: undefined, engine: "", truncated: false, busy: false });
+		const include = typeof initialInclude === "string" ? initialInclude : "";
+		setSearch((s) => ({ ...(s ?? { query: "", regex: false, words: false, results: undefined, engine: "", truncated: false, busy: false }), include }));
 	}, []);
+	const changedSearchInclude = useMemo(() => {
+		if (!git?.repo) return "";
+		const paths = [...new Set([...(git.working ?? []).map((f) => f.path), ...(git.branchFiles ?? [])])].filter(Boolean);
+		return paths.join(",");
+	}, [git]);
 
 	// Debounced auto-search, VSCode-style, while the panel is open. Flag
 	// toggles mutate the search object, so they retrigger this effect too.
@@ -1161,15 +1169,15 @@ export function CodeBody(props) {
 
 	return h(
 		"div",
-		{ className: "ce-root ce-code-root", "data-mobile-view": (doc || diff) && (!railVisible || mobileView === "editor") ? "editor" : "files", onKeyDown: onRootKeyDown },
+		{ className: "ce-root ce-code-root", "data-mobile-view": (doc || diff || searchOpen || palette) && (!railVisible || mobileView === "editor") ? "editor" : "files", onKeyDown: onRootKeyDown },
 		h(
 			"div",
 			{ className: "ce-toolbar" },
 			h(
 				"div",
 				{ className: "ce-seg" },
-				h("button", { type: "button", className: `ce-seg-btn${mode === "files" ? " ce-seg-on" : ""}`, onClick: () => { setMode("files"); setRailVisible(true); setMobileView("files"); } }, t("toolbar.files")),
-				h("button", { type: "button", className: `ce-seg-btn${mode === "changes" ? " ce-seg-on" : ""}`, onClick: () => { setMode("changes"); setRailVisible(true); setMobileView("files"); refreshGit(); } }, `${t("toolbar.changes")}${git?.repo ? ` · ${git.working.length}` : ""}`),
+				h("button", { type: "button", className: `ce-seg-btn${mode === "files" ? " ce-seg-on" : ""}`, onClick: () => { setMode("files"); setSearchOpen(false); closePalette(); setRailVisible(true); setMobileView("files"); } }, t("toolbar.files")),
+				h("button", { type: "button", className: `ce-seg-btn${mode === "changes" ? " ce-seg-on" : ""}`, onClick: () => { setMode("changes"); setSearchOpen(false); closePalette(); setRailVisible(true); setMobileView("files"); refreshGit(); } }, `${t("toolbar.changes")}${git?.repo ? ` · ${git.working.length}` : ""}`),
 			),
 			(doc || diff) ? h("button", { type: "button", className: "ce-mobile-open-editor ce-link", onClick: () => setMobileView("editor") }, t("layout.backEditor")) : null,
 			git?.repo
@@ -1252,6 +1260,7 @@ export function CodeBody(props) {
 						onUnstage: (item) => void unstageChange(item.path),
 						onUnstageDir: (dirPath) => void unstageChange(dirPath),
 						onCommit: (msg, stageAll, amend) => commitChanges(msg, stageAll, amend),
+						onSearch: () => openSearch(changedSearchInclude),
 						committing,
 						onNotify: (text, kind) => say(text, kind),
 						refresh: refreshGit,
@@ -1263,7 +1272,7 @@ export function CodeBody(props) {
 			h(
 				"div",
 				{ className: "ce-editor" },
-				h("button", { type: "button", className: "ce-mobile-back", onClick: () => { setRailVisible(true); setMobileView("files"); } }, `← ${t("layout.backFiles")}`),
+				h("button", { type: "button", className: "ce-mobile-back", onClick: () => { setSearchOpen(false); closePalette(); setRailVisible(true); setMobileView("files"); } }, `← ${t("layout.backFiles")}`),
 				tabs.length > 0
 					? h("div", { className: "ce-tabs", ref: tabsRef },
 						tabs.map((p) => {

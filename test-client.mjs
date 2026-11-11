@@ -553,6 +553,12 @@ try {
 	let codeTree = renderCode();
 	const getCode = (test) => collect(codeTree).find(test);
 	check("narrow code navigation starts on file list with one search entry", codeTree.props["data-mobile-view"] === "files" && collect(codeTree).filter((n) => n.props.className === "ce-rail-search").length === 1 && !getCode((n) => n.props.className === "ce-tool ce-workspace-search"), null);
+	getCode((n) => n.props.className === "ce-rail-search").props.onClick({ type: "click" }); codeTree = renderCode();
+	check("workspace search remains reachable before opening any document on narrow panels", codeTree.props["data-mobile-view"] === "editor" && Boolean(getCode((n) => n.type.name === "SearchPanel")), null);
+	check("search button click never puts a mouse event in the include filter", getCode((n) => n.type.name === "SearchPanel")?.props.state.include === "", null);
+	getCode((n) => n.props.className === "ce-mobile-back").props.onClick(); codeTree = renderCode();
+	check("returning to file list closes the narrow search overlay", codeTree.props["data-mobile-view"] === "files" && !getCode((n) => n.type.name === "SearchPanel"), null);
+
 	getCode((n) => n.type === TreePanelCmp).props.onOpenFile("readme.txt", 1, 1);
 	await new Promise((resolve) => setImmediate(resolve)); codeTree = renderCode();
 	check("opening a file switches narrow workspace to editor", codeTree.props["data-mobile-view"] === "editor", codeTree.props["data-mobile-view"]);
