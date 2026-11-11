@@ -1,5 +1,45 @@
 # Changelog
 
+## 1.4.1 (2026-11-11)
+
+Quality review round: an independent audit (separate agent, read-only, all findings reproduced in sandboxes) found 1 critical + 6 major + 10 minor issues; every one is fixed with regression tests (suite now 353 assertions).
+
+### Fixed — data loss
+
+- **Workspace replace could permanently truncate files >4 MiB**: `fs.read` returns a capped prefix and the replace flow wrote it back over the original. Replaces now skip truncated files with a per-file error.
+- **Skills editor could truncate SKILL.md >1 MiB on save**: `skills.read` now reports `truncated:true` and the editor blocks saving truncated content (warning chip + toast).
+- `readFencedText` / `skills.readCapped` read only the capped prefix of oversize files instead of buffering multi-GB files into the host process (OOM risk).
+
+### Fixed — fences & git safety
+
+- **Symlinked skill directories** (e.g. `.agents/skills/evil -> $HOME` carried by a cloned repo) could smuggle reads/writes/deletes outside the skill roots — all four skill routes now do a realpath containment re-check.
+- **`fs.create` / `fs.rename` destinations** resolved lexically — a symlinked dir inside the workspace could redirect creates/moves outside. Both now realpath the nearest existing ancestor and re-fence (`resolveFencedNewPath`).
+- **Parent-tree reads exposed hidden directories**: when the workspace sits directly under `$HOME`, `fs.read ../.ssh/...` was allowed. Extra read roots now refuse any path with a dot segment.
+- **Cross-session cache leak**: `extraReadRoots` cached the first workspace's roots process-wide; later sessions inherited them. Roots are now computed per call (only the workspace-independent Go roots are cached).
+- **Git write routes on enclosing repos**: with the session cwd inside a larger repo, `commit`/`push`/`stash`/`checkout`/`pull`/`fetch` silently mutated the repo beyond the workspace while `stage`/`discard` refused it. All write routes now share one fence (`fencedRepoRoot`) and refuse with a clear error; reads (status/diff/log/blame/branches) stay lenient.
+- **`git.revertHunk` race**: the client now sends the rendered hunk header and the host refuses on range mismatch ("diff has changed; refresh") instead of reverting a shifted hunk — previously an agent editing the same file alongside could cause an unrecoverable wrong-hunk revert.
+- **Glob metacharacters in filenames** (`a*.txt`) swept sibling files in stage/discard/diff/log/restore — all git pathspecs are now `:(literal)` (blame excluded: it doesn't parse the magic and is read-only).
+- `runGit`: maxBuffer overflow no longer counts as success (truncated diffs were returned as complete); timeouts now SIGTERM first and SIGKILL after a 3 s grace so a killed git can clean up `index.lock`.
+
+### Fixed — UI behavior
+
+- Tree refresh/reveal no longer flickers loaded subtrees away (previous listing stays visible while refetching; a failed refresh keeps stale entries).
+- Dragging a file onto another **file** row moves it into that file's folder (VSCode behavior) instead of falling through to the workspace root; root-drop only triggers on the bare panel background.
+- Switching files clears stale floating UI (file history 🕘, go-to-line, symbol palette).
+- Hunk revert is two-step (⟲ arms an inline danger confirm), consistent with every other destructive action.
+- Active editor tab auto-scrolls into view; go-to-line clamps to the wrap render cap in wrap mode.
+- Auto gutter marks are debounced (220 ms) — rapid tab switching no longer spawns a git process per passthrough file.
+- Workspace replace invalidates the search context cache (stale previews) and the cache is bounded to 30 files.
+- ripgrep timeouts return partial results with `timedOut:true` instead of burning another 15 s on grep and misreporting "grep could not run".
+- `parseCurl`: line continuations are handled in the tokenizer — single-quoted bodies keep literal backslash+newline (multi-line bodies survive roundtrips), double-quoted fold per POSIX; `-c/--cookie-jar`, `-T/--upload-file` & co no longer leak their values into the URL.
+- NaN `limit` falls back to the default instead of silently returning empty results.
+- LSP servers no longer idle out while the user is reading code (diagnostics/status calls touch the idle timer); `didOpen` sends correct languageIds for `.pyi/.mjs/.cjs/.mts/.cts`.
+- `api.send` streams responses and aborts at the 2 MiB cap instead of buffering unbounded bodies.
+
+### Changed — structure
+
+- `curl.js` split out of `apiclient.js` (pure curl wire format: parse/serialize/quote); `searchpanel.js` split out of `overlays.js` (search UI + match highlighting). `apiclient.js` 800→553, `overlays.js` ~750→355 lines.
+
 ## 1.4.0 (2026-11-11)
 
 Second competitor-parity round: the remaining VSCode / GitLens / Postman gaps.
