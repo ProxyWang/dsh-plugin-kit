@@ -383,7 +383,19 @@ export const CSS = `
 .cet-row:hover .cet-act{opacity:1}
 .cet-act-show{opacity:1}
 .cet-act:hover{color:var(--dsw-alias-label-primary,#ddd);background:var(--dsw-alias-interactive-bg-hover,#2b2b2b)}
-.cet-act-danger{color:var(--dsw-alias-state-error-primary,#f85149);font-size:11px}
+.cet-act-danger{color:var(--dsw-alias-state-error-primary,#f85149);font-size:11px}.cet-context{position:fixed;z-index:100001;min-width:190px;max-width:260px;padding:4px;background:var(--dsw-alias-bg-layer-2,#24272c);border:.5px solid var(--dsw-alias-border-l2,#444);border-radius:7px;box-shadow:0 8px 24px rgba(0,0,0,.28);color:var(--dsw-alias-label-primary,#ddd)}
+.cet-context-path{padding:6px 9px;color:var(--dsw-alias-label-tertiary,#889);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cet-context-rule{height:.5px;background:var(--dsw-alias-border-l1,#333);margin:3px 0}
+.cet-context>button{display:block;width:100%;border:0;border-radius:4px;background:transparent;color:inherit;text-align:left;font:inherit;font-size:12px;padding:6px 9px;cursor:pointer}
+.cet-context>button:hover,.cet-context>button:focus-visible{background:var(--dsw-alias-interactive-bg-hover,#2b3038);outline:0}
+.cet-context-danger{color:var(--dsw-alias-state-error-primary,#f85149)!important}
+
+.cet-context{position:fixed;z-index:100001;min-width:190px;max-width:260px;padding:4px;background:var(--dsw-alias-bg-layer-2,#24272c);border:.5px solid var(--dsw-alias-border-l2,#444);border-radius:7px;box-shadow:0 8px 24px rgba(0,0,0,.28);color:var(--dsw-alias-label-primary,#ddd)}
+.cet-context-path{padding:6px 9px;color:var(--dsw-alias-label-tertiary,#889);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cet-context-rule{height:.5px;background:var(--dsw-alias-border-l1,#333);margin:3px 0}
+.cet-context>button{display:block;width:100%;border:0;border-radius:4px;background:transparent;color:inherit;text-align:left;font:inherit;font-size:12px;padding:6px 9px;cursor:pointer}
+.cet-context>button:hover,.cet-context>button:focus-visible{background:var(--dsw-alias-interactive-bg-hover,#2b3038);outline:0}
+.cet-context-danger{color:var(--dsw-alias-state-error-primary,#f85149)!important}
 .cet-status{flex:none;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;font-weight:700}
 .cet-st-m{color:var(--dsw-alias-state-warn-primary,#e3b341)}
 .cet-st-u,.cet-st-a{color:var(--dsw-alias-state-success-primary,#3fb950)}

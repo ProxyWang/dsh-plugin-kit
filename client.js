@@ -193,6 +193,9 @@ var zh = {
   "history.title": "文件历史",
   "history.none": "没有提交历史（文件可能未被跟踪）",
   "tree.newFile": "新建文件",
+  "tree.copyAbsolute": "复制绝对路径",
+  "tree.copyRelative": "复制相对路径",
+  "tree.workspaceRoot": "工作区根目录",
   "tree.copyPath": "复制路径（⌥/Alt 点击复制相对路径）",
   "tree.copied": "路径已复制",
   "tree.moved": "已移动",
@@ -526,6 +529,9 @@ var en = {
   "history.title": "File History",
   "history.none": "No commit history (file may be untracked)",
   "tree.newFile": "New file",
+  "tree.copyAbsolute": "Copy absolute path",
+  "tree.copyRelative": "Copy relative path",
+  "tree.workspaceRoot": "Workspace root",
   "tree.copyPath": "Copy path (⌥/Alt-click copies the relative path)",
   "tree.copied": "Path copied",
   "tree.moved": "Moved",
@@ -1934,6 +1940,7 @@ function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshKey, onN
   const [action, setAction] = useState(null);
   const [dragPath, setDragPath] = useState(null);
   const [dropDir, setDropDir] = useState(null);
+  const [contextMenu, setContextMenu] = useState(null);
   const railRef = useRef(null);
   const lastRevealed = useRef(null);
   const revealTick = useRef(null);
@@ -1947,9 +1954,23 @@ function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshKey, onN
     });
   }, [cwd]);
   useEffect(() => {
+    if (!contextMenu) return void 0;
+    const close = () => setContextMenu(null);
+    const key = (event) => {
+      if (event.key === "Escape") close();
+    };
+    document.addEventListener("mousedown", close, true);
+    document.addEventListener("keydown", key, true);
+    return () => {
+      document.removeEventListener("mousedown", close, true);
+      document.removeEventListener("keydown", key, true);
+    };
+  }, [contextMenu]);
+  useEffect(() => {
     setListing({});
     setExpanded([]);
     setAction(null);
+    setContextMenu(null);
     loadDir("");
   }, [cwd, refreshKey, loadDir]);
   useEffect(() => {
@@ -2119,6 +2140,38 @@ function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshKey, onN
       bad();
     }
   };
+  const openContextMenu = (event, path, isDir) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setContextMenu({
+      path,
+      isDir,
+      x: Math.max(8, Math.min(event.clientX, (window.innerWidth || 1e3) - 218)),
+      y: Math.max(8, Math.min(event.clientY, (window.innerHeight || 800) - 260))
+    });
+  };
+  const contextCopy = (relative) => {
+    if (!contextMenu) return;
+    copyPath(contextMenu.path, relative ? { altKey: true } : {});
+    setContextMenu(null);
+  };
+  const contextRename = () => {
+    if (!contextMenu) return;
+    setAction({ kind: "rename", path: contextMenu.path, value: contextMenu.path.split("/").pop() });
+    setContextMenu(null);
+  };
+  const contextDelete = () => {
+    if (!contextMenu) return;
+    setAction({ kind: "delete", path: contextMenu.path });
+    setContextMenu(null);
+  };
+  const contextCreate = (kind) => {
+    if (!contextMenu?.isDir) return;
+    if (!expanded.includes(contextMenu.path)) setExpanded([...expanded, contextMenu.path]);
+    if (listing[contextMenu.path] === void 0) loadDir(contextMenu.path);
+    setAction({ kind, path: contextMenu.path, value: "" });
+    setContextMenu(null);
+  };
   const inputRow = (dirPath, kind, placeholder) => h(
     "div",
     {
@@ -2222,6 +2275,7 @@ function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshKey, onN
               className: `ce-row${dropDir === childPath ? " ce-row-drop" : ""}`,
               style: { paddingLeft: 6 + depth * 14 },
               onClick: () => toggle(childPath),
+              onContextMenu: (e) => openContextMenu(e, childPath, true),
               type: "button",
               ...dragProps(childPath),
               ...dropProps(childPath)
@@ -2246,6 +2300,7 @@ function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshKey, onN
               style: { paddingLeft: 6 + depth * 14 },
               type: "button",
               onClick: () => onOpenFile(childPath, 1, 1),
+              onContextMenu: (e) => openContextMenu(e, childPath, false),
               ...dragProps(childPath),
               ...fileDropProps(childPath)
             },
@@ -2291,7 +2346,23 @@ function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshKey, onN
       h(HintButton, { type: "button", className: "cet-act cet-act-show", hint: t("tree.newDirRoot"), onClick: () => setAction({ kind: "newdir", path: "", value: "" }) }, `+ ${t("tree.dirWord")}`)
     ),
     action !== null && (action.kind === "newfile" || action.kind === "newdir") && action.path === "" ? inputRow("", action.kind === "newdir" ? "dir" : "file", action.kind === "newdir" ? t("tree.newDirPlaceholder") : t("tree.newFilePlaceholder")) : null,
-    renderLevel("", 0)
+    renderLevel("", 0),
+    contextMenu ? h(
+      "div",
+      { className: "cet-context", style: { left: contextMenu.x, top: contextMenu.y }, role: "menu", onMouseDown: (e) => e.stopPropagation() },
+      h("div", { className: "cet-context-path", title: contextMenu.path }, contextMenu.path || t("tree.workspaceRoot")),
+      h("div", { className: "cet-context-rule" }),
+      h("button", { type: "button", role: "menuitem", onClick: () => contextCopy(false) }, t("tree.copyAbsolute")),
+      h("button", { type: "button", role: "menuitem", onClick: () => contextCopy(true) }, t("tree.copyRelative")),
+      contextMenu.isDir ? h(
+        Fragment,
+        null,
+        h("button", { type: "button", role: "menuitem", onClick: () => contextCreate("newfile") }, t("tree.newFile")),
+        h("button", { type: "button", role: "menuitem", onClick: () => contextCreate("newdir") }, t("tree.newDir"))
+      ) : null,
+      h("button", { type: "button", role: "menuitem", onClick: contextRename }, t("tree.rename")),
+      h("button", { type: "button", role: "menuitem", className: "cet-context-danger", onClick: contextDelete }, t("tree.delete"))
+    ) : null
   );
 }
 
@@ -5465,7 +5536,19 @@ var CSS2 = `
 .cet-row:hover .cet-act{opacity:1}
 .cet-act-show{opacity:1}
 .cet-act:hover{color:var(--dsw-alias-label-primary,#ddd);background:var(--dsw-alias-interactive-bg-hover,#2b2b2b)}
-.cet-act-danger{color:var(--dsw-alias-state-error-primary,#f85149);font-size:11px}
+.cet-act-danger{color:var(--dsw-alias-state-error-primary,#f85149);font-size:11px}.cet-context{position:fixed;z-index:100001;min-width:190px;max-width:260px;padding:4px;background:var(--dsw-alias-bg-layer-2,#24272c);border:.5px solid var(--dsw-alias-border-l2,#444);border-radius:7px;box-shadow:0 8px 24px rgba(0,0,0,.28);color:var(--dsw-alias-label-primary,#ddd)}
+.cet-context-path{padding:6px 9px;color:var(--dsw-alias-label-tertiary,#889);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cet-context-rule{height:.5px;background:var(--dsw-alias-border-l1,#333);margin:3px 0}
+.cet-context>button{display:block;width:100%;border:0;border-radius:4px;background:transparent;color:inherit;text-align:left;font:inherit;font-size:12px;padding:6px 9px;cursor:pointer}
+.cet-context>button:hover,.cet-context>button:focus-visible{background:var(--dsw-alias-interactive-bg-hover,#2b3038);outline:0}
+.cet-context-danger{color:var(--dsw-alias-state-error-primary,#f85149)!important}
+
+.cet-context{position:fixed;z-index:100001;min-width:190px;max-width:260px;padding:4px;background:var(--dsw-alias-bg-layer-2,#24272c);border:.5px solid var(--dsw-alias-border-l2,#444);border-radius:7px;box-shadow:0 8px 24px rgba(0,0,0,.28);color:var(--dsw-alias-label-primary,#ddd)}
+.cet-context-path{padding:6px 9px;color:var(--dsw-alias-label-tertiary,#889);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cet-context-rule{height:.5px;background:var(--dsw-alias-border-l1,#333);margin:3px 0}
+.cet-context>button{display:block;width:100%;border:0;border-radius:4px;background:transparent;color:inherit;text-align:left;font:inherit;font-size:12px;padding:6px 9px;cursor:pointer}
+.cet-context>button:hover,.cet-context>button:focus-visible{background:var(--dsw-alias-interactive-bg-hover,#2b3038);outline:0}
+.cet-context-danger{color:var(--dsw-alias-state-error-primary,#f85149)!important}
 .cet-status{flex:none;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;font-weight:700}
 .cet-st-m{color:var(--dsw-alias-state-warn-primary,#e3b341)}
 .cet-st-u,.cet-st-a{color:var(--dsw-alias-state-success-primary,#3fb950)}

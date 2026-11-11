@@ -13,6 +13,7 @@ export function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshK
 	const [action, setAction] = useState(null); // {kind: newfile|newdir|rename|delete, path, value}
 	const [dragPath, setDragPath] = useState(null); // path being dragged (move source)
 	const [dropDir, setDropDir] = useState(null); // dir currently highlighted as drop target
+	const [contextMenu, setContextMenu] = useState(null); // {path, isDir, x, y}
 	const railRef = useRef(null);
 	const lastRevealed = useRef(null);
 	const revealTick = useRef(null);
@@ -28,11 +29,24 @@ export function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshK
 		});
 	}, [cwd]);
 	useEffect(() => {
+		if (!contextMenu) return undefined;
+		const close = () => setContextMenu(null);
+		const key = (event) => { if (event.key === "Escape") close(); };
+		document.addEventListener("mousedown", close, true);
+		document.addEventListener("keydown", key, true);
+		return () => {
+			document.removeEventListener("mousedown", close, true);
+			document.removeEventListener("keydown", key, true);
+		};
+	}, [contextMenu]);
+	useEffect(() => {
 		setListing({});
 		setExpanded([]);
 		setAction(null);
+		setContextMenu(null);
 		loadDir("");
 	}, [cwd, refreshKey, loadDir]);
+
 	// VSCode-style auto reveal: opening a file (from search, quick-open, an LSP
 	// jump…) expands its ancestor chain and scrolls the row into view. Runs
 	// once per path/refresh — reloads the chain so it also works right after
@@ -206,8 +220,39 @@ export function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshK
 			bad();
 		}
 	};
-	const inputRow = (dirPath, kind, placeholder) => h("div", {
-		key: `inp:${dirPath}:${kind}`,
+	const openContextMenu = (event, path, isDir) => {
+		event.preventDefault();
+		event.stopPropagation();
+		setContextMenu({
+			path,
+			isDir,
+			x: Math.max(8, Math.min(event.clientX, (window.innerWidth || 1000) - 218)),
+			y: Math.max(8, Math.min(event.clientY, (window.innerHeight || 800) - 260)),
+		});
+	};
+	const contextCopy = (relative) => {
+		if (!contextMenu) return;
+		copyPath(contextMenu.path, relative ? { altKey: true } : {});
+		setContextMenu(null);
+	};
+	const contextRename = () => {
+		if (!contextMenu) return;
+		setAction({ kind: "rename", path: contextMenu.path, value: contextMenu.path.split("/").pop() });
+		setContextMenu(null);
+	};
+	const contextDelete = () => {
+		if (!contextMenu) return;
+		setAction({ kind: "delete", path: contextMenu.path });
+		setContextMenu(null);
+	};
+	const contextCreate = (kind) => {
+		if (!contextMenu?.isDir) return;
+		if (!expanded.includes(contextMenu.path)) setExpanded([...expanded, contextMenu.path]);
+		if (listing[contextMenu.path] === undefined) loadDir(contextMenu.path);
+		setAction({ kind, path: contextMenu.path, value: "" });
+		setContextMenu(null);
+	};
+	const inputRow = (dirPath, kind, placeholder) => h("div", {		key: `inp:${dirPath}:${kind}`,
 		className: "ce-row ctp-inputrow",
 		style: { paddingLeft: 6 + depthOf(dirPath) * 14 },
 	},
@@ -305,6 +350,7 @@ export function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshK
 							className: `ce-row${dropDir === childPath ? " ce-row-drop" : ""}`,
 							style: { paddingLeft: 6 + depth * 14 },
 							onClick: () => toggle(childPath),
+							onContextMenu: (e) => openContextMenu(e, childPath, true),
 							type: "button",
 							...dragProps(childPath),
 							...dropProps(childPath),
@@ -329,6 +375,7 @@ export function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshK
 							style: { paddingLeft: 6 + depth * 14 },
 							type: "button",
 							onClick: () => onOpenFile(childPath, 1, 1),
+							onContextMenu: (e) => openContextMenu(e, childPath, false),
 							...dragProps(childPath),
 							...fileDropProps(childPath),
 						},
@@ -372,5 +419,18 @@ export function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshK
 		? inputRow("", action.kind === "newdir" ? "dir" : "file", action.kind === "newdir" ? t("tree.newDirPlaceholder") : t("tree.newFilePlaceholder"))
 		: null,
 	renderLevel("", 0),
+		contextMenu
+			? h("div", { className: "cet-context", style: { left: contextMenu.x, top: contextMenu.y }, role: "menu", onMouseDown: (e) => e.stopPropagation() },
+				h("div", { className: "cet-context-path", title: contextMenu.path }, contextMenu.path || t("tree.workspaceRoot")),
+				h("div", { className: "cet-context-rule" }),
+				h("button", { type: "button", role: "menuitem", onClick: () => contextCopy(false) }, t("tree.copyAbsolute")),
+				h("button", { type: "button", role: "menuitem", onClick: () => contextCopy(true) }, t("tree.copyRelative")),
+				contextMenu.isDir ? h(Fragment, null,
+					h("button", { type: "button", role: "menuitem", onClick: () => contextCreate("newfile") }, t("tree.newFile")),
+					h("button", { type: "button", role: "menuitem", onClick: () => contextCreate("newdir") }, t("tree.newDir")),
+				) : null,
+				h("button", { type: "button", role: "menuitem", onClick: contextRename }, t("tree.rename")),
+				h("button", { type: "button", role: "menuitem", className: "cet-context-danger", onClick: contextDelete }, t("tree.delete")),
+			) : null,
 	);
 }
