@@ -71,6 +71,16 @@ var ROW = 22;
 
 // src/client/locale.js
 var zh = {
+  "layout.backEditor": "返回代码",
+  "layout.backFiles": "文件与变更",
+  "changes.compose": "提交更改",
+  "changes.readyCount": "已暂存 {n} 个文件",
+  "changes.stageBeforeCommit": "填写信息后提交",
+  "changes.noFilterMatches": "没有匹配此筛选条件的文件",
+  "changes.allStaged": "所有更改已暂存",
+  "api.resizePanels": "调整请求与响应区域高度",
+  "api.resizeHint": "拖动调整高度 · 方向键微调 · 双击恢复",
+  "skills.details": "说明与安装位置",
   "type.label": "代码",
   "guide.title": "代码浏览器",
   "guide.description": "工作区代码浏览、当前分支变更、LSP 跳转定义/引用（Go/TS/Python）",
@@ -410,6 +420,16 @@ var zh = {
   "quickopen.command": "快速打开文件（代码浏览器）"
 };
 var en = {
+  "layout.backEditor": "Back to editor",
+  "layout.backFiles": "Files & Changes",
+  "changes.compose": "Commit changes",
+  "changes.readyCount": "{n} staged files",
+  "changes.stageBeforeCommit": "Write a message to commit",
+  "changes.noFilterMatches": "No files match this filter",
+  "changes.allStaged": "All changes are staged",
+  "api.resizePanels": "Resize request and response panes",
+  "api.resizeHint": "Drag to resize · Arrow keys to adjust · Double-click to reset",
+  "skills.details": "Description & installation",
   "type.label": "Code",
   "guide.title": "Code Explorer",
   "guide.description": "Workspace browsing, branch changes, LSP definition/reference jumps (Go/TS/Python)",
@@ -2482,47 +2502,6 @@ function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commitsOpen, 
       h("input", { className: "ce-input", type: "search", value: filterQuery, placeholder: t("changes.filterPlaceholder"), "aria-label": t("changes.filterPlaceholder"), onChange: (e) => setFilterQuery(e.target.value) })
     ),
     h(
-      "div",
-      { className: "ce-commitbox" },
-      h("input", {
-        className: "ce-input ce-commitbox-msg",
-        "aria-label": t("changes.commitPlaceholder"),
-        type: "text",
-        placeholder: staged.length > 0 || amend ? t("changes.commitPlaceholder") : t("changes.commitAllPlaceholder"),
-        value: message,
-        disabled: committing,
-        spellcheck: false,
-        autoComplete: "off",
-        onChange: (event) => setMessage(event.target.value),
-        onKeyDown: (event) => {
-          event.stopPropagation();
-          if (event.key === "Enter") {
-            event.preventDefault();
-            submit();
-          }
-        }
-      }),
-      h(
-        "div",
-        { className: "ce-commitbox-actions" },
-        h("button", {
-          type: "button",
-          className: `ce-commitbox-amend${amend ? " ce-tool-on" : ""}`,
-          "aria-pressed": amend,
-          title: t("changes.amendTitle"),
-          disabled: committing,
-          onClick: () => setAmend((v) => !v)
-        }, t("changes.amend")),
-        h("button", {
-          type: "button",
-          className: "ce-commitbox-btn",
-          disabled: commitDisabled,
-          title: amend ? t("changes.amendTitle") : staged.length > 0 ? t("changes.commit") : t("changes.commitAll"),
-          onClick: submit
-        }, committing ? t("changes.commitBusy") : `✓ ${commitLabel}`)
-      )
-    ),
-    h(
       "section",
       { className: "ce-change-group" },
       staged.length > 0 ? h(
@@ -2551,7 +2530,7 @@ function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commitsOpen, 
         h("button", { className: "ce-link", type: "button", title: treeView ? t("changes.toList") : t("changes.toTree"), onClick: () => setTreeView((v) => !v) }, treeView ? t("changes.toList") : t("changes.toTree")),
         h("button", { className: "ce-tool ce-tiny", type: "button", title: t("refresh"), onClick: refresh }, h(IconRefresh))
       ),
-      git.working.length === 0 && h("div", { className: "ce-note" }, t("changes.none")),
+      visibleUnstaged.length === 0 && h("div", { className: "ce-note" }, t(q ? "changes.noFilterMatches" : unstaged.length === 0 && staged.length > 0 ? "changes.allStaged" : "changes.none")),
       treeView ? h(ChangeTree, {
         items: visibleUnstaged.map((f) => ({ path: f.path, ch: badge(f.xy), from: f.from ?? void 0 })),
         onOpen: (item) => onOpenDiff(item.path, "working"),
@@ -2564,9 +2543,60 @@ function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commitsOpen, 
       }) : flatRows(visibleUnstaged, "w", "working")
     ),
     h(
-      "section",
-      { className: "ce-change-group" },
-      h("div", { className: "ce-section" }, t("changes.branch")),
+      "details",
+      { className: "ce-commit-disclosure" },
+      h(
+        "summary",
+        { className: "ce-disclosure-summary" },
+        h("span", null, t("changes.compose")),
+        h("span", { className: "ce-disclosure-meta" }, staged.length ? t("changes.readyCount", { n: staged.length }) : t("changes.stageBeforeCommit"))
+      ),
+      h(
+        "div",
+        { className: "ce-commitbox" },
+        h("input", {
+          className: "ce-input ce-commitbox-msg",
+          "aria-label": t("changes.commitPlaceholder"),
+          type: "text",
+          placeholder: staged.length > 0 || amend ? t("changes.commitPlaceholder") : t("changes.commitAllPlaceholder"),
+          value: message,
+          disabled: committing,
+          spellcheck: false,
+          autoComplete: "off",
+          onChange: (event) => setMessage(event.target.value),
+          onKeyDown: (event) => {
+            event.stopPropagation();
+            if (event.key === "Enter") {
+              event.preventDefault();
+              submit();
+            }
+          }
+        }),
+        h(
+          "div",
+          { className: "ce-commitbox-actions" },
+          h("button", {
+            type: "button",
+            className: `ce-commitbox-amend${amend ? " ce-tool-on" : ""}`,
+            "aria-pressed": amend,
+            title: t("changes.amendTitle"),
+            disabled: committing,
+            onClick: () => setAmend((v) => !v)
+          }, t("changes.amend")),
+          h("button", {
+            type: "button",
+            className: "ce-commitbox-btn",
+            disabled: commitDisabled,
+            title: amend ? t("changes.amendTitle") : staged.length > 0 ? t("changes.commit") : t("changes.commitAll"),
+            onClick: submit
+          }, committing ? t("changes.commitBusy") : `✓ ${commitLabel}`)
+        )
+      )
+    ),
+    h(
+      "details",
+      { className: "ce-change-group ce-branch-history", ...q ? { open: true } : {} },
+      h("summary", { className: "ce-disclosure-summary" }, h("span", null, t("changes.branch")), h("span", { className: "ce-disclosure-meta" }, String(visibleBranchFiles.length))),
       git.base ? h(
         Fragment,
         null,
@@ -3880,6 +3910,7 @@ function CodeBody(props) {
   const [showDiffView, setShowDiffView] = useState(true);
   const [railW, setRailW] = useState(230);
   const [railVisible, setRailVisible] = useState(true);
+  const [mobileView, setMobileView] = useState("files");
   const [symbols, setSymbols] = useState([]);
   const [symPalette, setSymPalette] = useState(null);
   const [commitsOpen, setCommitsOpen] = useState(false);
@@ -4015,6 +4046,7 @@ function CodeBody(props) {
         setSymPalette(null);
         setPreviewOn(true);
         setDoc(entry2);
+        setMobileView("editor");
         modeRef.current = "code";
         setDiff(null);
         setCursor(null);
@@ -4047,6 +4079,7 @@ function CodeBody(props) {
       setSymPalette(null);
       setPreviewOn(PREVIEW_RE.test(path));
       setDoc(entry);
+      setMobileView("editor");
       modeRef.current = "code";
       setDiff(null);
       const clampLine = Math.min(Math.max(1, line), Math.max(1, lines2.length));
@@ -4259,6 +4292,7 @@ function CodeBody(props) {
       const res = await api("git.diff", repo ? { cwd, path, scope, repo } : { cwd, path, scope });
       const value = res.ok ? res.value : { error: res.error };
       modeRef.current = "diff";
+      setMobileView("editor");
       setShowDiffView(true);
       setDiff({ path, scope, text: value.diff ?? "", error: value.error, base: value.base, untracked: value.untracked, note: value.note });
       setOverlay(null);
@@ -4311,6 +4345,7 @@ function CodeBody(props) {
         return;
       }
       modeRef.current = "diff";
+      setMobileView("editor");
       setDiff({ path: `${t("diff.scopeCommit")} ${commit.hash}`, scope: "commit", commit: value.commit, text: value.diff ?? "" });
       setShowDiffView(true);
       setOverlay(null);
@@ -4347,6 +4382,7 @@ function CodeBody(props) {
       }
       setFileHist(null);
       modeRef.current = "diff";
+      setMobileView("editor");
       setDiff({ path: `${commit.hash} · ${path}`, scope: "commit", commit: value.commit, text: value.diff ?? "" });
       setShowDiffView(true);
       setOverlay(null);
@@ -4856,6 +4892,7 @@ function CodeBody(props) {
       setOverlay(null);
       setHover(null);
       modeRef.current = "diff";
+      setMobileView("editor");
       setShowDiffView(true);
       setDiff({
         path: detail.path ?? "",
@@ -4873,19 +4910,26 @@ function CodeBody(props) {
   }
   return h(
     "div",
-    { className: "ce-root", onKeyDown: onRootKeyDown },
+    { className: "ce-root ce-code-root", "data-mobile-view": (doc || diff) && (!railVisible || mobileView === "editor") ? "editor" : "files", onKeyDown: onRootKeyDown },
     h(
       "div",
       { className: "ce-toolbar" },
       h(
         "div",
         { className: "ce-seg" },
-        h("button", { type: "button", className: `ce-seg-btn${mode === "files" ? " ce-seg-on" : ""}`, onClick: () => setMode("files") }, t("toolbar.files")),
+        h("button", { type: "button", className: `ce-seg-btn${mode === "files" ? " ce-seg-on" : ""}`, onClick: () => {
+          setMode("files");
+          setRailVisible(true);
+          setMobileView("files");
+        } }, t("toolbar.files")),
         h("button", { type: "button", className: `ce-seg-btn${mode === "changes" ? " ce-seg-on" : ""}`, onClick: () => {
           setMode("changes");
+          setRailVisible(true);
+          setMobileView("files");
           refreshGit();
         } }, `${t("toolbar.changes")}${git?.repo ? ` · ${git.working.length}` : ""}`)
       ),
+      doc || diff ? h("button", { type: "button", className: "ce-mobile-open-editor ce-link", onClick: () => setMobileView("editor") }, t("layout.backEditor")) : null,
       git?.repo ? h(
         "button",
         {
@@ -4901,8 +4945,8 @@ function CodeBody(props) {
         !sync.busy && git.behind > 0 ? h("span", { className: "ce-ab ce-ab-behind" }, `↓${git.behind}`) : null
       ) : null,
       h("span", { className: "ce-spacer" }),
-      h("button", { type: "button", className: "ce-tool", title: `${t("quickopen.placeholder")} (⌘P / Ctrl+P)`, onClick: openPalette }, h(IconSearch)),
-      h("button", { type: "button", className: "ce-tool ce-workspace-search", title: `${t("search.workspaceHint")} (⇧⌘F / Ctrl+Shift+F)`, "aria-label": t("search.workspaceHint"), onClick: openSearch }, h(IconTextSearch), h("span", null, t("changes.searchWorkspace"))),
+      !railVisible ? h("button", { type: "button", className: "ce-tool", title: `${t("quickopen.placeholder")} (⌘P / Ctrl+P)`, onClick: openPalette }, h(IconSearch)) : null,
+      !railVisible ? h("button", { type: "button", className: "ce-tool ce-workspace-search", title: `${t("search.workspaceHint")} (⇧⌘F / Ctrl+Shift+F)`, "aria-label": t("search.workspaceHint"), onClick: openSearch }, h(IconTextSearch), h("span", null, t("changes.searchWorkspace"))) : null,
       h("button", { type: "button", className: "ce-tool", title: `${statusTitle}`, onClick: () => {
         refreshGit();
         setTreeKey((k) => k + 1);
@@ -4923,10 +4967,10 @@ function CodeBody(props) {
         "div",
         { className: "ce-rail-wrap ce-rail-with-search", style: { width: `${railW}px` } },
         h(
-          "button",
-          { type: "button", className: "ce-rail-search", title: `${t("search.workspaceHint")} (⇧⌘F / Ctrl+Shift+F)`, onClick: openSearch },
-          h(IconTextSearch),
-          h("span", null, t("changes.searchWorkspace"))
+          "div",
+          { className: "ce-rail-navigation" },
+          h("button", { type: "button", className: "ce-rail-search", title: `${t("search.workspaceHint")} (⇧⌘F / Ctrl+Shift+F)`, onClick: openSearch }, h(IconTextSearch), h("span", null, t("changes.searchWorkspace"))),
+          h("button", { type: "button", className: "ce-tool ce-rail-quickopen", "aria-label": t("quickopen.placeholder"), title: `${t("quickopen.placeholder")} (⌘P / Ctrl+P)`, onClick: openPalette }, h(IconSearch))
         ),
         mode === "files" ? h(TreePanel, {
           cwd,
@@ -4976,6 +5020,10 @@ function CodeBody(props) {
       h(
         "div",
         { className: "ce-editor" },
+        h("button", { type: "button", className: "ce-mobile-back", onClick: () => {
+          setRailVisible(true);
+          setMobileView("files");
+        } }, `← ${t("layout.backFiles")}`),
         tabs.length > 0 ? h(
           "div",
           { className: "ce-tabs", ref: tabsRef },
@@ -5813,6 +5861,68 @@ var CSS2 = `
 .ce-toolbar{flex-wrap:wrap}
 .ce-head{overflow-x:auto;scrollbar-width:thin}
 @media(prefers-reduced-motion:reduce){.ce-root button{transition:none}.ce-spin{animation:none}}
+/* Task layouts: review files first; reserve stable space for the active document. */
+.ce-code-root{container-type:inline-size}
+.ce-code-root .ce-toolbar{flex-wrap:nowrap;min-width:0}
+.ce-code-root .ce-seg{flex:none}
+.ce-code-root .ce-branch{min-width:0;max-width:220px;flex:0 1 auto}
+.ce-code-root .ce-branch>span:first-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ce-code-root .ce-toolbar>.ce-tool{flex:none}
+.ce-rail-navigation{display:flex;align-items:center;gap:4px;padding:8px;flex:none;border-bottom:1px solid var(--ce-line)}
+.ce-rail-navigation .ce-rail-search{margin:0;flex:1;min-width:0;min-height:30px;font-size:11px}
+.ce-rail-quickopen{flex:none}
+.ce-rail-with-search{max-width:45%;min-width:170px}
+.ce-mobile-back,.ce-mobile-open-editor{display:none}
+.ce-changes>.ce-change-group:first-of-type{border-top:0;padding-top:0}
+.ce-commit-disclosure{border-top:1px solid var(--ce-line);border-bottom:1px solid var(--ce-line);margin-top:8px}
+.ce-disclosure-summary{cursor:pointer;padding:12px;list-style-position:inside;color:var(--ce-fg);font-size:12px;line-height:1.5}
+.ce-disclosure-summary>span:first-child{font-weight:600}
+.ce-disclosure-meta{display:block;margin-top:4px;margin-left:14px;font-size:11px;color:var(--ce-fg-3);font-weight:400}
+.ce-disclosure-summary:hover{background:var(--ce-surface-1)}
+.ce-disclosure-summary:focus-visible{outline:2px solid var(--ce-accent);outline-offset:-2px}
+.ce-commit-disclosure .ce-commitbox{border:0}
+.ce-branch-history{padding:0}
+.ce-changes .ce-section{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start}
+.ce-changes .ce-section>span:first-child{grid-column:1/-1;line-height:1.5}
+.ce-changes .ce-section>.ce-tool{justify-self:end}
+.ce-changes .ce-section>.ce-link{justify-self:start}
+.ce-changes .ce-section>.ce-link+.ce-link{justify-self:end}
+.cea-scroll.cea-workspace{display:grid;flex:1;min-height:0;overflow:hidden;gap:0}
+.cea-request{display:flex;flex-direction:column;min-height:0;min-width:0;overflow:hidden}
+.cea-workspace .cea-request-panel{flex:1;min-height:0;max-height:none;overflow:auto;padding:8px}
+.cea-workspace .cea-request-panel .cea-body{display:block;min-height:160px;max-height:none;resize:vertical}
+.cea-workspace .cea-response{flex:none;min-height:0;min-width:0;border:0;overflow:hidden}
+.cea-response-content{flex:1;min-height:0;min-width:0;overflow:auto}
+.cea-response-content .cea-resp{min-height:0;margin:0;padding:12px;border:0;border-radius:0;overflow:visible;width:max-content;min-width:100%}
+.cea-response-content .cea-hlist{padding:8px 12px;border-bottom:1px solid var(--ce-line)}
+.cea-response-content .cea-hlist div{overflow-wrap:anywhere}
+.cea-workspace .cea-response>.cea-empty{flex:1;min-height:0}
+.cea-resizer{display:flex;align-items:center;justify-content:center;cursor:row-resize;touch-action:none;background:var(--ce-surface-1);border-block:1px solid var(--ce-line);min-height:10px}
+.cea-resizer>span{width:32px;height:2px;border-radius:2px;background:var(--ce-line-strong)}
+.cea-resizer:hover,.cea-resizer:focus-visible{background:var(--ce-accent-soft);outline:0}
+.cea-resizer:focus-visible>span{background:var(--ce-accent)}
+.ce-sk-detail-head{max-height:36%;padding:14px 16px 8px}
+.ce-sk-detail-title{margin-bottom:6px;font-size:16px}
+.ce-sk-install-details{margin-top:8px;font-size:11px;color:var(--ce-fg-3)}
+.ce-sk-install-details>summary{cursor:pointer;padding:4px 0}
+.ce-sk-install-details .ce-sk-detail-desc{font-size:12px;margin:6px 0;line-height:1.6}
+.ce-sk-edit>.ce-md{padding:18px 24px;line-height:1.75}
+.ce-sk-edit .ce-md-p,.ce-sk-edit .ce-md-list{max-width:76ch}
+.ce-sk-searchbar{gap:6px;padding:10px 12px}
+@container (max-width:620px){
+ .ce-code-root .ce-rail-wrap{max-width:none;width:100%!important;min-width:0;border:0}
+ .ce-code-root .ce-splitter,.ce-code-root .ce-rail-tab{display:none}
+ .ce-code-root[data-mobile-view="files"] .ce-editor{display:none}
+ .ce-code-root[data-mobile-view="editor"] .ce-rail-wrap{display:none}
+ .ce-code-root[data-mobile-view="editor"] .ce-mobile-back{display:block;flex:none;text-align:left;padding:8px 12px;border:0;border-bottom:1px solid var(--ce-line);background:var(--ce-surface-1);color:var(--ce-fg-2);font:inherit;font-size:12px;cursor:pointer}
+ .ce-code-root[data-mobile-view="files"] .ce-mobile-open-editor{display:block;flex:none;font-size:11px}
+ .ce-code-root .ce-branch{max-width:120px}
+ .ce-code-root .ce-workspace-search{width:26px;padding:0}
+ .ce-code-root .ce-workspace-search>span{display:none}
+ .ce-sk-detail-head{max-height:34%;padding:12px 16px 6px}
+ .ce-sk-back{margin-bottom:8px}
+ .ce-sk-edit>.ce-md{padding:16px}
+}
 `;
 
 // src/client/register.js
@@ -6326,15 +6436,20 @@ function SkillsView({ cwd, t, say }) {
               contentTruncated ? h("span", { className: "ce-chip ce-chip-warn" }, t("skills.truncatedChip")) : null,
               dirty ? h("span", { className: "ce-chip ce-chip-warn" }, t("skills.dirty")) : null
             ),
-            sel.description ? h("p", { className: "ce-sk-detail-desc" }, sel.description) : null,
-            sel.dir || sel.path ? h("button", { type: "button", className: "ce-sk-path", title: t("skills.copyPath"), onClick: async () => {
-              try {
-                await navigator.clipboard.writeText(sel.dir ?? sel.path);
-                say(t("skills.pathCopied"));
-              } catch {
-                say(t("skills.copyFailed"), "error");
-              }
-            } }, sel.dir || sel.path) : null
+            h(
+              "details",
+              { className: "ce-sk-install-details", key: sel.path || sel.name },
+              h("summary", null, t("skills.details")),
+              sel.description ? h("p", { className: "ce-sk-detail-desc" }, sel.description) : null,
+              sel.dir || sel.path ? h("button", { type: "button", className: "ce-sk-path", title: t("skills.copyPath"), onClick: async () => {
+                try {
+                  await navigator.clipboard.writeText(sel.dir ?? sel.path);
+                  say(t("skills.pathCopied"));
+                } catch {
+                  say(t("skills.copyFailed"), "error");
+                }
+              } }, sel.dir || sel.path) : null
+            )
           ),
           h(
             "div",
@@ -6691,6 +6806,15 @@ function ApiView({ t }) {
   const [requestTab, setRequestTab] = useState("params");
   const [responseCopied, setResponseCopied] = useState(false);
   const [timeoutMs, setTimeoutMs] = useState(3e4);
+  const [requestShare, setRequestShare] = useState(42);
+  const workspaceRef = useRef(null);
+  const splitDrag = useRef(null);
+  const setSplit = (value) => setRequestShare(Math.max(24, Math.min(72, value)));
+  const splitPointer = (event) => {
+    const rect = workspaceRef.current?.getBoundingClientRect();
+    if (!rect || rect.height <= 0) return;
+    setSplit((event.clientY - rect.top) / rect.height * 100);
+  };
   useEffect(() => {
     storeList(ENV_KEY, envPairs);
   }, [envPairs]);
@@ -6985,122 +7109,162 @@ function ApiView({ t }) {
     ) : null,
     h(
       "div",
-      { className: "cea-scroll ce-scroll" },
+      { className: "cea-scroll cea-workspace", ref: workspaceRef, style: { gridTemplateRows: `minmax(0, ${requestShare}fr) 10px minmax(0, ${100 - requestShare}fr)` } },
       h(
-        "div",
-        { className: "cea-request-tabs", role: "group", "aria-label": t("api.requestConfig") },
-        [["params", t("api.params"), activeParamCount], ["headers", t("api.headers"), headers.filter((p) => p.name?.trim()).length], ["body", t("api.body"), bodyType === "none" ? 0 : 1], ["settings", t("api.settings"), 0]].map(([id, label, count]) => h("button", { type: "button", key: id, className: `cea-config-tab${requestTab === id ? " cea-config-tab-on" : ""}`, "aria-pressed": requestTab === id, onClick: () => {
-          setRequestTab(id);
-          if (id === "params" && paramPairs.length === 0) setParamPairs([{ name: "", value: "" }]);
-          if (id === "headers" && headers.length === 0) setHeaders([{ name: "", value: "" }]);
-        } }, label, count ? h("span", { className: "cea-tab-count" }, count) : null))
-      ),
-      h(
-        "div",
-        { className: "cea-request-panel" },
-        requestTab === "settings" ? h("div", { className: "cea-settings" }, h(
-          "label",
-          { className: "cea-tmo" },
-          t("api.timeout"),
-          h("input", {
-            className: "ce-input cea-tmo-in",
-            type: "number",
-            min: 1e3,
-            max: 12e4,
-            step: 1e3,
-            value: timeoutMs,
-            onChange: (e) => setTimeoutMs(Math.max(1e3, Math.min(12e4, Number(e.target.value) || 3e4)))
-          })
-        )) : null,
-        requestTab === "params" ? h(
-          Fragment,
-          null,
-          paramPairs.map((p, i) => h(
-            "div",
-            { key: i, className: "cea-hrow" },
-            h("input", { className: "ce-input cea-hkey", placeholder: "name", value: p.name ?? "", onChange: (e) => setParamPairs((prev) => prev.map((x, j) => j === i ? { ...x, name: e.target.value } : x)) }),
-            h("input", { className: "ce-input cea-hval", placeholder: "value", value: p.value ?? "", onChange: (e) => setParamPairs((prev) => prev.map((x, j) => j === i ? { ...x, value: e.target.value } : x)) }),
-            h("button", { type: "button", className: "ce-tool ce-tiny", onClick: () => setParamPairs((prev) => prev.filter((_, j) => j !== i)) }, "✕")
-          )),
-          h(
-            "div",
-            { className: "cea-hrow" },
-            h("button", { type: "button", className: "ce-tool ce-tiny", title: t("api.addParam"), onClick: () => setParamPairs((prev) => [...prev, { name: "", value: "" }]) }, "+"),
-            h("span", { className: "cea-hint" }, t("api.paramsHint"))
-          )
-        ) : null,
-        requestTab === "headers" ? h(
-          Fragment,
-          null,
-          h(
-            "div",
-            { className: "cea-sec" },
-            h("span", null, t("api.headers")),
-            h("span", { className: "ce-spacer" }),
-            h("button", { type: "button", className: "ce-tool ce-tiny", title: t("api.addHeader"), onClick: () => setHeaders((prev) => [...prev, { name: "", value: "" }]) }, "+")
-          ),
-          headers.map((hd, i) => h(
-            "div",
-            { key: i, className: "cea-hrow" },
-            h("input", { className: "ce-input cea-hkey", placeholder: "Header", value: hd.name ?? "", onChange: (e) => setHeaderAt(i, { name: e.target.value }) }),
-            h("input", { className: "ce-input cea-hval", placeholder: "Value", value: hd.value ?? "", onChange: (e) => setHeaderAt(i, { value: e.target.value }) }),
-            h("button", { type: "button", className: "ce-tool ce-tiny", onClick: () => setHeaders((prev) => prev.filter((_, j) => j !== i)) }, "✕")
-          ))
-        ) : null,
-        requestTab === "body" ? h(
-          Fragment,
-          null,
-          h(
-            "div",
-            { className: "cea-sec" },
-            h("span", null, t("api.body")),
+        "section",
+        { className: "cea-request", "aria-label": t("api.requestConfig") },
+        h(
+          "div",
+          { className: "cea-request-tabs", role: "group", "aria-label": t("api.requestConfig") },
+          [["params", t("api.params"), activeParamCount], ["headers", t("api.headers"), headers.filter((p) => p.name?.trim()).length], ["body", t("api.body"), bodyType === "none" ? 0 : 1], ["settings", t("api.settings"), 0]].map(([id, label, count]) => h("button", { type: "button", key: id, className: `cea-config-tab${requestTab === id ? " cea-config-tab-on" : ""}`, "aria-pressed": requestTab === id, onClick: () => {
+            setRequestTab(id);
+            if (id === "params" && paramPairs.length === 0) setParamPairs([{ name: "", value: "" }]);
+            if (id === "headers" && headers.length === 0) setHeaders([{ name: "", value: "" }]);
+          } }, label, count ? h("span", { className: "cea-tab-count" }, count) : null))
+        ),
+        h(
+          "div",
+          { className: "cea-request-panel" },
+          requestTab === "settings" ? h("div", { className: "cea-settings" }, h(
+            "label",
+            { className: "cea-tmo" },
+            t("api.timeout"),
+            h("input", {
+              className: "ce-input cea-tmo-in",
+              type: "number",
+              min: 1e3,
+              max: 12e4,
+              step: 1e3,
+              value: timeoutMs,
+              onChange: (e) => setTimeoutMs(Math.max(1e3, Math.min(12e4, Number(e.target.value) || 3e4)))
+            })
+          )) : null,
+          requestTab === "params" ? h(
+            Fragment,
+            null,
+            paramPairs.map((p, i) => h(
+              "div",
+              { key: i, className: "cea-hrow" },
+              h("input", { className: "ce-input cea-hkey", placeholder: "name", value: p.name ?? "", onChange: (e) => setParamPairs((prev) => prev.map((x, j) => j === i ? { ...x, name: e.target.value } : x)) }),
+              h("input", { className: "ce-input cea-hval", placeholder: "value", value: p.value ?? "", onChange: (e) => setParamPairs((prev) => prev.map((x, j) => j === i ? { ...x, value: e.target.value } : x)) }),
+              h("button", { type: "button", className: "ce-tool ce-tiny", onClick: () => setParamPairs((prev) => prev.filter((_, j) => j !== i)) }, "✕")
+            )),
             h(
-              "select",
-              { className: "cea-method", value: bodyType, onChange: (e) => setBodyType(e.target.value) },
-              h("option", { value: "none" }, t("api.bodyNone")),
-              h("option", { value: "form" }, t("api.bodyForm")),
-              h("option", { value: "multipart" }, t("api.bodyMultipart")),
-              h("option", { value: "raw" }, t("api.bodyRaw"))
+              "div",
+              { className: "cea-hrow" },
+              h("button", { type: "button", className: "ce-tool ce-tiny", title: t("api.addParam"), onClick: () => setParamPairs((prev) => [...prev, { name: "", value: "" }]) }, "+"),
+              h("span", { className: "cea-hint" }, t("api.paramsHint"))
+            )
+          ) : null,
+          requestTab === "headers" ? h(
+            Fragment,
+            null,
+            h(
+              "div",
+              { className: "cea-sec" },
+              h("span", null, t("api.headers")),
+              h("span", { className: "ce-spacer" }),
+              h("button", { type: "button", className: "ce-tool ce-tiny", title: t("api.addHeader"), onClick: () => setHeaders((prev) => [...prev, { name: "", value: "" }]) }, "+")
             ),
-            bodyType === "raw" ? h(
-              Fragment,
-              null,
+            headers.map((hd, i) => h(
+              "div",
+              { key: i, className: "cea-hrow" },
+              h("input", { className: "ce-input cea-hkey", placeholder: "Header", value: hd.name ?? "", onChange: (e) => setHeaderAt(i, { name: e.target.value }) }),
+              h("input", { className: "ce-input cea-hval", placeholder: "Value", value: hd.value ?? "", onChange: (e) => setHeaderAt(i, { value: e.target.value }) }),
+              h("button", { type: "button", className: "ce-tool ce-tiny", onClick: () => setHeaders((prev) => prev.filter((_, j) => j !== i)) }, "✕")
+            ))
+          ) : null,
+          requestTab === "body" ? h(
+            Fragment,
+            null,
+            h(
+              "div",
+              { className: "cea-sec" },
+              h("span", null, t("api.body")),
               h(
                 "select",
-                { className: "cea-method", value: rawSub, onChange: (e) => setRawSub(e.target.value) },
-                ["json", "text", "html", "xml"].map((s) => h("option", { key: s, value: s }, s))
+                { className: "cea-method", value: bodyType, onChange: (e) => setBodyType(e.target.value) },
+                h("option", { value: "none" }, t("api.bodyNone")),
+                h("option", { value: "form" }, t("api.bodyForm")),
+                h("option", { value: "multipart" }, t("api.bodyMultipart")),
+                h("option", { value: "raw" }, t("api.bodyRaw"))
               ),
-              rawSub === "json" ? h(
+              bodyType === "raw" ? h(
                 Fragment,
                 null,
-                h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost", onClick: beautify }, t("api.beautify")),
-                beautifyErr ? h("span", { className: "cea-err" }, beautifyErr) : null
-              ) : null
-            ) : null,
-            bodyType === "form" || bodyType === "multipart" ? h("button", { type: "button", className: "ce-tool ce-tiny", title: t("api.addHeader"), onClick: () => setFormPairs((prev) => [...prev, { name: "", value: "" }]) }, "+") : null
-          ),
-          bodyType === "form" || bodyType === "multipart" ? h(Fragment, null, formPairs.map((p, i) => h(
-            "div",
-            { key: i, className: "cea-hrow" },
-            h("input", { className: "ce-input cea-hkey", placeholder: "key", value: p.name ?? "", onChange: (e) => setFormPairs((prev) => prev.map((x, j) => j === i ? { ...x, name: e.target.value } : x)) }),
-            h("input", { className: "ce-input cea-hval", placeholder: "value", value: p.value ?? "", onChange: (e) => setFormPairs((prev) => prev.map((x, j) => j === i ? { ...x, value: e.target.value } : x)) }),
-            h("button", { type: "button", className: "ce-tool ce-tiny", onClick: () => setFormPairs((prev) => prev.filter((_, j) => j !== i)) }, "✕")
-          ))) : null,
-          bodyType === "raw" ? h("textarea", { className: "cea-body", "aria-label": t("api.body"), placeholder: rawSub === "json" ? '{\n  "key": "value"\n}' : t("api.body"), value: body, spellcheck: false, onKeyDown: (e) => {
-            if (e.key !== "Tab" || e.shiftKey) return;
-            e.preventDefault();
-            const el = e.currentTarget;
-            const start = el.selectionStart;
-            const end = el.selectionEnd;
-            setBody(body.slice(0, start) + "  " + body.slice(end));
-            requestAnimationFrame(() => el.setSelectionRange(start + 2, start + 2));
-          }, onChange: (e) => {
-            setBody(e.target.value);
-            setBeautifyErr("");
-          } }) : null,
-          bodyType === "none" ? h("div", { className: "cea-empty" }, t("api.bodyEmpty")) : null
-        ) : null
+                h(
+                  "select",
+                  { className: "cea-method", value: rawSub, onChange: (e) => setRawSub(e.target.value) },
+                  ["json", "text", "html", "xml"].map((s) => h("option", { key: s, value: s }, s))
+                ),
+                rawSub === "json" ? h(
+                  Fragment,
+                  null,
+                  h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost", onClick: beautify }, t("api.beautify")),
+                  beautifyErr ? h("span", { className: "cea-err" }, beautifyErr) : null
+                ) : null
+              ) : null,
+              bodyType === "form" || bodyType === "multipart" ? h("button", { type: "button", className: "ce-tool ce-tiny", title: t("api.addHeader"), onClick: () => setFormPairs((prev) => [...prev, { name: "", value: "" }]) }, "+") : null
+            ),
+            bodyType === "form" || bodyType === "multipart" ? h(Fragment, null, formPairs.map((p, i) => h(
+              "div",
+              { key: i, className: "cea-hrow" },
+              h("input", { className: "ce-input cea-hkey", placeholder: "key", value: p.name ?? "", onChange: (e) => setFormPairs((prev) => prev.map((x, j) => j === i ? { ...x, name: e.target.value } : x)) }),
+              h("input", { className: "ce-input cea-hval", placeholder: "value", value: p.value ?? "", onChange: (e) => setFormPairs((prev) => prev.map((x, j) => j === i ? { ...x, value: e.target.value } : x)) }),
+              h("button", { type: "button", className: "ce-tool ce-tiny", onClick: () => setFormPairs((prev) => prev.filter((_, j) => j !== i)) }, "✕")
+            ))) : null,
+            bodyType === "raw" ? h("textarea", { className: "cea-body", "aria-label": t("api.body"), placeholder: rawSub === "json" ? '{\n  "key": "value"\n}' : t("api.body"), value: body, spellcheck: false, onKeyDown: (e) => {
+              if (e.key !== "Tab" || e.shiftKey) return;
+              e.preventDefault();
+              const el = e.currentTarget;
+              const start = el.selectionStart;
+              const end = el.selectionEnd;
+              setBody(body.slice(0, start) + "  " + body.slice(end));
+              requestAnimationFrame(() => el.setSelectionRange(start + 2, start + 2));
+            }, onChange: (e) => {
+              setBody(e.target.value);
+              setBeautifyErr("");
+            } }) : null,
+            bodyType === "none" ? h("div", { className: "cea-empty" }, t("api.bodyEmpty")) : null
+          ) : null
+        )
       ),
+      h("div", {
+        className: "cea-resizer",
+        role: "separator",
+        tabIndex: 0,
+        "aria-label": t("api.resizePanels"),
+        "aria-orientation": "horizontal",
+        "aria-valuemin": 24,
+        "aria-valuemax": 72,
+        "aria-valuenow": Math.round(requestShare),
+        title: t("api.resizeHint"),
+        onPointerDown: (e) => {
+          if (e.button !== 0) return;
+          e.preventDefault();
+          e.currentTarget.setPointerCapture(e.pointerId);
+          splitDrag.current = e.pointerId;
+          splitPointer(e);
+        },
+        onPointerMove: (e) => {
+          if (splitDrag.current === e.pointerId) splitPointer(e);
+        },
+        onPointerUp: (e) => {
+          if (splitDrag.current !== e.pointerId) return;
+          splitDrag.current = null;
+          e.currentTarget.releasePointerCapture(e.pointerId);
+        },
+        onLostPointerCapture: () => {
+          splitDrag.current = null;
+        },
+        onDoubleClick: () => setRequestShare(42),
+        onKeyDown: (e) => {
+          if (!["ArrowUp", "ArrowDown", "Home", "End"].includes(e.key)) return;
+          e.preventDefault();
+          e.stopPropagation();
+          setSplit(e.key === "Home" ? 24 : e.key === "End" ? 72 : requestShare + (e.key === "ArrowDown" ? 5 : -5));
+        }
+      }, h("span", { "aria-hidden": true })),
       h(
         "section",
         { className: "cea-response", "aria-label": t("api.resp"), "aria-busy": sending },
@@ -7134,8 +7298,12 @@ function ApiView({ t }) {
               h("button", { type: "button", className: "ce-link", onClick: () => setShowRespHeaders((v) => !v) }, `${t("api.respHeaders")} ${showRespHeaders ? "▾" : "▸"}`)
             )
           ),
-          showRespHeaders && !response.error ? h("div", { className: "cea-hlist" }, (response.headers ?? []).map((hd, i) => h("div", { key: i }, h("span", { className: "cea-hk" }, hd[0]), h("span", null, hd[1])))) : null,
-          !response.error ? h("pre", { className: "cea-resp" }, respJson ?? response.text ?? "") : null
+          h(
+            "div",
+            { className: "cea-response-content ce-scroll" },
+            showRespHeaders && !response.error ? h("div", { className: "cea-hlist" }, (response.headers ?? []).map((hd, i) => h("div", { key: i }, h("span", { className: "cea-hk" }, hd[0]), h("span", null, hd[1])))) : null,
+            !response.error ? h("pre", { className: "cea-resp" }, respJson ?? response.text ?? "") : null
+          )
         ) : h("div", { className: "cea-empty" }, h("strong", null, t("api.responseEmpty")), h("span", null, t("api.sendShortcut")))
       )
     ),
