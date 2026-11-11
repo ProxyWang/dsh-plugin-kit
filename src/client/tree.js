@@ -2,6 +2,7 @@
 
 import { Fragment, h, useCallback, useEffect, useRef, useState } from "./react.js";
 import { api } from "./api.js";
+import { HintButton } from "./hint.js";
 import { IconFolder } from "./icons.js";
 import { FileGlyph, fileTint } from "./changetree.js";
 import { ancestorDirs, canDropInto, parentDir, toAbs } from "./pathtools.js";
@@ -226,10 +227,10 @@ export function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshK
 	}),
 	);
 	const acts = (path, isDir) => h("span", { className: "ctp-acts" },
-		isDir ? h("button", {
+		isDir ? h(HintButton, {
 			type: "button",
 			className: "cet-act",
-			title: t("tree.newFile"),
+			hint: t("tree.newFile"),
 			onClick: (e) => {
 				e.stopPropagation();
 				if (!expanded.includes(path)) setExpanded([...expanded, path]);
@@ -237,19 +238,19 @@ export function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshK
 				setAction({ kind: "newfile", path, value: "" });
 			},
 		}, "+") : null,
-		h("button", {
+		h(HintButton, {
 			type: "button",
 			className: "cet-act",
-			title: t("tree.copyPath"),
+			hint: t("tree.copyPath"),
 			onClick: (e) => {
 				e.stopPropagation();
 				copyPath(path, e);
 			},
 		}, "📋"),
-		h("button", {
+		h(HintButton, {
 			type: "button",
 			className: "cet-act",
-			title: t("tree.rename"),
+			hint: t("tree.rename"),
 			onClick: (e) => {
 				e.stopPropagation();
 				setAction({ kind: "rename", path, value: path.split("/").pop() });
@@ -274,10 +275,10 @@ export function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshK
 					},
 				}, t("changes.cancel")),
 			)
-			: h("button", {
+			: h(HintButton, {
 				type: "button",
 				className: "cet-act",
-				title: t("tree.delete"),
+				hint: t("tree.delete"),
 				onClick: (e) => {
 					e.stopPropagation();
 					setAction({ kind: "delete", path });
@@ -364,8 +365,8 @@ export function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshK
 		},
 	},
 	h("div", { className: "ctp-tools" },
-		h("button", { type: "button", className: "cet-act cet-act-show", title: t("tree.newFileRoot"), onClick: () => setAction({ kind: "newfile", path: "", value: "" }) }, `+ ${t("tree.fileWord")}`),
-		h("button", { type: "button", className: "cet-act cet-act-show", title: t("tree.newDirRoot"), onClick: () => setAction({ kind: "newdir", path: "", value: "" }) }, `+ ${t("tree.dirWord")}`),
+		h(HintButton, { type: "button", className: "cet-act cet-act-show", hint: t("tree.newFileRoot"), onClick: () => setAction({ kind: "newfile", path: "", value: "" }) }, `+ ${t("tree.fileWord")}`),
+		h(HintButton, { type: "button", className: "cet-act cet-act-show", hint: t("tree.newDirRoot"), onClick: () => setAction({ kind: "newdir", path: "", value: "" }) }, `+ ${t("tree.dirWord")}`),
 	),
 	action !== null && (action.kind === "newfile" || action.kind === "newdir") && action.path === ""
 		? inputRow("", action.kind === "newdir" ? "dir" : "file", action.kind === "newdir" ? t("tree.newDirPlaceholder") : t("tree.newFilePlaceholder"))

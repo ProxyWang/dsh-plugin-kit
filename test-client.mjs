@@ -579,6 +579,48 @@ try {
 	check("inline creation uses the chosen scope and collapses after success", skillRequests.some((r) => r.url.endsWith("/skills.create") && r.body.name === "my-skill" && r.body.scope === "project") && !skillNode((n) => n.props.className === "ce-sk-create"), null);
 } finally { globalThis.fetch = previousSkillsFetch; }
 
+// --- Fast hints: controlled delay, viewport placement, dismissal and accessible labels --------
+const { HintButton } = await import("./src/client/hint.js");
+const oldHintGlobals = { document: globalThis.document, window: globalThis.window, setTimeout: globalThis.setTimeout, clearTimeout: globalThis.clearTimeout };
+const hintTimers = new Map();
+const hintNodes = [];
+const hintListeners = new Set();
+let hintTimerId = 0;
+const hintTargetAttrs = new Map([["aria-describedby", "existing-description"]]);
+const hintTarget = { isConnected: true, getBoundingClientRect: () => ({ left: 290, top: 170, bottom: 190, width: 20 }),
+	getAttribute: (k) => hintTargetAttrs.get(k) ?? null, setAttribute: (k, v) => hintTargetAttrs.set(k, v), removeAttribute: (k) => hintTargetAttrs.delete(k) };
+globalThis.setTimeout = (callback, delay) => { hintTimers.set(++hintTimerId, { callback, delay }); return hintTimerId; };
+globalThis.clearTimeout = (id) => hintTimers.delete(id);
+globalThis.document = {
+	createElement: () => ({ style: {}, attrs: {}, setAttribute(k, v) { this.attrs[k] = v; }, getBoundingClientRect: () => ({ width: 100, height: 24 }), remove() { this.removed = true; } }),
+	body: { appendChild: (node) => hintNodes.push(node) },
+	addEventListener: (kind) => hintListeners.add(kind), removeEventListener: (kind) => hintListeners.delete(kind),
+};
+globalThis.window = { innerWidth: 320, innerHeight: 200, addEventListener: (kind) => hintListeners.add(kind), removeEventListener: (kind) => hintListeners.delete(kind) };
+const fireHint = () => { const [id, timer] = hintTimers.entries().next().value; hintTimers.delete(id); timer.callback(); };
+try {
+	let hintClicks = 0;
+	const hintButton = HintButton({ hint: "新建文件", title: "native title must be removed", children: "+", onClick: () => hintClicks++ });
+	check("fast hint replaces native title and retains accessible button name", hintButton.props.title === undefined && hintButton.props["aria-label"] === "新建文件", null);
+	hintButton.props.onMouseEnter({ currentTarget: hintTarget });
+	check("tree hints appear after 100ms instead of browser-native delay", hintNodes.length === 0 && [...hintTimers.values()][0]?.delay === 100, null);
+	fireHint();
+	check("hint clamps to viewport and moves above the bottom edge", hintNodes[0].style.left === "212px" && hintNodes[0].style.top === "140px" && hintNodes[0].attrs.role === "tooltip", hintNodes[0].style);
+	hintButton.props.onMouseLeave({});
+	check("leaving hides hint and restores existing accessibility description", hintNodes[0].removed && hintTargetAttrs.get("aria-describedby") === "existing-description" && hintListeners.size === 0, null);
+	hintButton.props.onFocus({ currentTarget: hintTarget });
+	check("keyboard focus shows hint without hover delay", [...hintTimers.values()][0]?.delay === 0, null);
+	fireHint();
+	let hintEscapeStopped = false;
+	hintButton.props.onKeyDown({ key: "Escape", stopPropagation: () => { hintEscapeStopped = true; } });
+	check("Escape dismisses visible hint", hintEscapeStopped && hintNodes[1].removed && hintListeners.size === 0, null);
+	hintButton.props.onMouseEnter({ currentTarget: hintTarget });
+	hintButton.props.onClick({});
+	check("click cancels pending hints and preserves the action", hintTimers.size === 0 && hintClicks === 1, null);
+} finally {
+	for (const [key, value] of Object.entries(oldHintGlobals)) { if (value === undefined) delete globalThis[key]; else globalThis[key] = value; }
+}
+
 // --- the generated bundle: registration + factory --------------------------------------
 
 const bundle = await readFile(new URL("./client.js", import.meta.url), "utf8");

@@ -476,7 +476,8 @@ export const CSS = `
 .ce-htmlprev{flex:1;min-height:0;width:100%;border:0;background:#fff}
 .ctp-tools{display:flex;gap:6px;padding:4px 8px;border-bottom:.5px solid var(--dsw-alias-border-l1,#333);flex:none}
 .ctp-acts{margin-left:auto;display:inline-flex;gap:2px;opacity:0;transition:opacity .1s}
-.ce-row:hover .ctp-acts{opacity:1}
+.ce-fast-hint{position:fixed;z-index:100000;pointer-events:none;max-width:min(260px,calc(100vw - 16px));box-sizing:border-box;padding:5px 8px;border:.5px solid var(--dsw-alias-border-l2,#444);border-radius:5px;background:var(--dsw-alias-bg-layer-2,#24272c);color:var(--dsw-alias-label-primary,#ddd);font-family:system-ui,sans-serif;font-size:12px;font-weight:400;line-height:1.4;white-space:normal;overflow-wrap:anywhere;box-shadow:0 3px 10px rgba(0,0,0,.14)}
+.ce-row:hover .ctp-acts,.ce-row:focus-within .ctp-acts{opacity:1}
 .ctp-acts .cet-act{opacity:1}
 .ctp-inputrow{cursor:default}
 .ctp-inputrow:hover{background:transparent}

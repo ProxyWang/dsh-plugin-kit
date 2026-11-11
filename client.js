@@ -1578,6 +1578,94 @@ function canDropInto(dragPath, targetDir) {
   return true;
 }
 
+// src/client/hint.js
+var nextHintId = 0;
+var dismissCurrent = null;
+function HintButton({ hint, title: _nativeTitle, ...props }) {
+  const timer = useRef(null);
+  const active = useRef(null);
+  const hide = useCallback(() => {
+    if (timer.current !== null) {
+      clearTimeout(timer.current);
+      timer.current = null;
+    }
+    const current = active.current;
+    if (!current) return;
+    active.current = null;
+    current.node.remove();
+    if (current.previous) current.target.setAttribute("aria-describedby", current.previous);
+    else current.target.removeAttribute("aria-describedby");
+    document.removeEventListener("scroll", hide, true);
+    window.removeEventListener("resize", hide);
+    if (dismissCurrent === hide) dismissCurrent = null;
+  }, []);
+  useEffect(() => hide, [hide]);
+  const show = (event, delay) => {
+    hide();
+    const target = event.currentTarget;
+    timer.current = setTimeout(() => {
+      timer.current = null;
+      if (!target.isConnected || !hint) return;
+      dismissCurrent?.();
+      const node = document.createElement("span");
+      node.className = "ce-fast-hint";
+      node.id = `ce-fast-hint-${++nextHintId}`;
+      node.setAttribute("role", "tooltip");
+      node.textContent = hint;
+      node.style.visibility = "hidden";
+      document.body.appendChild(node);
+      const anchor = target.getBoundingClientRect();
+      const size = node.getBoundingClientRect();
+      const left = Math.max(8, Math.min(anchor.left + anchor.width / 2 - size.width / 2, window.innerWidth - size.width - 8));
+      const below = anchor.bottom + 6;
+      const top = below + size.height <= window.innerHeight - 8 ? below : Math.max(8, anchor.top - size.height - 6);
+      node.style.left = `${left}px`;
+      node.style.top = `${top}px`;
+      node.style.visibility = "visible";
+      active.current = { node, target, previous: target.getAttribute("aria-describedby") };
+      target.setAttribute("aria-describedby", [active.current.previous, node.id].filter(Boolean).join(" "));
+      dismissCurrent = hide;
+      document.addEventListener("scroll", hide, true);
+      window.addEventListener("resize", hide);
+    }, delay);
+  };
+  return h("button", {
+    ...props,
+    "aria-label": props["aria-label"] ?? hint,
+    onMouseEnter: (e) => {
+      show(e, 100);
+      props.onMouseEnter?.(e);
+    },
+    onMouseLeave: (e) => {
+      hide();
+      props.onMouseLeave?.(e);
+    },
+    onFocus: (e) => {
+      show(e, 0);
+      props.onFocus?.(e);
+    },
+    onBlur: (e) => {
+      hide();
+      props.onBlur?.(e);
+    },
+    onPointerDown: (e) => {
+      hide();
+      props.onPointerDown?.(e);
+    },
+    onClick: (e) => {
+      hide();
+      props.onClick?.(e);
+    },
+    onKeyDown: (e) => {
+      if (e.key === "Escape") {
+        hide();
+        e.stopPropagation();
+      }
+      props.onKeyDown?.(e);
+    }
+  }, props.children);
+}
+
 // src/client/changetree.js
 function buildTree(items) {
   const root = { name: "", dirs: /* @__PURE__ */ new Map(), files: [], count: 0 };
@@ -2056,10 +2144,10 @@ function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshKey, onN
   const acts = (path, isDir) => h(
     "span",
     { className: "ctp-acts" },
-    isDir ? h("button", {
+    isDir ? h(HintButton, {
       type: "button",
       className: "cet-act",
-      title: t("tree.newFile"),
+      hint: t("tree.newFile"),
       onClick: (e) => {
         e.stopPropagation();
         if (!expanded.includes(path)) setExpanded([...expanded, path]);
@@ -2067,19 +2155,19 @@ function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshKey, onN
         setAction({ kind: "newfile", path, value: "" });
       }
     }, "+") : null,
-    h("button", {
+    h(HintButton, {
       type: "button",
       className: "cet-act",
-      title: t("tree.copyPath"),
+      hint: t("tree.copyPath"),
       onClick: (e) => {
         e.stopPropagation();
         copyPath(path, e);
       }
     }, "📋"),
-    h("button", {
+    h(HintButton, {
       type: "button",
       className: "cet-act",
-      title: t("tree.rename"),
+      hint: t("tree.rename"),
       onClick: (e) => {
         e.stopPropagation();
         setAction({ kind: "rename", path, value: path.split("/").pop() });
@@ -2104,10 +2192,10 @@ function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshKey, onN
           setAction(null);
         }
       }, t("changes.cancel"))
-    ) : h("button", {
+    ) : h(HintButton, {
       type: "button",
       className: "cet-act",
-      title: t("tree.delete"),
+      hint: t("tree.delete"),
       onClick: (e) => {
         e.stopPropagation();
         setAction({ kind: "delete", path });
@@ -2199,8 +2287,8 @@ function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshKey, onN
     h(
       "div",
       { className: "ctp-tools" },
-      h("button", { type: "button", className: "cet-act cet-act-show", title: t("tree.newFileRoot"), onClick: () => setAction({ kind: "newfile", path: "", value: "" }) }, `+ ${t("tree.fileWord")}`),
-      h("button", { type: "button", className: "cet-act cet-act-show", title: t("tree.newDirRoot"), onClick: () => setAction({ kind: "newdir", path: "", value: "" }) }, `+ ${t("tree.dirWord")}`)
+      h(HintButton, { type: "button", className: "cet-act cet-act-show", hint: t("tree.newFileRoot"), onClick: () => setAction({ kind: "newfile", path: "", value: "" }) }, `+ ${t("tree.fileWord")}`),
+      h(HintButton, { type: "button", className: "cet-act cet-act-show", hint: t("tree.newDirRoot"), onClick: () => setAction({ kind: "newdir", path: "", value: "" }) }, `+ ${t("tree.dirWord")}`)
     ),
     action !== null && (action.kind === "newfile" || action.kind === "newdir") && action.path === "" ? inputRow("", action.kind === "newdir" ? "dir" : "file", action.kind === "newdir" ? t("tree.newDirPlaceholder") : t("tree.newFilePlaceholder")) : null,
     renderLevel("", 0)
@@ -5470,7 +5558,8 @@ var CSS2 = `
 .ce-htmlprev{flex:1;min-height:0;width:100%;border:0;background:#fff}
 .ctp-tools{display:flex;gap:6px;padding:4px 8px;border-bottom:.5px solid var(--dsw-alias-border-l1,#333);flex:none}
 .ctp-acts{margin-left:auto;display:inline-flex;gap:2px;opacity:0;transition:opacity .1s}
-.ce-row:hover .ctp-acts{opacity:1}
+.ce-fast-hint{position:fixed;z-index:100000;pointer-events:none;max-width:min(260px,calc(100vw - 16px));box-sizing:border-box;padding:5px 8px;border:.5px solid var(--dsw-alias-border-l2,#444);border-radius:5px;background:var(--dsw-alias-bg-layer-2,#24272c);color:var(--dsw-alias-label-primary,#ddd);font-family:system-ui,sans-serif;font-size:12px;font-weight:400;line-height:1.4;white-space:normal;overflow-wrap:anywhere;box-shadow:0 3px 10px rgba(0,0,0,.14)}
+.ce-row:hover .ctp-acts,.ce-row:focus-within .ctp-acts{opacity:1}
 .ctp-acts .cet-act{opacity:1}
 .ctp-inputrow{cursor:default}
 .ctp-inputrow:hover{background:transparent}
