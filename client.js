@@ -128,6 +128,7 @@ var zh = {
   "diff.prevChange": "上一处变更",
   "diff.nextChange": "下一处变更",
   "diff.revertHunk": "回退此变更块（git apply -R，仅工作区 diff）",
+  "diff.revertConfirm": "确认回退此块?",
   "diff.hunkReverted": "已回退该变更块",
   "diff.deletedLines": "行被删除 · 点击查看",
   "diff.deletedAt": "此处删除的内容",
@@ -429,6 +430,7 @@ var en = {
   "diff.prevChange": "Previous change",
   "diff.nextChange": "Next change",
   "diff.revertHunk": "Revert this hunk (git apply -R, working diffs only)",
+  "diff.revertConfirm": "Revert this hunk?",
   "diff.hunkReverted": "Hunk reverted",
   "diff.deletedLines": "deleted lines · click to view",
   "diff.deletedAt": "Deleted here",
@@ -1038,6 +1040,7 @@ function DiffView({ t, diff, onClose, onOpenSource, canSource, onRevertHunk }) {
   const marks = useMemo(() => intraMarks(shown), [shown]);
   const [sbs, setSbs] = useState(loadSbs);
   const [navIdx, setNavIdx] = useState(-1);
+  const [confirmHunk, setConfirmHunk] = useState(-1);
   const containerRef = useRef(null);
   const paired = useMemo(() => sbs ? pairRows(shown) : null, [sbs, shown]);
   const hunkIdxOf = useMemo(() => {
@@ -1073,6 +1076,7 @@ function DiffView({ t, diff, onClose, onOpenSource, canSource, onRevertHunk }) {
   }, [sbs, paired, shown]);
   useEffect(() => {
     setNavIdx(-1);
+    setConfirmHunk(-1);
   }, [diff.text, sbs]);
   const toggleSbs = () => {
     const next = !sbs;
@@ -1108,6 +1112,41 @@ function DiffView({ t, diff, onClose, onOpenSource, canSource, onRevertHunk }) {
     const after = row.text.slice(mark.end);
     return mid === "" ? [before, h("span", { key: "m", className: `${cls} ce-wd-zero` }, ""), after] : [before, h("span", { key: "m", className: cls }, mid), after];
   };
+  const renderHunkRevert = (hunkIdx) => {
+    if (!onRevertHunk) return null;
+    if (confirmHunk === hunkIdx) {
+      return h(
+        "span",
+        { className: "ce-hunk-confirm" },
+        h("button", {
+          type: "button",
+          className: "ce-tool ce-tiny ce-hunk-revert-on",
+          onClick: (e) => {
+            e.stopPropagation();
+            setConfirmHunk(-1);
+            onRevertHunk(hunkIdx);
+          }
+        }, t("diff.revertConfirm")),
+        h("button", {
+          type: "button",
+          className: "ce-tool ce-tiny",
+          onClick: (e) => {
+            e.stopPropagation();
+            setConfirmHunk(-1);
+          }
+        }, "✕")
+      );
+    }
+    return h("button", {
+      type: "button",
+      className: "ce-tool ce-tiny ce-hunk-revert",
+      title: t("diff.revertHunk"),
+      onClick: (e) => {
+        e.stopPropagation();
+        setConfirmHunk(hunkIdx);
+      }
+    }, "⟲");
+  };
   const renderUniRow = (row, i) => {
     const clickable = Boolean(onOpenSource) && (row.newLine !== void 0 || row.oldLine !== void 0);
     return h(
@@ -1121,15 +1160,7 @@ function DiffView({ t, diff, onClose, onOpenSource, canSource, onRevertHunk }) {
       diff.gutter === false ? null : h("span", { className: "ce-dnum" }, row.oldLine ?? ""),
       diff.gutter === false ? null : h("span", { className: "ce-dnum" }, row.newLine ?? ""),
       h("span", { className: "ce-dtext" }, renderMarkedText(row, true)),
-      row.kind === "hunk" && onRevertHunk ? h("button", {
-        type: "button",
-        className: "ce-tool ce-tiny ce-hunk-revert",
-        title: t("diff.revertHunk"),
-        onClick: (e) => {
-          e.stopPropagation();
-          onRevertHunk(hunkIdxOf.get(i) ?? 0);
-        }
-      }, "⟲") : null
+      row.kind === "hunk" ? renderHunkRevert(hunkIdxOf.get(i) ?? 0) : null
     );
   };
   const renderSbsRow = (p, i) => {
@@ -1139,15 +1170,7 @@ function DiffView({ t, diff, onClose, onOpenSource, canSource, onRevertHunk }) {
         "div",
         { key: i, "data-dr": i, className: `ce-sbsrow ce-sbsrow-full ce-dline-${p.kind}${navCls}` },
         h("span", { className: "ce-sbscell" }, p.left.text === "" ? " " : p.left.text),
-        p.kind === "hunk" && onRevertHunk ? h("button", {
-          type: "button",
-          className: "ce-tool ce-tiny ce-hunk-revert",
-          title: t("diff.revertHunk"),
-          onClick: (e) => {
-            e.stopPropagation();
-            onRevertHunk(sbsHunkIdxOf?.get(i) ?? 0);
-          }
-        }, "⟲") : null
+        p.kind === "hunk" ? renderHunkRevert(sbsHunkIdxOf?.get(i) ?? 0) : null
       );
     }
     const jumpLine = p.right?.newLine ?? p.left?.oldLine;
@@ -1765,9 +1788,12 @@ function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshKey, onN
   const lastRevealed = useRef(null);
   const revealTick = useRef(null);
   const loadDir = useCallback((path) => {
-    setListing((current) => ({ ...current, [path]: { loading: true } }));
+    setListing((current) => current[path]?.entries ? current : { ...current, [path]: { loading: true } });
     api("fs.list", { cwd, path }).then((res) => {
-      setListing((current) => ({ ...current, [path]: res.ok ? res.value : { error: res.error } }));
+      setListing((current) => {
+        if (!res.ok) return current[path]?.entries ? current : { ...current, [path]: { error: res.error } };
+        return { ...current, [path]: res.value };
+      });
     });
   }, [cwd]);
   useEffect(() => {
@@ -1907,6 +1933,29 @@ function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshKey, onN
       if (from && canDropInto(from, dirPath)) runMove(from, dirPath);
     }
   });
+  const fileDropProps = (filePath) => {
+    const dir = parentDir(filePath);
+    return {
+      onDragOver: (e) => {
+        if (!dragPath || !canDropInto(dragPath, dir)) return;
+        e.preventDefault();
+        e.stopPropagation();
+        try {
+          e.dataTransfer.dropEffect = "move";
+        } catch {
+        }
+      },
+      onDrop: (e) => {
+        e.stopPropagation();
+        if (!dragPath) return;
+        e.preventDefault();
+        const from = dragPath;
+        setDragPath(null);
+        setDropDir(null);
+        if (canDropInto(from, dir)) runMove(from, dir);
+      }
+    };
+  };
   const depthOf = (path) => path === "" ? 0 : path.split("/").length;
   const copyPath = (path, event) => {
     const text = event?.altKey ? path : toAbs(cwd, path);
@@ -2047,7 +2096,8 @@ function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshKey, onN
               style: { paddingLeft: 6 + depth * 14 },
               type: "button",
               onClick: () => onOpenFile(childPath, 1, 1),
-              ...dragProps(childPath)
+              ...dragProps(childPath),
+              ...fileDropProps(childPath)
             },
             h("span", { className: `cet-fico ce-tree-ico ${fileTint(childPath)}` }, h(FileGlyph)),
             h("span", { className: "ce-name" }, entry.name),
@@ -2065,8 +2115,10 @@ function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshKey, onN
     {
       className: "ce-scroll ce-rail",
       ref: railRef,
+      // Root drop only when the pointer is over the bare panel background —
+      // drops that bubble up from rows must not teleport entries to the root.
       onDragOver: (e) => {
-        if (!dragPath || !canDropInto(dragPath, "")) return;
+        if (e.target !== railRef.current || !dragPath || !canDropInto(dragPath, "")) return;
         e.preventDefault();
         try {
           e.dataTransfer.dropEffect = "move";
@@ -2074,7 +2126,7 @@ function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshKey, onN
         }
       },
       onDrop: (e) => {
-        if (!dragPath) return;
+        if (e.target !== railRef.current || !dragPath) return;
         e.preventDefault();
         const from = dragPath;
         setDragPath(null);
@@ -2602,6 +2654,7 @@ function SearchPanel({ t, cwd, state, onQuery, onInclude, onToggleRegex, onToggl
     }
     setReplaceBusy(false);
     setConfirmAll(false);
+    setCtxCache({});
     if (hits > 0) onNotify?.(t("search.replaceDone", { hits, files }));
     else onNotify?.(t("search.replaceNone"), "error");
     if (errors.length > 0) onNotify?.(`${t("search.replaceFail", { n: errors.length })}: ${errors[0]}`, "error");
@@ -2622,7 +2675,12 @@ function SearchPanel({ t, cwd, state, onQuery, onInclude, onToggleRegex, onToggl
             setCtxCache((c) => ({ ...c, [r.path]: { error: res.error ?? t("search.ctxFail") } }));
             return;
           }
-          setCtxCache((c) => ({ ...c, [r.path]: { lines: res.value.content.split("\n") } }));
+          setCtxCache((c) => {
+            const next2 = { ...c, [r.path]: { lines: res.value.content.split("\n") } };
+            const keys = Object.keys(next2);
+            while (keys.length > 30) delete next2[keys.shift()];
+            return next2;
+          });
         });
       }
     }
@@ -3312,6 +3370,8 @@ function CodeBody(props) {
   const peekRef = useRef(null);
   const wrapOnRef = useRef(false);
   const tabViewRef = useRef({});
+  const autoMarksTimer = useRef(null);
+  const tabsRef = useRef(null);
   docRef.current = doc;
   cursorRef.current = cursor;
   peekRef.current = peek;
@@ -3421,6 +3481,9 @@ function CodeBody(props) {
         setDiffMarks(null);
         setDelGroups(null);
         setDelPreview(null);
+        setFileHist(null);
+        setGotoOpen(false);
+        setSymPalette(null);
         setPreviewOn(true);
         setDoc(entry2);
         modeRef.current = "code";
@@ -3450,6 +3513,9 @@ function CodeBody(props) {
       setDiffMarks(null);
       setDelGroups(null);
       setDelPreview(null);
+      setFileHist(null);
+      setGotoOpen(false);
+      setSymPalette(null);
       setPreviewOn(PREVIEW_RE.test(path));
       setDoc(entry);
       modeRef.current = "code";
@@ -3477,18 +3543,23 @@ function CodeBody(props) {
       }
       if (!opts?.noAutoMarks) {
         const markSeq = seq;
-        const repo = repoSelRef.current;
-        api("git.diff", repo ? { cwd, path, scope: "working", repo } : { cwd, path, scope: "working" }).then((gres) => {
-          if (openSeqRef.current !== markSeq || modeRef.current !== "code") return;
-          const gval = gres.ok ? gres.value ?? {} : {};
-          if (gval.error || gval.untracked || !gval.diff) return;
-          const marks = changedNewLines(gval.diff);
-          const dels = deletedGroups(gval.diff);
-          if (marks.size === 0 && dels.size === 0) return;
-          setDiffMarks((cur) => cur === null ? marks : cur);
-          setDelGroups((cur) => cur === null ? dels : cur);
-        }).catch(() => {
-        });
+        if (autoMarksTimer.current) clearTimeout(autoMarksTimer.current);
+        autoMarksTimer.current = setTimeout(() => {
+          autoMarksTimer.current = null;
+          if (openSeqRef.current !== markSeq) return;
+          const repo = repoSelRef.current;
+          api("git.diff", repo ? { cwd, path, scope: "working", repo } : { cwd, path, scope: "working" }).then((gres) => {
+            if (openSeqRef.current !== markSeq || modeRef.current !== "code") return;
+            const gval = gres.ok ? gres.value ?? {} : {};
+            if (gval.error || gval.untracked || !gval.diff) return;
+            const marks = changedNewLines(gval.diff);
+            const dels = deletedGroups(gval.diff);
+            if (marks.size === 0 && dels.size === 0) return;
+            setDiffMarks((cur) => cur === null ? marks : cur);
+            setDelGroups((cur) => cur === null ? dels : cur);
+          }).catch(() => {
+          });
+        }, 220);
       }
       const markLine = mark?.line ?? clampLine;
       requestAnimationFrame(() => {
@@ -4331,7 +4402,14 @@ function CodeBody(props) {
   }, [tab, refreshGit, loadFile]);
   useEffect(() => () => {
     if (noticeTimer.current) clearTimeout(noticeTimer.current);
+    if (autoMarksTimer.current) clearTimeout(autoMarksTimer.current);
   }, []);
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => {
+      tabsRef.current?.querySelector?.(".ce-tab-active")?.scrollIntoView({ inline: "nearest", block: "nearest" });
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [doc, tabs]);
   useEffect(() => {
     const area = codeRef.current;
     if (!area) return;
@@ -4522,7 +4600,7 @@ function CodeBody(props) {
         { className: "ce-editor" },
         tabs.length > 0 ? h(
           "div",
-          { className: "ce-tabs" },
+          { className: "ce-tabs", ref: tabsRef },
           tabs.map((p) => {
             const active = doc?.path === p && (!diff || !showDiffView);
             const dirty = active && editing && editText !== (doc?.raw ?? "");
@@ -4702,7 +4780,7 @@ function CodeBody(props) {
           void openFile(item.path, item.line, item.col, true, word ? { line: item.line, col: item.col, word } : null);
         }, onClose: () => setOverlay(null) }) : null,
         palette ? h(QuickOpen, { t, state: palette, onQuery: onPaletteQuery, onPick: onPalettePick, onClose: closePalette }) : null,
-        gotoOpen && doc && !doc.image ? h(GotoLinePalette, { t, totalLines: doc.lines.length, initial: cursor?.line ?? 1, onGo: jumpToLine, onClose: () => setGotoOpen(false) }) : null,
+        gotoOpen && doc && !doc.image ? h(GotoLinePalette, { t, totalLines: wrapOn ? Math.min(doc.lines.length, WRAP_LINE_CAP) : doc.lines.length, initial: cursor?.line ?? 1, onGo: jumpToLine, onClose: () => setGotoOpen(false) }) : null,
         fileHist ? h(FileHistoryOverlay, { t, hist: fileHist, onPick: (c) => void openHistCommit(c), onClose: () => setFileHist(null) }) : null,
         searchOpen && search ? h(SearchPanel, {
           t,
@@ -4851,6 +4929,8 @@ var CSS2 = `
 .ce-sbsrow-full .ce-sbscell{flex:1;min-width:0}
 .ce-hunk-revert{margin-left:auto;flex:none;opacity:.6}
 .ce-dline:hover .ce-hunk-revert,.ce-sbsrow-full:hover .ce-hunk-revert{opacity:1}
+.ce-hunk-confirm{margin-left:auto;display:flex;gap:2px;align-items:center;flex:none}
+.ce-hunk-revert-on{color:var(--dsw-alias-state-error-primary,#f85149);font-weight:700}
 .ce-sbsnum{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;line-height:19px;color:var(--dsw-alias-label-tertiary,#667);text-align:right;padding:1px 6px 1px 0;user-select:none;background:rgba(128,128,128,.05);overflow:hidden}
 .ce-sbscell{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;line-height:19px;white-space:pre-wrap;overflow-wrap:break-word;padding:1px 10px 1px 4px;min-width:0}
 .ce-sbs-del{background:color-mix(in srgb,var(--dsw-alias-state-error-primary,#f85149) 12%,transparent)}

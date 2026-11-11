@@ -436,7 +436,7 @@ const dvNodes = collect(DiffView({
 const revertBtn = dvNodes.find((n) => typeof n.props?.className === "string" && n.props.className.includes("ce-hunk-revert"));
 check("working-scope hunk row shows the revert button", Boolean(revertBtn), null);
 revertBtn?.props?.onClick({ stopPropagation: () => {} });
-check("revert button reports hunk index 0", revertedIdx === 0, revertedIdx);
+check("revert ⟲ arms a confirm instead of reverting immediately", revertedIdx === null, revertedIdx);
 const dvCommit = collect(DiffView({
 	t: (k) => k,
 	diff: { path: "c", scope: "commit", commit: "abc", text: "@@ -1 +1 @@\n-a\n+b\n" },

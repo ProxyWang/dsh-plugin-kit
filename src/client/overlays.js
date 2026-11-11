@@ -237,6 +237,8 @@ export function SearchPanel({ t, cwd, state, onQuery, onInclude, onToggleRegex, 
 		}
 		setReplaceBusy(false);
 		setConfirmAll(false);
+		// Expanded context lines may now show pre-replace content — drop them.
+		setCtxCache({});
 		if (hits > 0) onNotify?.(t("search.replaceDone", { hits, files }));
 		else onNotify?.(t("search.replaceNone"), "error");
 		if (errors.length > 0) onNotify?.(`${t("search.replaceFail", { n: errors.length })}: ${errors[0]}`, "error");
@@ -257,7 +259,13 @@ export function SearchPanel({ t, cwd, state, onQuery, onInclude, onToggleRegex, 
 						setCtxCache((c) => ({ ...c, [r.path]: { error: res.error ?? t("search.ctxFail") } }));
 						return;
 					}
-					setCtxCache((c) => ({ ...c, [r.path]: { lines: res.value.content.split("\n") } }));
+					setCtxCache((c) => {
+						// Bounded cache: evict oldest paths past 30 files.
+						const next = { ...c, [r.path]: { lines: res.value.content.split("\n") } };
+						const keys = Object.keys(next);
+						while (keys.length > 30) delete next[keys.shift()];
+						return next;
+					});
 				});
 			}
 		}

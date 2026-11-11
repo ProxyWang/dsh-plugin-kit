@@ -224,6 +224,7 @@ export function DiffView({ t, diff, onClose, onOpenSource, canSource, onRevertHu
 	const marks = useMemo(() => intraMarks(shown), [shown]);
 	const [sbs, setSbs] = useState(loadSbs);
 	const [navIdx, setNavIdx] = useState(-1);
+	const [confirmHunk, setConfirmHunk] = useState(-1);
 	const containerRef = useRef(null);
 	const paired = useMemo(() => (sbs ? pairRows(shown) : null), [sbs, shown]);
 	// Row index → hunk ordinal, so the ⟲ button can address one hunk.
@@ -262,6 +263,7 @@ export function DiffView({ t, diff, onClose, onOpenSource, canSource, onRevertHu
 	}, [sbs, paired, shown]);
 	useEffect(() => {
 		setNavIdx(-1);
+		setConfirmHunk(-1);
 	}, [diff.text, sbs]);
 	const toggleSbs = () => {
 		const next = !sbs;
@@ -299,6 +301,41 @@ export function DiffView({ t, diff, onClose, onOpenSource, canSource, onRevertHu
 			? [before, h("span", { key: "m", className: `${cls} ce-wd-zero` }, ""), after]
 			: [before, h("span", { key: "m", className: cls }, mid), after];
 	};
+	// Hunk revert is destructive (discards uncommitted work) so it follows the
+	// panel's two-step convention: ⟲ arms, an inline danger button confirms.
+	const renderHunkRevert = (hunkIdx) => {
+		if (!onRevertHunk) return null;
+		if (confirmHunk === hunkIdx) {
+			return h("span", { className: "ce-hunk-confirm" },
+				h("button", {
+					type: "button",
+					className: "ce-tool ce-tiny ce-hunk-revert-on",
+					onClick: (e) => {
+						e.stopPropagation();
+						setConfirmHunk(-1);
+						onRevertHunk(hunkIdx);
+					},
+				}, t("diff.revertConfirm")),
+				h("button", {
+					type: "button",
+					className: "ce-tool ce-tiny",
+					onClick: (e) => {
+						e.stopPropagation();
+						setConfirmHunk(-1);
+					},
+				}, "✕"),
+			);
+		}
+		return h("button", {
+			type: "button",
+			className: "ce-tool ce-tiny ce-hunk-revert",
+			title: t("diff.revertHunk"),
+			onClick: (e) => {
+				e.stopPropagation();
+				setConfirmHunk(hunkIdx);
+			},
+		}, "⟲");
+	};
 	const renderUniRow = (row, i) => {
 		const clickable = Boolean(onOpenSource) && (row.newLine !== void 0 || row.oldLine !== void 0);
 		return h(
@@ -312,17 +349,7 @@ export function DiffView({ t, diff, onClose, onOpenSource, canSource, onRevertHu
 			diff.gutter === false ? null : h("span", { className: "ce-dnum" }, row.oldLine ?? ""),
 			diff.gutter === false ? null : h("span", { className: "ce-dnum" }, row.newLine ?? ""),
 			h("span", { className: "ce-dtext" }, renderMarkedText(row, true)),
-			row.kind === "hunk" && onRevertHunk
-				? h("button", {
-					type: "button",
-					className: "ce-tool ce-tiny ce-hunk-revert",
-					title: t("diff.revertHunk"),
-					onClick: (e) => {
-						e.stopPropagation();
-						onRevertHunk(hunkIdxOf.get(i) ?? 0);
-					},
-				}, "⟲")
-				: null,
+			row.kind === "hunk" ? renderHunkRevert(hunkIdxOf.get(i) ?? 0) : null,
 		);
 	};
 	const renderSbsRow = (p, i) => {
@@ -330,17 +357,7 @@ export function DiffView({ t, diff, onClose, onOpenSource, canSource, onRevertHu
 		if (p.kind === "hunk" || p.kind === "meta") {
 			return h("div", { key: i, "data-dr": i, className: `ce-sbsrow ce-sbsrow-full ce-dline-${p.kind}${navCls}` },
 				h("span", { className: "ce-sbscell" }, p.left.text === "" ? " " : p.left.text),
-				p.kind === "hunk" && onRevertHunk
-					? h("button", {
-						type: "button",
-						className: "ce-tool ce-tiny ce-hunk-revert",
-						title: t("diff.revertHunk"),
-						onClick: (e) => {
-							e.stopPropagation();
-							onRevertHunk(sbsHunkIdxOf?.get(i) ?? 0);
-						},
-					}, "⟲")
-					: null);
+				p.kind === "hunk" ? renderHunkRevert(sbsHunkIdxOf?.get(i) ?? 0) : null);
 		}
 		const jumpLine = p.right?.newLine ?? p.left?.oldLine;
 		const clickable = Boolean(onOpenSource) && jumpLine !== void 0;

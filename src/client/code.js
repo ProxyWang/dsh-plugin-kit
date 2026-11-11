@@ -98,6 +98,8 @@ export function CodeBody(props) {
 	const peekRef = useRef(null);
 	const wrapOnRef = useRef(false);
 	const tabViewRef = useRef({}); // path → {line, col, scroll} restored when switching tabs
+	const autoMarksTimer = useRef(null);
+	const tabsRef = useRef(null);
 
 	docRef.current = doc;
 	cursorRef.current = cursor;
@@ -224,6 +226,9 @@ export function CodeBody(props) {
 				setDiffMarks(null);
 				setDelGroups(null);
 				setDelPreview(null);
+				setFileHist(null);
+				setGotoOpen(false);
+				setSymPalette(null);
 				setPreviewOn(true);
 				setDoc(entry);
 				modeRef.current = "code";
@@ -253,6 +258,9 @@ export function CodeBody(props) {
 			setDiffMarks(null);
 			setDelGroups(null);
 			setDelPreview(null);
+			setFileHist(null);
+			setGotoOpen(false);
+			setSymPalette(null);
 			setPreviewOn(PREVIEW_RE.test(path));
 			setDoc(entry);
 			modeRef.current = "code";
@@ -282,21 +290,28 @@ export function CodeBody(props) {
 			// VSCode parity: opening a file with uncommitted working-tree changes
 			// shows gutter marks right away, without going through the Changes
 			// list. Untracked files are skipped (whole-file green is noise).
+			// Debounced so rapid tab switching doesn't spawn git processes for
+			// files that are only passed through.
 			if (!opts?.noAutoMarks) {
 				const markSeq = seq;
-				const repo = repoSelRef.current;
-				api("git.diff", repo ? { cwd, path, scope: "working", repo } : { cwd, path, scope: "working" })
-					.then((gres) => {
-						if (openSeqRef.current !== markSeq || modeRef.current !== "code") return;
-						const gval = gres.ok ? gres.value ?? {} : {};
-						if (gval.error || gval.untracked || !gval.diff) return;
-						const marks = changedNewLines(gval.diff);
-						const dels = deletedGroups(gval.diff);
-						if (marks.size === 0 && dels.size === 0) return;
-						setDiffMarks((cur) => (cur === null ? marks : cur));
-						setDelGroups((cur) => (cur === null ? dels : cur));
-					})
-					.catch(() => {});
+				if (autoMarksTimer.current) clearTimeout(autoMarksTimer.current);
+				autoMarksTimer.current = setTimeout(() => {
+					autoMarksTimer.current = null;
+					if (openSeqRef.current !== markSeq) return;
+					const repo = repoSelRef.current;
+					api("git.diff", repo ? { cwd, path, scope: "working", repo } : { cwd, path, scope: "working" })
+						.then((gres) => {
+							if (openSeqRef.current !== markSeq || modeRef.current !== "code") return;
+							const gval = gres.ok ? gres.value ?? {} : {};
+							if (gval.error || gval.untracked || !gval.diff) return;
+							const marks = changedNewLines(gval.diff);
+							const dels = deletedGroups(gval.diff);
+							if (marks.size === 0 && dels.size === 0) return;
+							setDiffMarks((cur) => (cur === null ? marks : cur));
+							setDelGroups((cur) => (cur === null ? dels : cur));
+						})
+						.catch(() => {});
+				}, 220);
 			}
 			// reveal after layout; mark drives the exact-token highlight
 			const markLine = mark?.line ?? clampLine;
@@ -1218,7 +1233,16 @@ export function CodeBody(props) {
 
 	useEffect(() => () => {
 		if (noticeTimer.current) clearTimeout(noticeTimer.current);
+		if (autoMarksTimer.current) clearTimeout(autoMarksTimer.current);
 	}, []);
+
+	// Keep the active tab visible in the (horizontally scrollable) strip.
+	useEffect(() => {
+		const raf = requestAnimationFrame(() => {
+			tabsRef.current?.querySelector?.(".ce-tab-active")?.scrollIntoView({ inline: "nearest", block: "nearest" });
+		});
+		return () => cancelAnimationFrame(raf);
+	}, [doc, tabs]);
 
 	// autosize viewport
 	useEffect(() => {
@@ -1431,7 +1455,7 @@ export function CodeBody(props) {
 				"div",
 				{ className: "ce-editor" },
 				tabs.length > 0
-					? h("div", { className: "ce-tabs" },
+					? h("div", { className: "ce-tabs", ref: tabsRef },
 						tabs.map((p) => {
 							const active = doc?.path === p && (!diff || !showDiffView);
 							const dirty = active && editing && editText !== (doc?.raw ?? "");
@@ -1611,7 +1635,7 @@ export function CodeBody(props) {
 				overlay ? h(LocationList, { t, overlay, cwd, onPick: (item) => { const word = cursorRef.current?.word; setOverlay(null); void openFile(item.path, item.line, item.col, true, word ? { line: item.line, col: item.col, word } : null); }, onClose: () => setOverlay(null) }) : null,
 				palette ? h(QuickOpen, { t, state: palette, onQuery: onPaletteQuery, onPick: onPalettePick, onClose: closePalette }) : null,
 				gotoOpen && doc && !doc.image
-					? h(GotoLinePalette, { t, totalLines: doc.lines.length, initial: cursor?.line ?? 1, onGo: jumpToLine, onClose: () => setGotoOpen(false) })
+					? h(GotoLinePalette, { t, totalLines: wrapOn ? Math.min(doc.lines.length, WRAP_LINE_CAP) : doc.lines.length, initial: cursor?.line ?? 1, onGo: jumpToLine, onClose: () => setGotoOpen(false) })
 					: null,
 				fileHist
 					? h(FileHistoryOverlay, { t, hist: fileHist, onPick: (c) => void openHistCommit(c), onClose: () => setFileHist(null) })

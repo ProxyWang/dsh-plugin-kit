@@ -16,9 +16,14 @@ export function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshK
 	const lastRevealed = useRef(null);
 	const revealTick = useRef(null);
 	const loadDir = useCallback((path) => {
-		setListing((current) => ({ ...current, [path]: { loading: true } }));
+		// Keep showing the previous listing while refetching — replacing it with
+		// a loading state made every reveal/refresh flicker the subtree away.
+		setListing((current) => (current[path]?.entries ? current : { ...current, [path]: { loading: true } }));
 		api("fs.list", { cwd, path }).then((res) => {
-			setListing((current) => ({ ...current, [path]: res.ok ? res.value : { error: res.error } }));
+			setListing((current) => {
+				if (!res.ok) return current[path]?.entries ? current : { ...current, [path]: { error: res.error } };
+				return { ...current, [path]: res.value };
+			});
 		});
 	}, [cwd]);
 	useEffect(() => {
@@ -162,6 +167,30 @@ export function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshK
 			if (from && canDropInto(from, dirPath)) runMove(from, dirPath);
 		},
 	});
+	// Dropping onto a file row targets that file's folder (VSCode behavior);
+	// the drop event never falls through to the root handler.
+	const fileDropProps = (filePath) => {
+		const dir = parentDir(filePath);
+		return {
+			onDragOver: (e) => {
+				if (!dragPath || !canDropInto(dragPath, dir)) return;
+				e.preventDefault();
+				e.stopPropagation();
+				try {
+					e.dataTransfer.dropEffect = "move";
+				} catch {}
+			},
+			onDrop: (e) => {
+				e.stopPropagation();
+				if (!dragPath) return;
+				e.preventDefault();
+				const from = dragPath;
+				setDragPath(null);
+				setDropDir(null);
+				if (canDropInto(from, dir)) runMove(from, dir);
+			},
+		};
+	};
 	const depthOf = (path) => (path === "" ? 0 : path.split("/").length);
 	// Clipboard copy: plain click → absolute path, ⌥/Alt-click → workspace-relative.
 	const copyPath = (path, event) => {
@@ -300,6 +329,7 @@ export function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshK
 							type: "button",
 							onClick: () => onOpenFile(childPath, 1, 1),
 							...dragProps(childPath),
+							...fileDropProps(childPath),
 						},
 						h("span", { className: `cet-fico ce-tree-ico ${fileTint(childPath)}` }, h(FileGlyph)),
 						h("span", { className: "ce-name" }, entry.name),
@@ -315,15 +345,17 @@ export function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshK
 	return h("div", {
 		className: "ce-scroll ce-rail",
 		ref: railRef,
+		// Root drop only when the pointer is over the bare panel background —
+		// drops that bubble up from rows must not teleport entries to the root.
 		onDragOver: (e) => {
-			if (!dragPath || !canDropInto(dragPath, "")) return;
+			if (e.target !== railRef.current || !dragPath || !canDropInto(dragPath, "")) return;
 			e.preventDefault();
 			try {
 				e.dataTransfer.dropEffect = "move";
 			} catch {}
 		},
 		onDrop: (e) => {
-			if (!dragPath) return;
+			if (e.target !== railRef.current || !dragPath) return;
 			e.preventDefault();
 			const from = dragPath;
 			setDragPath(null);
