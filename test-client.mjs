@@ -346,7 +346,7 @@ rp = replaceInText("abc", "([", "x", { regex: true });
 check("invalid regex replace is a no-op", rp.count === 0 && rp.text === "abc", rp);
 
 // --- search match highlighting -----------------------------------------------------------------
-const { matchRanges, highlightText } = await import("./src/client/overlays.js");
+const { matchRanges, highlightText } = await import("./src/client/searchpanel.js");
 check("matchRanges literal smart-case finds all", JSON.stringify(matchRanges("foo Bar foo", "foo", false)) === JSON.stringify([[0, 3], [8, 11]]), matchRanges("foo Bar foo", "foo", false));
 check("matchRanges uppercase query is case-sensitive", matchRanges("foo bar", "Foo", false).length === 0, matchRanges("foo bar", "Foo", false));
 check("matchRanges regex mode", JSON.stringify(matchRanges("abc abc", "a.c", true)) === JSON.stringify([[0, 3], [4, 7]]), matchRanges("abc abc", "a.c", true));
@@ -377,7 +377,8 @@ check("launcher renders element", Launch({}) != null, null);
 check("launcher null on empty registry", makeLauncher({ registry: { entries: () => [] }, sidebarRight: { openTab: () => {} }, getShortcuts: () => null, t: (k) => k })({}) === null, null);
 
 // --- curl parser -----------------------------------------------------------------------------
-const { parseCurl, toCurl, substituteVars, buildEnvMap, shellQuote } = await import("./src/client/apiclient.js");
+const { parseCurl, toCurl, shellQuote } = await import("./src/client/curl.js");
+const { substituteVars, buildEnvMap } = await import("./src/client/apiclient.js");
 const c1 = parseCurl("curl -X POST 'https://a.b/c?d=1' -H 'Content-Type: application/json' -H 'X-T: v' --data '{\"x\":1}'");
 check("parseCurl post json", c1.method === "POST" && c1.url === "https://a.b/c?d=1" && c1.headers.length === 2 && c1.body === '{"x":1}', c1);
 const c2 = parseCurl("curl https://a.b/x \\\n  -H 'A: b' \\\n  -u user:pass");

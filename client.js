@@ -2413,85 +2413,7 @@ function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commitsOpen, 
   );
 }
 
-// src/client/replace.js
-function escapeReLocal(s) {
-  return String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-function buildReplaceRe(query, opts) {
-  if (!query) return null;
-  const insensitive = String(query) === String(query).toLowerCase();
-  let src = String(query);
-  if (!opts?.regex) src = escapeReLocal(src);
-  if (opts?.words) src = `\\b(?:${src})\\b`;
-  try {
-    return new RegExp(src, insensitive ? "gmi" : "gm");
-  } catch {
-    return null;
-  }
-}
-function replaceInText(text, query, replaceWith, opts) {
-  const re = buildReplaceRe(query, opts);
-  if (!re || typeof text !== "string") return { text, count: 0 };
-  const replacement = String(replaceWith ?? "");
-  if (opts?.regex) {
-    const found = text.match(re);
-    const count2 = found ? found.length : 0;
-    if (count2 === 0) return { text, count: 0 };
-    return { text: text.replace(re, replacement), count: count2 };
-  }
-  let count = 0;
-  const out = text.replace(re, () => {
-    count++;
-    return replacement;
-  });
-  return { text: out, count };
-}
-
 // src/client/overlays.js
-function matchRanges(text, query, regex) {
-  const ranges = [];
-  if (!text || !query) return ranges;
-  const insensitive = query === query.toLowerCase();
-  if (regex) {
-    let re;
-    try {
-      re = new RegExp(query, insensitive ? "gi" : "g");
-    } catch {
-      return ranges;
-    }
-    let m;
-    let guard2 = 0;
-    while ((m = re.exec(text)) !== null && guard2++ < 60) {
-      if (m[0] === "") {
-        re.lastIndex++;
-        continue;
-      }
-      ranges.push([m.index, m.index + m[0].length]);
-    }
-    return ranges;
-  }
-  const hay = insensitive ? text.toLowerCase() : text;
-  let at = hay.indexOf(query);
-  let guard = 0;
-  while (at !== -1 && guard++ < 60) {
-    ranges.push([at, at + query.length]);
-    at = hay.indexOf(query, at + query.length);
-  }
-  return ranges;
-}
-function highlightText(text, ranges) {
-  if (!ranges || ranges.length === 0) return text;
-  const out = [];
-  let last = 0;
-  for (const [s, e] of ranges) {
-    if (s < last) continue;
-    if (s > last) out.push(text.slice(last, s));
-    out.push(h("b", { key: `m${s}`, className: "ce-shl" }, text.slice(s, e)));
-    last = e;
-  }
-  if (last < text.length) out.push(text.slice(last));
-  return out;
-}
 function LocationList({ t, overlay, cwd, onPick, onClose }) {
   return h(
     "div",
@@ -2593,6 +2515,321 @@ function QuickOpen({ t, state, onQuery, onPick, onClose }) {
       })
     )
   );
+}
+function RefsPeek({ t, cwd, peek, scroll, totalLines, onPick, onClose }) {
+  const defs = peek.def ?? [];
+  const refs = (peek.refs ?? []).filter((r) => !defs.some((d) => d.path === r.path && d.line === r.line && d.col === r.col));
+  const groups = [];
+  const pushRow = (loc, isDef) => {
+    let g = groups.find((x) => x.path === loc.path);
+    if (!g) {
+      g = { path: loc.path, rows: [] };
+      groups.push(g);
+    }
+    g.rows.push({ ...loc, isDef });
+  };
+  defs.slice(0, 30).forEach((d) => pushRow(d, true));
+  refs.slice(0, 60).forEach((r) => pushRow(r, false));
+  const flat = [];
+  for (const g of groups) flat.push(...g.rows);
+  const [sel, setSel] = useState(0);
+  const bodyRef = useRef(null);
+  useEffect(() => {
+    setSel(0);
+  }, [peek.symbol, peek.busy]);
+  useEffect(() => {
+    bodyRef.current?.querySelector(`[data-ri="${sel}"]`)?.scrollIntoView({ block: "nearest" });
+  }, [sel]);
+  const onKeyDown = (event) => {
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      event.stopPropagation();
+      setSel((s) => Math.min(flat.length - 1, s + 1));
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
+      event.stopPropagation();
+      setSel((s) => Math.max(0, s - 1));
+    } else if (event.key === "Enter") {
+      event.preventDefault();
+      event.stopPropagation();
+      if (flat[sel]) onPick(flat[sel]);
+    }
+  };
+  const top = Math.max(6, Math.min(peek.anchorLine * ROW + 6 - scroll, totalLines * ROW));
+  let ri = 0;
+  return h(
+    "div",
+    { className: "ce-peek", style: { top }, onKeyDown, onMouseDown: (event) => event.stopPropagation() },
+    h(
+      "div",
+      { className: "ce-peek-head" },
+      h("span", { className: "ce-peek-sym" }, peek.symbol),
+      peek.busy ? h("span", { className: "ce-peek-meta" }, t("loading")) : h("span", { className: "ce-peek-meta" }, `${t("peek.defs")} ${defs.length} · ${t("peek.refs")} ${refs.length}`),
+      h("span", { className: "ce-spacer" }),
+      h("span", { className: "ce-peek-hint" }, t("peek.hint")),
+      h("button", { className: "ce-tool ce-tiny", type: "button", title: `${t("close")} (Esc)`, onClick: onClose }, "✕")
+    ),
+    peek.error ? h("div", { className: "ce-note" }, peek.error) : null,
+    !peek.busy && flat.length === 0 && !peek.error ? h("div", { className: "ce-note" }, t("peek.empty")) : null,
+    h(
+      "div",
+      { className: "ce-peek-body ce-scroll", ref: bodyRef },
+      groups.map((g, gi) => {
+        const fileRows = g.rows.map((r) => {
+          const i = ri++;
+          return h(
+            "button",
+            {
+              key: i,
+              type: "button",
+              "data-ri": i,
+              className: `ce-peek-row${i === sel ? " ce-peek-row-sel" : ""}${r.isDef ? " ce-peek-def" : ""}`,
+              onMouseEnter: () => setSel(i),
+              onClick: () => onPick(r)
+            },
+            h("span", { className: "ce-peek-lno" }, `${r.line}:${r.col}`),
+            h("span", { className: "ce-peek-snippet" }, r.snippet ?? "")
+          );
+        });
+        return h(
+          Fragment,
+          { key: `${g.path}-${gi}` },
+          h("div", { className: "ce-peek-file" }, h("span", { className: "ce-peek-fpath" }, RelPath(cwd, g.path) || g.path)),
+          fileRows
+        );
+      })
+    )
+  );
+}
+var SYMBOL_GLYPHS = { 2: "▣", 3: "ƒ", 4: "Ω", 5: "◆", 6: "ƒ", 7: "◆", 8: "◈", 9: "#", 10: "◈", 11: "▣", 12: "✓", 13: "▣", 14: "🛡", 15: "ω", 16: "◆", 17: "◆", 18: "≡", 19: "◦", 20: "◦", 21: "≡", 22: "◆", 23: "◆", 24: "▣", 25: "•", 26: "•" };
+function SymbolPalette({ t, symbols, onPick, onClose }) {
+  const [query, setQuery] = useState("");
+  const [sel, setSel] = useState(0);
+  const inputRef = useRef(null);
+  const listRef = useRef(null);
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
+  const q = query.trim().toLowerCase();
+  const items = useMemo(() => {
+    const filtered = !q ? symbols : symbols.filter((s) => (s.name ?? "").toLowerCase().includes(q) || (s.name ?? "").toLowerCase().startsWith(q));
+    return filtered.slice(0, 120);
+  }, [symbols, q]);
+  useEffect(() => {
+    setSel(0);
+  }, [query]);
+  useEffect(() => {
+    listRef.current?.querySelector(`[data-si="${sel}"]`)?.scrollIntoView({ block: "nearest" });
+  }, [sel]);
+  const onKeyDown = (event) => {
+    if (event.key === "Escape") {
+      event.stopPropagation();
+      onClose();
+    } else if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setSel((s) => Math.min(items.length - 1, s + 1));
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setSel((s) => Math.max(0, s - 1));
+    } else if (event.key === "Enter") {
+      event.preventDefault();
+      if (items[sel]) onPick(items[sel]);
+    }
+  };
+  return h(
+    "div",
+    { className: "ce-palette", onKeyDown, onMouseDown: (event) => event.stopPropagation() },
+    h(
+      "div",
+      { className: "ce-palette-head" },
+      h("input", {
+        ref: inputRef,
+        className: "ce-input",
+        type: "text",
+        placeholder: t("symbols.placeholder"),
+        value: query,
+        onChange: (event) => setQuery(event.target.value),
+        onKeyDown,
+        spellcheck: false
+      }),
+      h("button", { className: "ce-tool ce-tiny", type: "button", title: `${t("close")} (Esc)`, onClick: onClose }, "✕")
+    ),
+    h(
+      "div",
+      { className: "ce-palette-list ce-scroll", ref: listRef },
+      items.length === 0 ? h("div", { className: "ce-note" }, t("symbols.none")) : null,
+      items.map(
+        (s, i) => h(
+          "button",
+          {
+            key: `${s.name}-${s.line}-${i}`,
+            type: "button",
+            "data-si": i,
+            className: `ce-qitem${i === sel ? " ce-qitem-sel" : ""}`,
+            onMouseEnter: () => setSel(i),
+            onClick: () => onPick(s)
+          },
+          h("span", { className: "ce-symglyph" }, SYMBOL_GLYPHS[s.kind] ?? "•"),
+          h("span", { className: "ce-qbase" }, s.name),
+          h("span", { className: "ce-qdir" }, `:${s.line}:${s.col}`)
+        )
+      )
+    )
+  );
+}
+function GotoLinePalette({ t, totalLines, initial, onGo, onClose }) {
+  const [value, setValue] = useState(String(initial ?? ""));
+  const inputRef = useRef(null);
+  useEffect(() => {
+    inputRef.current?.focus();
+    inputRef.current?.select();
+  }, []);
+  const submit = () => {
+    const n = Number.parseInt(value, 10);
+    if (Number.isFinite(n) && n >= 1) onGo(Math.min(n, totalLines));
+    onClose();
+  };
+  const onKeyDown = (event) => {
+    event.stopPropagation();
+    if (event.key === "Enter") {
+      event.preventDefault();
+      submit();
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      onClose();
+    }
+  };
+  return h(
+    "div",
+    { className: "ce-palette ce-goto", onMouseDown: (event) => event.stopPropagation() },
+    h(
+      "div",
+      { className: "ce-palette-head" },
+      h("input", {
+        ref: inputRef,
+        className: "ce-input",
+        type: "text",
+        inputMode: "numeric",
+        placeholder: t("goto.placeholder", { n: totalLines }),
+        value,
+        onChange: (event) => setValue(event.target.value),
+        onKeyDown,
+        spellcheck: false,
+        autoComplete: "off"
+      }),
+      h("button", { className: "ce-tool ce-tiny", type: "button", title: `${t("close")} (Esc)`, onClick: onClose }, "✕")
+    )
+  );
+}
+function FileHistoryOverlay({ t, hist, onPick, onClose }) {
+  return h(
+    "div",
+    { className: "ce-overlay", onMouseDown: (event) => event.stopPropagation() },
+    h(
+      "div",
+      { className: "ce-overlay-head" },
+      h("span", null, `${t("history.title")}${hist.commits ? ` · ${hist.commits.length}` : ""}`),
+      h("span", { className: "ce-histpath" }, hist.path),
+      h("span", { className: "ce-spacer" }),
+      h("button", { className: "ce-tool ce-tiny", type: "button", title: `${t("close")} (Esc)`, onClick: onClose }, "✕")
+    ),
+    h(
+      "div",
+      { className: "ce-overlay-list ce-scroll" },
+      hist.busy ? h("div", { className: "ce-note" }, t("loading")) : null,
+      hist.error ? h("div", { className: "ce-note" }, `${t("error")}: ${hist.error}`) : null,
+      !hist.busy && !hist.error && (hist.commits ?? []).length === 0 ? h("div", { className: "ce-note" }, t("history.none")) : null,
+      (hist.commits ?? []).map(
+        (c) => h(
+          "button",
+          { key: c.hash, type: "button", className: "ce-histrow", title: `${c.hash} · ${c.author} · ${c.when}`, onClick: () => onPick(c) },
+          h("span", { className: "ce-chash" }, c.hash),
+          h("span", { className: "ce-csubject" }, c.subject),
+          h("span", { className: "ce-histmeta" }, `${c.author} · ${c.when}`)
+        )
+      )
+    )
+  );
+}
+
+// src/client/replace.js
+function escapeReLocal(s) {
+  return String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+function buildReplaceRe(query, opts) {
+  if (!query) return null;
+  const insensitive = String(query) === String(query).toLowerCase();
+  let src = String(query);
+  if (!opts?.regex) src = escapeReLocal(src);
+  if (opts?.words) src = `\\b(?:${src})\\b`;
+  try {
+    return new RegExp(src, insensitive ? "gmi" : "gm");
+  } catch {
+    return null;
+  }
+}
+function replaceInText(text, query, replaceWith, opts) {
+  const re = buildReplaceRe(query, opts);
+  if (!re || typeof text !== "string") return { text, count: 0 };
+  const replacement = String(replaceWith ?? "");
+  if (opts?.regex) {
+    const found = text.match(re);
+    const count2 = found ? found.length : 0;
+    if (count2 === 0) return { text, count: 0 };
+    return { text: text.replace(re, replacement), count: count2 };
+  }
+  let count = 0;
+  const out = text.replace(re, () => {
+    count++;
+    return replacement;
+  });
+  return { text: out, count };
+}
+
+// src/client/searchpanel.js
+function matchRanges(text, query, regex) {
+  const ranges = [];
+  if (!text || !query) return ranges;
+  const insensitive = query === query.toLowerCase();
+  if (regex) {
+    let re;
+    try {
+      re = new RegExp(query, insensitive ? "gi" : "g");
+    } catch {
+      return ranges;
+    }
+    let m;
+    let guard2 = 0;
+    while ((m = re.exec(text)) !== null && guard2++ < 60) {
+      if (m[0] === "") {
+        re.lastIndex++;
+        continue;
+      }
+      ranges.push([m.index, m.index + m[0].length]);
+    }
+    return ranges;
+  }
+  const hay = insensitive ? text.toLowerCase() : text;
+  let at = hay.indexOf(query);
+  let guard = 0;
+  while (at !== -1 && guard++ < 60) {
+    ranges.push([at, at + query.length]);
+    at = hay.indexOf(query, at + query.length);
+  }
+  return ranges;
+}
+function highlightText(text, ranges) {
+  if (!ranges || ranges.length === 0) return text;
+  const out = [];
+  let last = 0;
+  for (const [s, e] of ranges) {
+    if (s < last) continue;
+    if (s > last) out.push(text.slice(last, s));
+    out.push(h("b", { key: `m${s}`, className: "ce-shl" }, text.slice(s, e)));
+    last = e;
+  }
+  if (last < text.length) out.push(text.slice(last));
+  return out;
 }
 function SearchPanel({ t, cwd, state, onQuery, onInclude, onToggleRegex, onToggleWords, onSubmit, onPick, onClose, onNotify }) {
   const inputRef = useRef(null);
@@ -2869,241 +3106,6 @@ function SearchPanel({ t, cwd, state, onQuery, onInclude, onToggleRegex, onToggl
           )
         );
       })
-    )
-  );
-}
-function RefsPeek({ t, cwd, peek, scroll, totalLines, onPick, onClose }) {
-  const defs = peek.def ?? [];
-  const refs = (peek.refs ?? []).filter((r) => !defs.some((d) => d.path === r.path && d.line === r.line && d.col === r.col));
-  const groups = [];
-  const pushRow = (loc, isDef) => {
-    let g = groups.find((x) => x.path === loc.path);
-    if (!g) {
-      g = { path: loc.path, rows: [] };
-      groups.push(g);
-    }
-    g.rows.push({ ...loc, isDef });
-  };
-  defs.slice(0, 30).forEach((d) => pushRow(d, true));
-  refs.slice(0, 60).forEach((r) => pushRow(r, false));
-  const flat = [];
-  for (const g of groups) flat.push(...g.rows);
-  const [sel, setSel] = useState(0);
-  const bodyRef = useRef(null);
-  useEffect(() => {
-    setSel(0);
-  }, [peek.symbol, peek.busy]);
-  useEffect(() => {
-    bodyRef.current?.querySelector(`[data-ri="${sel}"]`)?.scrollIntoView({ block: "nearest" });
-  }, [sel]);
-  const onKeyDown = (event) => {
-    if (event.key === "ArrowDown") {
-      event.preventDefault();
-      event.stopPropagation();
-      setSel((s) => Math.min(flat.length - 1, s + 1));
-    } else if (event.key === "ArrowUp") {
-      event.preventDefault();
-      event.stopPropagation();
-      setSel((s) => Math.max(0, s - 1));
-    } else if (event.key === "Enter") {
-      event.preventDefault();
-      event.stopPropagation();
-      if (flat[sel]) onPick(flat[sel]);
-    }
-  };
-  const top = Math.max(6, Math.min(peek.anchorLine * ROW + 6 - scroll, totalLines * ROW));
-  let ri = 0;
-  return h(
-    "div",
-    { className: "ce-peek", style: { top }, onKeyDown, onMouseDown: (event) => event.stopPropagation() },
-    h(
-      "div",
-      { className: "ce-peek-head" },
-      h("span", { className: "ce-peek-sym" }, peek.symbol),
-      peek.busy ? h("span", { className: "ce-peek-meta" }, t("loading")) : h("span", { className: "ce-peek-meta" }, `${t("peek.defs")} ${defs.length} · ${t("peek.refs")} ${refs.length}`),
-      h("span", { className: "ce-spacer" }),
-      h("span", { className: "ce-peek-hint" }, t("peek.hint")),
-      h("button", { className: "ce-tool ce-tiny", type: "button", title: `${t("close")} (Esc)`, onClick: onClose }, "✕")
-    ),
-    peek.error ? h("div", { className: "ce-note" }, peek.error) : null,
-    !peek.busy && flat.length === 0 && !peek.error ? h("div", { className: "ce-note" }, t("peek.empty")) : null,
-    h(
-      "div",
-      { className: "ce-peek-body ce-scroll", ref: bodyRef },
-      groups.map((g, gi) => {
-        const fileRows = g.rows.map((r) => {
-          const i = ri++;
-          return h(
-            "button",
-            {
-              key: i,
-              type: "button",
-              "data-ri": i,
-              className: `ce-peek-row${i === sel ? " ce-peek-row-sel" : ""}${r.isDef ? " ce-peek-def" : ""}`,
-              onMouseEnter: () => setSel(i),
-              onClick: () => onPick(r)
-            },
-            h("span", { className: "ce-peek-lno" }, `${r.line}:${r.col}`),
-            h("span", { className: "ce-peek-snippet" }, r.snippet ?? "")
-          );
-        });
-        return h(
-          Fragment,
-          { key: `${g.path}-${gi}` },
-          h("div", { className: "ce-peek-file" }, h("span", { className: "ce-peek-fpath" }, RelPath(cwd, g.path) || g.path)),
-          fileRows
-        );
-      })
-    )
-  );
-}
-var SYMBOL_GLYPHS = { 2: "▣", 3: "ƒ", 4: "Ω", 5: "◆", 6: "ƒ", 7: "◆", 8: "◈", 9: "#", 10: "◈", 11: "▣", 12: "✓", 13: "▣", 14: "🛡", 15: "ω", 16: "◆", 17: "◆", 18: "≡", 19: "◦", 20: "◦", 21: "≡", 22: "◆", 23: "◆", 24: "▣", 25: "•", 26: "•" };
-function SymbolPalette({ t, symbols, onPick, onClose }) {
-  const [query, setQuery] = useState("");
-  const [sel, setSel] = useState(0);
-  const inputRef = useRef(null);
-  const listRef = useRef(null);
-  useEffect(() => {
-    inputRef.current?.focus();
-  }, []);
-  const q = query.trim().toLowerCase();
-  const items = useMemo(() => {
-    const filtered = !q ? symbols : symbols.filter((s) => (s.name ?? "").toLowerCase().includes(q) || (s.name ?? "").toLowerCase().startsWith(q));
-    return filtered.slice(0, 120);
-  }, [symbols, q]);
-  useEffect(() => {
-    setSel(0);
-  }, [query]);
-  useEffect(() => {
-    listRef.current?.querySelector(`[data-si="${sel}"]`)?.scrollIntoView({ block: "nearest" });
-  }, [sel]);
-  const onKeyDown = (event) => {
-    if (event.key === "Escape") {
-      event.stopPropagation();
-      onClose();
-    } else if (event.key === "ArrowDown") {
-      event.preventDefault();
-      setSel((s) => Math.min(items.length - 1, s + 1));
-    } else if (event.key === "ArrowUp") {
-      event.preventDefault();
-      setSel((s) => Math.max(0, s - 1));
-    } else if (event.key === "Enter") {
-      event.preventDefault();
-      if (items[sel]) onPick(items[sel]);
-    }
-  };
-  return h(
-    "div",
-    { className: "ce-palette", onKeyDown, onMouseDown: (event) => event.stopPropagation() },
-    h(
-      "div",
-      { className: "ce-palette-head" },
-      h("input", {
-        ref: inputRef,
-        className: "ce-input",
-        type: "text",
-        placeholder: t("symbols.placeholder"),
-        value: query,
-        onChange: (event) => setQuery(event.target.value),
-        onKeyDown,
-        spellcheck: false
-      }),
-      h("button", { className: "ce-tool ce-tiny", type: "button", title: `${t("close")} (Esc)`, onClick: onClose }, "✕")
-    ),
-    h(
-      "div",
-      { className: "ce-palette-list ce-scroll", ref: listRef },
-      items.length === 0 ? h("div", { className: "ce-note" }, t("symbols.none")) : null,
-      items.map(
-        (s, i) => h(
-          "button",
-          {
-            key: `${s.name}-${s.line}-${i}`,
-            type: "button",
-            "data-si": i,
-            className: `ce-qitem${i === sel ? " ce-qitem-sel" : ""}`,
-            onMouseEnter: () => setSel(i),
-            onClick: () => onPick(s)
-          },
-          h("span", { className: "ce-symglyph" }, SYMBOL_GLYPHS[s.kind] ?? "•"),
-          h("span", { className: "ce-qbase" }, s.name),
-          h("span", { className: "ce-qdir" }, `:${s.line}:${s.col}`)
-        )
-      )
-    )
-  );
-}
-function GotoLinePalette({ t, totalLines, initial, onGo, onClose }) {
-  const [value, setValue] = useState(String(initial ?? ""));
-  const inputRef = useRef(null);
-  useEffect(() => {
-    inputRef.current?.focus();
-    inputRef.current?.select();
-  }, []);
-  const submit = () => {
-    const n = Number.parseInt(value, 10);
-    if (Number.isFinite(n) && n >= 1) onGo(Math.min(n, totalLines));
-    onClose();
-  };
-  const onKeyDown = (event) => {
-    event.stopPropagation();
-    if (event.key === "Enter") {
-      event.preventDefault();
-      submit();
-    } else if (event.key === "Escape") {
-      event.preventDefault();
-      onClose();
-    }
-  };
-  return h(
-    "div",
-    { className: "ce-palette ce-goto", onMouseDown: (event) => event.stopPropagation() },
-    h(
-      "div",
-      { className: "ce-palette-head" },
-      h("input", {
-        ref: inputRef,
-        className: "ce-input",
-        type: "text",
-        inputMode: "numeric",
-        placeholder: t("goto.placeholder", { n: totalLines }),
-        value,
-        onChange: (event) => setValue(event.target.value),
-        onKeyDown,
-        spellcheck: false,
-        autoComplete: "off"
-      }),
-      h("button", { className: "ce-tool ce-tiny", type: "button", title: `${t("close")} (Esc)`, onClick: onClose }, "✕")
-    )
-  );
-}
-function FileHistoryOverlay({ t, hist, onPick, onClose }) {
-  return h(
-    "div",
-    { className: "ce-overlay", onMouseDown: (event) => event.stopPropagation() },
-    h(
-      "div",
-      { className: "ce-overlay-head" },
-      h("span", null, `${t("history.title")}${hist.commits ? ` · ${hist.commits.length}` : ""}`),
-      h("span", { className: "ce-histpath" }, hist.path),
-      h("span", { className: "ce-spacer" }),
-      h("button", { className: "ce-tool ce-tiny", type: "button", title: `${t("close")} (Esc)`, onClick: onClose }, "✕")
-    ),
-    h(
-      "div",
-      { className: "ce-overlay-list ce-scroll" },
-      hist.busy ? h("div", { className: "ce-note" }, t("loading")) : null,
-      hist.error ? h("div", { className: "ce-note" }, `${t("error")}: ${hist.error}`) : null,
-      !hist.busy && !hist.error && (hist.commits ?? []).length === 0 ? h("div", { className: "ce-note" }, t("history.none")) : null,
-      (hist.commits ?? []).map(
-        (c) => h(
-          "button",
-          { key: c.hash, type: "button", className: "ce-histrow", title: `${c.hash} · ${c.author} · ${c.when}`, onClick: () => onPick(c) },
-          h("span", { className: "ce-chash" }, c.hash),
-          h("span", { className: "ce-csubject" }, c.subject),
-          h("span", { className: "ce-histmeta" }, `${c.author} · ${c.when}`)
-        )
-      )
     )
   );
 }
@@ -5735,14 +5737,8 @@ function SkillsTitle({ useTabInfo }) {
   return h(Fragment, null, h("span", { className: "ce-title-ico" }, h(SkillsGlyph)), tabInfo?.tab?.title ?? "Skills");
 }
 
-// src/client/apiclient.js
-var DRAFT_KEY = "dsh.ce.api.draft.v1";
+// src/client/curl.js
 var SUB_CT = { json: "application/json", text: "text/plain", html: "text/html", xml: "application/xml" };
-function upsertHeader(list, name, value) {
-  const found = list.find((hd) => hd.name.toLowerCase() === name.toLowerCase());
-  if (found) found.value = value;
-  else list.push({ name, value });
-}
 function parseCurl(input) {
   const joined = String(input ?? "").trim();
   const tokens = [];
@@ -5901,12 +5897,6 @@ function parseCurl(input) {
   if (method === "") method = "GET";
   return multipart ? { method, url, headers, body, multipart } : { method, url, headers, body };
 }
-function statusClass(status) {
-  if (status < 300) return "cea-ok";
-  if (status < 400) return "cea-info";
-  if (status < 500) return "cea-warn";
-  return "cea-err";
-}
 function shellQuote(s) {
   return `'${String(s).replace(/'/g, "'\\''")}'`;
 }
@@ -5934,6 +5924,20 @@ function toCurl(req) {
     }
   }
   return parts.length <= 2 ? parts.join(" ") : parts.join(" \\\n  ");
+}
+
+// src/client/apiclient.js
+var DRAFT_KEY = "dsh.ce.api.draft.v1";
+function upsertHeader(list, name, value) {
+  const found = list.find((hd) => hd.name.toLowerCase() === name.toLowerCase());
+  if (found) found.value = value;
+  else list.push({ name, value });
+}
+function statusClass(status) {
+  if (status < 300) return "cea-ok";
+  if (status < 400) return "cea-info";
+  if (status < 500) return "cea-warn";
+  return "cea-err";
 }
 function substituteVars(text, envMap) {
   if (typeof text !== "string" || !text.includes("{{")) return text;

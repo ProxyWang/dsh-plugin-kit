@@ -11,7 +11,8 @@ import { BranchPalette } from "./branchpick.js";
 import { RelPath, toAbs } from "./pathtools.js";
 import { TreePanel } from "./tree.js";
 import { ChangesPanel } from "./changes.js";
-import { LocationList, QuickOpen, SearchPanel, RefsPeek, SymbolPalette, GotoLinePalette, FileHistoryOverlay } from "./overlays.js";
+import { LocationList, QuickOpen, RefsPeek, SymbolPalette, GotoLinePalette, FileHistoryOverlay } from "./overlays.js";
+import { SearchPanel } from "./searchpanel.js";
 import { computeGutter, computeVisible, computeWrapRows, compileFindRe, findRangesInLine, WRAP_LINE_CAP } from "./codeview.js";
 
 /** Files that open in rendered preview by default: markdown, html and svg. */
