@@ -82,6 +82,7 @@ sh("git", ["branch", "-m", "renamed"], `${root}/B`);
 sh("git", ["push", "-q", "origin", "renamed:main2"], `${root}/B`);
 sh("git", ["checkout", "-q", "-b", "main2", "origin/main2", "--no-track"], `${root}/B`);
 const stB2 = await call("git.status", { cwd: `${root}/B` });
+check("B feature branch base prefers the remote-tracking default", stB2.ok && stB2.value.base?.name === "origin/main", stB2.value?.base);
 check("B inferred upstream origin/main2 auto", stB2.ok && stB2.value.upstream === "origin/main2" && stB2.value.upstreamInferred === true, stB2);
 
 // --- git.push ---------------------------------------------------------------------

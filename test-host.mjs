@@ -505,6 +505,15 @@ check("refused stale revert left file dirty", readFileSync(`${cwd}/audit.txt`, "
 const rhMatch = await call("git.revertHunk", { cwd, path: "audit.txt", hunkIndex: 0, hunkHeader: aHunk });
 check("revertHunk with matching header succeeds", rhMatch.ok && !rhMatch.value.error && readFileSync(`${cwd}/audit.txt`, "utf8").startsWith("l1"), rhMatch.value);
 
+// m-note: diffs without content hunks explain themselves instead of a bare "0 changed lines".
+writeFileSync(`${cwd}/modenote.txt`, "m\n");
+git(["add", "modenote.txt"]);
+git(["commit", "-qm", "modenote base"]);
+execFileSync("chmod", ["+x", `${cwd}/modenote.txt`]);
+const mn = await call("git.diff", { cwd, path: "modenote.txt", scope: "working" });
+check("mode-only diff carries an explanatory note", mn.ok && /模式/.test(mn.value.note ?? ""), mn.value?.note);
+execFileSync("chmod", ["-x", `${cwd}/modenote.txt`]);
+
 // m2: glob metacharacters in filenames stay literal pathspecs.
 writeFileSync(`${cwd}/a*.txt`, "star\n");
 writeFileSync(`${cwd}/a1.txt`, "one\n");

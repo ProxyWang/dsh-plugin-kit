@@ -491,7 +491,7 @@ export function CodeBody(props) {
 		let first = Number.POSITIVE_INFINITY;
 		for (const n of marks) if (n < first) first = n;
 		if (first === Number.POSITIVE_INFINITY) first = 1;
-		setDiff({ path, scope, text, base: res.ok ? res.value.base : void 0 });
+		setDiff({ path, scope, text, base: res.ok ? res.value.base : void 0, note: res.ok ? res.value.note : void 0 });
 		setShowDiffView(false);
 		modeRef.current = "code";
 		await loadFile(path, first, 1, null, { noAutoMarks: true });
@@ -1315,6 +1315,9 @@ export function CodeBody(props) {
 							docLang !== "text" ? h("span", { className: "ce-chip" }, docLang) : null,
 							diffMarks
 								? h("button", { type: "button", className: "ce-chip ce-chip-mark", title: t("diff.marksClear"), onClick: () => setDiffMarks(null) }, `${t("diff.marksChip")} ${diffMarks.size}`)
+								: null,
+							diffMarks && diffMarks.size === 0 && diff?.note && !showDiffView
+								? h("span", { className: "ce-chip", title: diff.note }, diff.note)
 								: null,
 							diff && !showDiffView && (diff.scope === "working" || diff.scope === "branch")
 								? h("button", { type: "button", className: "ce-tool ce-tiny", title: t("diff.showHunks"), onClick: () => setShowDiffView(true) }, "≡")

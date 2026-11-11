@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.4.2 (2026-11-11)
+
+### Fixed
+
+- **Branch-changes baseline used a stale LOCAL default branch.** `detectBase` stripped the `origin/` prefix from the `origin/HEAD` target, so `merge-base` ran against local `master`/`main`: whenever the local copy lagged behind the remote, the "branch committed changes" list inflated with the remote's own history (e.g. 141 files / 159 commits for a small feature branch). The baseline is now the remote-tracking ref (`origin/master` / `origin/main`); local branch names remain the fallback only when no remote ref exists.
+- **"变更行 0" chip on files the changes list insists are modified.** Diffs without content hunks — mode/permission-only changes, binaries, rename/copy metadata, empty additions — now carry an explanatory `note` from `git.diff`, and the whole-file view shows it as a chip instead of the baffling zero count.
+
+### Tests
+
+- Regression: mode-only diff returns the explanatory note; a feature branch's base resolves to `origin/main` (remote-tracking default), while a checkout of the default branch itself still reports no base.
+
 ## 1.4.1 (2026-11-11)
 
 Quality review round: an independent audit (separate agent, read-only, all findings reproduced in sandboxes) found 1 critical + 6 major + 10 minor issues; every one is fixed with regression tests (suite now 353 assertions).
