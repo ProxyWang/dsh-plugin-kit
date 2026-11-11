@@ -624,6 +624,26 @@ try {
 	for (const [key, value] of Object.entries(oldHintGlobals)) { if (value === undefined) delete globalThis[key]; else globalThis[key] = value; }
 }
 
+// --- Refs peek dismisses on outside pointer input, including loading/error states ------------
+const { RefsPeek } = await import("./src/client/overlays.js");
+const originalPeekDocument = globalThis.document;
+const peekListeners = new Map();
+globalThis.document = { addEventListener: (name, handler, capture) => peekListeners.set(name, { handler, capture }), removeEventListener: () => {} };
+try {
+	let peekClosed = 0;
+	const peekPanel = RefsPeek({ t: (k) => k, cwd: "/w", peek: { symbol: "example", anchorLine: 1, busy: true, def: [], refs: [] }, scroll: 0, totalLines: 10, onPick: () => {}, onClose: () => peekClosed++ });
+	const insideTarget = {};
+	peekPanel.props.ref.current = { contains: (target) => target === insideTarget };
+	peekListeners.get("pointerdown").handler({ target: insideTarget });
+	check("peek keeps internal pointer interactions open", peekClosed === 0, peekClosed);
+	let preventedOutside = false;
+	peekListeners.get("pointerdown").handler({ target: {}, preventDefault: () => { preventedOutside = true; } });
+	check("peek closes on outside pointer without swallowing the next action", peekClosed === 1 && !preventedOutside && peekListeners.get("pointerdown").capture === true, peekClosed);
+	let stoppedPeekEscape = false;
+	peekListeners.get("keydown").handler({ key: "Escape", preventDefault() {}, stopPropagation: () => { stoppedPeekEscape = true; } });
+	check("peek Escape works even while focus remains on the editor", peekClosed === 2 && stoppedPeekEscape, peekClosed);
+} finally { if (originalPeekDocument === undefined) delete globalThis.document; else globalThis.document = originalPeekDocument; }
+
 // --- the generated bundle: registration + factory --------------------------------------
 
 const bundle = await readFile(new URL("./client.js", import.meta.url), "utf8");

@@ -979,7 +979,7 @@ export function CodeBody(props) {
 		(event) => {
 			const target = event.target?.closest?.("[data-ce-l]");
 			setHover(null);
-			if (!target || !docRef.current) return;
+			if (!target || !docRef.current) { closePeek(); return; }
 			const line = Number(target.dataset.ceL);
 			const col = Number(target.dataset.ceC);
 			const text = docRef.current.lines[line - 1] ?? "";
@@ -1001,7 +1001,7 @@ export function CodeBody(props) {
 			if (mod) void doJump("definition", at);
 			else void openPeek(word, at.line, at.col);
 		},
-		[doJump, openPeek],
+		[doJump, openPeek, closePeek],
 	);
 
 	// session / cwd lifecycle

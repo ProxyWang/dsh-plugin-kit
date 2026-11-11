@@ -2784,6 +2784,25 @@ function RefsPeek({ t, cwd, peek, scroll, totalLines, onPick, onClose }) {
   for (const g of groups) flat.push(...g.rows);
   const [sel, setSel] = useState(0);
   const bodyRef = useRef(null);
+  const panelRef = useRef(null);
+  useEffect(() => {
+    const dismissOutside = (event) => {
+      if (panelRef.current && !panelRef.current.contains(event.target)) onClose();
+    };
+    const dismissEscape = (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation();
+        onClose();
+      }
+    };
+    document.addEventListener("pointerdown", dismissOutside, true);
+    document.addEventListener("keydown", dismissEscape, true);
+    return () => {
+      document.removeEventListener("pointerdown", dismissOutside, true);
+      document.removeEventListener("keydown", dismissEscape, true);
+    };
+  }, [onClose]);
   useEffect(() => {
     setSel(0);
   }, [peek.symbol, peek.busy]);
@@ -2809,7 +2828,7 @@ function RefsPeek({ t, cwd, peek, scroll, totalLines, onPick, onClose }) {
   let ri = 0;
   return h(
     "div",
-    { className: "ce-peek", style: { top }, onKeyDown, onMouseDown: (event) => event.stopPropagation() },
+    { className: "ce-peek", ref: panelRef, style: { top }, onKeyDown, onMouseDown: (event) => event.stopPropagation() },
     h(
       "div",
       { className: "ce-peek-head" },
@@ -4703,7 +4722,10 @@ function CodeBody(props) {
     (event) => {
       const target = event.target?.closest?.("[data-ce-l]");
       setHover(null);
-      if (!target || !docRef.current) return;
+      if (!target || !docRef.current) {
+        closePeek();
+        return;
+      }
       const line = Number(target.dataset.ceL);
       const col = Number(target.dataset.ceC);
       const text = docRef.current.lines[line - 1] ?? "";
@@ -4724,7 +4746,7 @@ function CodeBody(props) {
       if (mod) void doJump("definition", at);
       else void openPeek(word, at.line, at.col);
     },
-    [doJump, openPeek]
+    [doJump, openPeek, closePeek]
   );
   useEffect(() => {
     if (!cwd) {
