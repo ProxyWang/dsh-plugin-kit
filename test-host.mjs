@@ -1,7 +1,7 @@
 // Drives the host half through a fake webServer to exercise every route.
 import { Readable } from "node:stream";
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdirSync, writeFileSync, appendFileSync, rmSync, symlinkSync, existsSync } from "node:fs";
+import { mkdirSync, writeFileSync, appendFileSync, readFileSync, rmSync, symlinkSync, existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
@@ -453,6 +453,72 @@ check("fs.delete removes dir recursive", dDel.ok && !dList.value.entries.some((e
 const dRoot = await call("fs.delete", { cwd, path: "." });
 check("fs.delete refuses workspace root", dRoot.value?.error === "cannot delete the workspace root", dRoot);
 
+// --- audit regressions: symlink fences, enclosing repos, literal pathspecs ----------------------
+// M2: create/rename must not escape through a symlinked directory inside the workspace.
+mkdirSync("/tmp/ce-outside", { recursive: true });
+symlinkSync("/tmp/ce-outside", `${cwd}/linkdir`);
+const cLink = await call("fs.create", { cwd, path: "linkdir/evil.txt", kind: "file" });
+check("fs.create refuses to write through symlinked dir", cLink.ok === false || Boolean(cLink.value?.error), cLink);
+check("fs.create escape created nothing outside", !existsSync("/tmp/ce-outside/evil.txt"), null);
+const rLink = await call("fs.rename", { cwd, path: "main.go", to: "linkdir/moved.go" });
+check("fs.rename refuses to move through symlinked dir", rLink.ok === false || Boolean(rLink.value?.error), rLink);
+check("fs.rename escape left both sides intact", existsSync(`${cwd}/main.go`) && !existsSync("/tmp/ce-outside/moved.go"), null);
+rmSync(`${cwd}/linkdir`, { force: true });
+rmSync("/tmp/ce-outside", { recursive: true, force: true });
+
+// M3: hidden dirs under the extra read root (parent tree) stay unreadable.
+mkdirSync("/tmp/.ce-audit-secret", { recursive: true });
+writeFileSync("/tmp/.ce-audit-secret/key.txt", "secret\n");
+const hiddenRead = await call("fs.read", { cwd, path: "../.ce-audit-secret/key.txt" });
+check("hidden sibling dirs are not readable via extra roots", hiddenRead.ok === false, hiddenRead);
+rmSync("/tmp/.ce-audit-secret", { recursive: true, force: true });
+
+// M4: a repo ENCLOSING the workspace answers reads but refuses panel writes.
+mkdirSync("/tmp/ce-enclosing/inner", { recursive: true });
+execFileSync("git", ["-C", "/tmp/ce-enclosing", "init", "-q", "-b", "main"]);
+execFileSync("git", ["-C", "/tmp/ce-enclosing", "config", "user.email", "t@t"]);
+execFileSync("git", ["-C", "/tmp/ce-enclosing", "config", "user.name", "t"]);
+writeFileSync("/tmp/ce-enclosing/inner/f.txt", "x\n");
+execFileSync("git", ["-C", "/tmp/ce-enclosing", "add", "-A"]);
+execFileSync("git", ["-C", "/tmp/ce-enclosing", "commit", "-qm", "c1"]);
+writeFileSync("/tmp/ce-enclosing/inner/f.txt", "y\n");
+const encStatus = await call("git.status", { cwd: "/tmp/ce-enclosing/inner" });
+check("enclosing repo: status (read) still works", encStatus.ok && encStatus.value.repo === true, encStatus.value?.repo);
+const encCommit = await call("git.commit", { cwd: "/tmp/ce-enclosing/inner", message: "nope" });
+check("enclosing repo: commit refused by write fence", encCommit.ok === false && /larger repository/.test(encCommit.error ?? ""), encCommit);
+const encStash = await call("git.stash.save", { cwd: "/tmp/ce-enclosing/inner" });
+check("enclosing repo: stash.save refused", encStash.ok === false && /larger repository/.test(encStash.error ?? ""), encStash);
+const encStage = await call("git.stage", { cwd: "/tmp/ce-enclosing/inner", path: "f.txt" });
+check("enclosing repo: stage refused", encStage.ok === false, encStage);
+rmSync("/tmp/ce-enclosing", { recursive: true, force: true });
+
+// M5: revertHunk refuses a stale hunk header (file changed since render).
+writeFileSync(`${cwd}/audit.txt`, "l1\nl2\nl3\nl4\nl5\nl6\nl7\nl8\n");
+git(["add", "audit.txt"]);
+git(["commit", "-qm", "audit base"]);
+writeFileSync(`${cwd}/audit.txt`, "CHANGED\nl2\nl3\nl4\nl5\nl6\nl7\nl8\n");
+const aDiff = await call("git.diff", { cwd, path: "audit.txt", scope: "working" });
+const aHunk = aDiff.value.diff.split("\n").find((l) => l.startsWith("@@")) ?? "";
+const rhMismatch = await call("git.revertHunk", { cwd, path: "audit.txt", hunkIndex: 0, hunkHeader: "@@ -99,3 +99,4 @@" });
+check("revertHunk refuses stale hunk header", rhMismatch.ok && /diff has changed/.test(rhMismatch.value?.error ?? ""), rhMismatch.value);
+check("refused stale revert left file dirty", readFileSync(`${cwd}/audit.txt`, "utf8").startsWith("CHANGED"), null);
+const rhMatch = await call("git.revertHunk", { cwd, path: "audit.txt", hunkIndex: 0, hunkHeader: aHunk });
+check("revertHunk with matching header succeeds", rhMatch.ok && !rhMatch.value.error && readFileSync(`${cwd}/audit.txt`, "utf8").startsWith("l1"), rhMatch.value);
+
+// m2: glob metacharacters in filenames stay literal pathspecs.
+writeFileSync(`${cwd}/a*.txt`, "star\n");
+writeFileSync(`${cwd}/a1.txt`, "one\n");
+const stStar = await call("git.stage", { cwd, path: "a*.txt" });
+const starW = (stStar.value?.status?.working ?? []).map((f) => `${f.xy}|${f.path}`);
+check("stage of literal 'a*.txt' does not sweep a1.txt", starW.some((w) => w.includes("a*.txt") && w.trimStart().startsWith("A")) && starW.some((w) => w.includes("a1.txt") && w.includes("??")), starW);
+await call("git.unstage", { cwd, path: "a*.txt" });
+rmSync(`${cwd}/a*.txt`);
+rmSync(`${cwd}/a1.txt`);
+
+// m6: NaN limit falls back to the default instead of silently returning [].
+const nanLimit = await call("search.files", { cwd, query: "main", limit: "abc" });
+check("NaN limit falls back to default", nanLimit.ok && Array.isArray(nanLimit.value.matches) && nanLimit.value.matches.length > 0, nanLimit.value?.matches?.length);
+
 // --- fence edges: symlinks refused, escapes refused -------------------------------------------
 writeFileSync("/tmp/ce-fence-secret.txt", "secret\n");
 symlinkSync("/tmp/ce-fence-secret.txt", `${cwd}/link.txt`);
@@ -516,6 +582,21 @@ writeFileSync(`${cwd}-home/.agents/skills/real-skill/SKILL.md`, "---\nname: real
 symlinkSync(`${cwd}-home/.agents/skills/real-skill`, `${cwd}/.agents/skills/linked-skill`);
 const sDelLink = await call("skills.delete", { cwd, path: `${cwd}/.agents/skills/linked-skill/SKILL.md` });
 check("skills.delete on symlink removes link only", sDelLink.ok && !existsSync(`${cwd}/.agents/skills/linked-skill`) && existsSync(`${cwd}-home/.agents/skills/real-skill/SKILL.md`), sDelLink);
+
+// M1: a symlinked skill dir must not smuggle reads/writes/deletes outside the roots.
+mkdirSync("/tmp/ce-skill-outside", { recursive: true });
+writeFileSync("/tmp/ce-skill-outside/secret.txt", "top-secret\n");
+symlinkSync("/tmp/ce-skill-outside", `${cwd}/.agents/skills/evil-link`);
+const evilRead = await call("skills.read", { cwd, path: `${cwd}/.agents/skills/evil-link/secret.txt` });
+check("skills.read refuses symlinked-dir escape", evilRead.ok === false, evilRead);
+const evilWrite = await call("skills.write", { cwd, path: `${cwd}/.agents/skills/evil-link/secret.txt`, content: "pwned" });
+check("skills.write refuses symlinked-dir escape", evilWrite.ok === false && readFileSync("/tmp/ce-skill-outside/secret.txt", "utf8") === "top-secret\n", evilWrite);
+const evilDel = await call("skills.delete", { cwd, path: `${cwd}/.agents/skills/evil-link/secret.txt` });
+check("skills.delete refuses symlinked-dir escape", evilDel.ok === false && existsSync("/tmp/ce-skill-outside/secret.txt"), evilDel);
+const evilCreate = await call("skills.create", { cwd, name: "evil-link", scope: "project" });
+check("skills.create refuses symlinked dir", evilCreate.ok === false, evilCreate);
+rmSync(`${cwd}/.agents/skills/evil-link`, { force: true });
+rmSync("/tmp/ce-skill-outside", { recursive: true, force: true });
 rmSync(`${cwd}-home`, { recursive: true, force: true });
 
 for (const cleanup of cleanups) cleanup();

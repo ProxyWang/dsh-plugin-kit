@@ -265,6 +265,8 @@ var zh = {
   "skills.bundled": "内置（只读）",
   "skills.other": "内置 / 插件提供（只读）",
   "skills.readonly": "只读",
+  "skills.truncatedNoSave": "文件超过 1MB 已被截断，禁止保存以防丢失内容",
+  "skills.truncatedChip": "已截断 · 禁止保存",
   "skills.refresh": "刷新",
   "skills.new": "新建 skill",
   "skills.createPlaceholder": "新 skill 名称（kebab-case）",
@@ -342,6 +344,7 @@ var zh = {
   "search.replaceNone": "没有可替换的匹配",
   "search.replaceFail": "{n} 个文件替换失败",
   "search.replaceCapped": "文件过多，仅处理前 200 个",
+  "search.replaceTruncated": "文件过大（读取被截断），已跳过以防丢数据",
   "peek.defs": "定义",
   "peek.refs": "引用",
   "peek.tagDef": "声明",
@@ -567,6 +570,8 @@ var en = {
   "skills.bundled": "Bundled (read-only)",
   "skills.other": "Bundled / plugin-provided (read-only)",
   "skills.readonly": "read-only",
+  "skills.truncatedNoSave": "File exceeds 1MB and was truncated; saving is blocked to prevent data loss",
+  "skills.truncatedChip": "truncated · save blocked",
   "skills.refresh": "Refresh",
   "skills.new": "New skill",
   "skills.createPlaceholder": "new skill name (kebab-case)",
@@ -644,6 +649,7 @@ var en = {
   "search.replaceNone": "No replaceable matches",
   "search.replaceFail": "{n} file(s) failed",
   "search.replaceCapped": "Too many files; processed the first 200 only",
+  "search.replaceTruncated": "file too large (read was truncated); skipped to prevent data loss",
   "peek.defs": "definition",
   "peek.refs": "references",
   "peek.tagDef": "decl",
@@ -1112,7 +1118,7 @@ function DiffView({ t, diff, onClose, onOpenSource, canSource, onRevertHunk }) {
     const after = row.text.slice(mark.end);
     return mid === "" ? [before, h("span", { key: "m", className: `${cls} ce-wd-zero` }, ""), after] : [before, h("span", { key: "m", className: cls }, mid), after];
   };
-  const renderHunkRevert = (hunkIdx) => {
+  const renderHunkRevert = (hunkIdx, headerText) => {
     if (!onRevertHunk) return null;
     if (confirmHunk === hunkIdx) {
       return h(
@@ -1124,7 +1130,7 @@ function DiffView({ t, diff, onClose, onOpenSource, canSource, onRevertHunk }) {
           onClick: (e) => {
             e.stopPropagation();
             setConfirmHunk(-1);
-            onRevertHunk(hunkIdx);
+            onRevertHunk(hunkIdx, headerText);
           }
         }, t("diff.revertConfirm")),
         h("button", {
@@ -1160,7 +1166,7 @@ function DiffView({ t, diff, onClose, onOpenSource, canSource, onRevertHunk }) {
       diff.gutter === false ? null : h("span", { className: "ce-dnum" }, row.oldLine ?? ""),
       diff.gutter === false ? null : h("span", { className: "ce-dnum" }, row.newLine ?? ""),
       h("span", { className: "ce-dtext" }, renderMarkedText(row, true)),
-      row.kind === "hunk" ? renderHunkRevert(hunkIdxOf.get(i) ?? 0) : null
+      row.kind === "hunk" ? renderHunkRevert(hunkIdxOf.get(i) ?? 0, row.text) : null
     );
   };
   const renderSbsRow = (p, i) => {
@@ -1170,7 +1176,7 @@ function DiffView({ t, diff, onClose, onOpenSource, canSource, onRevertHunk }) {
         "div",
         { key: i, "data-dr": i, className: `ce-sbsrow ce-sbsrow-full ce-dline-${p.kind}${navCls}` },
         h("span", { className: "ce-sbscell" }, p.left.text === "" ? " " : p.left.text),
-        p.kind === "hunk" ? renderHunkRevert(sbsHunkIdxOf?.get(i) ?? 0) : null
+        p.kind === "hunk" ? renderHunkRevert(sbsHunkIdxOf?.get(i) ?? 0, p.left.text) : null
       );
     }
     const jumpLine = p.right?.newLine ?? p.left?.oldLine;
@@ -2640,6 +2646,10 @@ function SearchPanel({ t, cwd, state, onQuery, onInclude, onToggleRegex, onToggl
       const res = await api("fs.read", { cwd, path });
       if (!res.ok || res.value.kind !== "text") {
         errors.push(path);
+        continue;
+      }
+      if (res.value.truncated === true) {
+        errors.push(`${path}: ${t("search.replaceTruncated")}`);
         continue;
       }
       const r = replaceInText(res.value.content, state.query, replaceText, { regex: state.regex === true, words: state.words === true });
@@ -4169,11 +4179,14 @@ function CodeBody(props) {
       setDelGroups(deletedGroups(diff.text));
     });
   }, [diff, loadFile]);
-  const revertHunk = useCallback(async (hunkIndex) => {
+  const revertHunk = useCallback(async (hunkIndex, hunkHeader) => {
     if (!cwd || !diff || diff.scope !== "working" || typeof diff.path !== "string" || diff.path === "") return;
     const path = diff.path;
     const repo = repoSelRef.current;
-    const res = await api("git.revertHunk", repo ? { cwd, path, hunkIndex, repo } : { cwd, path, hunkIndex });
+    const body = { cwd, path, hunkIndex };
+    if (typeof hunkHeader === "string" && hunkHeader !== "") body.hunkHeader = hunkHeader;
+    if (repo) body.repo = repo;
+    const res = await api("git.revertHunk", body);
     const value = res.ok ? res.value ?? {} : { error: res.error };
     if (!res.ok || value.error) {
       say(`${t("error")}: ${value.error ?? res.error}`, "error");
@@ -4641,7 +4654,7 @@ function CodeBody(props) {
           },
           onOpenSource: (line) => openDiffSource(line),
           canSource: diff.scope === "working" || diff.scope === "branch" || diff.scope === "staged",
-          onRevertHunk: diff.scope === "working" && !diff.untracked && typeof diff.path === "string" && diff.path !== "" ? (idx) => void revertHunk(idx) : null
+          onRevertHunk: diff.scope === "working" && !diff.untracked && typeof diff.path === "string" && diff.path !== "" ? (idx, header) => void revertHunk(idx, header) : null
         }) : doc ? h(
           Fragment,
           null,
@@ -5471,6 +5484,7 @@ function SkillsView({ cwd, t, say }) {
   const [newName, setNewName] = useState("");
   const [scope, setScope] = useState("user");
   const [editMode, setEditMode] = useState(false);
+  const [contentTruncated, setContentTruncated] = useState(false);
   const readonly = sel !== null && (sel.source === "bundled" || sel.source === "other");
   const dirty = content !== savedContent;
   const load = useCallback(() => {
@@ -5496,6 +5510,7 @@ function SkillsView({ cwd, t, say }) {
     if (!skill.path) {
       setContent("");
       setSavedContent("");
+      setContentTruncated(false);
       return;
     }
     api("skills.read", { cwd, path: skill.path }).then((res) => {
@@ -5505,10 +5520,16 @@ function SkillsView({ cwd, t, say }) {
       }
       setContent(res.value.content);
       setSavedContent(res.value.content);
+      setContentTruncated(res.value.truncated === true);
+      if (res.value.truncated === true) say(t("skills.truncatedNoSave"), "error");
     });
   }, [cwd, say, t]);
   const save = useCallback(() => {
     if (!sel || !dirty) return;
+    if (contentTruncated) {
+      say(t("skills.truncatedNoSave"), "error");
+      return;
+    }
     setBusy(true);
     api("skills.write", { cwd, path: sel.path, content }).then((res) => {
       setBusy(false);
@@ -5521,7 +5542,7 @@ function SkillsView({ cwd, t, say }) {
       say(t("skills.saved"));
       load();
     });
-  }, [sel, dirty, content, cwd, say, t, load]);
+  }, [sel, dirty, content, contentTruncated, cwd, say, t, load]);
   const remove = useCallback(() => {
     if (!sel) return;
     setBusy(true);
@@ -5635,6 +5656,7 @@ function SkillsView({ cwd, t, say }) {
           h("span", { className: "ce-head-path", title: sel.path }, sel.name),
           h("span", { className: "ce-chip" }, sel.source),
           readonly ? h("span", { className: "ce-chip ce-chip-warn" }, t("skills.readonly")) : null,
+          contentTruncated ? h("span", { className: "ce-chip ce-chip-warn", title: t("skills.truncatedNoSave") }, t("skills.truncatedChip")) : null,
           sel.dir || sel.path ? h("button", {
             type: "button",
             className: "ce-sk-path",
@@ -5722,16 +5744,30 @@ function upsertHeader(list, name, value) {
   else list.push({ name, value });
 }
 function parseCurl(input) {
-  const joined = String(input ?? "").replace(/\\\r?\n/g, " ").trim();
+  const joined = String(input ?? "").trim();
   const tokens = [];
   let cur = "";
   let quote = null;
   let started = false;
+  const continuationLen = (i) => {
+    if (joined[i] !== "\\") return 0;
+    if (joined[i + 1] === "\n") return 2;
+    if (joined[i + 1] === "\r" && joined[i + 2] === "\n") return 3;
+    return 0;
+  };
   for (let i = 0; i < joined.length; i++) {
     const ch = joined[i];
     if (quote !== null) {
-      if (ch === "\\" && quote === '"' && i + 1 < joined.length) {
-        cur += joined[++i];
+      if (ch === "\\" && quote === '"') {
+        const cont2 = continuationLen(i);
+        if (cont2 > 0) {
+          i += cont2 - 1;
+          continue;
+        }
+        if (i + 1 < joined.length) {
+          cur += joined[++i];
+          continue;
+        }
         continue;
       }
       if (ch === quote) {
@@ -5739,6 +5775,11 @@ function parseCurl(input) {
         continue;
       }
       cur += ch;
+      continue;
+    }
+    const cont = continuationLen(i);
+    if (cont > 0) {
+      i += cont - 1;
       continue;
     }
     if (ch === "'" || ch === '"') {
@@ -5776,7 +5817,7 @@ function parseCurl(input) {
     if (existing) existing.value = value;
     else headers.push({ name, value });
   };
-  const VALUE_FLAGS = /* @__PURE__ */ new Set(["-o", "--output", "--max-time", "-m", "--retry", "--connect-timeout", "-w", "--write-out", "--resolve", "--cacert", "--cert", "--key", "--proxy", "-x"]);
+  const VALUE_FLAGS = /* @__PURE__ */ new Set(["-o", "--output", "--max-time", "-m", "--retry", "--connect-timeout", "-w", "--write-out", "--resolve", "--cacert", "--cert", "--key", "--proxy", "-x", "-c", "--cookie-jar", "-T", "--upload-file", "--url-query", "--retry-delay", "--retry-max-time", "--limit-rate", "--compressed-ssh"]);
   for (let i = 0; i < tokens.length; i++) {
     const t = tokens[i];
     const next = () => {

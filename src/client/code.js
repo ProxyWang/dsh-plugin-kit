@@ -991,11 +991,14 @@ export function CodeBody(props) {
 	// Revert one hunk of the working diff (host re-derives the patch fresh and
 	// runs git apply -R). The hunk view refreshes afterwards; the source view
 	// always reloads, so no stale document can linger.
-	const revertHunk = useCallback(async (hunkIndex) => {
+	const revertHunk = useCallback(async (hunkIndex, hunkHeader) => {
 		if (!cwd || !diff || diff.scope !== "working" || typeof diff.path !== "string" || diff.path === "") return;
 		const path = diff.path;
 		const repo = repoSelRef.current;
-		const res = await api("git.revertHunk", repo ? { cwd, path, hunkIndex, repo } : { cwd, path, hunkIndex });
+		const body = { cwd, path, hunkIndex };
+		if (typeof hunkHeader === "string" && hunkHeader !== "") body.hunkHeader = hunkHeader;
+		if (repo) body.repo = repo;
+		const res = await api("git.revertHunk", body);
 		const value = res.ok ? res.value ?? {} : { error: res.error };
 		if (!res.ok || value.error) {
 			say(`${t("error")}: ${value.error ?? res.error}`, "error");
@@ -1496,7 +1499,7 @@ export function CodeBody(props) {
 						onOpenSource: (line) => openDiffSource(line),
 						canSource: diff.scope === "working" || diff.scope === "branch" || diff.scope === "staged",
 						onRevertHunk: diff.scope === "working" && !diff.untracked && typeof diff.path === "string" && diff.path !== ""
-							? (idx) => void revertHunk(idx)
+							? (idx, header) => void revertHunk(idx, header)
 							: null,
 					})
 					: doc

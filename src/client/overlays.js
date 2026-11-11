@@ -225,6 +225,12 @@ export function SearchPanel({ t, cwd, state, onQuery, onInclude, onToggleRegex, 
 				errors.push(path);
 				continue;
 			}
+			if (res.value.truncated === true) {
+				// fs.read capped at 4 MiB: writing the prefix back would silently
+				// lop off everything past the cap. Never replace in truncated files.
+				errors.push(`${path}: ${t("search.replaceTruncated")}`);
+				continue;
+			}
 			const r = replaceInText(res.value.content, state.query, replaceText, { regex: state.regex === true, words: state.words === true });
 			if (r.count === 0) continue;
 			const w = await api("fs.write", { cwd, path, content: r.text, baseMtime: res.value.mtimeMs });

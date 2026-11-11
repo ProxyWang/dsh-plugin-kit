@@ -386,6 +386,12 @@ const c3 = parseCurl("curl -G https://a.b/s -d 'q=1' -d 'r=2'");
 check("parseCurl -G appends query", c3.method === "GET" && c3.url === "https://a.b/s?q=1&r=2" && c3.body === "", c3);
 const c4 = parseCurl("curl --json '{\"a\":1}' https://a.b/j");
 check("parseCurl --json implies POST + content type", c4.method === "POST" && c4.headers.some((hd) => hd.name.toLowerCase() === "content-type" && hd.value === "application/json"), c4);
+const c7 = parseCurl("curl -c jar.txt https://a.b/x");
+check("parseCurl skips -c cookie-jar value (not the URL)", c7.url === "https://a.b/x", c7);
+const c8 = parseCurl("curl --data-raw 'line1\\\nline2' https://a.b/y");
+check("parseCurl keeps literal backslash+newline in single-quoted body", c8.body === "line1\\\nline2", JSON.stringify(c8.body));
+const c9 = parseCurl("curl -H \"X-A: 1 \\\n2\" https://a.b/z");
+check("parseCurl folds double-quoted line continuations", c9.headers.some((hd) => hd.name === "X-A" && hd.value === "1 2"), c9.headers);
 
 // --- curl export + env variables ----------------------------------------------------------------
 check("shellQuote escapes single quotes", shellQuote("it's") === `'it'\\''s'`, shellQuote("it's"));

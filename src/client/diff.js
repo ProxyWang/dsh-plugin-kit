@@ -303,7 +303,9 @@ export function DiffView({ t, diff, onClose, onOpenSource, canSource, onRevertHu
 	};
 	// Hunk revert is destructive (discards uncommitted work) so it follows the
 	// panel's two-step convention: ⟲ arms, an inline danger button confirms.
-	const renderHunkRevert = (hunkIdx) => {
+	// The rendered hunk header rides along so the host can refuse when the
+	// file changed since this view was rendered (stale index → wrong hunk).
+	const renderHunkRevert = (hunkIdx, headerText) => {
 		if (!onRevertHunk) return null;
 		if (confirmHunk === hunkIdx) {
 			return h("span", { className: "ce-hunk-confirm" },
@@ -313,7 +315,7 @@ export function DiffView({ t, diff, onClose, onOpenSource, canSource, onRevertHu
 					onClick: (e) => {
 						e.stopPropagation();
 						setConfirmHunk(-1);
-						onRevertHunk(hunkIdx);
+						onRevertHunk(hunkIdx, headerText);
 					},
 				}, t("diff.revertConfirm")),
 				h("button", {
@@ -349,7 +351,7 @@ export function DiffView({ t, diff, onClose, onOpenSource, canSource, onRevertHu
 			diff.gutter === false ? null : h("span", { className: "ce-dnum" }, row.oldLine ?? ""),
 			diff.gutter === false ? null : h("span", { className: "ce-dnum" }, row.newLine ?? ""),
 			h("span", { className: "ce-dtext" }, renderMarkedText(row, true)),
-			row.kind === "hunk" ? renderHunkRevert(hunkIdxOf.get(i) ?? 0) : null,
+			row.kind === "hunk" ? renderHunkRevert(hunkIdxOf.get(i) ?? 0, row.text) : null,
 		);
 	};
 	const renderSbsRow = (p, i) => {
@@ -357,7 +359,7 @@ export function DiffView({ t, diff, onClose, onOpenSource, canSource, onRevertHu
 		if (p.kind === "hunk" || p.kind === "meta") {
 			return h("div", { key: i, "data-dr": i, className: `ce-sbsrow ce-sbsrow-full ce-dline-${p.kind}${navCls}` },
 				h("span", { className: "ce-sbscell" }, p.left.text === "" ? " " : p.left.text),
-				p.kind === "hunk" ? renderHunkRevert(sbsHunkIdxOf?.get(i) ?? 0) : null);
+				p.kind === "hunk" ? renderHunkRevert(sbsHunkIdxOf?.get(i) ?? 0, p.left.text) : null);
 		}
 		const jumpLine = p.right?.newLine ?? p.left?.oldLine;
 		const clickable = Boolean(onOpenSource) && jumpLine !== void 0;

@@ -22,16 +22,33 @@ function upsertHeader(list, name, value) {
  * noise flags.
  */
 export function parseCurl(input) {
-	const joined = String(input ?? "").replace(/\\\r?\n/g, " ").trim();
+	const joined = String(input ?? "").trim();
 	const tokens = [];
 	let cur = "";
 	let quote = null;
 	let started = false;
+	// Backslash-newline continuation: bash drops both chars (unquoted AND
+	// inside double quotes); inside single quotes they stay literal. Folding
+	// them in a pre-pass used to corrupt multi-line request bodies.
+	const continuationLen = (i) => {
+		if (joined[i] !== "\\") return 0;
+		if (joined[i + 1] === "\n") return 2;
+		if (joined[i + 1] === "\r" && joined[i + 2] === "\n") return 3;
+		return 0;
+	};
 	for (let i = 0; i < joined.length; i++) {
 		const ch = joined[i];
 		if (quote !== null) {
-			if (ch === "\\" && quote === '"' && i + 1 < joined.length) {
-				cur += joined[++i];
+			if (ch === "\\" && quote === '"') {
+				const cont = continuationLen(i);
+				if (cont > 0) {
+					i += cont - 1;
+					continue;
+				}
+				if (i + 1 < joined.length) {
+					cur += joined[++i];
+					continue;
+				}
 				continue;
 			}
 			if (ch === quote) {
@@ -39,6 +56,11 @@ export function parseCurl(input) {
 				continue;
 			}
 			cur += ch;
+			continue;
+		}
+		const cont = continuationLen(i);
+		if (cont > 0) {
+			i += cont - 1;
 			continue;
 		}
 		if (ch === "'" || ch === '"') {
@@ -77,7 +99,7 @@ export function parseCurl(input) {
 		if (existing) existing.value = value;
 		else headers.push({ name, value });
 	};
-	const VALUE_FLAGS = new Set(["-o", "--output", "--max-time", "-m", "--retry", "--connect-timeout", "-w", "--write-out", "--resolve", "--cacert", "--cert", "--key", "--proxy", "-x"]);
+	const VALUE_FLAGS = new Set(["-o", "--output", "--max-time", "-m", "--retry", "--connect-timeout", "-w", "--write-out", "--resolve", "--cacert", "--cert", "--key", "--proxy", "-x", "-c", "--cookie-jar", "-T", "--upload-file", "--url-query", "--retry-delay", "--retry-max-time", "--limit-rate", "--compressed-ssh"]);
 	for (let i = 0; i < tokens.length; i++) {
 		const t = tokens[i];
 		const next = () => {

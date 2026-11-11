@@ -17,6 +17,7 @@ export function SkillsView({ cwd, t, say }) {
 	const [newName, setNewName] = useState("");
 	const [scope, setScope] = useState("user");
 	const [editMode, setEditMode] = useState(false);
+	const [contentTruncated, setContentTruncated] = useState(false);
 	const readonly = sel !== null && (sel.source === "bundled" || sel.source === "other");
 	const dirty = content !== savedContent;
 
@@ -44,6 +45,7 @@ export function SkillsView({ cwd, t, say }) {
 		if (!skill.path) {
 			setContent("");
 			setSavedContent("");
+			setContentTruncated(false);
 			return;
 		}
 		api("skills.read", { cwd, path: skill.path }).then((res) => {
@@ -53,11 +55,19 @@ export function SkillsView({ cwd, t, say }) {
 			}
 			setContent(res.value.content);
 			setSavedContent(res.value.content);
+			setContentTruncated(res.value.truncated === true);
+			if (res.value.truncated === true) say(t("skills.truncatedNoSave"), "error");
 		});
 	}, [cwd, say, t]);
 
 	const save = useCallback(() => {
 		if (!sel || !dirty) return;
+		// A truncated read must never be written back: it would silently drop
+		// everything past the 1 MiB cap.
+		if (contentTruncated) {
+			say(t("skills.truncatedNoSave"), "error");
+			return;
+		}
 		setBusy(true);
 		api("skills.write", { cwd, path: sel.path, content }).then((res) => {
 			setBusy(false);
@@ -70,7 +80,7 @@ export function SkillsView({ cwd, t, say }) {
 			say(t("skills.saved"));
 			load();
 		});
-	}, [sel, dirty, content, cwd, say, t, load]);
+	}, [sel, dirty, content, contentTruncated, cwd, say, t, load]);
 
 	const remove = useCallback(() => {
 		if (!sel) return;
@@ -177,6 +187,7 @@ export function SkillsView({ cwd, t, say }) {
 						h("span", { className: "ce-head-path", title: sel.path }, sel.name),
 						h("span", { className: "ce-chip" }, sel.source),
 						readonly ? h("span", { className: "ce-chip ce-chip-warn" }, t("skills.readonly")) : null,
+						contentTruncated ? h("span", { className: "ce-chip ce-chip-warn", title: t("skills.truncatedNoSave") }, t("skills.truncatedChip")) : null,
 						sel.dir || sel.path ? h("button", {
 							type: "button",
 							className: "ce-sk-path",
