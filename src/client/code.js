@@ -554,7 +554,7 @@ export function CodeBody(props) {
 			setFileHist((cur) => {
 				if (!cur || cur.path !== path) return cur;
 				if (!res.ok) return { path, error: res.error };
-				if (res.value?.error) return { path, error: res.value.error };
+				if (res.value?.error) return { path, error: res.value.error, scopeInfo: res.value.scope };
 				return { path, commits: res.value?.commits ?? [] };
 			});
 		});
@@ -629,7 +629,7 @@ export function CodeBody(props) {
 			if (!cwd) return;
 			const nonce = ++searchNonce.current;
 			setSearch((s) => (s ? { ...s, busy: true, error: undefined } : s));
-			api("search.text", { cwd, query, include: include || "", regex: opts?.regex === true, words: opts?.words === true }).then((res) => {
+			api("search.text", { cwd, query, include: include || "", regex: opts?.regex === true, words: opts?.words === true, scope: opts?.scope?.kind ?? "workspace", directory: opts?.scope?.directory, repo: opts?.scope?.repo }).then((res) => {
 				if (searchNonce.current !== nonce) return;
 				setSearch((s) => {
 					if (!s) return s;
@@ -641,31 +641,33 @@ export function CodeBody(props) {
 		[cwd],
 	);
 
-	const openSearch = useCallback((initialInclude = "") => {
+	const openSearch = useCallback((requested) => {
+		const scope = requested?.kind === "directory"
+			? { kind: "directory", directory: requested.directory }
+			: mode === "changes" ? { kind: "changes", repo: repoSelRef.current ?? undefined } : { kind: "workspace" };
+		++searchNonce.current;
 		setMobileView("editor");
 		setSearchOpen(true);
-		const include = typeof initialInclude === "string" ? initialInclude : "";
-		setSearch((s) => ({ ...(s ?? { query: "", regex: false, words: false, results: undefined, engine: "", truncated: false, busy: false }), include }));
+		setSearch((s) => ({ ...(s ?? { query: "", include: "", regex: false, words: false }), scope, results: undefined, engine: "", truncated: false, busy: false, error: undefined, scopeInfo: undefined }));
+	}, [mode]);
+	const changeSearch = useCallback((patch) => {
+		++searchNonce.current;
+		setSearch((s) => s ? { ...s, ...patch, results: undefined, busy: false, error: undefined, scopeInfo: undefined } : s);
 	}, []);
-	const changedSearchInclude = useMemo(() => {
-		if (!git?.repo) return "";
-		const paths = [...new Set([...(git.working ?? []).map((f) => f.path), ...(git.branchFiles ?? [])])].filter(Boolean);
-		return paths.join(",");
-	}, [git]);
 
-	// Debounced auto-search, VSCode-style, while the panel is open. Flag
-	// toggles mutate the search object, so they retrigger this effect too.
+	// Only request inputs retrigger search. Busy/results changes must not start
+	// another request, and scope changes invalidate in-flight results immediately.
+	const searchQuery = search?.query ?? "";
+	const searchInclude = search?.include ?? "";
+	const searchRegex = search?.regex === true;
+	const searchWords = search?.words === true;
+	const searchScope = search?.scope;
 	useEffect(() => {
-		if (!searchOpen || !search) return undefined;
-		const query = (search.query ?? "").trim();
-		if (query.length < 2) {
-			if (search.results !== undefined && !search.busy) return undefined;
-			setSearch((s) => (s ? { ...s, results: [], engine: "", busy: false, error: undefined } : s));
-			return undefined;
-		}
-		const timer = setTimeout(() => runSearchNow(search.query, search.include, search), 400);
+		++searchNonce.current;
+		if (!searchOpen || searchQuery.trim().length < 2) return undefined;
+		const timer = setTimeout(() => runSearchNow(searchQuery, searchInclude, { regex: searchRegex, words: searchWords, scope: searchScope }), 400);
 		return () => clearTimeout(timer);
-	}, [searchOpen, search, runSearchNow]);
+	}, [searchOpen, searchQuery, searchInclude, searchRegex, searchWords, searchScope, runSearchNow]);
 
 	const onSearchPick = useCallback(
 		(r) => {
@@ -1198,7 +1200,7 @@ export function CodeBody(props) {
 				: null,
 			h("span", { className: "ce-spacer" }),
 			!railVisible ? h("button", { type: "button", className: "ce-tool", title: `${t("quickopen.placeholder")} (⌘P / Ctrl+P)`, onClick: openPalette }, h(IconSearch)) : null,
-			!railVisible ? h("button", { type: "button", className: "ce-tool ce-workspace-search", title: `${t("search.workspaceHint")} (⇧⌘F / Ctrl+Shift+F)`, "aria-label": t("search.workspaceHint"), onClick: openSearch }, h(IconTextSearch), h("span", null, t("changes.searchWorkspace"))) : null,
+			!railVisible ? h("button", { type: "button", className: "ce-tool ce-workspace-search", title: `${t(mode === "changes" ? "search.changesHint" : "search.workspaceHint")} (⇧⌘F / Ctrl+Shift+F)`, "aria-label": t(mode === "changes" ? "search.changesHint" : "search.workspaceHint"), onClick: openSearch }, h(IconTextSearch), h("span", null, t(mode === "changes" ? "search.changesAction" : "changes.searchWorkspace"))) : null,
 			h("button", { type: "button", className: "ce-tool", title: `${statusTitle}`, onClick: () => { refreshGit(); setTreeKey((k) => k + 1); if (docRef.current) void loadFile(docRef.current.path, cursorRef.current?.line ?? 1, cursorRef.current?.col ?? 1); } }, h(IconRefresh)),
 			h("span", { className: `ce-dot ce-dot-${status.state}`, title: statusTitle }),
 		),
@@ -1216,7 +1218,7 @@ export function CodeBody(props) {
 			railVisible
 				? h("div", { className: "ce-rail-wrap ce-rail-with-search", style: { width: `${railW}px` } },
 					h("div", { className: "ce-rail-navigation" },
-						h("button", { type: "button", className: "ce-rail-search", title: `${t("search.workspaceHint")} (⇧⌘F / Ctrl+Shift+F)`, onClick: openSearch }, h(IconTextSearch), h("span", null, t("changes.searchWorkspace"))),
+						h("button", { type: "button", className: "ce-rail-search", title: `${t(mode === "changes" ? "search.changesHint" : "search.workspaceHint")} (⇧⌘F / Ctrl+Shift+F)`, onClick: openSearch }, h(IconTextSearch), h("span", null, t(mode === "changes" ? "search.changesAction" : "changes.searchWorkspace"))),
 						h("button", { type: "button", className: "ce-tool ce-rail-quickopen", "aria-label": t("quickopen.placeholder"), title: `${t("quickopen.placeholder")} (⌘P / Ctrl+P)`, onClick: openPalette }, h(IconSearch)),
 					),
 					mode === "files"
@@ -1224,6 +1226,7 @@ export function CodeBody(props) {
 						cwd,
 						t,
 						onOpenFile: (path, line, col) => void openFile(path, line, col),
+						onSearchDirectory: (directory) => openSearch({ kind: "directory", directory }),
 						activePath: doc?.path ?? diff?.path,
 						revealPath: doc?.path ?? null,
 						refreshKey: treeKey,
@@ -1260,7 +1263,6 @@ export function CodeBody(props) {
 						onUnstage: (item) => void unstageChange(item.path),
 						onUnstageDir: (dirPath) => void unstageChange(dirPath),
 						onCommit: (msg, stageAll, amend) => commitChanges(msg, stageAll, amend),
-						onSearch: () => openSearch(changedSearchInclude),
 						committing,
 						onNotify: (text, kind) => say(text, kind),
 						refresh: refreshGit,
@@ -1466,10 +1468,11 @@ export function CodeBody(props) {
 					t,
 					cwd,
 					state: search,
-					onQuery: (q) => setSearch((s) => (s ? { ...s, query: q } : s)),
-					onInclude: (v) => setSearch((s) => (s ? { ...s, include: v } : s)),
-					onToggleRegex: () => setSearch((s) => (s ? { ...s, regex: !s.regex } : s)),
-					onToggleWords: () => setSearch((s) => (s ? { ...s, words: !s.words } : s)),
+					onQuery: (q) => changeSearch({ query: q }),
+					onInclude: (v) => changeSearch({ include: v }),
+					onDirectory: (directory) => changeSearch({ scope: directory.trim() ? { kind: "directory", directory: directory.trim() } : { kind: "workspace" } }),
+					onToggleRegex: () => changeSearch({ regex: !search.regex }),
+					onToggleWords: () => changeSearch({ words: !search.words }),
 					onSubmit: () => runSearchNow(search.query, search.include, search),
 					onPick: onSearchPick,
 					onClose: () => setSearchOpen(false),

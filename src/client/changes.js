@@ -10,7 +10,7 @@ export function isStagedXy(xy) {
 	return typeof xy === "string" && xy.length > 0 && xy[0] !== " " && xy[0] !== "?";
 }
 
-export function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commitsOpen, setCommitsOpen, onOpenCommit, onOpenDiff, onDiscard, onDiscardDir, onStage, onStageDir, onUnstage, onUnstageDir, onCommit, committing, onNotify, refresh, onSearch }) {
+export function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commitsOpen, setCommitsOpen, onOpenCommit, onOpenDiff, onDiscard, onDiscardDir, onStage, onStageDir, onUnstage, onUnstageDir, onCommit, committing, onNotify, refresh }) {
 	const [treeView, setTreeView] = useState(true);
 	const [message, setMessage] = useState("");
 	const [amend, setAmend] = useState(false);
@@ -127,7 +127,6 @@ export function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commit
 			: t("sync.noUpstream")),
 		h("div", { className: "ce-changes-search" },
 			h("input", { className: "ce-input", type: "search", value: filterQuery, placeholder: t("changes.filterPlaceholder"), "aria-label": t("changes.filterPlaceholder"), onChange: (e) => setFilterQuery(e.target.value) }),
-			onSearch ? h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost", onClick: onSearch, title: t("changes.searchChangedFiles") }, `⌕ ${t("changes.searchChangedFiles")}`) : null,
 		),
 		h("section", { className: "ce-change-group" },
 		staged.length > 0

@@ -71,6 +71,15 @@ var ROW = 22;
 
 // src/client/locale.js
 var zh = {
+  "search.inDirectory": "在此目录中搜索",
+  "search.changesPlaceholder": "在当前变更文件中搜索代码…",
+  "search.noChangedFiles": "当前没有可搜索的变更文件，不会扩大到整个工作区。",
+  "search.directoryPlaceholder": "留空搜索整个工作区，如 src/client",
+  "search.directoryLabel": "搜索目录",
+  "search.workspaceScope": "当前工作区 · 所有文件",
+  "search.directoryAction": "目录内搜索",
+  "search.changesHint": "仅搜索当前暂存区与工作区变更文件",
+  "search.changesAction": "搜索变更内容",
   "layout.backEditor": "返回代码",
   "layout.backFiles": "文件与变更",
   "changes.compose": "提交更改",
@@ -420,6 +429,15 @@ var zh = {
   "quickopen.command": "快速打开文件（代码浏览器）"
 };
 var en = {
+  "search.inDirectory": "Find in this directory",
+  "search.changesPlaceholder": "Search code in changed files…",
+  "search.noChangedFiles": "No searchable changed files. The search will not expand to the workspace.",
+  "search.directoryPlaceholder": "Empty = whole workspace, e.g. src/client",
+  "search.directoryLabel": "Directory",
+  "search.workspaceScope": "Current workspace · All files",
+  "search.directoryAction": "Search in directory",
+  "search.changesHint": "Only staged and working-tree changed files",
+  "search.changesAction": "Search changed content",
   "layout.backEditor": "Back to editor",
   "layout.backFiles": "Files & Changes",
   "changes.compose": "Commit changes",
@@ -1960,7 +1978,7 @@ function ChangeTree({ items, onOpen, onDiscard, onDiscardDir, onStage, onStageDi
 }
 
 // src/client/tree.js
-function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshKey, onNotify, onDeleted }) {
+function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshKey, onNotify, onDeleted, onSearchDirectory }) {
   const [listing, setListing] = useState({});
   const [expanded, setExpanded] = useState([]);
   const [action, setAction] = useState(null);
@@ -1968,6 +1986,7 @@ function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshKey, onN
   const [dropDir, setDropDir] = useState(null);
   const [contextMenu, setContextMenu] = useState(null);
   const railRef = useRef(null);
+  const contextMenuRef = useRef(null);
   const lastRevealed = useRef(null);
   const revealTick = useRef(null);
   const loadDir = useCallback((path) => {
@@ -1981,7 +2000,9 @@ function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshKey, onN
   }, [cwd]);
   useEffect(() => {
     if (!contextMenu) return void 0;
-    const close = () => setContextMenu(null);
+    const close = (event) => {
+      if (!event || !contextMenuRef.current?.contains(event.target)) setContextMenu(null);
+    };
     const key = (event) => {
       if (event.key === "Escape") close();
     };
@@ -2375,7 +2396,7 @@ function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshKey, onN
     renderLevel("", 0),
     contextMenu ? h(
       "div",
-      { className: "cet-context", style: { left: contextMenu.x, top: contextMenu.y }, role: "menu", onMouseDown: (e) => e.stopPropagation() },
+      { className: "cet-context", ref: contextMenuRef, style: { left: contextMenu.x, top: contextMenu.y }, role: "menu", onMouseDown: (e) => e.stopPropagation() },
       h("div", { className: "cet-context-path", title: contextMenu.path }, contextMenu.path || t("tree.workspaceRoot")),
       h("div", { className: "cet-context-rule" }),
       h("button", { type: "button", role: "menuitem", onClick: () => contextCopy(false) }, t("tree.copyAbsolute")),
@@ -2383,6 +2404,10 @@ function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshKey, onN
       contextMenu.isDir ? h(
         Fragment,
         null,
+        onSearchDirectory ? h("button", { type: "button", role: "menuitem", onClick: () => {
+          onSearchDirectory(contextMenu.path);
+          setContextMenu(null);
+        } }, t("search.inDirectory")) : null,
         h("button", { type: "button", role: "menuitem", onClick: () => contextCreate("newfile") }, t("tree.newFile")),
         h("button", { type: "button", role: "menuitem", onClick: () => contextCreate("newdir") }, t("tree.newDir"))
       ) : null,
@@ -2396,7 +2421,7 @@ function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshKey, onN
 function isStagedXy(xy) {
   return typeof xy === "string" && xy.length > 0 && xy[0] !== " " && xy[0] !== "?";
 }
-function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commitsOpen, setCommitsOpen, onOpenCommit, onOpenDiff, onDiscard, onDiscardDir, onStage, onStageDir, onUnstage, onUnstageDir, onCommit, committing, onNotify, refresh, onSearch }) {
+function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commitsOpen, setCommitsOpen, onOpenCommit, onOpenDiff, onDiscard, onDiscardDir, onStage, onStageDir, onUnstage, onUnstageDir, onCommit, committing, onNotify, refresh }) {
   const [treeView, setTreeView] = useState(true);
   const [message, setMessage] = useState("");
   const [amend, setAmend] = useState(false);
@@ -2499,8 +2524,7 @@ function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commitsOpen, 
     h(
       "div",
       { className: "ce-changes-search" },
-      h("input", { className: "ce-input", type: "search", value: filterQuery, placeholder: t("changes.filterPlaceholder"), "aria-label": t("changes.filterPlaceholder"), onChange: (e) => setFilterQuery(e.target.value) }),
-      onSearch ? h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost", onClick: onSearch, title: t("changes.searchChangedFiles") }, `⌕ ${t("changes.searchChangedFiles")}`) : null
+      h("input", { className: "ce-input", type: "search", value: filterQuery, placeholder: t("changes.filterPlaceholder"), "aria-label": t("changes.filterPlaceholder"), onChange: (e) => setFilterQuery(e.target.value) })
     ),
     h(
       "section",
@@ -3138,7 +3162,7 @@ function highlightText(text, ranges) {
   if (last < text.length) out.push(text.slice(last));
   return out;
 }
-function SearchPanel({ t, cwd, state, onQuery, onInclude, onToggleRegex, onToggleWords, onSubmit, onPick, onClose, onNotify }) {
+function SearchPanel({ t, cwd, state, onQuery, onInclude, onDirectory, onToggleRegex, onToggleWords, onSubmit, onPick, onClose, onNotify }) {
   const inputRef = useRef(null);
   const [expanded, setExpanded] = useState(() => /* @__PURE__ */ new Set());
   const [ctxCache, setCtxCache] = useState({});
@@ -3268,13 +3292,27 @@ function SearchPanel({ t, cwd, state, onQuery, onInclude, onToggleRegex, onToggl
     { className: "ce-search" },
     h(
       "div",
+      { className: "ce-search-scope" },
+      h("strong", null, t(state.scope?.kind === "changes" ? "search.changesAction" : state.scope?.kind === "directory" ? "search.directoryAction" : "changes.searchWorkspace")),
+      h("span", null, state.scope?.kind === "changes" ? t("search.changesHint") : state.scope?.kind === "directory" ? state.scope.directory : t("search.workspaceScope")),
+      h("button", { type: "button", className: "ce-tool", "aria-label": t("close"), title: t("close"), onClick: onClose }, "✕")
+    ),
+    state.scope?.kind !== "changes" ? h(
+      "label",
+      { className: "ce-search-directory" },
+      h("span", null, t("search.directoryLabel")),
+      h("input", { className: "ce-input", "aria-label": t("search.directoryLabel"), placeholder: t("search.directoryPlaceholder"), value: state.scope?.directory ?? "", onChange: (e) => onDirectory?.(e.target.value) })
+    ) : null,
+    state.scope?.kind === "changes" && state.scopeInfo?.files === 0 ? h("div", { className: "ce-note", role: "status" }, t("search.noChangedFiles")) : null,
+    h(
+      "div",
       { className: "ce-search-box" },
       h("button", { className: `ce-tool ce-tiny${replaceOpen ? " ce-tool-on" : ""}`, type: "button", title: t("search.replaceToggle"), onClick: () => setReplaceOpen((v) => !v) }, replaceOpen ? "▾" : "▸"),
       h("input", {
         ref: inputRef,
         className: "ce-input ce-search-q",
         type: "text",
-        placeholder: t("search.placeholder"),
+        placeholder: t(state.scope?.kind === "changes" ? "search.changesPlaceholder" : "search.placeholder"),
         value: state.query,
         onChange: (event) => onQuery(event.target.value),
         onKeyDown: (event) => {
@@ -4365,7 +4403,7 @@ function CodeBody(props) {
       setFileHist((cur) => {
         if (!cur || cur.path !== path) return cur;
         if (!res.ok) return { path, error: res.error };
-        if (res.value?.error) return { path, error: res.value.error };
+        if (res.value?.error) return { path, error: res.value.error, scopeInfo: res.value.scope };
         return { path, commits: res.value?.commits ?? [] };
       });
     });
@@ -4429,7 +4467,7 @@ function CodeBody(props) {
       if (!cwd) return;
       const nonce = ++searchNonce.current;
       setSearch((s) => s ? { ...s, busy: true, error: void 0 } : s);
-      api("search.text", { cwd, query, include: include || "", regex: opts?.regex === true, words: opts?.words === true }).then((res) => {
+      api("search.text", { cwd, query, include: include || "", regex: opts?.regex === true, words: opts?.words === true, scope: opts?.scope?.kind ?? "workspace", directory: opts?.scope?.directory, repo: opts?.scope?.repo }).then((res) => {
         if (searchNonce.current !== nonce) return;
         setSearch((s) => {
           if (!s) return s;
@@ -4440,28 +4478,28 @@ function CodeBody(props) {
     },
     [cwd]
   );
-  const openSearch = useCallback((initialInclude = "") => {
+  const openSearch = useCallback((requested) => {
+    const scope = requested?.kind === "directory" ? { kind: "directory", directory: requested.directory } : mode === "changes" ? { kind: "changes", repo: repoSelRef.current ?? void 0 } : { kind: "workspace" };
+    ++searchNonce.current;
     setMobileView("editor");
     setSearchOpen(true);
-    const include = typeof initialInclude === "string" ? initialInclude : "";
-    setSearch((s) => ({ ...s ?? { query: "", regex: false, words: false, results: void 0, engine: "", truncated: false, busy: false }, include }));
+    setSearch((s) => ({ ...s ?? { query: "", include: "", regex: false, words: false }, scope, results: void 0, engine: "", truncated: false, busy: false, error: void 0, scopeInfo: void 0 }));
+  }, [mode]);
+  const changeSearch = useCallback((patch) => {
+    ++searchNonce.current;
+    setSearch((s) => s ? { ...s, ...patch, results: void 0, busy: false, error: void 0, scopeInfo: void 0 } : s);
   }, []);
-  const changedSearchInclude = useMemo(() => {
-    if (!git?.repo) return "";
-    const paths = [.../* @__PURE__ */ new Set([...(git.working ?? []).map((f) => f.path), ...git.branchFiles ?? []])].filter(Boolean);
-    return paths.join(",");
-  }, [git]);
+  const searchQuery = search?.query ?? "";
+  const searchInclude = search?.include ?? "";
+  const searchRegex = search?.regex === true;
+  const searchWords = search?.words === true;
+  const searchScope = search?.scope;
   useEffect(() => {
-    if (!searchOpen || !search) return void 0;
-    const query = (search.query ?? "").trim();
-    if (query.length < 2) {
-      if (search.results !== void 0 && !search.busy) return void 0;
-      setSearch((s) => s ? { ...s, results: [], engine: "", busy: false, error: void 0 } : s);
-      return void 0;
-    }
-    const timer = setTimeout(() => runSearchNow(search.query, search.include, search), 400);
+    ++searchNonce.current;
+    if (!searchOpen || searchQuery.trim().length < 2) return void 0;
+    const timer = setTimeout(() => runSearchNow(searchQuery, searchInclude, { regex: searchRegex, words: searchWords, scope: searchScope }), 400);
     return () => clearTimeout(timer);
-  }, [searchOpen, search, runSearchNow]);
+  }, [searchOpen, searchQuery, searchInclude, searchRegex, searchWords, searchScope, runSearchNow]);
   const onSearchPick = useCallback(
     (r) => {
       void openFile(r.path, r.line, 1);
@@ -4959,7 +4997,7 @@ function CodeBody(props) {
       ) : null,
       h("span", { className: "ce-spacer" }),
       !railVisible ? h("button", { type: "button", className: "ce-tool", title: `${t("quickopen.placeholder")} (⌘P / Ctrl+P)`, onClick: openPalette }, h(IconSearch)) : null,
-      !railVisible ? h("button", { type: "button", className: "ce-tool ce-workspace-search", title: `${t("search.workspaceHint")} (⇧⌘F / Ctrl+Shift+F)`, "aria-label": t("search.workspaceHint"), onClick: openSearch }, h(IconTextSearch), h("span", null, t("changes.searchWorkspace"))) : null,
+      !railVisible ? h("button", { type: "button", className: "ce-tool ce-workspace-search", title: `${t(mode === "changes" ? "search.changesHint" : "search.workspaceHint")} (⇧⌘F / Ctrl+Shift+F)`, "aria-label": t(mode === "changes" ? "search.changesHint" : "search.workspaceHint"), onClick: openSearch }, h(IconTextSearch), h("span", null, t(mode === "changes" ? "search.changesAction" : "changes.searchWorkspace"))) : null,
       h("button", { type: "button", className: "ce-tool", title: `${statusTitle}`, onClick: () => {
         refreshGit();
         setTreeKey((k) => k + 1);
@@ -4982,13 +5020,14 @@ function CodeBody(props) {
         h(
           "div",
           { className: "ce-rail-navigation" },
-          h("button", { type: "button", className: "ce-rail-search", title: `${t("search.workspaceHint")} (⇧⌘F / Ctrl+Shift+F)`, onClick: openSearch }, h(IconTextSearch), h("span", null, t("changes.searchWorkspace"))),
+          h("button", { type: "button", className: "ce-rail-search", title: `${t(mode === "changes" ? "search.changesHint" : "search.workspaceHint")} (⇧⌘F / Ctrl+Shift+F)`, onClick: openSearch }, h(IconTextSearch), h("span", null, t(mode === "changes" ? "search.changesAction" : "changes.searchWorkspace"))),
           h("button", { type: "button", className: "ce-tool ce-rail-quickopen", "aria-label": t("quickopen.placeholder"), title: `${t("quickopen.placeholder")} (⌘P / Ctrl+P)`, onClick: openPalette }, h(IconSearch))
         ),
         mode === "files" ? h(TreePanel, {
           cwd,
           t,
           onOpenFile: (path, line, col) => void openFile(path, line, col),
+          onSearchDirectory: (directory) => openSearch({ kind: "directory", directory }),
           activePath: doc?.path ?? diff?.path,
           revealPath: doc?.path ?? null,
           refreshKey: treeKey,
@@ -5024,7 +5063,6 @@ function CodeBody(props) {
           onUnstage: (item) => void unstageChange(item.path),
           onUnstageDir: (dirPath) => void unstageChange(dirPath),
           onCommit: (msg, stageAll, amend) => commitChanges(msg, stageAll, amend),
-          onSearch: () => openSearch(changedSearchInclude),
           committing,
           onNotify: (text, kind) => say(text, kind),
           refresh: refreshGit
@@ -5229,10 +5267,11 @@ function CodeBody(props) {
           t,
           cwd,
           state: search,
-          onQuery: (q) => setSearch((s) => s ? { ...s, query: q } : s),
-          onInclude: (v) => setSearch((s) => s ? { ...s, include: v } : s),
-          onToggleRegex: () => setSearch((s) => s ? { ...s, regex: !s.regex } : s),
-          onToggleWords: () => setSearch((s) => s ? { ...s, words: !s.words } : s),
+          onQuery: (q) => changeSearch({ query: q }),
+          onInclude: (v) => changeSearch({ include: v }),
+          onDirectory: (directory) => changeSearch({ scope: directory.trim() ? { kind: "directory", directory: directory.trim() } : { kind: "workspace" } }),
+          onToggleRegex: () => changeSearch({ regex: !search.regex }),
+          onToggleWords: () => changeSearch({ words: !search.words }),
           onSubmit: () => runSearchNow(search.query, search.include, search),
           onPick: onSearchPick,
           onClose: () => setSearchOpen(false),
@@ -5938,6 +5977,13 @@ var CSS2 = `
  .ce-sk-back{margin-bottom:8px}
  .ce-sk-edit>.ce-md{padding:16px}
 }
+.ce-search-box>.ce-tool{flex:none;min-width:24px;padding:0;white-space:nowrap}
+.ce-search-scope{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:4px 8px;flex:none;padding-bottom:8px;border-bottom:1px solid var(--ce-line)}
+.ce-search-scope strong{font-size:13px;font-weight:600}
+.ce-search-scope>span{grid-row:2;font-size:11px;color:var(--ce-fg-3);overflow-wrap:anywhere}
+.ce-search-scope>.ce-tool{grid-column:2;grid-row:1/3}
+.ce-search-directory{display:flex;flex-wrap:wrap;align-items:center;gap:6px;font-size:11px;color:var(--ce-fg-2);flex:none}
+.ce-search-directory .ce-input{flex:1 1 160px;font-size:12px;min-width:0}
 `;
 
 // src/client/register.js

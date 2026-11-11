@@ -665,4 +665,11 @@ export const CSS = `
  .ce-sk-back{margin-bottom:8px}
  .ce-sk-edit>.ce-md{padding:16px}
 }
+.ce-search-box>.ce-tool{flex:none;min-width:24px;padding:0;white-space:nowrap}
+.ce-search-scope{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:4px 8px;flex:none;padding-bottom:8px;border-bottom:1px solid var(--ce-line)}
+.ce-search-scope strong{font-size:13px;font-weight:600}
+.ce-search-scope>span{grid-row:2;font-size:11px;color:var(--ce-fg-3);overflow-wrap:anywhere}
+.ce-search-scope>.ce-tool{grid-column:2;grid-row:1/3}
+.ce-search-directory{display:flex;flex-wrap:wrap;align-items:center;gap:6px;font-size:11px;color:var(--ce-fg-2);flex:none}
+.ce-search-directory .ce-input{flex:1 1 160px;font-size:12px;min-width:0}
 `;

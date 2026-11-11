@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased — scoped code search
+
+- Files search the workspace by default, with an explicit directory field and a folder context-menu action.
+- Changes keep filename/path filtering separate from code-content search. Content search derives staged, unstaged and untracked files on the Host; empty changes do not widen to the workspace, deleted files skip, and glob filters only narrow the set.
+- Literal Git filenames, nested selected repositories, result batching, and stale scope response handling have regression coverage. Search labels show the active scope.
+
 ## Unreleased — task-oriented layouts
 
 - Code: full-width list/editor navigation below 620 px, retained document state on Back, search and quick-open grouped in the rail.

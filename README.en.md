@@ -44,6 +44,13 @@ After installing, select a session in DSH, open **Start** in the right sidebar, 
 - **Test an API:** import curl or enter a request, edit the Params / Headers / Body / Settings tabs, then press `⌘/Ctrl+Enter` to send and inspect the response.
 - **Maintain skills:** search and select a skill, switch between preview and source, and save editable skills with `⌘/Ctrl+S`. Built-in and plugin-provided skills remain read-only.
 
+### Search scopes
+
+- **Files → Full-text search** searches workspace code. Enter a relative directory or use the folder's **Find in this directory** context action to narrow it. Results are grouped by file and jump to the matching line.
+- **Changes → File filter** filters the change list by filename/path.
+- **Changes → Search changed content** searches on-disk content only in staged, working-tree and untracked files. Unmodified files and committed branch history are excluded; empty changes return no results and deleted files are skipped.
+- Include/exclude globs further narrow the selected scope. `⌘/Ctrl+F` continues to search the open document.
+
 ## Features
 
 - **Code**

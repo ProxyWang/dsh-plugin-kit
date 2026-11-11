@@ -59,7 +59,7 @@ export function highlightText(text, ranges) {
 	return out;
 }
 
-export function SearchPanel({ t, cwd, state, onQuery, onInclude, onToggleRegex, onToggleWords, onSubmit, onPick, onClose, onNotify }) {
+export function SearchPanel({ t, cwd, state, onQuery, onInclude, onDirectory, onToggleRegex, onToggleWords, onSubmit, onPick, onClose, onNotify }) {
 	const inputRef = useRef(null);
 	const [expanded, setExpanded] = useState(() => new Set());
 	const [ctxCache, setCtxCache] = useState({}); // path -> {lines} | {loading} | {error}
@@ -196,6 +196,19 @@ export function SearchPanel({ t, cwd, state, onQuery, onInclude, onToggleRegex, 
 	return h(
 		"div",
 		{ className: "ce-search" },
+		h("div", { className: "ce-search-scope" },
+			h("strong", null, t(state.scope?.kind === "changes" ? "search.changesAction" : state.scope?.kind === "directory" ? "search.directoryAction" : "changes.searchWorkspace")),
+			h("span", null, state.scope?.kind === "changes"
+				? t("search.changesHint")
+				: state.scope?.kind === "directory" ? state.scope.directory : t("search.workspaceScope")),
+			h("button", { type: "button", className: "ce-tool", "aria-label": t("close"), title: t("close"), onClick: onClose }, "✕"),
+		),
+		state.scope?.kind !== "changes" ? h("label", { className: "ce-search-directory" },
+			h("span", null, t("search.directoryLabel")),
+			h("input", { className: "ce-input", "aria-label": t("search.directoryLabel"), placeholder: t("search.directoryPlaceholder"), value: state.scope?.directory ?? "", onChange: (e) => onDirectory?.(e.target.value) }),
+		) : null,
+		state.scope?.kind === "changes" && state.scopeInfo?.files === 0 ? h("div", { className: "ce-note", role: "status" }, t("search.noChangedFiles")) : null,
+
 		h(
 			"div",
 			{ className: "ce-search-box" },
@@ -204,7 +217,7 @@ export function SearchPanel({ t, cwd, state, onQuery, onInclude, onToggleRegex, 
 				ref: inputRef,
 				className: "ce-input ce-search-q",
 				type: "text",
-				placeholder: t("search.placeholder"),
+				placeholder: t(state.scope?.kind === "changes" ? "search.changesPlaceholder" : "search.placeholder"),
 				value: state.query,
 				onChange: (event) => onQuery(event.target.value),
 				onKeyDown: (event) => {

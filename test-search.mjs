@@ -1,5 +1,6 @@
 import { Readable } from "node:stream";
 import { execFileSync } from "node:child_process";
+import { mkdirSync, writeFileSync, appendFileSync, symlinkSync, unlinkSync } from "node:fs";
 
 // Self-contained fixture: recreate before use, drop on exit (success or crash).
 const root = "/tmp/ce-search";
@@ -65,6 +66,66 @@ const t9 = await call("search.text", { cwd, query: "untracked", include: "*.txt,
 check("multi-glob include", t9.ok && t9.value.results.some((r) => r.path === "u.txt"), t9);
 const t10 = await call("search.text", { cwd, query: "Greeter", include: "!*.txt" });
 check("negated glob excludes", t10.ok && t10.value.results.every((r) => !r.path.endsWith(".txt")), t10);
+
+// Explicit search scopes must stay restrictive, including empty changes and literal filenames.
+const git = (...args) => execFileSync("git", args, { cwd, stdio: "ignore" });
+git("add", "-A"); git("commit", "-qm", "clean scope baseline");
+const emptyChanges = await call("search.text", { cwd, query: "Greeter", scope: "changes", include: "*" });
+check("empty changes never falls back to workspace search", emptyChanges.ok && emptyChanges.value.results.length === 0 && emptyChanges.value.scope?.files === 0, emptyChanges);
+mkdirSync(`${cwd}/scope/nested`, { recursive: true });
+mkdirSync(`${cwd}/scope-other`, { recursive: true });
+writeFileSync(`${cwd}/scope/changed.txt`, "scopeNeedle base\n");
+writeFileSync(`${cwd}/scope/unchanged.txt`, "scopeNeedle untouched\n");
+writeFileSync(`${cwd}/scope/nested/deep.go`, "scopeNeedle nested\n");
+writeFileSync(`${cwd}/scope-other/outside.txt`, "scopeNeedle sibling\n");
+writeFileSync(`${cwd}/scope/a[,]*.txt`, "scopeNeedle literal\n");
+writeFileSync(`${cwd}/scope/a1.txt`, "scopeNeedle unrelated\n");
+writeFileSync(`${cwd}/scope/deleted.txt`, "scopeNeedle removed\n");
+git("add", "-A"); git("commit", "-qm", "scope fixtures");
+appendFileSync(`${cwd}/scope/changed.txt`, "scopeNeedle modified\n");
+appendFileSync(`${cwd}/scope/a[,]*.txt`, "scopeNeedle modified literal\n");
+writeFileSync(`${cwd}/scope/untracked.go`, "scopeNeedle untracked\n");
+unlinkSync(`${cwd}/scope/deleted.txt`);
+git("add", "--", "scope/changed.txt");
+const scoped = await call("search.text", { cwd, query: "scopeNeedle", scope: "changes" });
+const changedPaths = [...new Set(scoped.value?.results?.map((r) => r.path) ?? [])].sort();
+check("changes search includes staged unstaged and untracked files only", scoped.ok && JSON.stringify(changedPaths) === JSON.stringify(["scope/a[,]*.txt", "scope/changed.txt", "scope/untracked.go"]), changedPaths);
+check("deleted changed files are skipped without broadening search", scoped.ok && scoped.value.scope.files === 3, scoped);
+const filterChanged = await call("search.text", { cwd, query: "scopeNeedle", scope: "changes", include: "*.go" });
+check("user glob intersects mandatory changed-file set", filterChanged.ok && filterChanged.value.results.length === 1 && filterChanged.value.results[0].path === "scope/untracked.go", filterChanged);
+const widen = await call("search.text", { cwd, query: "scopeNeedle", scope: "changes", include: "*,*.txt" });
+check("include filters cannot widen changes scope to unrelated files", widen.ok && widen.value.results.every((r) => changedPaths.includes(r.path)), widen);
+const directory = await call("search.text", { cwd, query: "scopeNeedle", scope: "directory", directory: "scope/nested" });
+check("directory searches return workspace-relative paths", directory.ok && directory.value.results.length === 1 && directory.value.results[0].path === "scope/nested/deep.go", directory);
+const directoryAll = await call("search.text", { cwd, query: "scopeNeedle", scope: "directory", directory: "scope" });
+check("directory scope includes descendants but not similarly named sibling", directoryAll.ok && directoryAll.value.results.some((r) => r.path === "scope/nested/deep.go") && directoryAll.value.results.every((r) => r.path.startsWith("scope/")), directoryAll);
+const workspaceAll = await call("search.text", { cwd, query: "scopeNeedle", scope: "workspace" });
+check("workspace scope still searches unchanged files", workspaceAll.ok && workspaceAll.value.results.some((r) => r.path === "scope/unchanged.txt") && workspaceAll.value.results.some((r) => r.path === "scope-other/outside.txt"), workspaceAll);
+const escapeScope = await call("search.text", { cwd, query: "scopeNeedle", scope: "directory", directory: "../" });
+check("directory scope cannot escape the workspace", escapeScope.ok === false, escapeScope);
+symlinkSync("/tmp", `${cwd}/scope-link`);
+const linkScope = await call("search.text", { cwd, query: "scopeNeedle", scope: "directory", directory: "scope-link" });
+check("directory search refuses symlink escape", linkScope.ok === false, linkScope);
+const invalidScope = await call("search.text", { cwd, query: "scopeNeedle", scope: "anything" });
+check("invalid search scope is rejected", invalidScope.ok === false, invalidScope);
+
+// Repo-relative Git paths must map back to session-relative search results.
+mkdirSync(`${cwd}/nested-repo`, { recursive: true });
+const gitNested = (...args) => execFileSync("git", args, { cwd: `${cwd}/nested-repo`, stdio: "ignore" });
+gitNested("init", "-q"); gitNested("config", "user.email", "t@t"); gitNested("config", "user.name", "t");
+writeFileSync(`${cwd}/nested-repo/item.txt`, "scopeNeedle nested repo\n");
+gitNested("add", "-A"); gitNested("commit", "-qm", "nested base");
+appendFileSync(`${cwd}/nested-repo/item.txt`, "scopeNeedle edit\n");
+const nestedScope = await call("search.text", { cwd, query: "scopeNeedle", scope: "changes", repo: `${cwd}/nested-repo` });
+check("selected repository scope returns correct session-relative paths", nestedScope.ok && nestedScope.value.results.length > 0 && nestedScope.value.results.every((r) => r.path === "nested-repo/item.txt"), nestedScope);
+const nestedEscape = await call("search.text", { cwd, query: "scopeNeedle", scope: "changes", repo: "/tmp" });
+check("selected repository scope is fenced to the workspace", nestedEscape.ok === false, nestedEscape);
+mkdirSync(`${cwd}/many`, { recursive: true });
+for (let i = 0; i < 130; i++) writeFileSync(`${cwd}/many/${i}.txt`, "batchMarker\n");
+const manyScope = await call("search.text", { cwd, query: "batchMarker", scope: "changes", limit: 200 });
+check("changed-file search batches long literal argv lists without losing files", manyScope.ok && manyScope.value.results.length === 130 && !manyScope.value.truncated, manyScope.value?.results?.length);
+const limitScope = await call("search.text", { cwd, query: "batchMarker", scope: "changes", limit: 3 });
+check("result limit applies within the required scope", limitScope.ok && limitScope.value.results.length === 3 && limitScope.value.truncated, limitScope.value?.results?.length);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 cleanup();

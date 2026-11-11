@@ -7,7 +7,7 @@ import { IconFolder } from "./icons.js";
 import { FileGlyph, fileTint } from "./changetree.js";
 import { ancestorDirs, canDropInto, parentDir, toAbs } from "./pathtools.js";
 
-export function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshKey, onNotify, onDeleted }) {
+export function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshKey, onNotify, onDeleted, onSearchDirectory }) {
 	const [listing, setListing] = useState({});
 	const [expanded, setExpanded] = useState([]);
 	const [action, setAction] = useState(null); // {kind: newfile|newdir|rename|delete, path, value}
@@ -15,6 +15,7 @@ export function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshK
 	const [dropDir, setDropDir] = useState(null); // dir currently highlighted as drop target
 	const [contextMenu, setContextMenu] = useState(null); // {path, isDir, x, y}
 	const railRef = useRef(null);
+	const contextMenuRef = useRef(null);
 	const lastRevealed = useRef(null);
 	const revealTick = useRef(null);
 	const loadDir = useCallback((path) => {
@@ -30,7 +31,7 @@ export function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshK
 	}, [cwd]);
 	useEffect(() => {
 		if (!contextMenu) return undefined;
-		const close = () => setContextMenu(null);
+		const close = (event) => { if (!event || !contextMenuRef.current?.contains(event.target)) setContextMenu(null); };
 		const key = (event) => { if (event.key === "Escape") close(); };
 		document.addEventListener("mousedown", close, true);
 		document.addEventListener("keydown", key, true);
@@ -420,12 +421,13 @@ export function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshK
 		: null,
 	renderLevel("", 0),
 		contextMenu
-			? h("div", { className: "cet-context", style: { left: contextMenu.x, top: contextMenu.y }, role: "menu", onMouseDown: (e) => e.stopPropagation() },
+			? h("div", { className: "cet-context", ref: contextMenuRef, style: { left: contextMenu.x, top: contextMenu.y }, role: "menu", onMouseDown: (e) => e.stopPropagation() },
 				h("div", { className: "cet-context-path", title: contextMenu.path }, contextMenu.path || t("tree.workspaceRoot")),
 				h("div", { className: "cet-context-rule" }),
 				h("button", { type: "button", role: "menuitem", onClick: () => contextCopy(false) }, t("tree.copyAbsolute")),
 				h("button", { type: "button", role: "menuitem", onClick: () => contextCopy(true) }, t("tree.copyRelative")),
 				contextMenu.isDir ? h(Fragment, null,
+					onSearchDirectory ? h("button", { type: "button", role: "menuitem", onClick: () => { onSearchDirectory(contextMenu.path); setContextMenu(null); } }, t("search.inDirectory")) : null,
 					h("button", { type: "button", role: "menuitem", onClick: () => contextCreate("newfile") }, t("tree.newFile")),
 					h("button", { type: "button", role: "menuitem", onClick: () => contextCreate("newdir") }, t("tree.newDir")),
 				) : null,

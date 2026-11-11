@@ -566,6 +566,31 @@ try {
 	check("back to files retains the open editor document", codeTree.props["data-mobile-view"] === "files" && Boolean(getCode((n) => n.props.className === "ce-mobile-open-editor ce-link")), null);
 	getCode((n) => n.props.className === "ce-mobile-open-editor ce-link").props.onClick(); codeTree = renderCode();
 	check("return to editor does not reload or lose current document", codeTree.props["data-mobile-view"] === "editor" && navRequests.filter((r) => r.url.endsWith("/fs.read")).length === 1, navRequests);
+	getCode((n) => n.props.className === "ce-mobile-back").props.onClick(); codeTree = renderCode();
+	getCode((n) => n.type === TreePanelCmp).props.onSearchDirectory("src/client"); codeTree = renderCode();
+	check("directory action selects an explicit directory scope", getCode((n) => n.type.name === "SearchPanel")?.props.state.scope.directory === "src/client", null);
+	getCode((n) => n.type.name === "SearchPanel").props.onQuery("needle"); codeTree = renderCode();
+	getCode((n) => n.type.name === "SearchPanel").props.onSubmit(); await new Promise((resolve) => setImmediate(resolve)); codeTree = renderCode();
+	check("directory search request carries the selected scope to Host", navRequests.at(-1)?.body.scope === "directory" && navRequests.at(-1)?.body.directory === "src/client", navRequests.at(-1));
+	getCode((n) => n.type.name === "SearchPanel").props.onDirectory(""); codeTree = renderCode();
+	check("clearing search directory restores workspace scope", getCode((n) => n.type.name === "SearchPanel")?.props.state.scope.kind === "workspace", null);
+	getCode((n) => n.type === "button" && n.children[0] === "toolbar.changes").props.onClick(); await new Promise((resolve) => setImmediate(resolve)); codeTree = renderCode();
+	getCode((n) => n.props.className === "ce-rail-search").props.onClick({ type: "click" }); codeTree = renderCode();
+	check("Changes view search targets current changes regardless of empty Git state", getCode((n) => n.type.name === "SearchPanel")?.props.state.scope.kind === "changes" && JSON.stringify(getCode((n) => n.props.className === "ce-rail-search").children).includes("search.changesAction"), null);
+	getCode((n) => n.type.name === "SearchPanel").props.onSubmit(); await new Promise((resolve) => setImmediate(resolve)); codeTree = renderCode();
+	check("changes content search uses Host scope instead of CSV filename globs", navRequests.at(-1)?.body.scope === "changes" && navRequests.at(-1)?.body.include === "", navRequests.at(-1));
+	getCode((n) => n.type === "button" && n.children[0] === "toolbar.files").props.onClick(); codeTree = renderCode();
+	getCode((n) => n.props.className === "ce-rail-search").props.onClick(); codeTree = renderCode();
+	check("switching back to Files never leaves changes or directory scope behind", getCode((n) => n.type.name === "SearchPanel")?.props.state.scope.kind === "workspace", null);
+	let resolveOldSearch;
+	globalThis.fetch = async () => ({ json: () => new Promise((resolve) => { resolveOldSearch = resolve; }) });
+	getCode((n) => n.type.name === "SearchPanel").props.onSubmit(); await new Promise((resolve) => setImmediate(resolve));
+	getCode((n) => n.type.name === "SearchPanel").props.onDirectory("new-dir"); codeTree = renderCode();
+	check("changing scope clears old matches before the debounce completes", getCode((n) => n.type.name === "SearchPanel")?.props.state.results === undefined, null);
+	globalThis.fetch = async () => ({ json: async () => ({ ok: true, value: { results: [{ path: "new-dir/current.txt", line: 1, text: "needle" }] } }) });
+	getCode((n) => n.type.name === "SearchPanel").props.onSubmit(); await new Promise((resolve) => setImmediate(resolve)); codeTree = renderCode();
+	resolveOldSearch({ ok: true, value: { results: [{ path: "unrelated/old.txt", line: 1, text: "needle" }] } }); await new Promise((resolve) => setImmediate(resolve)); codeTree = renderCode();
+	check("late results from previous scope never overwrite current scope", getCode((n) => n.type.name === "SearchPanel")?.props.state.results?.[0]?.path === "new-dir/current.txt", null);
 } finally {
 	for (const [key, value] of Object.entries(navGlobals)) { if (value === undefined) delete globalThis[key]; else globalThis[key] = value; }
 }

@@ -1,6 +1,15 @@
 /* ---------------- locale ---------------- */
 
 export const zh = {
+	"search.inDirectory": "在此目录中搜索",
+	"search.changesPlaceholder": "在当前变更文件中搜索代码…",
+	"search.noChangedFiles": "当前没有可搜索的变更文件，不会扩大到整个工作区。",
+	"search.directoryPlaceholder": "留空搜索整个工作区，如 src/client",
+	"search.directoryLabel": "搜索目录",
+	"search.workspaceScope": "当前工作区 · 所有文件",
+	"search.directoryAction": "目录内搜索",
+	"search.changesHint": "仅搜索当前暂存区与工作区变更文件",
+	"search.changesAction": "搜索变更内容",
 	"layout.backEditor": "返回代码",
 	"layout.backFiles": "文件与变更",
 	"changes.compose": "提交更改",
@@ -351,6 +360,15 @@ export const zh = {
 	"quickopen.command": "快速打开文件（代码浏览器）",
 };
 export const en = {
+	"search.inDirectory": "Find in this directory",
+	"search.changesPlaceholder": "Search code in changed files…",
+	"search.noChangedFiles": "No searchable changed files. The search will not expand to the workspace.",
+	"search.directoryPlaceholder": "Empty = whole workspace, e.g. src/client",
+	"search.directoryLabel": "Directory",
+	"search.workspaceScope": "Current workspace · All files",
+	"search.directoryAction": "Search in directory",
+	"search.changesHint": "Only staged and working-tree changed files",
+	"search.changesAction": "Search changed content",
 	"layout.backEditor": "Back to editor",
 	"layout.backFiles": "Files & Changes",
 	"changes.compose": "Commit changes",
