@@ -1241,6 +1241,7 @@ export function CodeBody(props) {
 						onCommit: (msg, stageAll, amend) => commitChanges(msg, stageAll, amend),
 						committing,
 						onNotify: (text, kind) => say(text, kind),
+						onSearch: openSearch,
 						refresh: refreshGit,
 					}))
 				: null,

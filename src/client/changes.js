@@ -10,10 +10,11 @@ export function isStagedXy(xy) {
 	return typeof xy === "string" && xy.length > 0 && xy[0] !== " " && xy[0] !== "?";
 }
 
-export function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commitsOpen, setCommitsOpen, onOpenCommit, onOpenDiff, onDiscard, onDiscardDir, onStage, onStageDir, onUnstage, onUnstageDir, onCommit, committing, onNotify, refresh }) {
+export function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commitsOpen, setCommitsOpen, onOpenCommit, onOpenDiff, onDiscard, onDiscardDir, onStage, onStageDir, onUnstage, onUnstageDir, onCommit, committing, onNotify, refresh, onSearch }) {
 	const [treeView, setTreeView] = useState(true);
 	const [message, setMessage] = useState("");
 	const [amend, setAmend] = useState(false);
+	const [filterQuery, setFilterQuery] = useState("");
 	// Stash section state — all hooks must run before the early returns below.
 	const [stashes, setStashes] = useState([]);
 	const [stashOpen, setStashOpen] = useState(false);
@@ -91,6 +92,11 @@ export function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commit
 	const badge = (xy) => (xy === "??" ? "U" : xy.trim()[0] === "A" || xy.trim()[0] === "?" ? "A" : xy.trim()[0] || "M");
 	const staged = git.working.filter((f) => isStagedXy(f.xy));
 	const unstaged = git.working.filter((f) => !isStagedXy(f.xy));
+	const q = filterQuery.trim().toLowerCase();
+	const matchesPath = (value) => !q || String(value?.path ?? value ?? "").toLowerCase().includes(q);
+	const visibleStaged = staged.filter(matchesPath);
+	const visibleUnstaged = unstaged.filter(matchesPath);
+	const visibleBranchFiles = (git.branchFiles ?? []).filter(matchesPath);
 	const flatRows = (files, prefix, scope) => files.map((file) =>
 		h(
 			"button",
@@ -119,6 +125,10 @@ export function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commit
 		h("div", { className: "ce-note" }, git.upstream
 			? `${t("changes.vs")} ${git.upstream} · ↑${git.ahead ?? 0} ↓${git.behind ?? 0}${git.upstreamInferred ? " · auto" : ""}`
 			: t("sync.noUpstream")),
+		h("div", { className: "ce-changes-search" },
+			h("input", { className: "ce-input", type: "search", value: filterQuery, placeholder: t("changes.filterPlaceholder"), "aria-label": t("changes.filterPlaceholder"), onChange: (e) => setFilterQuery(e.target.value) }),
+			h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost", onClick: onSearch, title: t("changes.searchWorkspace") }, `⌕ ${t("changes.searchWorkspace")}`),
+		),
 		h("div", { className: "ce-commitbox" },
 			h("input", {
 				className: "ce-input ce-commitbox-msg",
@@ -164,25 +174,25 @@ export function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commit
 				h(
 					"div",
 					{ className: "ce-section" },
-					h("span", null, `${t("changes.staged")} · ${staged.length}`),
+					h("span", null, `${t("changes.staged")} · ${visibleStaged.length}${visibleStaged.length !== staged.length ? `/${staged.length}` : ""}`),
 					h("button", { className: "ce-link", type: "button", title: t("changes.unstageAll"), onClick: () => onUnstageDir && onUnstageDir("") }, t("changes.unstageAll")),
 				),
 				treeView
 					? h(ChangeTree, {
-						items: staged.map((f) => ({ path: f.path, ch: badge(f.xy), from: f.from ?? void 0 })),
+						items: visibleStaged.map((f) => ({ path: f.path, ch: badge(f.xy), from: f.from ?? void 0 })),
 						onOpen: (item) => onOpenDiff(item.path, "staged"),
 						onUnstage: (item) => onUnstage && onUnstage(item),
 						onUnstageDir: (dirPath) => onUnstageDir && onUnstageDir(dirPath),
 						keyPrefix: "s",
 						t,
 					})
-					: flatRows(staged, "s", "staged"),
+					: flatRows(visibleStaged, "s", "staged"),
 			)
 			: null,
 		h(
 			"div",
 			{ className: "ce-section" },
-			h("span", null, `${t("changes.working")} · ${unstaged.length}`),
+			h("span", null, `${t("changes.working")} · ${visibleUnstaged.length}${visibleUnstaged.length !== unstaged.length ? `/${unstaged.length}` : ""}`),
 			unstaged.length > 0
 				? h("button", { className: "ce-link", type: "button", title: t("changes.stageAll"), onClick: () => onStageDir && onStageDir("") }, t("changes.stageAll"))
 				: null,
@@ -192,7 +202,7 @@ export function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commit
 		git.working.length === 0 && h("div", { className: "ce-note" }, t("changes.none")),
 		treeView
 			? h(ChangeTree, {
-				items: unstaged.map((f) => ({ path: f.path, ch: badge(f.xy), from: f.from ?? void 0 })),
+				items: visibleUnstaged.map((f) => ({ path: f.path, ch: badge(f.xy), from: f.from ?? void 0 })),
 				onOpen: (item) => onOpenDiff(item.path, "working"),
 				onDiscard: (item) => onDiscard && onDiscard(item),
 				onDiscardDir: (dirItems) => onDiscardDir && onDiscardDir(dirItems),
@@ -201,7 +211,7 @@ export function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commit
 				keyPrefix: "w",
 				t,
 			})
-			: flatRows(unstaged, "w", "working"),
+			: flatRows(visibleUnstaged, "w", "working"),
 		),
 		h("section", { className: "ce-change-group" },
 		h("div", { className: "ce-section" }, t("changes.branch")),
@@ -212,7 +222,7 @@ export function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commit
 				h(
 					"div",
 					{ className: "ce-note ce-note-line" },
-					h("span", null, `${git.branch} ${t("changes.vs")} ${git.base.name} · ${git.branchFiles.length} files`),
+					h("span", null, `${git.branch} ${t("changes.vs")} ${git.base.name} · ${visibleBranchFiles.length}${visibleBranchFiles.length !== git.branchFiles.length ? `/${git.branchFiles.length}` : ""} files`),
 					h(
 						"button",
 						{ type: "button", className: "ce-link", title: t("changes.commitsToggle"), "aria-expanded": commitsOpen ? "true" : "false", onClick: () => setCommitsOpen((v) => !v) },
@@ -230,12 +240,12 @@ export function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commit
 					: null,
 				treeView
 					? h(ChangeTree, {
-						items: git.branchFiles.map((p) => ({ path: p, ch: "C" })),
+						items: visibleBranchFiles.map((p) => ({ path: p, ch: "C" })),
 						onOpen: (item) => onOpenDiff(item.path, "branch"),
 						keyPrefix: "b",
 						t,
 					})
-					: git.branchFiles.map((path) =>
+					: visibleBranchFiles.map((path) =>
 						h(
 							"button",
 							{ key: `b:${path}`, className: "ce-row", type: "button", title: path, onClick: () => onOpenDiff(path, "branch") },

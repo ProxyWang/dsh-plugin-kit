@@ -190,6 +190,9 @@ export const CSS = `
 .ce-changes .ce-note-line{align-items:flex-start;flex-wrap:wrap;gap:4px 8px}
 .ce-changes .ce-note-line>span{flex:1 1 160px;min-width:0;overflow-wrap:anywhere}
 .ce-changes .ce-note-line>.ce-link{flex:none}
+.ce-changes-search{display:flex;gap:6px;align-items:center;padding:4px 12px 8px;border-bottom:.5px solid var(--dsw-alias-border-l1,#333)}
+.ce-changes-search .ce-input{flex:1;min-width:0;font-size:12px;padding:6px 8px}
+.ce-changes-search .ce-sk-btn{flex:none;font-size:11px;white-space:nowrap}
 .ce-commitbox{display:flex;flex-direction:column;gap:8px;align-items:stretch;padding:8px 12px 12px;min-width:0;flex:none}
 .ce-commitbox-msg{flex:none;width:100%;box-sizing:border-box;min-width:0;font-size:12px;padding:7px 8px}
 .ce-commitbox-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;min-width:0}

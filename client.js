@@ -95,6 +95,8 @@ var zh = {
   "changes.notRepo": "当前工作区不是 Git 仓库",
   "changes.baseNone": "未检测到基线分支（main/master/origin/HEAD）",
   "changes.vs": "vs",
+  "changes.filterPlaceholder": "筛选当前变更文件…",
+  "changes.searchWorkspace": "全文搜索",
   "changes.pickRepo": "选择仓库…",
   loading: "加载中…",
   error: "失败",
@@ -431,6 +433,8 @@ var en = {
   "changes.notRepo": "Not a Git repository",
   "changes.baseNone": "No base branch detected (main/master/origin/HEAD)",
   "changes.vs": "vs",
+  "changes.filterPlaceholder": "Filter changed files…",
+  "changes.searchWorkspace": "Search workspace",
   "changes.pickRepo": "Pick repository…",
   loading: "Loading…",
   error: "Failed",
@@ -2370,10 +2374,11 @@ function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshKey, onN
 function isStagedXy(xy) {
   return typeof xy === "string" && xy.length > 0 && xy[0] !== " " && xy[0] !== "?";
 }
-function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commitsOpen, setCommitsOpen, onOpenCommit, onOpenDiff, onDiscard, onDiscardDir, onStage, onStageDir, onUnstage, onUnstageDir, onCommit, committing, onNotify, refresh }) {
+function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commitsOpen, setCommitsOpen, onOpenCommit, onOpenDiff, onDiscard, onDiscardDir, onStage, onStageDir, onUnstage, onUnstageDir, onCommit, committing, onNotify, refresh, onSearch }) {
   const [treeView, setTreeView] = useState(true);
   const [message, setMessage] = useState("");
   const [amend, setAmend] = useState(false);
+  const [filterQuery, setFilterQuery] = useState("");
   const [stashes, setStashes] = useState([]);
   const [stashOpen, setStashOpen] = useState(false);
   const [stashSaving, setStashSaving] = useState(false);
@@ -2441,6 +2446,11 @@ function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commitsOpen, 
   const badge = (xy) => xy === "??" ? "U" : xy.trim()[0] === "A" || xy.trim()[0] === "?" ? "A" : xy.trim()[0] || "M";
   const staged = git.working.filter((f) => isStagedXy(f.xy));
   const unstaged = git.working.filter((f) => !isStagedXy(f.xy));
+  const q = filterQuery.trim().toLowerCase();
+  const matchesPath = (value) => !q || String(value?.path ?? value ?? "").toLowerCase().includes(q);
+  const visibleStaged = staged.filter(matchesPath);
+  const visibleUnstaged = unstaged.filter(matchesPath);
+  const visibleBranchFiles = (git.branchFiles ?? []).filter(matchesPath);
   const flatRows = (files, prefix, scope) => files.map(
     (file) => h(
       "button",
@@ -2464,6 +2474,12 @@ function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commitsOpen, 
     { className: "ce-rail ce-scroll ce-changes" },
     selector,
     h("div", { className: "ce-note" }, git.upstream ? `${t("changes.vs")} ${git.upstream} · ↑${git.ahead ?? 0} ↓${git.behind ?? 0}${git.upstreamInferred ? " · auto" : ""}` : t("sync.noUpstream")),
+    h(
+      "div",
+      { className: "ce-changes-search" },
+      h("input", { className: "ce-input", type: "search", value: filterQuery, placeholder: t("changes.filterPlaceholder"), "aria-label": t("changes.filterPlaceholder"), onChange: (e) => setFilterQuery(e.target.value) }),
+      h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost", onClick: onSearch, title: t("changes.searchWorkspace") }, `⌕ ${t("changes.searchWorkspace")}`)
+    ),
     h(
       "div",
       { className: "ce-commitbox" },
@@ -2514,29 +2530,29 @@ function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commitsOpen, 
         h(
           "div",
           { className: "ce-section" },
-          h("span", null, `${t("changes.staged")} · ${staged.length}`),
+          h("span", null, `${t("changes.staged")} · ${visibleStaged.length}${visibleStaged.length !== staged.length ? `/${staged.length}` : ""}`),
           h("button", { className: "ce-link", type: "button", title: t("changes.unstageAll"), onClick: () => onUnstageDir && onUnstageDir("") }, t("changes.unstageAll"))
         ),
         treeView ? h(ChangeTree, {
-          items: staged.map((f) => ({ path: f.path, ch: badge(f.xy), from: f.from ?? void 0 })),
+          items: visibleStaged.map((f) => ({ path: f.path, ch: badge(f.xy), from: f.from ?? void 0 })),
           onOpen: (item) => onOpenDiff(item.path, "staged"),
           onUnstage: (item) => onUnstage && onUnstage(item),
           onUnstageDir: (dirPath) => onUnstageDir && onUnstageDir(dirPath),
           keyPrefix: "s",
           t
-        }) : flatRows(staged, "s", "staged")
+        }) : flatRows(visibleStaged, "s", "staged")
       ) : null,
       h(
         "div",
         { className: "ce-section" },
-        h("span", null, `${t("changes.working")} · ${unstaged.length}`),
+        h("span", null, `${t("changes.working")} · ${visibleUnstaged.length}${visibleUnstaged.length !== unstaged.length ? `/${unstaged.length}` : ""}`),
         unstaged.length > 0 ? h("button", { className: "ce-link", type: "button", title: t("changes.stageAll"), onClick: () => onStageDir && onStageDir("") }, t("changes.stageAll")) : null,
         h("button", { className: "ce-link", type: "button", title: treeView ? t("changes.toList") : t("changes.toTree"), onClick: () => setTreeView((v) => !v) }, treeView ? t("changes.toList") : t("changes.toTree")),
         h("button", { className: "ce-tool ce-tiny", type: "button", title: t("refresh"), onClick: refresh }, h(IconRefresh))
       ),
       git.working.length === 0 && h("div", { className: "ce-note" }, t("changes.none")),
       treeView ? h(ChangeTree, {
-        items: unstaged.map((f) => ({ path: f.path, ch: badge(f.xy), from: f.from ?? void 0 })),
+        items: visibleUnstaged.map((f) => ({ path: f.path, ch: badge(f.xy), from: f.from ?? void 0 })),
         onOpen: (item) => onOpenDiff(item.path, "working"),
         onDiscard: (item) => onDiscard && onDiscard(item),
         onDiscardDir: (dirItems) => onDiscardDir && onDiscardDir(dirItems),
@@ -2544,7 +2560,7 @@ function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commitsOpen, 
         onStageDir: (dirPath) => onStageDir && onStageDir(dirPath),
         keyPrefix: "w",
         t
-      }) : flatRows(unstaged, "w", "working")
+      }) : flatRows(visibleUnstaged, "w", "working")
     ),
     h(
       "section",
@@ -2556,7 +2572,7 @@ function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commitsOpen, 
         h(
           "div",
           { className: "ce-note ce-note-line" },
-          h("span", null, `${git.branch} ${t("changes.vs")} ${git.base.name} · ${git.branchFiles.length} files`),
+          h("span", null, `${git.branch} ${t("changes.vs")} ${git.base.name} · ${visibleBranchFiles.length}${visibleBranchFiles.length !== git.branchFiles.length ? `/${git.branchFiles.length}` : ""} files`),
           h(
             "button",
             { type: "button", className: "ce-link", title: t("changes.commitsToggle"), "aria-expanded": commitsOpen ? "true" : "false", onClick: () => setCommitsOpen((v) => !v) },
@@ -2570,11 +2586,11 @@ function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commitsOpen, 
           h("span", { className: "ce-csubject" }, commit.subject)
         )) : null,
         treeView ? h(ChangeTree, {
-          items: git.branchFiles.map((p) => ({ path: p, ch: "C" })),
+          items: visibleBranchFiles.map((p) => ({ path: p, ch: "C" })),
           onOpen: (item) => onOpenDiff(item.path, "branch"),
           keyPrefix: "b",
           t
-        }) : git.branchFiles.map(
+        }) : visibleBranchFiles.map(
           (path) => h(
             "button",
             { key: `b:${path}`, className: "ce-row", type: "button", title: path, onClick: () => onOpenDiff(path, "branch") },
@@ -4921,6 +4937,7 @@ function CodeBody(props) {
         onCommit: (msg, stageAll, amend) => commitChanges(msg, stageAll, amend),
         committing,
         onNotify: (text, kind) => say(text, kind),
+        onSearch: openSearch,
         refresh: refreshGit
       })) : null,
       railVisible ? h("div", { className: "ce-splitter", onMouseDown: startRailDrag, onDoubleClick: () => setRailVisible(false), title: "⇔ 拖动调宽 · 双击收起" }) : h("button", { type: "button", className: "ce-rail-tab", title: "展开侧栏 (⌘B / Ctrl+B)", onClick: () => setRailVisible(true) }, "▸"),
@@ -5350,6 +5367,9 @@ var CSS2 = `
 .ce-changes .ce-note-line{align-items:flex-start;flex-wrap:wrap;gap:4px 8px}
 .ce-changes .ce-note-line>span{flex:1 1 160px;min-width:0;overflow-wrap:anywhere}
 .ce-changes .ce-note-line>.ce-link{flex:none}
+.ce-changes-search{display:flex;gap:6px;align-items:center;padding:4px 12px 8px;border-bottom:.5px solid var(--dsw-alias-border-l1,#333)}
+.ce-changes-search .ce-input{flex:1;min-width:0;font-size:12px;padding:6px 8px}
+.ce-changes-search .ce-sk-btn{flex:none;font-size:11px;white-space:nowrap}
 .ce-commitbox{display:flex;flex-direction:column;gap:8px;align-items:stretch;padding:8px 12px 12px;min-width:0;flex:none}
 .ce-commitbox-msg{flex:none;width:100%;box-sizing:border-box;min-width:0;font-size:12px;padding:7px 8px}
 .ce-commitbox-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;min-width:0}
