@@ -181,6 +181,7 @@ export function RefsPeek({ t, cwd, peek, scroll, totalLines, onPick, onClose }) 
 							onMouseEnter: () => setSel(i),
 							onClick: () => onPick(r),
 						},
+						h("span", { className: "ce-peek-kind" }, r.isDef ? "◆" : "·"),
 						h("span", { className: "ce-peek-lno" }, `${r.line}:${r.col}`),
 						h("span", { className: "ce-peek-snippet" }, r.snippet ?? ""),
 					);
@@ -188,7 +189,11 @@ export function RefsPeek({ t, cwd, peek, scroll, totalLines, onPick, onClose }) 
 				return h(
 					Fragment,
 					{ key: `${g.path}-${gi}` },
-					h("div", { className: "ce-peek-file" }, h("span", { className: "ce-peek-fpath" }, RelPath(cwd, g.path) || g.path)),
+					h("div", { className: "ce-peek-file" },
+						h("span", { className: "ce-peek-file-icon", "aria-hidden": "true" }, "▤"),
+						h("span", { className: "ce-peek-fpath", title: g.path }, RelPath(cwd, g.path) || g.path),
+						h("span", { className: "ce-peek-file-count" }, String(g.rows.length)),
+					),
 					fileRows,
 				);
 			}),
