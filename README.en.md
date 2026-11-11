@@ -4,7 +4,7 @@ English | [简体中文](README.md)
 
 **Browse code, review changes, test APIs, and manage skills while chatting with your Agent in DeepSeek Harness (DSH).**
 
-`dsh-plugin-kit` adds three tools to the DSH right sidebar: **Code Explorer, API Tester, and Skills Manager**. It also organizes the Start page into task-based groups, keeping common development actions within the current session.
+`dsh-plugin-kit` adds three tools to the DSH right sidebar: **Code Explorer, API Tester, and Skills Manager**. It also organizes the Start page into task-based groups, keeping common development actions within the current session. Since v1.5.0, all surfaces share one visual system with three surface levels, clear type hierarchy, consistent spacing and control states, and support for DSH light and dark themes.
 
 ![Development toolbox Start page, shown in Chinese: Code & Files, Terminal & Web, and Agent Extensions](docs/images/toolbox-launcher.webp)
 

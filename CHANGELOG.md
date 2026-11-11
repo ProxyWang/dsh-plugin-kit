@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.5.0 (2026-11-11)
+
+### Changed — unified UI system
+
+- Added a cohesive visual foundation across Code Explorer, Changes, API Tester, Skills Manager and the Start launcher: three surface levels, consistent border/radius/spacing tokens, clearer foreground hierarchy, one interaction accent, and semantic success/warning/error colors.
+- Standardized toolbar, segmented controls, inputs, tabs, chips, primary buttons, focus rings, empty states, overlays and response/code surfaces for both light and dark DSH themes.
+- Improved the Code and Changes rails with clearer active states, section rhythm, branch metadata and search/filter grouping.
+- Improved API request/response hierarchy, Skills list/detail/editor hierarchy and launcher rows without changing their existing behavior.
+- Added responsive container rules and checked wide and narrow sidebar layouts for horizontal overflow.
+
+### Verification
+
+- 386 assertions green across host, client, search, nested, parent and remote suites.
+- Chrome previews checked Skills and API surfaces at wide and narrow widths.
+
 ## 1.4.2 (2026-11-11)
 
 ### Fixed
