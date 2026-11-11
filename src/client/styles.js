@@ -208,9 +208,9 @@ export const CSS = `
 .ce-commitbox-amend:hover{background:var(--dsw-alias-interactive-bg-hover,#262a30)}
 .ce-commitbox-amend:disabled{opacity:.45;cursor:default}
 .ce-commitbox-amend:focus-visible,.ce-commitbox-btn:focus-visible{outline:2px solid var(--dsw-alias-brand-primary,#59b7ff);outline-offset:2px}
-.ce-commitbox-btn{flex:0 1 auto;max-width:100%;min-height:28px;border:0;border-radius:6px;background:var(--dsw-alias-brand-primary,#2f81f7);color:#fff;font:inherit;font-size:11px;font-weight:600;padding:5px 10px;cursor:pointer;white-space:normal;overflow-wrap:anywhere;text-align:center}
-.ce-commitbox-btn:hover{filter:brightness(1.12)}
-.ce-commitbox-btn:disabled{opacity:.45;cursor:default;filter:none}
+.ce-commitbox-btn{flex:0 1 auto;max-width:100%;min-height:28px;border:0;border-radius:6px;background:var(--dsw-alias-button-primary-fill,#2563eb);color:var(--dsw-alias-label-primary-foreground,#fff);font:inherit;font-size:11px;font-weight:600;padding:5px 10px;cursor:pointer;white-space:normal;overflow-wrap:anywhere;text-align:center}
+.ce-commitbox-btn:hover:not(:disabled){filter:brightness(1.05)}
+.ce-changes .ce-commitbox-btn:disabled{opacity:1;cursor:not-allowed;filter:none;background:var(--dsw-alias-bg-layer-2,#24272c);color:var(--dsw-alias-label-secondary,#b7c0cc);border:1px solid var(--dsw-alias-border-l2,#444)}
 .ce-stash-save{display:flex;gap:5px;align-items:center;padding:4px 8px;flex-wrap:wrap}
 .ce-stash-save .ce-input{flex:1;min-width:90px;font-size:11px;padding:4px 6px}
 .ce-stash-u{display:flex;gap:3px;align-items:center;font-size:10px;color:var(--dsw-alias-label-tertiary,#889);flex:none;cursor:pointer;user-select:none}
