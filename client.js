@@ -2246,21 +2246,15 @@ function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commitsOpen, 
   const commitLabel = amend ? t("changes.amendCommit") : staged.length > 0 ? t("changes.commit") : t("changes.commitAll");
   return h(
     "div",
-    { className: "ce-rail ce-scroll" },
+    { className: "ce-rail ce-scroll ce-changes" },
     selector,
     h("div", { className: "ce-note" }, git.upstream ? `${t("changes.vs")} ${git.upstream} · ↑${git.ahead ?? 0} ↓${git.behind ?? 0}${git.upstreamInferred ? " · auto" : ""}` : t("sync.noUpstream")),
     h(
       "div",
       { className: "ce-commitbox" },
-      h("button", {
-        type: "button",
-        className: `ce-tool ce-tiny${amend ? " ce-tool-on" : ""}`,
-        title: t("changes.amendTitle"),
-        disabled: committing,
-        onClick: () => setAmend((v) => !v)
-      }, t("changes.amend")),
       h("input", {
         className: "ce-input ce-commitbox-msg",
+        "aria-label": t("changes.commitPlaceholder"),
         type: "text",
         placeholder: staged.length > 0 || amend ? t("changes.commitPlaceholder") : t("changes.commitAllPlaceholder"),
         value: message,
@@ -2276,140 +2270,164 @@ function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commitsOpen, 
           }
         }
       }),
-      h("button", {
-        type: "button",
-        className: "ce-commitbox-btn",
-        disabled: commitDisabled,
-        title: amend ? t("changes.amendTitle") : staged.length > 0 ? t("changes.commit") : t("changes.commitAll"),
-        onClick: submit
-      }, committing ? t("changes.commitBusy") : `✓ ${commitLabel}`)
+      h(
+        "div",
+        { className: "ce-commitbox-actions" },
+        h("button", {
+          type: "button",
+          className: `ce-commitbox-amend${amend ? " ce-tool-on" : ""}`,
+          "aria-pressed": amend,
+          title: t("changes.amendTitle"),
+          disabled: committing,
+          onClick: () => setAmend((v) => !v)
+        }, t("changes.amend")),
+        h("button", {
+          type: "button",
+          className: "ce-commitbox-btn",
+          disabled: commitDisabled,
+          title: amend ? t("changes.amendTitle") : staged.length > 0 ? t("changes.commit") : t("changes.commitAll"),
+          onClick: submit
+        }, committing ? t("changes.commitBusy") : `✓ ${commitLabel}`)
+      )
     ),
-    staged.length > 0 ? h(
-      Fragment,
-      null,
+    h(
+      "section",
+      { className: "ce-change-group" },
+      staged.length > 0 ? h(
+        Fragment,
+        null,
+        h(
+          "div",
+          { className: "ce-section" },
+          h("span", null, `${t("changes.staged")} · ${staged.length}`),
+          h("button", { className: "ce-link", type: "button", title: t("changes.unstageAll"), onClick: () => onUnstageDir && onUnstageDir("") }, t("changes.unstageAll"))
+        ),
+        treeView ? h(ChangeTree, {
+          items: staged.map((f) => ({ path: f.path, ch: badge(f.xy), from: f.from ?? void 0 })),
+          onOpen: (item) => onOpenDiff(item.path, "staged"),
+          onUnstage: (item) => onUnstage && onUnstage(item),
+          onUnstageDir: (dirPath) => onUnstageDir && onUnstageDir(dirPath),
+          keyPrefix: "s",
+          t
+        }) : flatRows(staged, "s", "staged")
+      ) : null,
       h(
         "div",
         { className: "ce-section" },
-        h("span", null, `${t("changes.staged")} · ${staged.length}`),
-        h("button", { className: "ce-link", type: "button", title: t("changes.unstageAll"), onClick: () => onUnstageDir && onUnstageDir("") }, t("changes.unstageAll"))
+        h("span", null, `${t("changes.working")} · ${unstaged.length}`),
+        unstaged.length > 0 ? h("button", { className: "ce-link", type: "button", title: t("changes.stageAll"), onClick: () => onStageDir && onStageDir("") }, t("changes.stageAll")) : null,
+        h("button", { className: "ce-link", type: "button", title: treeView ? t("changes.toList") : t("changes.toTree"), onClick: () => setTreeView((v) => !v) }, treeView ? t("changes.toList") : t("changes.toTree")),
+        h("button", { className: "ce-tool ce-tiny", type: "button", title: t("refresh"), onClick: refresh }, h(IconRefresh))
       ),
+      git.working.length === 0 && h("div", { className: "ce-note" }, t("changes.none")),
       treeView ? h(ChangeTree, {
-        items: staged.map((f) => ({ path: f.path, ch: badge(f.xy), from: f.from ?? void 0 })),
-        onOpen: (item) => onOpenDiff(item.path, "staged"),
-        onUnstage: (item) => onUnstage && onUnstage(item),
-        onUnstageDir: (dirPath) => onUnstageDir && onUnstageDir(dirPath),
-        keyPrefix: "s",
+        items: unstaged.map((f) => ({ path: f.path, ch: badge(f.xy), from: f.from ?? void 0 })),
+        onOpen: (item) => onOpenDiff(item.path, "working"),
+        onDiscard: (item) => onDiscard && onDiscard(item),
+        onDiscardDir: (dirItems) => onDiscardDir && onDiscardDir(dirItems),
+        onStage: (item) => onStage && onStage(item),
+        onStageDir: (dirPath) => onStageDir && onStageDir(dirPath),
+        keyPrefix: "w",
         t
-      }) : flatRows(staged, "s", "staged")
-    ) : null,
-    h(
-      "div",
-      { className: "ce-section" },
-      h("span", null, `${t("changes.working")} · ${unstaged.length}`),
-      unstaged.length > 0 ? h("button", { className: "ce-link", type: "button", title: t("changes.stageAll"), onClick: () => onStageDir && onStageDir("") }, t("changes.stageAll")) : null,
-      h("button", { className: "ce-link", type: "button", title: treeView ? t("changes.toList") : t("changes.toTree"), onClick: () => setTreeView((v) => !v) }, treeView ? t("changes.toList") : t("changes.toTree")),
-      h("button", { className: "ce-tool ce-tiny", type: "button", title: t("refresh"), onClick: refresh }, h(IconRefresh))
+      }) : flatRows(unstaged, "w", "working")
     ),
-    git.working.length === 0 && h("div", { className: "ce-note" }, t("changes.none")),
-    treeView ? h(ChangeTree, {
-      items: unstaged.map((f) => ({ path: f.path, ch: badge(f.xy), from: f.from ?? void 0 })),
-      onOpen: (item) => onOpenDiff(item.path, "working"),
-      onDiscard: (item) => onDiscard && onDiscard(item),
-      onDiscardDir: (dirItems) => onDiscardDir && onDiscardDir(dirItems),
-      onStage: (item) => onStage && onStage(item),
-      onStageDir: (dirPath) => onStageDir && onStageDir(dirPath),
-      keyPrefix: "w",
-      t
-    }) : flatRows(unstaged, "w", "working"),
-    h("div", { className: "ce-section" }, t("changes.branch")),
-    git.base ? h(
-      Fragment,
-      null,
+    h(
+      "section",
+      { className: "ce-change-group" },
+      h("div", { className: "ce-section" }, t("changes.branch")),
+      git.base ? h(
+        Fragment,
+        null,
+        h(
+          "div",
+          { className: "ce-note ce-note-line" },
+          h("span", null, `${git.branch} ${t("changes.vs")} ${git.base.name} · ${git.branchFiles.length} files`),
+          h(
+            "button",
+            { type: "button", className: "ce-link", title: t("changes.commitsToggle"), "aria-expanded": commitsOpen ? "true" : "false", onClick: () => setCommitsOpen((v) => !v) },
+            `${git.commits.length} ${t("changes.commits")} ${commitsOpen ? "▾" : "▸"}`
+          )
+        ),
+        commitsOpen ? git.commits.slice(0, 80).map((commit) => h(
+          "button",
+          { key: `c:${commit.hash}`, className: "ce-commit", type: "button", onClick: () => onOpenCommit(commit) },
+          h("span", { className: "ce-chash" }, commit.hash),
+          h("span", { className: "ce-csubject" }, commit.subject)
+        )) : null,
+        treeView ? h(ChangeTree, {
+          items: git.branchFiles.map((p) => ({ path: p, ch: "C" })),
+          onOpen: (item) => onOpenDiff(item.path, "branch"),
+          keyPrefix: "b",
+          t
+        }) : git.branchFiles.map(
+          (path) => h(
+            "button",
+            { key: `b:${path}`, className: "ce-row", type: "button", title: path, onClick: () => onOpenDiff(path, "branch") },
+            h("span", { className: "ce-badge ce-badge-c" }, "C"),
+            h("span", { className: "ce-name" }, path)
+          )
+        )
+      ) : h("div", { className: "ce-note" }, t("changes.baseNone"))
+    ),
+    h(
+      "section",
+      { className: "ce-change-group" },
       h(
         "div",
-        { className: "ce-note ce-note-line" },
-        h("span", null, `${git.branch} ${t("changes.vs")} ${git.base.name} · ${git.branchFiles.length} files`),
+        { className: "ce-section" },
+        h("span", null, `${t("stash.title")}${stashes.length ? ` · ${stashes.length}` : ""}`),
+        h("button", { className: "ce-link", type: "button", title: t("stash.saveTitle"), disabled: stashBusy, onClick: () => {
+          setStashSaving((v) => !v);
+          setStashOpen(true);
+        } }, `+ ${t("stash.save")}`),
+        h("button", { className: "ce-tool ce-tiny", type: "button", title: t("stash.toggle"), "aria-expanded": stashOpen ? "true" : "false", onClick: () => setStashOpen((v) => !v) }, stashOpen ? "▾" : "▸")
+      ),
+      stashSaving ? h(
+        "div",
+        { className: "ce-stash-save" },
+        h("input", {
+          className: "ce-input",
+          placeholder: t("stash.msgPlaceholder"),
+          value: stashMsg,
+          autoFocus: true,
+          onChange: (e) => setStashMsg(e.target.value),
+          onKeyDown: (e) => {
+            e.stopPropagation();
+            if (e.key === "Enter") stashSave();
+            else if (e.key === "Escape") setStashSaving(false);
+          }
+        }),
         h(
-          "button",
-          { type: "button", className: "ce-link", title: t("changes.commitsToggle"), "aria-expanded": commitsOpen ? "true" : "false", onClick: () => setCommitsOpen((v) => !v) },
-          `${git.commits.length} ${t("changes.commits")} ${commitsOpen ? "▾" : "▸"}`
+          "label",
+          { className: "ce-stash-u", title: t("stash.untrackedTitle") },
+          h("input", { type: "checkbox", checked: stashUntracked, onChange: (e) => setStashUntracked(e.target.checked) }),
+          t("stash.untracked")
+        ),
+        h("button", { className: "ce-sk-btn", type: "button", disabled: stashBusy, onClick: stashSave }, stashBusy ? "…" : t("stash.save"))
+      ) : null,
+      stashOpen ? stashes.length === 0 ? h("div", { className: "ce-note" }, t("stash.none")) : stashes.map((s) => h(
+        "div",
+        { key: s.ref, className: "ce-stashrow" },
+        h("span", { className: "ce-stashref" }, s.ref.replace(/^stash@\{(\d+)\}$/, "#$1")),
+        h("span", { className: "ce-stashmsg", title: s.message }, s.message || "—"),
+        h(
+          "span",
+          { className: "ce-stashacts" },
+          stashConfirm === s.ref ? h(
+            Fragment,
+            null,
+            h("button", { type: "button", className: "cet-act cet-act-show cet-act-danger", disabled: stashBusy, onClick: () => stashDrop(s.ref) }, t("stash.confirm")),
+            h("button", { type: "button", className: "cet-act cet-act-show", onClick: () => setStashConfirm(null) }, t("stash.cancel"))
+          ) : h(
+            Fragment,
+            null,
+            h("button", { type: "button", className: "ce-link", disabled: stashBusy, title: t("stash.applyTitle"), onClick: () => stashApply(s.ref, false) }, t("stash.apply")),
+            h("button", { type: "button", className: "ce-link", disabled: stashBusy, title: t("stash.popTitle"), onClick: () => stashApply(s.ref, true) }, t("stash.pop")),
+            h("button", { type: "button", className: "ce-tool ce-tiny", title: t("stash.drop"), disabled: stashBusy, onClick: () => setStashConfirm(s.ref) }, "✕")
+          )
         )
-      ),
-      commitsOpen ? git.commits.slice(0, 80).map((commit) => h(
-        "button",
-        { key: `c:${commit.hash}`, className: "ce-commit", type: "button", onClick: () => onOpenCommit(commit) },
-        h("span", { className: "ce-chash" }, commit.hash),
-        h("span", { className: "ce-csubject" }, commit.subject)
-      )) : null,
-      treeView ? h(ChangeTree, {
-        items: git.branchFiles.map((p) => ({ path: p, ch: "C" })),
-        onOpen: (item) => onOpenDiff(item.path, "branch"),
-        keyPrefix: "b",
-        t
-      }) : git.branchFiles.map(
-        (path) => h(
-          "button",
-          { key: `b:${path}`, className: "ce-row", type: "button", title: path, onClick: () => onOpenDiff(path, "branch") },
-          h("span", { className: "ce-badge ce-badge-c" }, "C"),
-          h("span", { className: "ce-name" }, path)
-        )
-      )
-    ) : h("div", { className: "ce-note" }, t("changes.baseNone")),
-    h(
-      "div",
-      { className: "ce-section" },
-      h("span", null, `${t("stash.title")}${stashes.length ? ` · ${stashes.length}` : ""}`),
-      h("button", { className: "ce-link", type: "button", title: t("stash.saveTitle"), disabled: stashBusy, onClick: () => {
-        setStashSaving((v) => !v);
-        setStashOpen(true);
-      } }, `+ ${t("stash.save")}`),
-      h("button", { className: "ce-tool ce-tiny", type: "button", title: t("stash.toggle"), "aria-expanded": stashOpen ? "true" : "false", onClick: () => setStashOpen((v) => !v) }, stashOpen ? "▾" : "▸")
-    ),
-    stashSaving ? h(
-      "div",
-      { className: "ce-stash-save" },
-      h("input", {
-        className: "ce-input",
-        placeholder: t("stash.msgPlaceholder"),
-        value: stashMsg,
-        autoFocus: true,
-        onChange: (e) => setStashMsg(e.target.value),
-        onKeyDown: (e) => {
-          e.stopPropagation();
-          if (e.key === "Enter") stashSave();
-          else if (e.key === "Escape") setStashSaving(false);
-        }
-      }),
-      h(
-        "label",
-        { className: "ce-stash-u", title: t("stash.untrackedTitle") },
-        h("input", { type: "checkbox", checked: stashUntracked, onChange: (e) => setStashUntracked(e.target.checked) }),
-        t("stash.untracked")
-      ),
-      h("button", { className: "ce-sk-btn", type: "button", disabled: stashBusy, onClick: stashSave }, stashBusy ? "…" : t("stash.save"))
-    ) : null,
-    stashOpen ? stashes.length === 0 ? h("div", { className: "ce-note" }, t("stash.none")) : stashes.map((s) => h(
-      "div",
-      { key: s.ref, className: "ce-stashrow" },
-      h("span", { className: "ce-stashref" }, s.ref.replace(/^stash@\{(\d+)\}$/, "#$1")),
-      h("span", { className: "ce-stashmsg", title: s.message }, s.message || "—"),
-      h(
-        "span",
-        { className: "ce-stashacts" },
-        stashConfirm === s.ref ? h(
-          Fragment,
-          null,
-          h("button", { type: "button", className: "cet-act cet-act-show cet-act-danger", disabled: stashBusy, onClick: () => stashDrop(s.ref) }, t("stash.confirm")),
-          h("button", { type: "button", className: "cet-act cet-act-show", onClick: () => setStashConfirm(null) }, t("stash.cancel"))
-        ) : h(
-          Fragment,
-          null,
-          h("button", { type: "button", className: "ce-link", disabled: stashBusy, title: t("stash.applyTitle"), onClick: () => stashApply(s.ref, false) }, t("stash.apply")),
-          h("button", { type: "button", className: "ce-link", disabled: stashBusy, title: t("stash.popTitle"), onClick: () => stashApply(s.ref, true) }, t("stash.pop")),
-          h("button", { type: "button", className: "ce-tool ce-tiny", title: t("stash.drop"), disabled: stashBusy, onClick: () => setStashConfirm(s.ref) }, "✕")
-        )
-      )
-    )) : null
+      )) : null
+    )
   );
 }
 
@@ -5096,9 +5114,24 @@ var CSS2 = `
 .ce-search-box{display:flex;gap:6px;align-items:center;flex:none}
 .ce-search-include{flex:none}
 .ce-repo{width:calc(100% - 16px);margin:4px 8px 2px;font-size:11px;padding:4px 6px;flex:none;align-self:flex-start}
-.ce-commitbox{display:flex;gap:6px;align-items:center;padding:6px 8px 2px;flex:none}
-.ce-commitbox-msg{flex:1;min-width:0;font-size:12px;padding:5px 8px}
-.ce-commitbox-btn{flex:none;border:0;border-radius:6px;background:var(--dsw-alias-brand-primary,#2f81f7);color:#fff;font:inherit;font-size:11px;font-weight:600;padding:5px 10px;cursor:pointer;white-space:nowrap}
+.ce-changes{overflow-x:hidden}
+.ce-changes>.ce-note{padding:8px 12px 4px;overflow-wrap:anywhere}
+.ce-change-group{min-width:0;padding:8px 0 12px;border-top:.5px solid var(--dsw-alias-border-l1,#333)}
+.ce-changes .ce-section{justify-content:flex-start;flex-wrap:wrap;gap:8px;padding:8px 12px;text-transform:none;letter-spacing:normal;color:var(--dsw-alias-label-primary,#ddd)}
+.ce-changes .ce-section>span:first-child{flex:1;min-width:0}
+.ce-changes .ce-section>.ce-link,.ce-changes .ce-section>.ce-tool{flex:none}
+.ce-changes .ce-note{padding-left:12px;padding-right:12px;line-height:1.5}
+.ce-changes .ce-note-line{align-items:flex-start;flex-wrap:wrap;gap:4px 8px}
+.ce-changes .ce-note-line>span{flex:1 1 160px;min-width:0;overflow-wrap:anywhere}
+.ce-changes .ce-note-line>.ce-link{flex:none}
+.ce-commitbox{display:flex;flex-direction:column;gap:8px;align-items:stretch;padding:8px 12px 12px;min-width:0;flex:none}
+.ce-commitbox-msg{flex:none;width:100%;box-sizing:border-box;min-width:0;font-size:12px;padding:7px 8px}
+.ce-commitbox-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;min-width:0}
+.ce-commitbox-amend{display:inline-flex;align-items:center;justify-content:center;flex:none;min-height:28px;border:.5px solid var(--dsw-alias-border-l2,#444);border-radius:6px;background:transparent;color:var(--dsw-alias-label-secondary,#999);font:inherit;font-size:11px;padding:4px 8px;cursor:pointer}
+.ce-commitbox-amend:hover{background:var(--dsw-alias-interactive-bg-hover,#262a30)}
+.ce-commitbox-amend:disabled{opacity:.45;cursor:default}
+.ce-commitbox-amend:focus-visible,.ce-commitbox-btn:focus-visible{outline:2px solid var(--dsw-alias-brand-primary,#59b7ff);outline-offset:2px}
+.ce-commitbox-btn{flex:0 1 auto;max-width:100%;min-height:28px;border:0;border-radius:6px;background:var(--dsw-alias-brand-primary,#2f81f7);color:#fff;font:inherit;font-size:11px;font-weight:600;padding:5px 10px;cursor:pointer;white-space:normal;overflow-wrap:anywhere;text-align:center}
 .ce-commitbox-btn:hover{filter:brightness(1.12)}
 .ce-commitbox-btn:disabled{opacity:.45;cursor:default;filter:none}
 .ce-stash-save{display:flex;gap:5px;align-items:center;padding:4px 8px;flex-wrap:wrap}

@@ -176,9 +176,24 @@ export const CSS = `
 .ce-search-box{display:flex;gap:6px;align-items:center;flex:none}
 .ce-search-include{flex:none}
 .ce-repo{width:calc(100% - 16px);margin:4px 8px 2px;font-size:11px;padding:4px 6px;flex:none;align-self:flex-start}
-.ce-commitbox{display:flex;gap:6px;align-items:center;padding:6px 8px 2px;flex:none}
-.ce-commitbox-msg{flex:1;min-width:0;font-size:12px;padding:5px 8px}
-.ce-commitbox-btn{flex:none;border:0;border-radius:6px;background:var(--dsw-alias-brand-primary,#2f81f7);color:#fff;font:inherit;font-size:11px;font-weight:600;padding:5px 10px;cursor:pointer;white-space:nowrap}
+.ce-changes{overflow-x:hidden}
+.ce-changes>.ce-note{padding:8px 12px 4px;overflow-wrap:anywhere}
+.ce-change-group{min-width:0;padding:8px 0 12px;border-top:.5px solid var(--dsw-alias-border-l1,#333)}
+.ce-changes .ce-section{justify-content:flex-start;flex-wrap:wrap;gap:8px;padding:8px 12px;text-transform:none;letter-spacing:normal;color:var(--dsw-alias-label-primary,#ddd)}
+.ce-changes .ce-section>span:first-child{flex:1;min-width:0}
+.ce-changes .ce-section>.ce-link,.ce-changes .ce-section>.ce-tool{flex:none}
+.ce-changes .ce-note{padding-left:12px;padding-right:12px;line-height:1.5}
+.ce-changes .ce-note-line{align-items:flex-start;flex-wrap:wrap;gap:4px 8px}
+.ce-changes .ce-note-line>span{flex:1 1 160px;min-width:0;overflow-wrap:anywhere}
+.ce-changes .ce-note-line>.ce-link{flex:none}
+.ce-commitbox{display:flex;flex-direction:column;gap:8px;align-items:stretch;padding:8px 12px 12px;min-width:0;flex:none}
+.ce-commitbox-msg{flex:none;width:100%;box-sizing:border-box;min-width:0;font-size:12px;padding:7px 8px}
+.ce-commitbox-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;min-width:0}
+.ce-commitbox-amend{display:inline-flex;align-items:center;justify-content:center;flex:none;min-height:28px;border:.5px solid var(--dsw-alias-border-l2,#444);border-radius:6px;background:transparent;color:var(--dsw-alias-label-secondary,#999);font:inherit;font-size:11px;padding:4px 8px;cursor:pointer}
+.ce-commitbox-amend:hover{background:var(--dsw-alias-interactive-bg-hover,#262a30)}
+.ce-commitbox-amend:disabled{opacity:.45;cursor:default}
+.ce-commitbox-amend:focus-visible,.ce-commitbox-btn:focus-visible{outline:2px solid var(--dsw-alias-brand-primary,#59b7ff);outline-offset:2px}
+.ce-commitbox-btn{flex:0 1 auto;max-width:100%;min-height:28px;border:0;border-radius:6px;background:var(--dsw-alias-brand-primary,#2f81f7);color:#fff;font:inherit;font-size:11px;font-weight:600;padding:5px 10px;cursor:pointer;white-space:normal;overflow-wrap:anywhere;text-align:center}
 .ce-commitbox-btn:hover{filter:brightness(1.12)}
 .ce-commitbox-btn:disabled{opacity:.45;cursor:default;filter:none}
 .ce-stash-save{display:flex;gap:5px;align-items:center;padding:4px 8px;flex-wrap:wrap}

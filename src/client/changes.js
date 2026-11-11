@@ -114,21 +114,15 @@ export function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commit
 	const commitLabel = amend ? t("changes.amendCommit") : staged.length > 0 ? t("changes.commit") : t("changes.commitAll");
 	return h(
 		"div",
-		{ className: "ce-rail ce-scroll" },
+		{ className: "ce-rail ce-scroll ce-changes" },
 		selector,
 		h("div", { className: "ce-note" }, git.upstream
 			? `${t("changes.vs")} ${git.upstream} · ↑${git.ahead ?? 0} ↓${git.behind ?? 0}${git.upstreamInferred ? " · auto" : ""}`
 			: t("sync.noUpstream")),
 		h("div", { className: "ce-commitbox" },
-			h("button", {
-				type: "button",
-				className: `ce-tool ce-tiny${amend ? " ce-tool-on" : ""}`,
-				title: t("changes.amendTitle"),
-				disabled: committing,
-				onClick: () => setAmend((v) => !v),
-			}, t("changes.amend")),
 			h("input", {
 				className: "ce-input ce-commitbox-msg",
+				"aria-label": t("changes.commitPlaceholder"),
 				type: "text",
 				placeholder: staged.length > 0 || amend ? t("changes.commitPlaceholder") : t("changes.commitAllPlaceholder"),
 				value: message,
@@ -144,6 +138,15 @@ export function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commit
 					}
 				},
 			}),
+			h("div", { className: "ce-commitbox-actions" },
+			h("button", {
+				type: "button",
+				className: `ce-commitbox-amend${amend ? " ce-tool-on" : ""}`,
+				"aria-pressed": amend,
+				title: t("changes.amendTitle"),
+				disabled: committing,
+				onClick: () => setAmend((v) => !v),
+			}, t("changes.amend")),
 			h("button", {
 				type: "button",
 				className: "ce-commitbox-btn",
@@ -151,7 +154,9 @@ export function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commit
 				title: amend ? t("changes.amendTitle") : staged.length > 0 ? t("changes.commit") : t("changes.commitAll"),
 				onClick: submit,
 			}, committing ? t("changes.commitBusy") : `✓ ${commitLabel}`),
+			),
 		),
+		h("section", { className: "ce-change-group" },
 		staged.length > 0
 			? h(
 				Fragment,
@@ -197,6 +202,8 @@ export function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commit
 				t,
 			})
 			: flatRows(unstaged, "w", "working"),
+		),
+		h("section", { className: "ce-change-group" },
 		h("div", { className: "ce-section" }, t("changes.branch")),
 		git.base
 			? h(
@@ -238,6 +245,8 @@ export function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commit
 					),
 			)
 			: h("div", { className: "ce-note" }, t("changes.baseNone")),
+		),
+		h("section", { className: "ce-change-group" },
 		h(
 			"div",
 			{ className: "ce-section" },
@@ -286,5 +295,6 @@ export function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commit
 					),
 				)))
 			: null,
+		),
 	);
 }
