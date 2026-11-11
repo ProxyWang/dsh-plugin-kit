@@ -14,6 +14,8 @@ import { ChangesPanel } from "./changes.js";
 import { LocationList, QuickOpen, RefsPeek, SymbolPalette, GotoLinePalette, FileHistoryOverlay } from "./overlays.js";
 import { SearchPanel } from "./searchpanel.js";
 import { computeGutter, computeVisible, computeWrapRows, compileFindRe, findRangesInLine, WRAP_LINE_CAP } from "./codeview.js";
+import { useGitActions } from "./usegit.js";
+import { useNavPersistence } from "./usepersistence.js";
 
 /** Files that open in rendered preview by default: markdown, html and svg. */
 const PREVIEW_RE = /\.(md|markdown|html?|svg)$/i;
@@ -83,8 +85,6 @@ export function CodeBody(props) {
 	const searchTimer = useRef(null);
 	const searchNonce = useRef(0);
 	const symbolNonce = useRef(0);
-	const saveTimer = useRef(null);
-	const restoredFor = useRef(null);
 
 	const codeRef = useRef(null);
 	const mainRef = useRef(null);
@@ -95,7 +95,6 @@ export function CodeBody(props) {
 	const modeRef = useRef("code"); // code | diff
 	const openSeqRef = useRef(0);
 	const noticeTimer = useRef(null);
-	const latestPersistRef = useRef(null);
 	const peekRef = useRef(null);
 	const wrapOnRef = useRef(false);
 	const tabViewRef = useRef({}); // path → {line, col, scroll} restored when switching tabs
@@ -178,7 +177,6 @@ export function CodeBody(props) {
 		});
 	}, [cwd]);
 
-	const [sync, setSync] = useState({ busy: false });
 	const [repos, setRepos] = useState(null); // [{root, branch, dirtyCount}]
 	const [repoSel, setRepoSel] = useState(null); // absolute root when the cwd is not a repo
 	const repoSelRef = useRef(null);
@@ -341,78 +339,12 @@ export function CodeBody(props) {
 		[loadFile],
 	);
 
-	const doFetch = useCallback(async () => {
-		if (!cwd || sync.busy) return;
-		setSync({ busy: true });
-		say(t("sync.fetching"));
-		const res = await api("git.fetch", repoSelRef.current ? { cwd, repo: repoSelRef.current } : { cwd });
-		setSync({ busy: false });
-		if (!res.ok) {
-			say(t("sync.fetchFail", { msg: res.error }), "error");
-			return;
-		}
-		const st = res.value?.status;
-		if (st) setGit(st);
-		if (res.value?.error) {
-			say(t("sync.fetchFail", { msg: res.value.error }), "error");
-			return;
-		}
-		if (!st || !st.repo) return;
-		say(st.behind > 0 ? t("sync.behind", { n: st.behind }) : st.ahead > 0 ? t("sync.localAhead", { n: st.ahead }) : t("sync.upToDate"));
-	}, [cwd, sync.busy, say, t]);
 
-	const doPull = useCallback(async () => {
-		if (!cwd || sync.busy) return;
-		setSync({ busy: true });
-		say(t("sync.pulling"));
-		const before = git?.behind ?? 0;
-		const res = await api("git.pull", repoSelRef.current ? { cwd, repo: repoSelRef.current } : { cwd });
-		setSync({ busy: false });
-		if (!res.ok) {
-			say(t("sync.pullFail", { msg: res.error }), "error");
-			return;
-		}
-		const value = res.value ?? {};
-		if (value.status) setGit(value.status);
-		if (value.error) {
-			const st = value.status;
-			if (st && st.ahead > 0 && st.behind > 0) say(t("sync.diverged"), "error");
-			else say(t("sync.pullFail", { msg: value.error }), "error");
-			return;
-		}
-		if (/Already up to date/i.test(value.output ?? "")) {
-			say(t("sync.upToDate"));
-			return;
-		}
-		const n = value.behindBefore ?? before;
-		say(n ? t("sync.pulled", { n }) : t("sync.upToDate"));
-		const cur = docRef.current;
-		if (cur && modeRef.current === "code") {
-			const c = cursorRef.current;
-			void loadFile(cur.path, c?.line ?? 1, c?.col ?? 1);
-		}
-	}, [cwd, sync.busy, git, say, t, loadFile]);
-
-	// Push the current branch; when it has no upstream yet the host publishes
-	// it with -u (VSCode's "Publish branch"). Never force-pushes.
-	const doPush = useCallback(async () => {
-		if (!cwd || sync.busy) return;
-		setSync({ busy: true });
-		say(t("sync.pushing"));
-		const res = await api("git.push", repoSelRef.current ? { cwd, repo: repoSelRef.current } : { cwd });
-		setSync({ busy: false });
-		if (!res.ok) {
-			say(t("sync.pushFail", { msg: res.error }), "error");
-			return;
-		}
-		const value = res.value ?? {};
-		if (value.status) setGit(value.status);
-		if (value.error) {
-			say(t("sync.pushFail", { msg: value.error }), "error");
-			return;
-		}
-		say(value.published ? t("sync.published") : t("sync.pushed"));
-	}, [cwd, sync.busy, say, t]);
+	// All mutating git operations (fetch/pull/push, discard, stage/commit)
+	// live in the useGitActions hook; results fold back through setGit/say.
+	const { sync, committing, doFetch, doPull, doPush, discardChange, discardMany, stageChange, unstageChange, commitChanges } = useGitActions({
+		cwd, t, say, git, setGit, repoSelRef, refreshGit, loadFile, docRef, cursorRef, modeRef,
+	});
 
 	// A repo selection re-fetches that repo's full status.
 	useEffect(() => {
@@ -511,67 +443,13 @@ export function CodeBody(props) {
 		}
 	}, [tabs, editing, editText, openFile, say, t]);
 
-	/* P0-1: per-session navigation state survives tab churn */
-	useEffect(() => {
-		if (!persistKey || !cwd || restoredFor.current === persistKey) return;
-		restoredFor.current = persistKey;
-		let blob = null;
-		try {
-			blob = JSON.parse(localStorage.getItem(persistKey) || "null");
-		} catch {}
-		if (!blob) return;
-		if (Number.isFinite(blob.railW)) setRailW(Math.max(150, Math.min(760, blob.railW)));
-		if (typeof blob.railVisible === "boolean") setRailVisible(blob.railVisible);
-		if (typeof blob.wrapOn === "boolean") setWrapOn(blob.wrapOn);
-		if (blob.findOpts && typeof blob.findOpts === "object") setFindOpts({ regex: blob.findOpts.regex === true, caseSensitive: blob.findOpts.caseSensitive === true, words: blob.findOpts.words === true });
-		if (Array.isArray(blob.tabs)) setTabs(blob.tabs.filter((p) => typeof p === "string" && p !== "").slice(0, 15));
-		if (typeof blob.mode === "string") setMode(blob.mode === "skills" ? "files" : blob.mode);
-		if (blob.path && !docRef.current) {
-			histRef.current = { back: Array.isArray(blob.back) ? blob.back : [], forward: Array.isArray(blob.forward) ? blob.forward : [] };
-			setHistTick((v) => v + 1);
-			void loadFile(blob.path, blob.line ?? 1, blob.col ?? 1, null).then(() => {
-				if (Number.isFinite(blob.scroll) && codeRef.current) {
-					codeRef.current.scrollTop = blob.scroll;
-					setScroll(blob.scroll);
-				}
-			});
-		}
-	}, [persistKey, cwd, loadFile]);
 
-	useEffect(() => {
-		if (!persistKey) return;
-		const payload = {
-			path: doc?.path,
-			line: cursor?.line,
-			col: cursor?.col,
-			scroll,
-			mode,
-			railW,
-			railVisible,
-			wrapOn,
-			findOpts,
-			tabs,
-			back: histRef.current.back.slice(-40),
-			forward: histRef.current.forward.slice(-40),
-		};
-		latestPersistRef.current = { key: persistKey, payload };
-		if (saveTimer.current) clearTimeout(saveTimer.current);
-		saveTimer.current = setTimeout(() => {
-			try {
-				localStorage.setItem(persistKey, JSON.stringify(payload));
-			} catch {}
-		}, 700);
-	}, [persistKey, doc, cursor, scroll, mode, railW, railVisible, wrapOn, findOpts, tabs, histTick]);
-
-	useEffect(() => () => {
-		if (saveTimer.current) clearTimeout(saveTimer.current);
-		const last = latestPersistRef.current;
-		if (last) {
-			try {
-				localStorage.setItem(last.key, JSON.stringify(last.payload));
-			} catch {}
-		}
-	}, []);
+	/* P0-1: per-session navigation state survives tab churn (usepersistence.js) */
+	useNavPersistence({
+		persistKey, cwd, doc, cursor, scroll, mode, railW, railVisible, wrapOn, findOpts, tabs, histTick,
+		histRef, docRef, codeRef, loadFile,
+		setRailW, setRailVisible, setWrapOn, setFindOpts, setTabs, setMode, setHistTick, setScroll,
+	});
 
 	const revealPosition = useCallback((line, col, word) => {
 		const current = docRef.current;
@@ -620,92 +498,6 @@ export function CodeBody(props) {
 		setDiffMarks(marks);
 		setDelGroups(deletedGroups(text));
 	}, [cwd, loadFile]);
-	// Revert one working-tree change: tracked files restore HEAD, staged adds
-	// unstage. Never deletes anything; the open doc reloads afterwards.
-	const discardChange = useCallback(async (item) => {
-		if (!cwd) return;
-		const repo = repoSelRef.current;
-		const res = await api("git.discard", repo ? { cwd, path: item.path, repo, ch: item.ch } : { cwd, path: item.path, ch: item.ch });
-		if (!res.ok) {
-			say(`${t("error")}: ${res.error}`, "error");
-			return;
-		}
-		say(t("changes.discarded"));
-		refreshGit();
-		if (docRef.current?.path === item.path) void loadFile(item.path, cursorRef.current?.line ?? 1, cursorRef.current?.col ?? 1);
-	}, [cwd, say, t, refreshGit, loadFile]);
-	// VSCode-style folder discard: revert every change under one directory.
-	const discardMany = useCallback(async (dirItems) => {
-		if (!cwd || !Array.isArray(dirItems) || dirItems.length === 0) return;
-		const repo = repoSelRef.current;
-		let okCount = 0;
-		const errors = [];
-		for (const item of dirItems) {
-			const res = await api("git.discard", repo ? { cwd, path: item.path, repo, ch: item.ch } : { cwd, path: item.path, ch: item.ch });
-			if (res.ok && !res.value?.error) okCount += 1;
-			else errors.push(`${item.path}: ${res.value?.error ?? res.error}`);
-		}
-		if (okCount > 0) say(t("changes.discardedN", { n: okCount }));
-		if (errors.length > 0) say(`${t("error")}: ${errors[0]}${errors.length > 1 ? ` (+${errors.length - 1})` : ""}`, "error");
-		refreshGit();
-		const openPath = docRef.current?.path;
-		if (openPath && dirItems.some((i) => i.path === openPath)) void loadFile(openPath, cursorRef.current?.line ?? 1, cursorRef.current?.col ?? 1);
-	}, [cwd, say, t, refreshGit, loadFile]);
-	// Stage / unstage one path or a whole directory ("" = whole repo). Rows
-	// moving between the Staged/Changes sections is the feedback; only errors
-	// raise a notice.
-	const stageChange = useCallback(async (path) => {
-		if (!cwd) return false;
-		const repo = repoSelRef.current;
-		const res = await api("git.stage", repo ? { cwd, path, repo } : { cwd, path });
-		if (!res.ok || res.value?.error) {
-			say(`${t("error")}: ${res.value?.error ?? res.error}`, "error");
-			return false;
-		}
-		if (res.value.status) setGit(res.value.status);
-		return true;
-	}, [cwd, say, t]);
-	const unstageChange = useCallback(async (path) => {
-		if (!cwd) return false;
-		const repo = repoSelRef.current;
-		const res = await api("git.unstage", repo ? { cwd, path, repo } : { cwd, path });
-		if (!res.ok || res.value?.error) {
-			say(`${t("error")}: ${res.value?.error ?? res.error}`, "error");
-			return false;
-		}
-		if (res.value.status) setGit(res.value.status);
-		return true;
-	}, [cwd, say, t]);
-	const [committing, setCommitting] = useState(false);
-	// Commit the staged set; when nothing is staged the panel asks for a
-	// "stage all & commit" instead (stageAll), done here as two calls.
-	// amend rewrites the previous commit (never combined with stageAll).
-	const commitChanges = useCallback(async (message, stageAll, amend) => {
-		if (!cwd || committing) return false;
-		setCommitting(true);
-		try {
-			const repo = repoSelRef.current;
-			if (stageAll) {
-				const sres = await api("git.stage", repo ? { cwd, path: "", repo } : { cwd, path: "" });
-				if (!sres.ok || sres.value?.error) {
-					say(`${t("error")}: ${sres.value?.error ?? sres.error}`, "error");
-					return false;
-				}
-				if (sres.value.status) setGit(sres.value.status);
-			}
-			const res = await api("git.commit", repo ? { cwd, message, amend: amend === true, repo } : { cwd, message, amend: amend === true });
-			const value = res.ok ? res.value ?? {} : { error: res.error };
-			if (value.status) setGit(value.status);
-			if (!res.ok || value.error) {
-				say(`${t("error")}: ${value.error ?? res.error}`, "error");
-				return false;
-			}
-			say(t("changes.committed", { c: value.commit ?? "" }));
-			return true;
-		} finally {
-			setCommitting(false);
-		}
-	}, [cwd, committing, say, t]);
 	// Blame column data: refetched per open file while the toggle is on.
 	useEffect(() => {
 		if (!blameOn || !doc || !cwd) return void 0;
