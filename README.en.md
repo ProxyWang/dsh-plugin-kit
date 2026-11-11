@@ -8,6 +8,20 @@ English | [简体中文](README.md)
 
 ![Development toolbox Start page, shown in Chinese: Code & Files, Terminal & Web, and Agent Extensions](docs/images/toolbox-launcher.webp)
 
+## UI previews
+
+Component previews rendered with the DSH theme tokens and sample data; these are not production requests or live-session screenshots.
+
+| API · Dark | API · Light |
+| --- | --- |
+| ![API dark](docs/images/api-v150-dark.png) | ![API light](docs/images/api-v150-light.png) |
+
+| Skills · Dark | Skills · Light |
+| --- | --- |
+| ![Skills dark](docs/images/skills-v150-dark.png) | ![Skills light](docs/images/skills-v150-light.png) |
+
+[UI system / 主题与布局约定](docs/ui-system.md)
+
 ## What does this plugin do?
 
 | Start-page group | Tool | What you can do |

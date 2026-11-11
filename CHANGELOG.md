@@ -13,7 +13,8 @@
 ### Verification
 
 - 386 assertions green across host, client, search, nested, parent and remote suites.
-- Chrome previews checked Skills and API surfaces at wide and narrow widths.
+- Chrome component previews checked API, Skills, Changes, launcher and references peek at 360 px and 1000 px in both actual DSH themes (20 states); no horizontal control overflow. Enabled primary button contrast exceeded 4.5:1. This is not an authenticated end-to-end GUI test.
+- Corrected primary button text to the actual `label-primary-foreground` token, supplied the launcher with its own local aliases, preserved editor monospace fonts, and let narrow peek headers wrap the shortcut hint.
 
 ## 1.4.2 (2026-11-11)
 

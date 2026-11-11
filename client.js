@@ -5492,7 +5492,7 @@ var CSS2 = `
 .ce-sk-view-switch{display:flex;align-items:center;gap:2px;margin-right:auto}
 .ce-sk-edit-label{margin-right:auto;font-size:12px;color:var(--dsw-alias-label-secondary,#999)}
 .ce-sk-root .ce-sk-view-on{background:var(--dsw-alias-interactive-bg-hover,#2c313a);color:var(--dsw-alias-label-primary,#ddd)}
-.ce-sk-root .ce-sk-primary{background:var(--dsw-alias-button-primary-fill,var(--dsw-alias-brand-primary,#2f81f7));border-color:transparent;color:var(--dsw-alias-label-on-color,#fff)}
+.ce-sk-root .ce-sk-primary{background:var(--dsw-alias-button-primary-fill,var(--dsw-alias-brand-primary,#2f81f7));border-color:transparent;color:var(--dsw-alias-label-primary-foreground,#fff)}
 .ce-sk-root .ce-sk-primary:hover{background:var(--dsw-alias-button-primary-hover,var(--dsw-alias-button-primary-fill,var(--dsw-alias-brand-primary,#2f81f7)));filter:none}
 .ce-sk-root .ce-sk-btn{min-height:28px;white-space:normal}
 .ce-sk-name-hint{flex-basis:100%;font-size:11px;line-height:1.5;color:var(--dsw-alias-label-secondary,#999)}
@@ -5682,7 +5682,7 @@ var CSS2 = `
 .cea-root>.cea-bar{display:grid;grid-template-columns:88px minmax(0,1fr) auto;gap:0;padding:12px 12px 8px;border:0}
 .cea-root>.cea-bar .cea-request-method{width:88px;height:36px;border-radius:6px 0 0 6px;font-weight:700}
 .cea-root>.cea-bar .cea-url{width:100%;height:36px;box-sizing:border-box;border-radius:0 6px 6px 0;border-left:0;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px}
-.cea-root>.cea-bar .cea-send{margin-left:8px;min-height:36px;padding:6px 16px;background:var(--dsw-alias-button-primary-fill,var(--dsw-alias-brand-primary,#2f81f7));border-color:transparent;color:var(--dsw-alias-label-on-color,#fff);font-weight:600}
+.cea-root>.cea-bar .cea-send{margin-left:8px;min-height:36px;padding:6px 16px;background:var(--dsw-alias-button-primary-fill,var(--dsw-alias-brand-primary,#2f81f7));border-color:transparent;color:var(--dsw-alias-label-primary-foreground,#fff);font-weight:600}
 .cea-root>.cea-bar .cea-send:hover{background:var(--dsw-alias-button-primary-hover,var(--dsw-alias-button-primary-fill,var(--dsw-alias-brand-primary,#2f81f7)))}
 .cea-tools{display:flex;flex-wrap:wrap;align-items:center;gap:4px;padding:0 12px 8px;border-bottom:.5px solid var(--dsw-alias-border-l1,#333);flex:none}
 .cea-tools .ce-sk-btn{border-color:transparent;padding:4px 8px;font-size:11px}
@@ -5725,7 +5725,7 @@ var CSS2 = `
 .ctp-inputrow:hover{background:transparent}
 .ctp-inputrow .ce-input{flex:1;min-width:0}
 /* v1.5 visual system: calm surfaces, one interaction accent, readable density. */
-.ce-root{
+.ce-root,.cel-root{
 	--ce-surface-0:var(--dsw-alias-bg-base,#111315);
 	--ce-surface-1:var(--dsw-alias-bg-layer-1,#181b1f);
 	--ce-surface-2:var(--dsw-alias-bg-layer-2,#20242a);
@@ -5734,13 +5734,12 @@ var CSS2 = `
 	--ce-fg:var(--dsw-alias-label-primary,#edf2f7);
 	--ce-fg-2:var(--dsw-alias-label-secondary,#aab5c1);
 	--ce-fg-3:var(--dsw-alias-label-tertiary,#7d8996);
-	--ce-accent:var(--dsw-alias-brand-primary,#79b8ff);
+	--ce-accent:var(--dsw-alias-button-info-fill,#4176e6);
 	--ce-accent-soft:color-mix(in srgb,var(--ce-accent) 14%,transparent);
 	--ce-radius:8px;
 	background:var(--ce-surface-0);color:var(--ce-fg);font-size:13px;letter-spacing:.005em
 }
 .ce-root *{box-sizing:border-box}
-.ce-root button,.ce-root input,.ce-root select,.ce-root textarea{font-family:inherit}
 .ce-root button{transition:background-color .12s ease,color .12s ease,border-color .12s ease,opacity .12s ease}
 .ce-root button:focus-visible,.ce-root input:focus-visible,.ce-root select:focus-visible,.ce-root textarea:focus-visible{outline:2px solid var(--ce-accent);outline-offset:1px}
 .ce-toolbar{min-height:42px;padding:7px 10px;background:var(--ce-surface-1);border-bottom:1px solid var(--ce-line);gap:7px}
@@ -5753,11 +5752,11 @@ var CSS2 = `
 .ce-rail-wrap{background:var(--ce-surface-0);border-right:1px solid var(--ce-line)}
 .ce-rail-search{background:var(--ce-surface-1);border-color:var(--ce-line-strong);color:var(--ce-fg-2)}
 .ce-rail-search:hover{background:var(--ce-accent-soft);border-color:color-mix(in srgb,var(--ce-accent) 45%,transparent)}
-.ce-row{min-height:28px;border-radius:6px;padding:5px 9px;color:var(--ce-fg-2)}
+.ce-row{min-height:26px;border-radius:6px;padding:5px 9px;color:var(--ce-fg-2)}
 .ce-row:hover{background:var(--ce-surface-2);color:var(--ce-fg)}
 .ce-active{background:var(--ce-accent-soft);color:var(--ce-fg);box-shadow:inset 2px 0 0 var(--ce-accent)}
 .ce-note{color:var(--ce-fg-3);padding:6px 12px;line-height:1.5}
-.ce-section{padding:14px 12px 7px;color:var(--ce-fg-2);font-size:11px;letter-spacing:.06em;border-top:1px solid var(--ce-line)}
+.ce-section{padding:12px 12px 7px;color:var(--ce-fg-2);font-size:11px;letter-spacing:normal}
 .ce-editor{background:var(--ce-surface-0)}
 .ce-tabs{background:var(--ce-surface-0);border-bottom:1px solid var(--ce-line);padding:5px 8px 0}
 .ce-tab{border-radius:7px 7px 0 0;padding:6px 8px;color:var(--ce-fg-3)}
@@ -5768,18 +5767,23 @@ var CSS2 = `
 .ce-code-wrap,.ce-code,.ce-gutter{background:var(--ce-surface-0)}
 .ce-gutter{border-right:1px solid var(--ce-line)}
 .ce-line{font-size:13px;line-height:${ROW}px}
-.ce-empty{color:var(--ce-fg-3);background:radial-gradient(circle at 50% 42%,var(--ce-accent-soft),transparent 34%);line-height:1.6}
+.ce-empty{color:var(--ce-fg-3);background:var(--ce-surface-0);line-height:1.6}
 .ce-commitbox{background:var(--ce-surface-1);border-bottom:1px solid var(--ce-line);padding:10px 12px 12px}
 .ce-commitbox-msg,.ce-input{background:var(--ce-surface-0);border:1px solid var(--ce-line-strong);color:var(--ce-fg);border-radius:7px}
 .ce-commitbox-msg::placeholder,.ce-input::placeholder{color:var(--ce-fg-3)}
 .ce-commitbox-msg:focus,.ce-input:focus{border-color:var(--ce-accent);box-shadow:0 0 0 3px var(--ce-accent-soft)}
-.ce-commitbox-btn,.ce-sk-primary{background:var(--dsw-alias-button-primary-fill,var(--ce-accent));border:0;color:var(--dsw-alias-label-on-color,#fff);border-radius:7px;min-height:30px}
+.ce-commitbox-btn,.ce-sk-primary{background:var(--dsw-alias-button-primary-fill,var(--ce-accent));border:0;color:var(--dsw-alias-label-primary-foreground,#fff);border-radius:7px;min-height:30px}
 .ce-commitbox-btn:hover,.ce-sk-primary:hover{background:var(--dsw-alias-button-primary-hover,var(--ce-accent))}
 .ce-changes-search{background:var(--ce-surface-1);border-bottom:1px solid var(--ce-line);padding:8px 12px}
 .ce-change-group{border-top:1px solid var(--ce-line);padding-bottom:8px}
 .ce-peek,.ce-overlay,.cea-hist,.cet-context{background:var(--ce-surface-1);border:1px solid var(--ce-line-strong);border-radius:10px;box-shadow:0 18px 50px rgba(0,0,0,.42)}
 .ce-peek-head,.ce-overlay-head{background:var(--ce-surface-2);border-bottom:1px solid var(--ce-line);padding:9px 12px}
 .ce-peek-file{background:var(--ce-surface-2);border-color:var(--ce-line);padding:7px 12px}
+.ce-peek-head{flex-wrap:wrap;gap:6px 8px}
+.ce-peek-sym{flex:1 1 120px;max-width:none;min-width:0}
+.ce-peek-hint{flex:1 1 100%;order:1;font-size:10px}
+.ce-peek-head>.ce-spacer{display:none}
+.ce-peek-head>.ce-tool{flex:none}
 .ce-peek-row-sel{background:var(--ce-accent-soft)}
 .cea-root>.cea-bar{background:var(--ce-surface-1);border-bottom:1px solid var(--ce-line);padding:10px 12px}
 .cea-root>.cea-bar .cea-request-method,.cea-root>.cea-bar .cea-url{height:38px;background:var(--ce-surface-0);border-color:var(--ce-line-strong)}
@@ -5794,10 +5798,21 @@ var CSS2 = `
 .ce-sk-row-on{background:var(--ce-accent-soft);box-shadow:inset 2px 0 var(--ce-accent)}
 .ce-sk-detail-title{letter-spacing:-.01em}
 .ce-sk-source,.ce-sk-ta{background:var(--ce-surface-0);color:var(--ce-fg)}
-.cel-root{background:var(--ce-surface-1);border:1px solid var(--ce-line);border-radius:10px;padding:8px}
-.cel-section{color:var(--ce-fg-3);padding:12px 8px 6px;font-size:11px;letter-spacing:.06em}
-.cel-row{border-radius:8px;padding:8px;color:var(--ce-fg-2)}
-.cel-row:hover{background:var(--ce-accent-soft);color:var(--ce-fg)}
+.cel-root{background:var(--ce-surface-0);padding:20px 16px;gap:4px}
+.cel-section{color:var(--ce-fg-3);padding:18px 10px 6px;font-size:11px;letter-spacing:normal;text-transform:none}
+.cel-row{border-radius:8px;padding:10px;color:var(--ce-fg-2);gap:12px;min-height:60px}
+.cel-row:hover{background:var(--ce-surface-1);color:var(--ce-fg)}
+.cel-ico{background:var(--ce-surface-2);border:1px solid var(--ce-line);color:var(--ce-fg-2);width:32px;height:32px;border-radius:8px}
+.cel-desc{color:var(--ce-fg-2);font-size:12px;line-height:1.5}
+.cel-kbd{font-size:10px;color:var(--ce-fg-3);background:var(--ce-surface-1);border-color:var(--ce-line)}
+.ce-changes .ce-section{font-size:12px;gap:6px}
+.ce-changes .ce-section>.ce-link{font-size:10px;font-weight:400}
+.ce-changes .ce-note-line{padding-top:6px;padding-bottom:8px;font-size:11px}
+.ce-changes>.ce-note{font-size:11px;padding-top:10px;padding-bottom:8px}
+.ce-commitbox-amend{font-size:11px;border-color:var(--ce-line);color:var(--ce-fg-2)}
+.ce-toolbar{flex-wrap:wrap}
+.ce-head{overflow-x:auto;scrollbar-width:thin}
+@media(prefers-reduced-motion:reduce){.ce-root button{transition:none}.ce-spin{animation:none}}
 `;
 
 // src/client/register.js

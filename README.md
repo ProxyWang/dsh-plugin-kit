@@ -8,6 +8,20 @@
 
 ![开发工具箱开始页：代码与文件、终端与网页、Agent 扩展](docs/images/toolbox-launcher.webp)
 
+## 界面预览
+
+以下为使用 DSH 真实主题变量和示例数据生成的组件预览；不是生产请求或真实会话截图。
+
+| API · Dark | API · Light |
+| --- | --- |
+| ![API dark](docs/images/api-v150-dark.png) | ![API light](docs/images/api-v150-light.png) |
+
+| Skills · Dark | Skills · Light |
+| --- | --- |
+| ![Skills dark](docs/images/skills-v150-dark.png) | ![Skills light](docs/images/skills-v150-light.png) |
+
+[UI system / 主题与布局约定](docs/ui-system.md)
+
 ## 这个插件能做什么？
 
 | 开始页分组 | 工具入口 | 用途 |
