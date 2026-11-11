@@ -6801,7 +6801,8 @@ function makeLauncher({ registry, sidebarRight, getShortcuts, t }) {
           title: typeof entry.description === "function" ? entry.description() : "",
           onClick: () => {
             try {
-              sidebarRight.openTab(kind);
+              if (kind === "browser") sidebarRight.openTab(kind, { params: { url: "https://www.doubao.com/" } });
+              else sidebarRight.openTab(kind);
             } catch (error) {
               console.warn("code-explorer: launcher open failed", error);
             }
