@@ -19,6 +19,12 @@ const GROUPS = [
 ];
 const GROUP_ORDER = ["code", "run", "skills", "more"];
 
+/** The Code IDE owns the primary workspace explorer. Keep the host file tab
+ * available to the shell, but do not present a second entry in the Start page. */
+export function isRedundantWorkspaceFiles(def) {
+	return String(def?.kind ?? "") === "files";
+}
+
 export function groupOf(kind) {
 	return GROUPS.find((g) => g.test(String(kind)))?.id ?? "more";
 }
@@ -33,7 +39,7 @@ export function collectBoxes(registry) {
 	}
 	const boxes = [];
 	for (const def of defs ?? []) {
-		if (!def || typeof def !== "object") continue;
+		if (!def || typeof def !== "object" || isRedundantWorkspaceFiles(def)) continue;
 		for (const entry of def.guide ?? []) {
 			if (!entry || typeof entry !== "object") continue;
 			boxes.push({ kind: def.kind, entry, group: groupOf(def.kind) });
@@ -89,6 +95,7 @@ export function makeBrowserOpener(sidebarRight, now = Date.now) {
 				: sidebarRight.openTabs?.getSnapshot?.()?.filter((tab) => tab.sessionId === sessionId) ?? [];
 			const existing = tabs.find((tab) => tab.kind === "browser");
 			if (existing) {
+				if (sidebarRight.isExpanded?.() === false) sidebarRight.toggleExpanded();
 				sidebarRight.focus(existing.id ?? existing.tabId);
 				return;
 			}

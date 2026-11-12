@@ -375,9 +375,151 @@ const fakeRegistry = {
 const boxes = collectBoxes(fakeRegistry);
 check("collectBoxes groups and orders", boxes.map((b) => b.group).join() === "code,run,skills", boxes.map((b) => b.group));
 check("collectBoxes bad registry", collectBoxes({ entries: () => { throw new Error("x"); } }).length === 0, null);
+const filteredBoxes = collectBoxes({ entries: () => [{ kind: "files", guide: [{ id: "files", title: () => "Workspace files" }] }, ...fakeRegistry.entries()] });
+check("launcher hides redundant workspace files entry", filteredBoxes.every((box) => box.kind !== "files") && filteredBoxes.length === boxes.length, filteredBoxes.map((box) => box.kind));
 const Launch = makeLauncher({ registry: fakeRegistry, sidebarRight: { openTab: () => {} }, getShortcuts: () => null, t: (k) => k });
 check("launcher renders element", Launch({}) != null, null);
 check("launcher null on empty registry", makeLauncher({ registry: { entries: () => [] }, sidebarRight: { openTab: () => {} }, getShortcuts: () => null, t: (k) => k })({}) === null, null);
+
+// --- Native left navigation routes tools to the current right-side workspace ----------------
+const { collectLeftTools, makeLeftToolRouter, installLeftTools, WorkspaceGuide } = await import("./src/client/lefttools.js");
+const { definition, apiDefinition, skillsDefinition } = await import("./src/client/register.js");
+const leftDefinitions = [definition((k) => k), apiDefinition((k) => k), skillsDefinition((k) => k),
+ { kind: "files", guide: [{ id: "f", title: () => "Files" }] },
+ { kind: "browser", guide: [{ id: "browser", title: () => "Browser", order: 1 }] },
+ { kind: "terminal", guide: [{ id: "terminal", title: () => "Terminal", order: 2 }] },
+];
+const leftRegistryListeners = new Set();
+const leftRegistry = { entries: () => leftDefinitions, subscribe(fn) { leftRegistryListeners.add(fn); return () => leftRegistryListeners.delete(fn); } };
+const leftTools = collectLeftTools(leftRegistry, (k) => k);
+check("left navigation collects workspace API skills browser and terminal", leftTools.map((tool) => tool.kind).join() === "code,code-api,code-skills,browser,terminal", leftTools.map((tool) => tool.kind));
+check("owned tools have no duplicate right guide entries", leftDefinitions.slice(0,3).every((entry) => entry.guide.length === 0), null);
+check("right workspace guide contains no launcher buttons", !collect(WorkspaceGuide({ t: (k) => k })).some((node) => node.type === "button"), null);
+let selectedLeftPanel = null;
+let leftSession = "session-A";
+let onScreenSession = "session-A";
+let rightExpanded = false;
+const leftNavigationCalls = [], leftNavigationNotices = [], leftLayoutListeners = new Set();
+const leftSlots = new Map();
+const leftLayout = {
+ panelInfo: { getSnapshot: () => ({ activePanelId: selectedLeftPanel }), subscribe(fn) { leftLayoutListeners.add(fn); return () => leftLayoutListeners.delete(fn); } },
+ selectPanel(id) {
+  if (id !== null && !leftSlots.has(`main:${id}`)) throw Error(`Missing main seat: ${id}`);
+  selectedLeftPanel = id; onScreenSession = id === null ? leftSession : undefined;
+  for (const listener of leftLayoutListeners) listener();
+ },
+};
+const leftSidebar = {
+ mounted: { getSnapshot: () => onScreenSession },
+ commandTarget(element) { check("left tool target uses restored Conversation instead of sidebar DOM", element === null && selectedLeftPanel === null, null); return onScreenSession ? { sessionId: onScreenSession, paneId: "right" } : undefined; },
+ openTabFromTarget(kind, target) { leftNavigationCalls.push({ kind, sessionId: target.sessionId }); rightExpanded = true; },
+ tabsIn(sessionId) { return sessionId === "session-A" ? [{ id: "browser-A", kind: "browser" }] : []; },
+ focus(id) { leftNavigationCalls.push({ focus: id, sessionId: onScreenSession }); },
+ isExpanded: () => rightExpanded,
+ toggleExpanded() { rightExpanded = !rightExpanded; },
+ openTab(kind, options) { leftNavigationCalls.push({ kind, options, sessionId: onScreenSession }); },
+};
+const contextLeft = {
+ layout: leftLayout, sidebarRight: leftSidebar, sidebarRightTabs: leftRegistry,
+ slots: {
+  inject(_name, register) { return register(); },
+  register(options, component) { const key = `${options.name}:${options.key ?? options.id}`; leftSlots.set(key, { options, component }); return () => leftSlots.delete(key); },
+ },
+};
+const disposeLeftTools = installLeftTools(contextLeft, (k) => k);
+check("tools use native same-level panel rows with matching main seats", leftTools.every((tool) => leftSlots.has(`sidebar.panellist:${tool.id}`) && leftSlots.has(`main:${tool.id}`)), [...leftSlots.keys()]);
+for (const kind of ["code", "code-api", "code-skills"]) {
+ leftLayout.selectPanel(leftTools.find((tool) => tool.kind === kind).id);
+ check(`left ${kind} opens in current right workspace and preserves Conversation`, selectedLeftPanel === null && leftNavigationCalls.at(-1)?.kind === kind && leftNavigationCalls.at(-1)?.sessionId === "session-A", leftNavigationCalls.at(-1));
+}
+onScreenSession = undefined; selectedLeftPanel = "plugins";
+leftLayout.selectPanel(leftTools.find((tool) => tool.kind === "code-api").id);
+check("tool click from global Plugins returns to conversation and opens right API", selectedLeftPanel === null && leftNavigationCalls.at(-1)?.kind === "code-api", leftNavigationCalls.at(-1));
+leftSession = "session-B";
+leftLayout.selectPanel(leftTools.find((tool) => tool.kind === "code-skills").id);
+check("left tool click follows current session instead of captured old session", leftNavigationCalls.at(-1)?.sessionId === "session-B", leftNavigationCalls.at(-1));
+leftSession = "session-A"; rightExpanded = false;
+leftLayout.selectPanel(leftTools.find((tool) => tool.kind === "browser").id);
+check("left browser entry reuses existing page and reveals collapsed workspace", rightExpanded && leftNavigationCalls.at(-1)?.focus === "browser-A", leftNavigationCalls.at(-1));
+const leftBeforeMissing = leftNavigationCalls.length;
+leftSession = undefined;
+leftLayout.selectPanel(leftTools.find((tool) => tool.kind === "code").id);
+check("no-session tool click preserves Conversation and opens no unrelated session", selectedLeftPanel === null && leftNavigationCalls.length === leftBeforeMissing, null);
+leftSession = "later-session";
+for (const listener of leftLayoutListeners) listener();
+check("missing-session tool click is not queued into a future session", leftNavigationCalls.length === leftBeforeMissing, null);
+// Independent router reports failures through visible notices, without keeping a stale target.
+const reportRouter = makeLeftToolRouter({ layout: leftLayout, sidebarRight: leftSidebar, getTools: () => leftTools, report: (text) => leftNavigationNotices.push(text), t: (k) => k });
+selectedLeftPanel = leftTools[0].id; leftSession = undefined; reportRouter();
+check("missing session produces clear navigation feedback", leftNavigationNotices.at(-1) === "shortcut.noSession", leftNavigationNotices);
+selectedLeftPanel = "schedules"; reportRouter();
+check("native automation panel selection remains untouched", selectedLeftPanel === "schedules", selectedLeftPanel);
+selectedLeftPanel = null;
+leftDefinitions.push({ kind: "new-tool", guide: [{ id: "new", title: () => "New Tool" }] });
+for (const listener of leftRegistryListeners) listener();
+check("newly registered tools receive a left entry dynamically", [...leftSlots.values()].some(({ options }) => options.name === "sidebar.panellist" && options.label?.() === "New Tool"), null);
+leftDefinitions.pop(); for (const listener of leftRegistryListeners) listener();
+check("removed tools release left entries and main seats", ![...leftSlots.values()].some(({ options }) => options.label?.() === "New Tool"), null);
+disposeLeftTools();
+check("plugin unload releases all left registrations and subscriptions", leftSlots.size === 0 && leftLayoutListeners.size === 0 && leftRegistryListeners.size === 0, { slots: leftSlots.size, layout: leftLayoutListeners.size, registry: leftRegistryListeners.size });
+
+// --- Tool toggle closes exact current-session tabs; sole guide is not a tool -----------------
+let toggleSession = "A", togglePanel = null, toggleBlocked = false;
+let toggleSerial = 0;
+const toggleSessions = new Map([["A", [{ id: "guide-A", kind: "guide" }]], ["B", [{ id: "foreign-code", kind: "code" }]]]);
+const toggleExpanded = new Map([["A", false], ["B", true]]);
+const toggleActive = new Map();
+const toggleCalls = [], toggleNotices = [];
+const toggleLayout = { panelInfo: { getSnapshot: () => ({ activePanelId: togglePanel }) }, selectPanel: (id) => { togglePanel = id; } };
+const toggleSidebar = {
+ mounted: { getSnapshot: () => toggleSession },
+ commandTarget: () => toggleSession ? { sessionId: toggleSession, paneId: "dock" } : undefined,
+ tabsIn: (id) => toggleSessions.get(id) ?? [],
+ active: () => (toggleSessions.get(toggleSession) ?? []).find((tab) => tab.id === toggleActive.get(toggleSession)),
+ isExpanded: () => toggleExpanded.get(toggleSession) ?? false,
+ toggleExpanded: () => { toggleExpanded.set(toggleSession, !toggleExpanded.get(toggleSession)); },
+ focus: (id) => { toggleActive.set(toggleSession, id); toggleCalls.push({ focus: id }); },
+ openTabFromTarget(kind, target) {
+  const id = `${kind}-${++toggleSerial}`;
+  toggleSessions.set(target.sessionId, [...this.tabsIn(target.sessionId), { id, kind }]);
+  toggleActive.set(target.sessionId, id); toggleExpanded.set(target.sessionId, true); toggleCalls.push({ open: kind, id });
+ },
+ openTab(kind) { this.openTabFromTarget(kind, { sessionId: toggleSession }); },
+ close(id) {
+  if (toggleBlocked) throw Error("unsaved changes");
+  toggleSessions.set(toggleSession, this.tabsIn(toggleSession).filter((tab) => tab.id !== id));
+  toggleCalls.push({ close: id });
+ },
+};
+const routeToggle = makeLeftToolRouter({ layout: toggleLayout, sidebarRight: toggleSidebar, getTools: () => leftTools, report: (text) => toggleNotices.push(text), t: (key) => key });
+const clickToggle = (kind) => { togglePanel = leftTools.find((tool) => tool.kind === kind).id; routeToggle(); };
+clickToggle("code");
+const firstToggleCode = toggleSidebar.tabsIn("A").find((tab) => tab.kind === "code").id;
+check("first tool click opens and expands workspace", toggleSidebar.isExpanded() && toggleCalls.at(-1)?.open === "code", toggleCalls);
+clickToggle("code-api");
+clickToggle("code");
+check("clicking existing inactive tool closes only its tab", toggleCalls.at(-1)?.close === firstToggleCode && toggleSidebar.tabsIn("A").some((tab) => tab.kind === "code-api") && toggleSidebar.isExpanded(), toggleCalls);
+clickToggle("code-api");
+check("last tool close collapses sidebar despite retained guide", !toggleSidebar.isExpanded() && toggleSidebar.tabsIn("A").every((tab) => tab.kind === "guide"), toggleSidebar.tabsIn("A"));
+check("tool close never affects another session", toggleSidebar.tabsIn("B")[0]?.id === "foreign-code", toggleSidebar.tabsIn("B"));
+clickToggle("code");
+toggleSidebar.toggleExpanded(); const beforeHiddenToggle = toggleCalls.length;
+clickToggle("code");
+check("clicking hidden tool reveals it instead of deleting it", toggleSidebar.isExpanded() && toggleCalls.length === beforeHiddenToggle + 1 && Boolean(toggleCalls.at(-1)?.focus) && toggleSidebar.tabsIn("A").some((tab) => tab.kind === "code"), toggleCalls);
+toggleBlocked = true; const tabsBeforeVeto = toggleSidebar.tabsIn("A");
+clickToggle("code");
+check("close veto preserves tab and expanded workspace", toggleSidebar.tabsIn("A") === tabsBeforeVeto && toggleSidebar.isExpanded() && toggleNotices.at(-1)?.includes("unsaved changes"), toggleNotices);
+toggleBlocked = false; clickToggle("code");
+clickToggle("browser"); clickToggle("browser"); const browserBeforeReopen = toggleSerial;
+clickToggle("browser");
+check("browser can reopen immediately after being toggled closed", toggleSerial === browserBeforeReopen + 1 && toggleSidebar.tabsIn("A").some((tab) => tab.kind === "browser"), toggleCalls);
+clickToggle("browser");
+toggleSessions.set("A", [{ id: "guide-A", kind: "guide" }, { id: "terminal-one", kind: "terminal" }, { id: "terminal-two", kind: "terminal" }]);
+toggleExpanded.set("A", true); toggleActive.set("A", "terminal-one");
+clickToggle("terminal");
+check("multiple terminals close the active matching instance only", toggleCalls.at(-1)?.close === "terminal-one" && toggleSidebar.tabsIn("A").some((tab) => tab.id === "terminal-two") && toggleSidebar.isExpanded(), toggleSidebar.tabsIn("A"));
+clickToggle("terminal");
+check("closing final terminal collapses workspace", !toggleSidebar.isExpanded(), null);
 
 // --- browser launch reuse, including existing multi-instance tabs ------------------------------
 const { makeBrowserOpener } = await import("./src/client/launcher.js");
@@ -570,6 +712,50 @@ try {
 	check("settled API response appears and Send becomes available", Boolean(apiNode((n) => n.props.className === "cea-resp")) && apiNode((n) => n.props.className === "ce-sk-btn cea-send")?.props.disabled === false, null);
 } finally { globalThis.fetch = savedFetch; }
 
+// --- Request builder tables and enabled-row wire behavior ---------------------------------
+const { RequestFields } = await import("./src/client/requestfields.js");
+let tableRows = [{ name: "X-Trace", value: "abc", description: "Trace id" }];
+const drawFields = () => RequestFields({ t: (k) => k, label: "Headers", rows: tableRows, onChange: (rows) => { tableRows = rows; } });
+let fieldNodes = collect(drawFields());
+check("request fields render real table headers", fieldNodes.filter((n) => n.type === "th").length === 5, null);
+fieldNodes.find((n) => n.type === "input" && n.props.type === "checkbox" && !n.props.disabled).props.onChange({ target: { checked: false } });
+check("disabling request row retains its value and description", tableRows[0].enabled === false && tableRows[0].value === "abc" && tableRows[0].description === "Trace id", tableRows);
+fieldNodes = collect(drawFields());
+fieldNodes.filter((n) => n.type === "input" && n.props.placeholder === "api.fieldName").at(-1).props.onChange({ target: { value: "X-New" } });
+check("typing in trailing row appends an enabled field", tableRows.length === 2 && tableRows[1].name === "X-New" && tableRows[1].enabled === true, tableRows);
+fieldNodes = collect(drawFields());
+fieldNodes.find((n) => n.type === "button").props.onClick();
+check("request table delete removes only selected row", tableRows.length === 1 && tableRows[0].name === "X-New", tableRows);
+check("disabled params do not override URL parameters", mergeParams("https://example.test/?q=original", [{ name: "q", value: "disabled", enabled: false }]) === "https://example.test/?q=original", null);
+check("disabled environment variables are excluded", buildEnvMap([{ name: "key", value: "old", enabled: false }]).key === undefined, null);
+for (const bodyType of ["form", "multipart"]) {
+ const exported = toCurl({ url: "https://example.test/", bodyType, headers: [{ name: "X-Off", value: "secret", enabled: false }], formPairs: [{ name: "off", value: "hidden", enabled: false }, { name: "on", value: "visible" }] });
+ check(`curl ${bodyType} omits disabled headers and fields`, !exported.includes("secret") && !exported.includes("hidden") && exported.includes("visible"), null);
+}
+const renderTableApi = createHookRenderer(ApiView, { t: (k) => k });
+let tableApi = renderTableApi();
+const tableNode = (predicate) => collect(tableApi).find(predicate);
+const chooseApiTab = (key) => { tableNode((n) => n.props.className?.startsWith("cea-config-tab") && n.children[0] === key).props.onClick(); tableApi = renderTableApi(); };
+tableNode((n) => n.props.className === "ce-input cea-url").props.onChange({ target: { value: "https://example.test/" } }); tableApi = renderTableApi();
+tableNode((n) => n.type === RequestFields).props.onChange([{ name: "on", value: "1" }, { name: "off", value: "2", enabled: false }]); tableApi = renderTableApi();
+chooseApiTab("api.headers");
+tableNode((n) => n.type === RequestFields).props.onChange([{ name: "X-On", value: "yes" }, { name: "X-Off", value: "no", enabled: false }]); tableApi = renderTableApi();
+check("header tab count includes enabled named fields only", collect(tableApi).find((n) => n.props.className === "cea-config-tab cea-config-tab-on").children[1].children[0] === 1, null);
+chooseApiTab("api.environment");
+check("environment editor is a configuration tab", Boolean(tableNode((n) => n.type === RequestFields && n.props.label === "api.environment")), null);
+const tableFetch = globalThis.fetch;
+let tableWire;
+globalThis.fetch = async (_url, options) => { tableWire = JSON.parse(options.body); return { json: async () => ({ ok: true, value: { status: 200, headers: [], text: "ok" } }) }; };
+try {
+ tableNode((n) => n.props.className === "ce-sk-btn cea-send").props.onClick();
+ await new Promise((resolve) => setImmediate(resolve)); tableApi = renderTableApi();
+ check("API sends only enabled parameters and headers", tableWire.url === "https://example.test/?on=1" && tableWire.headers.length === 1 && tableWire.headers[0].name === "X-On", tableWire);
+ tableNode((n) => n.props.title === "api.history").props.onClick(); tableApi = renderTableApi();
+ tableNode((n) => n.props.title === "api.restoreTitle").props.onClick(); tableApi = renderTableApi();
+ chooseApiTab("api.headers");
+ check("request history restores disabled fields without losing metadata", tableNode((n) => n.type === RequestFields).props.rows[1].enabled === false, null);
+} finally { globalThis.fetch = tableFetch; }
+
 // --- Task layout: narrow code navigation and review-first changes ---------------------------
 const { CodeBody } = await import("./src/client/code.js");
 const { TreePanel: TreePanelCmp } = await import("./src/client/tree.js");
@@ -600,6 +786,44 @@ try {
 	getCode((n) => n.props.className === "ce-mobile-open-editor ce-link").props.onClick(); codeTree = renderCode();
 	check("return to editor does not reload or lose current document", codeTree.props["data-mobile-view"] === "editor" && navRequests.filter((r) => r.url.endsWith("/fs.read")).length === 1, navRequests);
 	getCode((n) => n.props.className === "ce-mobile-back").props.onClick(); codeTree = renderCode();
+	// File navigation must reclaim the editor from search/quick-open overlays.
+	getCode((n) => n.props.className === "ce-rail-search").props.onClick(); codeTree = renderCode();
+	getCode((n) => n.type.name === "SearchPanel").props.onQuery("keep-query"); codeTree = renderCode();
+	getCode((n) => n.type === TreePanelCmp).props.onOpenFile("other.txt", 1, 1);
+	codeTree = renderCode();
+	check("tree file click dismisses search immediately", !getCode((n) => n.type.name === "SearchPanel"), null);
+	await new Promise((resolve) => setImmediate(resolve)); codeTree = renderCode();
+	check("file navigation displays the selected document", getCode((n) => n.props.className === "ce-head-path")?.children[0] === "other.txt", null);
+	getCode((n) => n.props.className === "ce-rail-search").props.onClick(); codeTree = renderCode();
+	check("reopening search preserves the query", getCode((n) => n.type.name === "SearchPanel")?.props.state.query === "keep-query", null);
+	getCode((n) => n.type.name === "SearchPanel").props.onClose(); codeTree = renderCode();
+	getCode((n) => n.props.className === "ce-rail-search").props.onClick(); codeTree = renderCode();
+	codeTree.props.onKeyDown({ code: "KeyP", ctrlKey: true, preventDefault() {} }); codeTree = renderCode();
+	check("quick open replaces search instead of stacking", Boolean(getCode((n) => n.type.name === "QuickOpen")) && !getCode((n) => n.type.name === "SearchPanel"), null);
+	getCode((n) => n.props.className === "ce-rail-search").props.onClick(); codeTree = renderCode();
+	check("search replaces quick open instead of stacking", Boolean(getCode((n) => n.type.name === "SearchPanel")) && !getCode((n) => n.type.name === "QuickOpen"), null);
+	getCode((n) => n.type === TreePanelCmp).props.onOpenFile("other.txt", 1, 1);
+	await new Promise((resolve) => setImmediate(resolve)); codeTree = renderCode();
+	getCode((n) => n.type === "button" && n.props.title === "editor.edit").props.onClick(); codeTree = renderCode();
+	getCode((n) => n.type === "textarea" && n.props.className.startsWith("ce-edit-ta")).props.onChange({ target: { value: "unsaved draft" } }); codeTree = renderCode();
+	const readsBeforeDirtyNavigation = navRequests.filter((r) => r.url.endsWith("/fs.read")).length;
+	getCode((n) => n.type === TreePanelCmp).props.onOpenFile("blocked.txt", 1, 1);
+	await new Promise((resolve) => setImmediate(resolve)); codeTree = renderCode();
+	check("tree navigation preserves unsaved draft and refuses reload", getCode((n) => n.type === "textarea" && n.props.className.startsWith("ce-edit-ta"))?.props.value === "unsaved draft" && navRequests.filter((r) => r.url.endsWith("/fs.read")).length === readsBeforeDirtyNavigation, null);
+	getCode((n) => n.props.className === "ce-rail-search").props.onClick(); codeTree = renderCode();
+	codeTree.props.onKeyDown({ key: "Escape", preventDefault() {}, stopPropagation() {} }); codeTree = renderCode();
+	check("Escape closes search before cancelling an editor draft", !getCode((n) => n.type.name === "SearchPanel") && getCode((n) => n.type === "textarea" && n.props.className.startsWith("ce-edit-ta"))?.props.value === "unsaved draft", null);
+	getCode((n) => n.type === "button" && n.children[0] === "editor.cancel").props.onClick(); codeTree = renderCode();
+	getCode((n) => n.props.className === "ce-rail-search").props.onClick(); codeTree = renderCode();
+	getCode((n) => n.props.className.startsWith("ce-command-trigger")).props.onClick(); codeTree = renderCode();
+	check("command center replaces search", Boolean(getCode((n) => n.type.name === "CommandPalette")) && !getCode((n) => n.type.name === "SearchPanel"), null);
+	getCode((n) => n.type.name === "CommandPalette").props.commands.find((command) => command.id === "changes").run(); codeTree = renderCode();
+	check("source control command dismisses command center", !getCode((n) => n.type.name === "CommandPalette"), null);
+	getCode((n) => n.props.className === "ce-rail-search").props.onClick(); codeTree = renderCode();
+	getCode((n) => n.type.name === "ChangesPanel").props.onOpenCommit({ hash: "abc" }); codeTree = renderCode();
+	check("Git commit navigation dismisses search immediately", !getCode((n) => n.type.name === "SearchPanel"), null);
+	await new Promise((resolve) => setImmediate(resolve)); codeTree = renderCode();
+	getCode((n) => n.type === "button" && n.children[0] === "toolbar.files").props.onClick(); codeTree = renderCode();
 	getCode((n) => n.type === TreePanelCmp).props.onSearchDirectory("src/client"); codeTree = renderCode();
 	check("directory action selects an explicit directory scope", getCode((n) => n.type.name === "SearchPanel")?.props.state.scope.directory === "src/client", null);
 	getCode((n) => n.type.name === "SearchPanel").props.onQuery("needle"); codeTree = renderCode();
@@ -757,6 +981,158 @@ try {
 	check("peek Escape works even while focus remains on the editor", peekClosed === 2 && stoppedPeekEscape, peekClosed);
 } finally { if (originalPeekDocument === undefined) delete globalThis.document; else globalThis.document = originalPeekDocument; }
 
+// --- Shared dismiss lifecycle: actual capture listeners and component state -----------------
+const { registerDismissLayer } = await import("./src/client/dismiss.js");
+const dismissalDocument = globalThis.document;
+const dismissalFetch = globalThis.fetch;
+const dismissalListeners = new Map();
+const layerDoc = {
+ activeElement: null,
+ addEventListener(name, listener, capture) { dismissalListeners.set(name, { listener, capture }); },
+ removeEventListener(name, listener) { if (dismissalListeners.get(name)?.listener === listener) dismissalListeners.delete(name); },
+};
+const outsideNode = {};
+const eventFor = (target, patch = {}) => ({ target, button: 0, preventDefault() { this.defaultPrevented = true; }, stopPropagation() { this.stopped = true; }, ...patch });
+const dispatchLayer = (name, event) => dismissalListeners.get(name)?.listener(event);
+const makeLayerNode = (inside) => ({ ownerDocument: layerDoc, contains: (target) => target === inside, isConnected: true });
+globalThis.document = layerDoc;
+globalThis.fetch = async () => ({ json: async () => ({ ok: true, value: { branches: [] } }) });
+try {
+ let lowerClosed = 0, upperClosed = 0;
+ const lowerInside = {}, upperInside = {};
+ const lower = registerDismissLayer(layerDoc, { node: () => makeLayerNode(lowerInside), dismiss: () => lowerClosed++ });
+ const upper = registerDismissLayer(layerDoc, { node: () => makeLayerNode(upperInside), dismiss: () => upperClosed++ });
+ dispatchLayer("pointerdown", eventFor(upperInside));
+ check("dismiss registry keeps clicks inside top layer open", upperClosed === 0 && lowerClosed === 0, null);
+ const clickOutside = eventFor(outsideNode);
+ dispatchLayer("pointerdown", clickOutside);
+ check("outside dismissal affects only top layer and preserves destination click", upperClosed === 1 && lowerClosed === 0 && !clickOutside.defaultPrevented && !clickOutside.stopped, null);
+ dispatchLayer("pointerdown", eventFor(outsideNode, { button: 2 }));
+ check("right click does not dismiss a transient layer", upperClosed === 1, null);
+ dispatchLayer("keydown", eventFor(outsideNode, { key: "Escape", isComposing: true }));
+ check("IME Escape does not dismiss a transient layer", upperClosed === 1, null);
+ const escapeTop = eventFor(outsideNode, { key: "Escape" }); dispatchLayer("keydown", escapeTop);
+ check("Escape closes only top layer and protects underlying editor", upperClosed === 2 && lowerClosed === 0 && escapeTop.defaultPrevented && escapeTop.stopped, null);
+ upper(); lower();
+ check("last layer unmount removes both global listeners", dismissalListeners.size === 0, dismissalListeners.size);
+ const removed = registerDismissLayer(layerDoc, { node: () => ({ isConnected: false }), dismiss: () => { throw Error("hidden layer dismissed"); } });
+ dispatchLayer("pointerdown", eventFor(outsideNode)); removed();
+ check("detached layers cannot intercept page interaction", dismissalListeners.size === 0, null);
+
+ const popupCases = [
+  ["LocationList", { overlay: { title: "Targets", items: [] }, cwd: "/w", onPick() {} }],
+  ["QuickOpen", { state: { query: "", results: [] }, onQuery() {}, onPick() {} }],
+  ["SymbolPalette", { symbols: [], onPick() {} }],
+  ["GotoLinePalette", { totalLines: 10, initial: 1, onGo() {} }],
+  ["FileHistoryOverlay", { hist: { path: "a.txt", commits: [] }, onPick() {} }],
+  ["CommandPalette", { commands: [] }],
+ ];
+ const allOverlays = await import("./src/client/overlays.js");
+ const { BranchPalette } = await import("./src/client/branchpick.js");
+ popupCases.push(["BranchPalette", { cwd: "/w", current: "main", onDone() {} }]);
+ for (const [name, props] of popupCases) {
+  let closes = 0;
+  const renderer = createHookRenderer(name === "BranchPalette" ? BranchPalette : allOverlays[name], { t: (k) => k, ...props, onClose: () => closes++ }, { effects: true });
+  const panel = renderer(); const inside = {};
+  panel.props.ref.current = makeLayerNode(inside); renderer.flushEffects();
+  dispatchLayer("pointerdown", eventFor(inside));
+  dispatchLayer("pointerdown", eventFor(outsideNode));
+  check(`${name} dismisses outside while retaining internal controls`, closes === 1, closes);
+  dispatchLayer("keydown", eventFor(inside, { key: "Escape" }));
+  check(`${name} responds to captured Escape`, closes === 2, closes);
+  renderer.unmount();
+  check(`${name} cleans up dismissal listeners`, dismissalListeners.size === 0, dismissalListeners.size);
+ }
+ let restoredFocus = 0;
+ const opener = { isConnected: true, focus() { restoredFocus++; } };
+ layerDoc.activeElement = opener;
+ const popupApi = createHookRenderer(ApiView, { t: (k) => k }, { effects: true });
+ let popupTree = popupApi(); popupApi.flushEffects(); popupTree = popupApi();
+ const findPopup = (predicate) => collect(popupTree).find(predicate);
+ const paintPopup = () => { popupTree = popupApi(); return popupTree; };
+ findPopup((n) => n.props["data-ce-popup-trigger"] === "api-save").props.onClick(); paintPopup();
+ const favoriteInside = {};
+ findPopup((n) => n.props["aria-label"] === "api.saveTitle").props.ref.current = makeLayerNode(favoriteInside); popupApi.flushEffects();
+ findPopup((n) => n.props.placeholder === "api.savePlaceholder").props.onChange({ target: { value: "Keep favorite draft" } }); paintPopup();
+ dispatchLayer("pointerdown", eventFor(favoriteInside)); paintPopup();
+ check("favorite dialog stays open while editing inside", Boolean(findPopup((n) => n.props.placeholder === "api.savePlaceholder")), null);
+ dispatchLayer("pointerdown", eventFor(outsideNode)); paintPopup(); popupApi.flushEffects();
+ check("favorite dialog closes on outside click without stealing focus", !findPopup((n) => n.props.placeholder === "api.savePlaceholder") && restoredFocus === 0, null);
+ findPopup((n) => n.props["data-ce-popup-trigger"] === "api-save").props.onClick(); paintPopup();
+ findPopup((n) => n.props["aria-label"] === "api.saveTitle").props.ref.current = makeLayerNode(favoriteInside); popupApi.flushEffects();
+ check("reopening favorite retains the unsaved name", findPopup((n) => n.props.placeholder === "api.savePlaceholder")?.props.value === "Keep favorite draft", null);
+ dispatchLayer("keydown", eventFor(favoriteInside, { key: "Escape" })); paintPopup(); popupApi.flushEffects();
+ check("favorite Escape dismisses and restores prior focus", !findPopup((n) => n.props.placeholder === "api.savePlaceholder") && restoredFocus === 1, restoredFocus);
+ findPopup((n) => n.props["data-ce-popup-trigger"] === "api-import").props.onClick(); paintPopup();
+ const importInside = {};
+ findPopup((n) => n.props["aria-label"] === "api.importTitle" && n.props.role === "dialog").props.ref.current = makeLayerNode(importInside); popupApi.flushEffects();
+ findPopup((n) => n.props.className === "cea-body cea-import").props.onChange({ target: { value: "curl https://example.test/keep" } }); paintPopup();
+ dispatchLayer("keydown", eventFor(importInside, { key: "Escape" })); paintPopup(); popupApi.flushEffects();
+ findPopup((n) => n.props["data-ce-popup-trigger"] === "api-import").props.onClick(); paintPopup();
+ findPopup((n) => n.props["aria-label"] === "api.importTitle" && n.props.role === "dialog").props.ref.current = makeLayerNode(importInside); popupApi.flushEffects();
+ check("curl import retains draft after Escape", findPopup((n) => n.props.className === "cea-body cea-import")?.props.value === "curl https://example.test/keep", null);
+ findPopup((n) => n.props["data-ce-popup-trigger"] === "api-history").props.onClick(); paintPopup(); popupApi.flushEffects();
+ const historyInside = {};
+ findPopup((n) => n.props.className === "cea-hist").props.ref.current = makeLayerNode(historyInside); popupApi.flushEffects();
+ check("opening API history replaces import dialog", !findPopup((n) => n.props.className === "cea-body cea-import") && Boolean(findPopup((n) => n.props.className === "cea-hist")), null);
+ dispatchLayer("pointerdown", eventFor(outsideNode)); paintPopup(); popupApi.flushEffects();
+ check("API history also dismisses on outside input", !findPopup((n) => n.props.className === "cea-hist"), null);
+ // Skills form dismissal closes the form but retains the draft name/scope.
+ const newSkillView = createHookRenderer(SkillsView, { cwd: "/w", t: (k) => k, say() {} }, { effects: true });
+ let newSkillTree = newSkillView(); newSkillView.flushEffects();
+ const skillNode = (fn) => collect(newSkillTree).find(fn);
+ skillNode((n) => n.props["data-ce-popup-trigger"] === "skill-create").props.onClick(); newSkillTree = newSkillView();
+ const skillInside = {};
+ skillNode((n) => n.props.className === "ce-sk-create").props.ref.current = makeLayerNode(skillInside); newSkillView.flushEffects();
+ skillNode((n) => n.props.className === "ce-input ce-sk-name-input").props.onChange({ target: { value: "retained-name" } }); newSkillTree = newSkillView();
+ dispatchLayer("pointerdown", eventFor(outsideNode)); newSkillTree = newSkillView(); newSkillView.flushEffects();
+ check("skill creation closes outside without creating anything", !skillNode((n) => n.props.className === "ce-sk-create"), null);
+ skillNode((n) => n.props["data-ce-popup-trigger"] === "skill-create").props.onClick(); newSkillTree = newSkillView();
+ check("skill creation retains name after outside dismissal", skillNode((n) => n.props.className === "ce-input ce-sk-name-input")?.props.value === "retained-name", null);
+ newSkillView.unmount();
+ // A hunk confirmation only disarms; outside clicks never execute revert.
+ let actualReverts = 0;
+ const confirmDiff = createHookRenderer(DiffView, { t: (k) => k, diff: { text: "@@ -1 +1 @@\n-old\n+new\n", scope: "working" }, onRevertHunk: () => actualReverts++, onClose() {} }, { effects: true });
+ let confirmTree = confirmDiff(); confirmDiff.flushEffects(); confirmTree = confirmDiff();
+ collect(confirmTree).find((n) => n.props.title === "diff.revertHunk").props.onClick({ stopPropagation() {} }); confirmTree = confirmDiff();
+ collect(confirmTree).find((n) => n.props.className === "ce-hunk-confirm").props.ref.current = makeLayerNode({}); confirmDiff.flushEffects();
+ dispatchLayer("pointerdown", eventFor(outsideNode)); confirmTree = confirmDiff(); confirmDiff.flushEffects();
+ check("outside hunk confirmation cancels without reverting", !collect(confirmTree).some((n) => n.props.className === "ce-hunk-confirm") && actualReverts === 0, null);
+ confirmDiff.unmount();
+ popupApi.unmount();
+ check("API unmount releases its capture listeners", dismissalListeners.size === 0, null);
+} finally {
+ globalThis.fetch = dismissalFetch;
+ if (dismissalDocument === undefined) delete globalThis.document; else globalThis.document = dismissalDocument;
+}
+
+// --- Host close cleanup refuses to discard a matching unsaved tool document -----------------
+const { useToolCloseGuard, registerToolCloseGuard } = await import("./src/client/closeguard.js");
+const closeDocument = globalThis.document, closeCustomEvent = globalThis.CustomEvent;
+const guardDocument = new EventTarget();
+globalThis.document = guardDocument;
+if (typeof globalThis.CustomEvent === "undefined") globalThis.CustomEvent = class extends Event { constructor(type, init) { super(type, init); this.detail = init.detail; } };
+const cleanupHandlers = new Map();
+const guardedSidebar = { registerCloseHandler(kind, handler) { cleanupHandlers.set(kind, handler); return () => cleanupHandlers.delete(kind); } };
+let closeBlockedCount = 0;
+try {
+ const guardProps = { sessionId: "A", kind: "code", dirty: true, onBlocked: () => closeBlockedCount++ };
+ const drawGuard = createHookRenderer(() => { useToolCloseGuard(guardProps); return null; }, {}, { effects: true });
+ drawGuard(); drawGuard.flushEffects();
+ const stopGuard = registerToolCloseGuard(guardedSidebar, "code", () => "save first", guardDocument);
+ let refused = false; try { cleanupHandlers.get("code")("A"); } catch (error) { refused = error.message === "save first"; }
+ check("native sidebar close handler vetoes unsaved code tab", refused && closeBlockedCount === 1, closeBlockedCount);
+ cleanupHandlers.get("code")("B");
+ check("unsaved close guard is scoped to its session", closeBlockedCount === 1, closeBlockedCount);
+ guardProps.dirty = false; drawGuard(); drawGuard.flushEffects(); cleanupHandlers.get("code")("A");
+ check("saving removes sidebar close veto", closeBlockedCount === 1, closeBlockedCount);
+ drawGuard.unmount(); stopGuard();
+ check("close guard handlers clean up on plugin unload", cleanupHandlers.size === 0, cleanupHandlers.size);
+} finally {
+ if (closeDocument === undefined) delete globalThis.document; else globalThis.document = closeDocument;
+ if (closeCustomEvent === undefined) delete globalThis.CustomEvent; else globalThis.CustomEvent = closeCustomEvent;
+}
+
 // --- the generated bundle: registration + factory --------------------------------------
 
 const bundle = await readFile(new URL("./client.js", import.meta.url), "utf8");
@@ -784,7 +1160,7 @@ check(
 check(
 	"bundle inject list matches the source descriptor",
 	JSON.stringify(descriptor?.inject) === JSON.stringify(sourceDescriptor.inject) &&
-		JSON.stringify(descriptor?.inject) === JSON.stringify(["slots", "locale", "sidebarRightTabs", "sidebarRight"]),
+		JSON.stringify(descriptor?.inject) === JSON.stringify(["slots", "locale", "sidebarRightTabs", "sidebarRight", "layout"]),
 	descriptor?.inject,
 );
 

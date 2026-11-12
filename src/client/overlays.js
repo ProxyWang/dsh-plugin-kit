@@ -3,11 +3,13 @@
 import { Fragment, h, useCallback, useEffect, useMemo, useRef, useState } from "./react.js";
 import { ROW } from "./constants.js";
 import { RelPath } from "./pathtools.js";
+import { useDismissLayer } from "./dismiss.js";
 
 export function LocationList({ t, overlay, cwd, onPick, onClose }) {
+	const panelRef = useDismissLayer({ onDismiss: onClose });
 	return h(
 		"div",
-		{ className: "ce-overlay" },
+		{ className: "ce-overlay", ref: panelRef, role: "dialog", "aria-label": overlay.title },
 		h(
 			"div",
 			{ className: "ce-overlay-head" },
@@ -29,7 +31,50 @@ export function LocationList({ t, overlay, cwd, onPick, onClose }) {
 	);
 }
 
+export function CommandPalette({ t, commands, onClose }) {
+	const [query, setQuery] = useState("");
+	const [sel, setSel] = useState(0);
+	const inputRef = useRef(null);
+	const listRef = useRef(null);
+	const panelRef = useDismissLayer({ onDismiss: onClose, ignoreSelector: ".ce-command-trigger" });
+	const items = useMemo(() => {
+		const q = query.trim().toLowerCase();
+		return (commands ?? []).filter((item) => !q || `${item.label} ${item.hint ?? ""}`.toLowerCase().includes(q));
+	}, [commands, query]);
+	useEffect(() => { setSel(0); }, [query]);
+	useEffect(() => { inputRef.current?.focus(); }, []);
+
+	useEffect(() => { listRef.current?.querySelector(`[data-command="${sel}"]`)?.scrollIntoView({ block: "nearest" }); }, [sel]);
+	const choose = (index) => {
+		const item = items[index];
+		if (!item) return;
+		onClose();
+		item.run();
+	};
+	const onKeyDown = (event) => {
+		if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); onClose(); }
+		else if (event.key === "ArrowDown") { event.preventDefault(); setSel((value) => Math.min(Math.max(0, items.length - 1), value + 1)); }
+		else if (event.key === "ArrowUp") { event.preventDefault(); setSel((value) => Math.max(0, value - 1)); }
+		else if (event.key === "Enter") { event.preventDefault(); choose(sel); }
+	};
+	return h("div", { className: "ce-palette ce-command-palette", ref: panelRef, role: "dialog", "aria-label": t("command.title"), onKeyDown },
+		h("div", { className: "ce-palette-head" },
+			h("span", { className: "ce-command-mark", "aria-hidden": true }, ">_"),
+			h("input", { ref: inputRef, className: "ce-input", type: "search", placeholder: t("command.placeholder"), "aria-label": t("command.placeholder"), value: query, onChange: (event) => setQuery(event.target.value), onKeyDown: (event) => { event.stopPropagation(); onKeyDown(event); }, autoComplete: "off" }),
+			h("button", { className: "ce-tool ce-tiny", type: "button", title: `${t("close")} (Esc)`, onClick: onClose }, "✕"),
+		),
+		h("div", { className: "ce-palette-list ce-scroll", ref: listRef },
+			items.length === 0 ? h("div", { className: "ce-note" }, t("command.empty")) : null,
+			items.map((item, index) => h("button", { key: item.id, type: "button", "data-command": index, className: `ce-command-item${index === sel ? " ce-qitem-sel" : ""}`, onMouseEnter: () => setSel(index), onClick: () => choose(index) },
+				h("span", { className: "ce-command-icon", "aria-hidden": true }, item.icon ?? "·"),
+				h("span", { className: "ce-command-label" }, item.label),
+				item.hint ? h("kbd", { className: "ce-command-hint" }, item.hint) : null,
+			)),
+		),
+	);
+}
 export function QuickOpen({ t, state, onQuery, onPick, onClose }) {
+	const panelRef = useDismissLayer({ onDismiss: onClose, ignoreSelector: ".ce-rail-quickopen" });
 	const [sel, setSel] = useState(0);
 	const inputRef = useRef(null);
 	const listRef = useRef(null);
@@ -65,7 +110,7 @@ export function QuickOpen({ t, state, onQuery, onPick, onClose }) {
 	};
 	return h(
 		"div",
-		{ className: "ce-palette", onKeyDown },
+		{ className: "ce-palette", ref: panelRef, role: "dialog", "aria-label": t("quickopen.placeholder"), onKeyDown },
 		h(
 			"div",
 			{ className: "ce-palette-head" },
@@ -76,7 +121,7 @@ export function QuickOpen({ t, state, onQuery, onPick, onClose }) {
 				placeholder: t("quickopen.placeholder"),
 				value: state.query,
 				onChange: (event) => onQuery(event.target.value),
-				onKeyDown,
+				onKeyDown: (event) => { event.stopPropagation(); onKeyDown(event); },
 				spellcheck: false,
 				autoCapitalize: "off",
 				autoComplete: "off",
@@ -126,27 +171,7 @@ export function RefsPeek({ t, cwd, peek, scroll, totalLines, onPick, onClose }) 
 	for (const g of groups) flat.push(...g.rows);
 	const [sel, setSel] = useState(0);
 	const bodyRef = useRef(null);
-	const panelRef = useRef(null);
-	useEffect(() => {
-		const dismissOutside = (event) => {
-			if (panelRef.current && !panelRef.current.contains(event.target)) onClose();
-		};
-		const dismissEscape = (event) => {
-			if (event.key === "Escape") {
-				event.preventDefault();
-				event.stopPropagation();
-				onClose();
-			}
-		};
-		// Capture runs even when other controls stop bubbling. Do not prevent
-		// pointer events: clicking another symbol should still open its peek.
-		document.addEventListener("pointerdown", dismissOutside, true);
-		document.addEventListener("keydown", dismissEscape, true);
-		return () => {
-			document.removeEventListener("pointerdown", dismissOutside, true);
-			document.removeEventListener("keydown", dismissEscape, true);
-		};
-	}, [onClose]);
+	const panelRef = useDismissLayer({ onDismiss: onClose });
 	useEffect(() => {
 		setSel(0);
 	}, [peek.symbol, peek.busy]);
@@ -225,6 +250,7 @@ export function RefsPeek({ t, cwd, peek, scroll, totalLines, onPick, onClose }) 
 const SYMBOL_GLYPHS = { 2: "▣", 3: "ƒ", 4: "Ω", 5: "◆", 6: "ƒ", 7: "◆", 8: "◈", 9: "#", 10: "◈", 11: "▣", 12: "✓", 13: "▣", 14: "🛡", 15: "ω", 16: "◆", 17: "◆", 18: "≡", 19: "◦", 20: "◦", 21: "≡", 22: "◆", 23: "◆", 24: "▣", 25: "•", 26: "•" };
 
 export function SymbolPalette({ t, symbols, onPick, onClose }) {
+	const panelRef = useDismissLayer({ onDismiss: onClose });
 	const [query, setQuery] = useState("");
 	const [sel, setSel] = useState(0);
 	const inputRef = useRef(null);
@@ -260,7 +286,7 @@ export function SymbolPalette({ t, symbols, onPick, onClose }) {
 	};
 	return h(
 		"div",
-		{ className: "ce-palette", onKeyDown, onMouseDown: (event) => event.stopPropagation() },
+		{ className: "ce-palette", ref: panelRef, role: "dialog", "aria-label": t("symbols.placeholder"), onKeyDown, onMouseDown: (event) => event.stopPropagation() },
 		h(
 			"div",
 			{ className: "ce-palette-head" },
@@ -271,7 +297,7 @@ export function SymbolPalette({ t, symbols, onPick, onClose }) {
 				placeholder: t("symbols.placeholder"),
 				value: query,
 				onChange: (event) => setQuery(event.target.value),
-				onKeyDown,
+				onKeyDown: (event) => { event.stopPropagation(); onKeyDown(event); },
 				spellcheck: false,
 			}),
 			h("button", { className: "ce-tool ce-tiny", type: "button", title: `${t("close")} (Esc)`, onClick: onClose }, "✕"),
@@ -302,6 +328,7 @@ export function SymbolPalette({ t, symbols, onPick, onClose }) {
 
 /** Minimal "go to line" palette (⌘G / Ctrl+G): one numeric input, Enter jumps. */
 export function GotoLinePalette({ t, totalLines, initial, onGo, onClose }) {
+	const panelRef = useDismissLayer({ onDismiss: onClose });
 	const [value, setValue] = useState(String(initial ?? ""));
 	const inputRef = useRef(null);
 	useEffect(() => {
@@ -325,7 +352,7 @@ export function GotoLinePalette({ t, totalLines, initial, onGo, onClose }) {
 	};
 	return h(
 		"div",
-		{ className: "ce-palette ce-goto", onMouseDown: (event) => event.stopPropagation() },
+		{ className: "ce-palette ce-goto", ref: panelRef, role: "dialog", "aria-label": t("goto.title"), onMouseDown: (event) => event.stopPropagation() },
 		h(
 			"div",
 			{ className: "ce-palette-head" },
@@ -337,7 +364,7 @@ export function GotoLinePalette({ t, totalLines, initial, onGo, onClose }) {
 				placeholder: t("goto.placeholder", { n: totalLines }),
 				value,
 				onChange: (event) => setValue(event.target.value),
-				onKeyDown,
+				onKeyDown: (event) => { event.stopPropagation(); onKeyDown(event); },
 				spellcheck: false,
 				autoComplete: "off",
 			}),
@@ -348,9 +375,10 @@ export function GotoLinePalette({ t, totalLines, initial, onGo, onClose }) {
 
 /** File history overlay (🕘): commits that touched one file, newest first; clicking opens that commit's diff for the file. */
 export function FileHistoryOverlay({ t, hist, onPick, onClose }) {
+	const panelRef = useDismissLayer({ onDismiss: onClose });
 	return h(
 		"div",
-		{ className: "ce-overlay", onMouseDown: (event) => event.stopPropagation() },
+		{ className: "ce-overlay", ref: panelRef, role: "dialog", "aria-label": t("history.title"), onMouseDown: (event) => event.stopPropagation() },
 		h(
 			"div",
 			{ className: "ce-overlay-head" },

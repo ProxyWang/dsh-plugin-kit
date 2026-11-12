@@ -197,7 +197,7 @@ export function toCurl(req) {
 	const bodyType = req?.bodyType || "none";
 	if (method !== "GET" || bodyType !== "none") parts.push(`-X ${method}`);
 	parts.push(shellQuote(String(req?.url ?? "")));
-	const headers = (req?.headers ?? []).filter((hd) => String(hd?.name ?? "").trim() !== "");
+	const headers = (req?.headers ?? []).filter((hd) => hd?.enabled !== false && String(hd?.name ?? "").trim() !== "");
 	for (const hd of headers) parts.push(`-H ${shellQuote(`${String(hd.name).trim()}: ${hd.value ?? ""}`)}`);
 	const hasCT = headers.some((hd) => String(hd.name).trim().toLowerCase() === "content-type");
 	if (bodyType === "raw") {
@@ -206,12 +206,12 @@ export function toCurl(req) {
 	} else if (bodyType === "form") {
 		for (const p of req?.formPairs ?? []) {
 			const name = String(p?.name ?? "").trim();
-			if (name) parts.push(`--data-urlencode ${shellQuote(`${name}=${p?.value ?? ""}`)}`);
+			if (name && p.enabled !== false) parts.push(`--data-urlencode ${shellQuote(`${name}=${p?.value ?? ""}`)}`);
 		}
 	} else if (bodyType === "multipart") {
 		for (const p of req?.formPairs ?? []) {
 			const name = String(p?.name ?? "").trim();
-			if (name) parts.push(`-F ${shellQuote(`${name}=${p?.value ?? ""}`)}`);
+			if (name && p.enabled !== false) parts.push(`-F ${shellQuote(`${name}=${p?.value ?? ""}`)}`);
 		}
 	}
 	// One logical flag per line (backslash continuations) once it gets long;

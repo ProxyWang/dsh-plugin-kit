@@ -2,6 +2,8 @@
 
 import { Fragment, h, useEffect, useMemo, useRef, useState } from "./react.js";
 
+import { useDismissLayer } from "./dismiss.js";
+
 const SBS_KEY = "dsh.ce.diff.sbs.v1";
 
 function loadSbs() {
@@ -225,6 +227,7 @@ export function DiffView({ t, diff, onClose, onOpenSource, canSource, onRevertHu
 	const [sbs, setSbs] = useState(loadSbs);
 	const [navIdx, setNavIdx] = useState(-1);
 	const [confirmHunk, setConfirmHunk] = useState(-1);
+	const confirmRef = useDismissLayer({ open: confirmHunk >= 0, onDismiss: () => setConfirmHunk(-1) });
 	const containerRef = useRef(null);
 	const paired = useMemo(() => (sbs ? pairRows(shown) : null), [sbs, shown]);
 	// Row index → hunk ordinal, so the ⟲ button can address one hunk.
@@ -308,7 +311,7 @@ export function DiffView({ t, diff, onClose, onOpenSource, canSource, onRevertHu
 	const renderHunkRevert = (hunkIdx, headerText) => {
 		if (!onRevertHunk) return null;
 		if (confirmHunk === hunkIdx) {
-			return h("span", { className: "ce-hunk-confirm" },
+			return h("span", { className: "ce-hunk-confirm", ref: confirmRef },
 				h("button", {
 					type: "button",
 					className: "ce-tool ce-tiny ce-hunk-revert-on",

@@ -4,6 +4,7 @@ import { Fragment, h, useCallback, useEffect, useState } from "./react.js";
 import { api } from "./api.js";
 import { IconRefresh } from "./icons.js";
 import { ChangeTree } from "./changetree.js";
+import { useDismissLayer } from "./dismiss.js";
 
 /** Porcelain xy: the index (first) column decides whether the entry is staged. */
 export function isStagedXy(xy) {
@@ -23,6 +24,8 @@ export function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commit
 	const [stashUntracked, setStashUntracked] = useState(false);
 	const [stashBusy, setStashBusy] = useState(false);
 	const [stashConfirm, setStashConfirm] = useState(null);
+	const stashSaveRef = useDismissLayer({ open: stashSaving, onDismiss: () => setStashSaving(false), ignoreSelector: '[data-ce-popup-trigger="stash-save"]' });
+	const stashConfirmRef = useDismissLayer({ open: stashConfirm !== null, onDismiss: () => setStashConfirm(null) });
 	const repoArgs = repoSel ? { cwd, repo: repoSel } : { cwd };
 	const isRepo = Boolean(git && git.repo);
 	const refreshStashes = useCallback(() => {
@@ -266,11 +269,11 @@ export function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commit
 			"div",
 			{ className: "ce-section" },
 			h("span", null, `${t("stash.title")}${stashes.length ? ` · ${stashes.length}` : ""}`),
-			h("button", { className: "ce-link", type: "button", title: t("stash.saveTitle"), disabled: stashBusy, onClick: () => { setStashSaving((v) => !v); setStashOpen(true); } }, `+ ${t("stash.save")}`),
-			h("button", { className: "ce-tool ce-tiny", type: "button", title: t("stash.toggle"), "aria-expanded": stashOpen ? "true" : "false", onClick: () => setStashOpen((v) => !v) }, stashOpen ? "▾" : "▸"),
+			h("button", { className: "ce-link", type: "button", title: t("stash.saveTitle"), "data-ce-popup-trigger": "stash-save", disabled: stashBusy, onClick: () => { setStashConfirm(null); setStashSaving((v) => !v); setStashOpen(true); } }, `+ ${t("stash.save")}`),
+			h("button", { className: "ce-tool ce-tiny", type: "button", title: t("stash.toggle"), "aria-expanded": stashOpen ? "true" : "false", onClick: () => { setStashConfirm(null); setStashSaving(false); setStashOpen((v) => !v); } }, stashOpen ? "▾" : "▸"),
 		),
 		stashSaving
-			? h("div", { className: "ce-stash-save" },
+			? h("div", { className: "ce-stash-save", ref: stashSaveRef },
 				h("input", {
 					className: "ce-input",
 					placeholder: t("stash.msgPlaceholder"),
@@ -298,14 +301,14 @@ export function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commit
 					h("span", { className: "ce-stashmsg", title: s.message }, s.message || "—"),
 					h("span", { className: "ce-stashacts" },
 						stashConfirm === s.ref
-							? h(Fragment, null,
+							? h("span", { ref: stashConfirmRef },
 								h("button", { type: "button", className: "cet-act cet-act-show cet-act-danger", disabled: stashBusy, onClick: () => stashDrop(s.ref) }, t("stash.confirm")),
 								h("button", { type: "button", className: "cet-act cet-act-show", onClick: () => setStashConfirm(null) }, t("stash.cancel")),
 							)
 							: h(Fragment, null,
 								h("button", { type: "button", className: "ce-link", disabled: stashBusy, title: t("stash.applyTitle"), onClick: () => stashApply(s.ref, false) }, t("stash.apply")),
 								h("button", { type: "button", className: "ce-link", disabled: stashBusy, title: t("stash.popTitle"), onClick: () => stashApply(s.ref, true) }, t("stash.pop")),
-								h("button", { type: "button", className: "ce-tool ce-tiny", title: t("stash.drop"), disabled: stashBusy, onClick: () => setStashConfirm(s.ref) }, "✕"),
+								h("button", { type: "button", className: "ce-tool ce-tiny", title: t("stash.drop"), disabled: stashBusy, onClick: () => { setStashSaving(false); setStashConfirm(s.ref); } }, "✕"),
 							),
 					),
 				)))

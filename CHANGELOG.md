@@ -1,5 +1,50 @@
 # Changelog
 
+## Unreleased — left tool entries toggle workspace tabs
+
+- Left entries now close an already open matching tool tab. The last real tool tab also collapses the right workspace; retained guide tabs do not keep it open. Other tools and other sessions remain untouched.
+- A manually collapsed workspace is revealed before any close. With multiple matching instances (such as terminals), the active matching instance is closed first. Browser pages can reopen immediately after a toggle close.
+- Registered native close cleanup guards for unsaved Code IDE and Skills edits, protecting both left-entry closes and native tab closes.
+- Added toggle, final-tab, session-isolation, multi-instance, immediate-reopen and unsaved-close regressions.
+
+## Unreleased — left navigation, right workspace
+
+- Moved all toolbox entry points into native left panel rows alongside Plugins and Automations. Selecting a tool restores Conversation and opens the current session’s right workspace through public layout/sidebar services.
+- Removed owned right guide entries and replaced the duplicate right launcher with a workspace hint. Browser/terminal and other registered tool entries follow the live registry; browser reuse now reveals a collapsed workspace.
+- Added regressions for global-panel navigation, current-session targeting, no-session feedback without delayed cross-session opens, dynamic tools and unload cleanup.
+
+## Unreleased — consistent transient-layer dismissal
+
+- Added one shared, non-modal pointer/Escape dismissal registry for API dialogs, IDE palettes, file menus, skills forms and temporary destructive confirmations. Outside pointer events continue to their destination; Escape affects only the top visible layer, with IME protection and listener cleanup.
+- Favorites and curl import retain drafts when dismissed. Tool-page hiding closes transient UI without cancelling document edits. Trigger buttons toggle without reopening accidentally.
+- Fixed duplicate input/palette keyboard handling in quick open and symbol lists, and duplicate trailing insert rows in legacy request drafts.
+- Added listener-lifecycle and component regressions plus 9 Chrome fixture checks using actual DOM pointer/keyboard events. See [interaction audit](docs/interaction-audit.md) for coverage and verification limits.
+
+## Unreleased — API request builder layout
+
+- Reorganized API debugging around a method/URL/Send row followed by configuration tabs; import/export, favorites and history remain in a compact utility row.
+- Added a shared request-fields table for query parameters, headers, form/multipart bodies and environment variables, with Name/Value/Description columns, enable checkboxes, row deletion and a trailing insert row. Variables are now a configuration tab.
+- Disabled fields remain in drafts/history/favorites but are excluded from HTTP requests and curl exports. Old rows without an enabled flag stay enabled.
+- Verified 452 assertions across all suites; checked light/dark component previews at 1100px and 390px container widths. These previews use fixture data and do not represent a live authenticated DSH session.
+
+## Unreleased — consistent editor navigation
+
+- Opening files, Git diffs, commits and chat diffs dismisses transient panels so search cannot cover the selected document. Clicking the current editor tab also dismisses panels without reloading the file.
+- Search, quick open and the command center replace each other. Search inputs survive dismissal; Escape closes navigation panels before cancelling an editor draft.
+- Centralized unsaved-edit checks protect file navigation and refresh. Added regression coverage for file clicks, retained queries, panel switching, Git navigation and draft protection.
+
+## Unreleased — unified Dev Workspace
+
+- Merged the primary file browsing and code editing entry into **Dev Workspace / 开发工作台**. The existing Code IDE `TreePanel` is now the launcher’s single primary workspace explorer, with file operations, previews, search, editing, LSP and Git review in one context.
+- The Start launcher filters the host’s redundant `files` guide entry to avoid presenting two competing workspace file browsers. The host file page remains available through host capabilities for compatibility.
+- Renamed the in-workspace Files control to **Explorer / 资源管理器**, clarified launcher grouping, and added a regression test that prevents the duplicate file entry from returning.
+
+## Unreleased — Code IDE command center
+
+- Renamed the Code Explorer surface to **Code IDE / 代码 IDE** across the launcher, tab metadata, locale and package documentation.
+- Added a keyboard-first Command Center (`⌘/Ctrl+Shift+P`) that unifies file browsing, source control, workspace search, quick open, current-file symbols, word wrap, side-panel visibility and refresh. Actions reuse existing handlers so navigation state and concurrency guards remain consistent.
+- The interaction direction follows the continuous workbench model documented by [VS Code’s user interface](https://code.visualstudio.com/docs/editing/getting-started/userinterface) and [code navigation](https://code.visualstudio.com/docs/editing/editingevolved): one editor context, discoverable commands, breadcrumbs/symbols and source control close to the file.
+
 ## Unreleased — browser launcher reuse
 
 - The toolbox Browser launcher now focuses an existing browser in the on-screen session, including older UUID-backed tabs, instead of always creating another page. Existing navigation is preserved; Doubao is only the initial URL when creating a new page.

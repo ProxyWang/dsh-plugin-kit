@@ -2,6 +2,16 @@
 
 The toolbox is an **Operate** surface inside the DSH right sidebar: browsing source, reviewing changes, testing HTTP requests and maintaining skills. Its visual language stays compatible with the host application's light and dark themes.
 
+## Entry points and work areas
+
+Tool entry points live in native left `sidebar.panellist` rows alongside Plugins and Automations. The plugin registers matching `main` keys because the host validates those ids; its synchronous `layout.panelInfo` subscriber restores Conversation and opens the selected tool through the current `sidebarRight.commandTarget(null)`. This uses public services and does not patch native DOM or core code. The native on-screen Session update was verified in the installed 0.2.2-rc.1 client bundle.
+
+Owned right-side tab ids/kinds and keepMounted state stay stable, while their guide entries are empty. The right guide is a quiet workspace hint with no launcher buttons. Existing browser pages are reused without resetting URLs, including when the right column was collapsed. No-session clicks show feedback immediately and are never queued into a later Session. Registry subscriptions add/remove left tool entries dynamically; unloading releases all registrations and subscriptions.
+
+Left entry clicks are toggles: with the workspace visible, an existing matching tab is closed through the host close API. Other tool tabs stay open; closing the final real tool collapses the workspace even if the host retains a guide. A collapsed workspace reveals the existing tab first. Multiple instances close the active matching instance, falling back to the latest matching tab. Code and Skills register native cleanup guards to refuse discarding unsaved text; API request drafts retain their existing persistence.
+
+Behavior tests cover these contracts with simulated synchronous host stores. A live authenticated DSH end-to-end click check has not been performed.
+
 ## Hierarchy
 
 - The toolbar identifies the current view and exposes navigation; the content rail carries search and file/change lists.
@@ -45,11 +55,27 @@ In addition to the functional test suites, v1.5.0 was checked in headless Chrome
 
 Navigation stays in the rail: workspace search and quick-open sit together. A narrow panel does not squeeze the file rail beside a tiny editor. Opening a file, diff or search switches to the editor region; returning to the list preserves the current document. On wide panels both regions remain visible.
 
+### Code IDE command center
+
+The Code surface is a compact IDE workbench rather than a file viewer. The command center is available from the toolbar and `⌘/Ctrl+Shift+P`; it exposes the same actions as the visible controls so keyboard and pointer workflows stay equivalent. Commands are filtered locally, support Up/Down/Enter/Escape, and close before running the action to preserve focus and avoid duplicate state transitions.
+
+The workbench keeps the file rail, editor tabs, symbol navigation, search and source control in one task context. This follows the navigation model described in [VS Code’s interface documentation](https://code.visualstudio.com/docs/editing/getting-started/userinterface) and [code navigation guide](https://code.visualstudio.com/docs/editing/editingevolved). The API and Skills tabs remain focused task surfaces: API keeps request, environment, history and response together; Skills keeps scope, preview, source and edit state together.
+
+
 Changes are reviewed before committing: filtered staged/working files precede the collapsed commit form. The form remains mounted so expanding/collapsing does not discard a draft. Branch history is a separate disclosure; filtering expands it so matches are discoverable. Stash controls keep their existing behavior.
 
 ### API requests and responses
 
 Request configuration and response are independent scroll regions within a bounded workspace. A horizontal separator adjusts the request share from 24% to 72%; drag, Up/Down, Home/End and double-click reset are supported. The toolbar stays visible while long response bodies scroll.
+
+The API request builder uses a method/URL/Send row followed directly by configuration tabs. Query parameters, headers, form bodies and environment variables share a Name/Value/Description table with enable checkboxes, deletion and a trailing insert row. Variables live in a configuration tab. Disabled rows preserve their values in drafts, history and favorites and are excluded from sending and curl export. Below 560px, the table prioritizes names and values and hides the description column. Colors follow host theme tokens.
+
+The new layout was checked with fixture component previews in light and dark at 1100px and 390px container widths; it has not been verified as an authenticated live DSH interaction.
+
+![API request builder, wide light preview](images/api-request-builder-wide-light.png)
+
+[Narrow dark preview](images/api-request-builder-narrow-dark.png)
+
 
 ### Skill instructions
 

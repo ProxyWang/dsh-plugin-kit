@@ -4,42 +4,43 @@ English | [简体中文](README.md)
 
 **Browse code, review changes, test APIs, and manage skills while chatting with your Agent in DeepSeek Harness (DSH).**
 
-`dsh-plugin-kit` adds three tools to the DSH right sidebar: **Code Explorer, API Tester, and Skills Manager**. It also organizes the Start page into task-based groups, keeping common development actions within the current session. Since v1.5.0, all surfaces share one visual system with three surface levels, clear type hierarchy, consistent spacing and control states, and support for DSH light and dark themes.
+`dsh-plugin-kit` places tool entry points in the DSH left navigation, alongside Plugins and Automations. Choose **Dev Workspace, API Tester, Skills Manager**, or an available browser/terminal entry to open it in the current session’s right workspace while keeping the conversation in the center. The right Start page is an empty-workspace guide rather than a duplicate launcher.
 
-![Development toolbox Start page, shown in Chinese: Code & Files, Terminal & Web, and Agent Extensions](docs/images/toolbox-launcher.webp)
+Dev Workspace combines file exploration, editing, search, symbols and Git review, with a keyboard-first Command Center (`⌘/Ctrl+Shift+P`). All surfaces support DSH light and dark themes.
 
-## UI previews
+## Screenshots and privacy
 
-Component previews rendered with the DSH theme tokens and sample data; these are not production requests or live-session screenshots.
+The README does not display real workspace or user-session screenshots, to avoid exposing usernames, local paths, project files, internal endpoints, cookies, tokens, or other personal information. UI examples use entirely fictional data and are reviewed before publication.
 
-| API · Dark | API · Light |
-| --- | --- |
-| ![API dark](docs/images/api-v150-dark.png) | ![API light](docs/images/api-v150-light.png) |
+## UI previews — fictional data
 
-| Skills · Dark | Skills · Light |
-| --- | --- |
-| ![Skills dark](docs/images/skills-v150-dark.png) | ![Skills light](docs/images/skills-v150-light.png) |
+These screenshots render the current plugin components with fictional fixtures and are marked **DEMO / Fictional data**. They are not screenshots of a real workspace or authenticated session. API examples use the reserved `example.test` domain; files, code and skills are sample content without real usernames, personal paths, internal endpoints or credentials. The previews show the Chinese UI.
+
+| Feature | Light theme | Dark theme |
+| --- | --- | --- |
+| Dev Workspace | ![Dev Workspace light fictional preview](docs/images/readme-workspace-light.png) | ![Dev Workspace dark fictional preview](docs/images/readme-workspace-dark.png) |
+| API Tester | ![API Tester light fictional preview](docs/images/readme-api-light.png) | ![API Tester dark fictional preview](docs/images/readme-api-dark.png) |
+| Skills Manager | ![Skills Manager light fictional preview](docs/images/readme-skills-light.png) | ![Skills Manager dark fictional preview](docs/images/readme-skills-dark.png) |
 
 [UI system / 主题与布局约定](docs/ui-system.md)
 
 ## What does this plugin do?
 
-| Start-page group | Tool | What you can do |
+| Entry location | Tool | What you can do |
 | --- | --- | --- |
-| Code & Files | Workspace files | Open the built-in DSH file browser for the current session workspace. |
-| Code & Files | **Code Explorer** | Browse and edit code, search files and code snippets, jump to definitions/references, review Git diffs, stage, commit, push, and manage stashes. |
-| Code & Files | **API Tester** | Import or copy curl, edit URLs, params, headers, bodies and environment variables, send HTTP requests, inspect responses, and save history and favorites. |
-| Terminal & Web | New terminal | Open the built-in DSH terminal to run commands in the session workspace. |
-| Terminal & Web | Browser | Open the built-in DSH browser. The launcher currently starts at Doubao; you can navigate to another URL afterward. |
-| Agent Extensions | **Skills Manager** | Search, preview, edit, create and delete installed Agent skills; filter by project, user, built-in and plugin sources. |
+| Left navigation | **Dev Workspace** | Unified file explorer, code editor, search, LSP navigation, and Git changes workbench. |
+| Left navigation | **API Tester** | Import or copy curl, edit URLs, params, headers, bodies and environment variables, send HTTP requests, inspect responses, and save history and favorites. |
+| Left navigation | New terminal | Open the built-in DSH terminal to run commands in the session workspace. |
+| Left navigation | Browser | Open the built-in DSH browser. The launcher currently starts at Doubao; you can navigate to another URL afterward. |
+| Left navigation | **Skills Manager** | Search, preview, edit, create and delete installed Agent skills; filter by project, user, built-in and plugin sources. |
 
-**Scope:** this plugin provides Code Explorer, API Tester, Skills Manager and the grouped launcher. Workspace files, Terminal and Browser use the built-in capabilities installed in your DSH profile; their entries depend on that profile. This is a DSH plugin, not a standalone IDE.
+**Scope:** the plugin provides Dev Workspace, API Tester, Skills Manager and left navigation integration. Host tool entries follow the live tab registry. Files are explored in Dev Workspace; browser and terminal capabilities depend on your profile. With no current session, navigation prompts you to select one and never queues the tool into a future unrelated session.
 
 ## Getting started
 
-After installing, select a session in DSH, open **Start** in the right sidebar, and choose a tool:
+After installing, select a session and choose a tool from **left navigation** to open it in the right workspace. Click an already open tool entry again to close its tab; closing the last tool tab collapses the right sidebar. Unsaved code or skill text blocks closing and prompts you to save first.
 
-- **Review Agent changes:** open Code Explorer → Changes, then select a file for marked source or side-by-side diffs. You can also click an edit/write tool call in chat to inspect that specific change.
+- **Review Agent changes:** open Dev Workspace → Changes, then select a file for marked source or side-by-side diffs. You can also click an edit/write tool call in chat to inspect that specific change.
 - **Find code:** use quick file open, find-in-file or workspace full-text search. Go, TS/JS and Python support definition/reference jumps when the matching language server is installed.
 - **Test an API:** import curl or enter a request, edit the Params / Headers / Body / Settings tabs, then press `⌘/Ctrl+Enter` to send and inspect the response.
 - **Maintain skills:** search and select a skill, switch between preview and source, and save editable skills with `⌘/Ctrl+S`. Built-in and plugin-provided skills remain read-only.
@@ -66,7 +67,7 @@ After installing, select a session in DSH, open **Start** in the right sidebar, 
   - Markdown / HTML / **SVG** files open in **rendered preview by default**, toggleable to raw
 - **Skills**: search by name/description/path and filter project/user/built-in or plugin sources; compact list + detail columns on wide panels, list/detail navigation on narrow panels. Create inline on demand; Markdown preview/source view, editing with ⌘S save, and two-step deletion. Provided skills stay read-only, truncated content cannot be edited, unsaved changes block navigation, and stale reads cannot replace the selected skill; writes remain strictly fenced to the skill roots
 - **API**: a basic Postman — one-click curl import (**-F parses into multipart fields**) and **⧉ copy-as-curl export**, **query params table (merged into the URL at send, same names override)**, **per-request timeout (1–120 s)**, **environment variables `{{var}}` (substituted in URL/headers/body at send time)**, method/URL/headers/body editors (form-urlencoded / **multipart** / raw with JSON beautify), Host-proxied send (no CORS issues), status/time/size + response headers + pretty JSON, **request history (last 30 sends recorded automatically, one-click restore)**, **named favorites**
-- **Start-page launcher**: reworks the right-sidebar picker into a grouped compact list (Code & Files / Terminal & Web / Agent Extensions / More) via the official chain slot
+- **Left navigation**: uses native `sidebar.panellist` and `layout` contracts to place tools alongside Plugins and Automations. Selecting a tool preserves Conversation and opens the current session’s right workspace. The right Start guide contains no duplicate tool entries.
 - Chat edit/write tool calls render as compact rows; clicking one opens that call's diff in the side panel
 
 ## Install
@@ -93,6 +94,8 @@ pnpm install
 pnpm run build   # src/client/** -> client.js (DSH client module format)
 pnpm test        # host routes + client pure logic + bundle shape, 6 suites (LSP cases auto-skip without gopls)
 ```
+
+Regenerate the documentation screenshots with `node scripts/render-readme-previews.mjs` (requires Chrome; set `CHROME_BIN` to override its path). The script uses only embedded fictional fixtures and never connects to a real DSH service.
 
 CI: `.github/workflows/ci.yml` (Node 20 + pnpm + gopls, runs on push/PR).
 

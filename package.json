@@ -1,7 +1,7 @@
 {
   "name": "dsh-plugin-kit",
   "version": "1.5.0",
-  "description": "Harness dev toolbox panel: workspace file tree with create/rename/delete/copy-path/drag-move/auto-reveal, multi-tab code editor with save-conflict guard, word wrap and go-to-line, full-text search with regex/context/grouping/replace, multi-language LSP jumps (Go/TS/Python), git stage/commit/amend/push/stash/history with side-by-side word-level diffs and hunk revert, image & Markdown/SVG previews, branch switcher, skills manager, and a Postman-style API tester with curl import/export, params, timeout, history, favorites and environment variables.",
+  "description": "Harness developer workspace: code IDE with a multi-tab editor, LSP navigation, search, Git review, API client, file browser, and skills manager.",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -24,6 +24,8 @@
       "immediately": true,
       "inject": [
         "@deepseek-ai/dsh-client-ui-sidebar-right",
+        "@deepseek-ai/dsh-client-ui-sidebar",
+        "@deepseek-ai/dsh-client-ui-layout",
         "@deepseek-ai/dsh-client-shortcuts"
       ]
     }

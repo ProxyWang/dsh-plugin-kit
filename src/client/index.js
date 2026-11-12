@@ -8,10 +8,11 @@ import { definition, insertStyles, skillsDefinition, apiDefinition } from "./reg
 import { CallDiffRow } from "./calldiff.js";
 import { SkillsTabBody, SkillsTitle } from "./skills.js";
 import { ApiView, ApiTitle } from "./apiclient.js";
-import { makeLauncher } from "./launcher.js";
+import { installLeftTools, WorkspaceGuide } from "./lefttools.js";
+import { registerToolCloseGuard } from "./closeguard.js";
 
 export default {
-	inject: ["slots", "locale", "sidebarRightTabs", "sidebarRight"],
+	inject: ["slots", "locale", "sidebarRightTabs", "sidebarRight", "layout"],
 	apply(ctx) {
 		// One failing registration must not take the whole plugin down with it.
 		const safe = (label, fn) => {
@@ -23,7 +24,6 @@ export default {
 		};
 		safe("styles", insertStyles);
 		const bound = ctx.locale.bind(NS);
-		let shortcutsSvc = null;
 		safe("dictionaries", () => ctx.locale.register(NS, { zh, en }));
 		safe("tab type", () => ctx.sidebarRightTabs.register(definition(bound)));
 		const Bound = (props) => h(CodeBody, { ...props, t: props.t ?? bound });
@@ -56,6 +56,9 @@ export default {
 			key: API_TAB_ID,
 			locale: NS,
 		}, ApiBound)));
+		for (const kind of [TAB_KIND, SKILLS_TAB_KIND]) {
+			safe(`unsaved close guard: ${kind}`, () => registerToolCloseGuard(ctx.sidebarRight, kind, () => bound("editor.dirtyGuard")));
+		}
 		safe("api tab title", () => ctx.slots.inject("sidebar.right.pane.tab.title", () => ctx.slots.register({
 			name: "sidebar.right.pane.tab.title",
 			key: API_TAB_ID,
@@ -77,7 +80,6 @@ export default {
 			yield ctx.slots.register({ name: "tool.call.toolview", key: "write", priority: -1, inject: () => bridge }, CallDiffRow);
 		}));
 		ctx.inject(["shortcuts"], (shortcutCtx) => {
-			shortcutsSvc = shortcutCtx.shortcuts;
 			try {
 				shortcutCtx.effect(() => shortcutCtx.shortcuts.register({
 					id: "code.explorer",
@@ -157,21 +159,13 @@ export default {
 				console.warn("code-explorer: skills shortcut not registered", error);
 			}
 		});
-		// Redesigned "Start" picker via the official chain slot (contract per the
-		// dsh-client-ui-sidebar-right 0.2.2 types): entries from the tab registry,
-		// opens through sidebarRight.openTab(kind), shortcut chips from the
-		// shortcuts catalog. Renders null when the registry is empty so the
-		// shipped guide stays as the fallback.
-		const Launcher = makeLauncher({
-			registry: ctx.sidebarRightTabs,
-			sidebarRight: ctx.sidebarRight,
-			getShortcuts: () => shortcutsSvc,
-			t: bound,
-		});
-		safe("guide launcher", () => ctx.slots.inject("sidebar.right.tab.guide", () => ctx.slots.register({
+		// Left navigation owns all tool launchers; right pages remain session-bound.
+		safe("left tool entries", () => installLeftTools(ctx, bound));
+		const Guide = () => h(WorkspaceGuide, { t: bound });
+		safe("workspace guide", () => ctx.slots.inject("sidebar.right.tab.guide", () => ctx.slots.register({
 			name: "sidebar.right.tab.guide",
 			order: -100,
-			select: (owner) => (owner && typeof owner === "object" ? true : null),
-		}, Launcher)));
+			select: (owner) => owner && typeof owner === "object" ? true : null,
+		}, Guide)));
 	},
 };

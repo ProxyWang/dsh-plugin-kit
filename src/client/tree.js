@@ -2,6 +2,7 @@
 
 import { Fragment, h, useCallback, useEffect, useRef, useState } from "./react.js";
 import { api } from "./api.js";
+import { useDismissLayer } from "./dismiss.js";
 import { HintButton } from "./hint.js";
 import { IconFolder } from "./icons.js";
 import { FileGlyph, fileTint } from "./changetree.js";
@@ -15,7 +16,8 @@ export function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshK
 	const [dropDir, setDropDir] = useState(null); // dir currently highlighted as drop target
 	const [contextMenu, setContextMenu] = useState(null); // {path, isDir, x, y}
 	const railRef = useRef(null);
-	const contextMenuRef = useRef(null);
+	const contextMenuRef = useDismissLayer({ open: Boolean(contextMenu), onDismiss: () => setContextMenu(null) });
+	const deleteRef = useDismissLayer({ open: action?.kind === "delete", onDismiss: () => setAction(null) });
 	const lastRevealed = useRef(null);
 	const revealTick = useRef(null);
 	const loadDir = useCallback((path) => {
@@ -29,17 +31,7 @@ export function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshK
 			});
 		});
 	}, [cwd]);
-	useEffect(() => {
-		if (!contextMenu) return undefined;
-		const close = (event) => { if (!event || !contextMenuRef.current?.contains(event.target)) setContextMenu(null); };
-		const key = (event) => { if (event.key === "Escape") close(); };
-		document.addEventListener("mousedown", close, true);
-		document.addEventListener("keydown", key, true);
-		return () => {
-			document.removeEventListener("mousedown", close, true);
-			document.removeEventListener("keydown", key, true);
-		};
-	}, [contextMenu]);
+
 	useEffect(() => {
 		setListing({});
 		setExpanded([]);
@@ -303,7 +295,7 @@ export function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshK
 			},
 		}, "✎"),
 		action?.kind === "delete" && action.path === path
-			? h(Fragment, null,
+			? h("span", { ref: deleteRef },
 				h("button", {
 					type: "button",
 					className: "cet-act cet-act-show cet-act-danger",

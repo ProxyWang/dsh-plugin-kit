@@ -5,6 +5,7 @@
  */
 
 import { Fragment, h, useMemo, useState } from "./react.js";
+import { useDismissLayer } from "./dismiss.js";
 
 /**
  * Nest flat repo-relative paths into a directory tree. Single-child directory
@@ -111,6 +112,7 @@ export function ChangeTree({ items, onOpen, onDiscard, onDiscardDir, onStage, on
 	const [collapsed, setCollapsed] = useState(() => new Set());
 	const [confirmPath, setConfirmPath] = useState(null);
 	const [confirmDir, setConfirmDir] = useState(null);
+	const confirmRef = useDismissLayer({ open: confirmPath !== null || confirmDir !== null, onDismiss: () => { setConfirmPath(null); setConfirmDir(null); } });
 	const tree = useMemo(() => buildTree(items ?? []), [items]);
 	const dupNames = useMemo(() => {
 		const counts = new Map();
@@ -169,7 +171,7 @@ export function ChangeTree({ items, onOpen, onDiscard, onDiscardDir, onStage, on
 					: null,
 				onDiscardDir
 					? (confirmDir === id
-						? h(Fragment, null,
+						? h("span", { ref: confirmRef },
 							h("button", {
 								type: "button",
 								className: "cet-act cet-act-show cet-act-danger",
@@ -194,6 +196,7 @@ export function ChangeTree({ items, onOpen, onDiscard, onDiscardDir, onStage, on
 							title: t ? t("changes.discardDir") : "discard",
 							onClick: (e) => {
 								e.stopPropagation();
+								setConfirmPath(null);
 								setConfirmDir(id);
 							},
 						}, "⟲"))
@@ -245,7 +248,7 @@ export function ChangeTree({ items, onOpen, onDiscard, onDiscardDir, onStage, on
 					: null,
 				onDiscard && ["M", "D", "A"].includes(String(file.ch))
 					? (confirmPath === file.path
-						? h(Fragment, null,
+						? h("span", { ref: confirmRef },
 							h("button", {
 								type: "button",
 								className: "cet-act cet-act-show cet-act-danger",
@@ -270,6 +273,7 @@ export function ChangeTree({ items, onOpen, onDiscard, onDiscardDir, onStage, on
 							title: t ? t("changes.discard") : "discard",
 							onClick: (e) => {
 								e.stopPropagation();
+								setConfirmDir(null);
 								setConfirmPath(file.path);
 							},
 						}, "⟲"))

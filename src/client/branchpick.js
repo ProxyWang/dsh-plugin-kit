@@ -2,8 +2,10 @@
 
 import { h, useEffect, useMemo, useState } from "./react.js";
 import { api } from "./api.js";
+import { useDismissLayer } from "./dismiss.js";
 
 export function BranchPalette({ cwd, repo, current, t, onDone, onClose, onFetch, onPull, onPush, canPush }) {
+	const panelRef = useDismissLayer({ onDismiss: onClose, ignoreSelector: ".ce-branch" });
 	const [query, setQuery] = useState("");
 	const [list, setList] = useState(null);
 	const [error, setError] = useState("");
@@ -87,7 +89,7 @@ export function BranchPalette({ cwd, repo, current, t, onDone, onClose, onFetch,
 		);
 	};
 
-	return h("div", { className: "ce-palette ce-bp" },
+	return h("div", { className: "ce-palette ce-bp", ref: panelRef, role: "dialog", "aria-label": t("branch.title") },
 		h("div", { className: "ce-palette-head" },
 			h("input", {
 				className: "ce-input",

@@ -7,15 +7,29 @@ export function createElement(type, props, ...children) {
 export const Fragment = Symbol.for("react.fragment");
 
 // Opt-in stateful renders for handler tests. Effects are deliberately skipped:
-// this verifies event/state transitions, not React lifecycle or browser layout.
+// this verifies event/state transitions, not browser layout. Pass { effects: true }
+// and flushEffects() after assigning refs to test listener lifecycle explicitly.
 let renderState = null;
-export function createHookRenderer(component, props) {
-	const state = { slots: [], cursor: 0 };
-	return () => {
+export function createHookRenderer(component, props, options = {}) {
+	const state = { slots: [], cursor: 0, runEffects: options.effects === true, effects: new Map(), pending: new Map() };
+	const render = () => {
 		state.cursor = 0;
 		renderState = state;
 		try { return component(props); } finally { renderState = null; }
 	};
+	render.flushEffects = () => {
+		for (const [index, { effect, deps }] of [...state.pending]) {
+			state.pending.delete(index);
+			state.effects.get(index)?.cleanup?.();
+			state.effects.set(index, { deps, cleanup: effect() });
+		}
+	};
+	render.unmount = () => {
+		state.pending.clear();
+		for (const entry of state.effects.values()) entry.cleanup?.();
+		state.effects.clear();
+	};
+	return render;
 }
 
 export function useState(initial) {
@@ -29,8 +43,14 @@ export function useState(initial) {
 	return [box.value, (next) => { box.value = typeof next === "function" ? next(box.value) : next; return box.value; }];
 }
 
-export function useEffect(effect) {
-	if (renderState) return;
+export function useEffect(effect, deps) {
+	if (renderState) {
+		if (!renderState.runEffects) return;
+		const index = renderState.cursor++;
+		const previous = renderState.effects.get(index);
+		if (!previous || !deps || deps.some((value, i) => !Object.is(value, previous.deps?.[i]))) renderState.pending.set(index, { effect, deps });
+		return;
+	}
 	return effect();
 }
 

@@ -469,7 +469,7 @@ export const CSS = `
 .cea-hurl{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:var(--dsw-alias-label-primary,#ccc);font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
 .cea-hname{flex:none;max-width:34%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:var(--dsw-alias-state-warn-primary,#e3b341)}
 .cea-hstatus{flex:none;font-size:11px}
-.cea-root{container-type:inline-size;overflow:hidden}
+.cea-root{container-type:inline-size;overflow:hidden;min-width:0;width:100%;max-width:100%}
 .cea-root>.cea-bar{display:grid;grid-template-columns:88px minmax(0,1fr) auto;gap:0;padding:12px 12px 8px;border:0}
 .cea-root>.cea-bar .cea-request-method{width:88px;height:36px;border-radius:6px 0 0 6px;font-weight:700}
 .cea-root>.cea-bar .cea-url{width:100%;height:36px;box-sizing:border-box;border-radius:0 6px 6px 0;border-left:0;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px}
@@ -603,7 +603,18 @@ export const CSS = `
 .ce-commitbox-amend{font-size:11px;border-color:var(--ce-line);color:var(--ce-fg-2)}
 .ce-toolbar{flex-wrap:wrap}
 .ce-head{overflow-x:auto;scrollbar-width:thin}
-@media(prefers-reduced-motion:reduce){.ce-root button{transition:none}.ce-spin{animation:none}}
+.ce-command-trigger{display:inline-flex;align-items:center;gap:6px;min-width:0;border:1px solid var(--ce-line);border-radius:7px;background:var(--ce-surface-0);color:var(--ce-fg-2);padding:5px 8px;font:inherit;font-size:11px;cursor:pointer;white-space:nowrap}
+.ce-command-trigger:hover,.ce-command-trigger.ce-tool-on{background:var(--ce-accent-soft);color:var(--ce-fg);border-color:color-mix(in srgb,var(--ce-accent) 45%,var(--ce-line))}
+.ce-command-trigger kbd,.ce-command-hint{font:inherit;font-size:10px;color:var(--ce-fg-3);background:var(--ce-surface-1);border:1px solid var(--ce-line);border-radius:4px;padding:2px 5px}
+.ce-command-mark{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--ce-accent);font-weight:700;flex:none}
+.ce-command-palette{top:46px;max-width:620px}
+.ce-command-palette .ce-palette-head{gap:8px}
+.ce-command-item{display:flex;align-items:center;gap:10px;width:100%;border:0;background:transparent;color:var(--ce-fg-2);font:inherit;text-align:left;padding:8px 12px;cursor:pointer}
+.ce-command-item:hover,.ce-command-item.ce-qitem-sel{background:var(--ce-accent-soft);color:var(--ce-fg)}
+.ce-command-icon{width:20px;text-align:center;color:var(--ce-accent);font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.ce-command-label{flex:1;min-width:0}
+.ce-command-hint{flex:none}
+
 /* Task layouts: review files first; reserve stable space for the active document. */
 .ce-code-root{container-type:inline-size}
 .ce-code-root .ce-toolbar{flex-wrap:nowrap;min-width:0}
@@ -658,7 +669,7 @@ export const CSS = `
  .ce-code-root[data-mobile-view="editor"] .ce-rail-wrap{display:none}
  .ce-code-root[data-mobile-view="editor"] .ce-mobile-back{display:block;flex:none;text-align:left;padding:8px 12px;border:0;border-bottom:1px solid var(--ce-line);background:var(--ce-surface-1);color:var(--ce-fg-2);font:inherit;font-size:12px;cursor:pointer}
  .ce-code-root[data-mobile-view="files"] .ce-mobile-open-editor{display:block;flex:none;font-size:11px}
- .ce-code-root .ce-branch{max-width:120px}
+ .ce-code-root .ce-branch{max-width:120px}.ce-code-root .ce-command-trigger{padding:5px 7px}.ce-code-root .ce-command-trigger>span:not(.ce-command-mark),.ce-code-root .ce-command-trigger>kbd{display:none}
  .ce-code-root .ce-workspace-search{width:26px;padding:0}
  .ce-code-root .ce-workspace-search>span{display:none}
  .ce-sk-detail-head{max-height:34%;padding:12px 16px 6px}
@@ -672,4 +683,52 @@ export const CSS = `
 .ce-search-scope>.ce-tool{grid-column:2;grid-row:1/3}
 .ce-search-directory{display:flex;flex-wrap:wrap;align-items:center;gap:6px;font-size:11px;color:var(--ce-fg-2);flex:none}
 .ce-search-directory .ce-input{flex:1 1 160px;font-size:12px;min-width:0}
+
+/* Request builder: one primary request row, config tabs and editable tables. */
+.cea-root>.cea-tools{padding:6px 12px;min-height:34px;border-bottom:1px solid var(--ce-line);background:var(--ce-surface-0);gap:4px}
+.cea-root>.cea-bar{padding:14px 16px;background:var(--ce-surface-0);border-bottom:0}
+.cea-root>.cea-bar .cea-request-method,.cea-root>.cea-bar .cea-url{height:42px;background:var(--ce-surface-0);font-size:13px}
+.cea-root>.cea-bar .cea-request-method{border-right:0;border-radius:8px 0 0 8px;color:var(--dsw-alias-state-success-primary,#288252)}
+.cea-root>.cea-bar .cea-url{border-left:0;border-radius:0 8px 8px 0;font-family:inherit}
+.cea-root>.cea-bar .cea-send{height:42px;min-width:80px;margin-left:10px;border-radius:8px;font-size:13px}
+.cea-root .cea-request-tabs{padding:0 16px;gap:24px;background:var(--ce-surface-0)}
+.cea-root .cea-config-tab{padding:12px 0 10px;font-size:13px;color:var(--ce-fg-2)}
+.cea-root .cea-config-tab-on{color:var(--ce-fg);border-bottom-color:var(--ce-accent)}
+.cea-workspace .cea-request-panel{padding:16px}
+.cea-fields{min-width:0}
+.cea-fields-scroll{overflow:auto;border:1px solid var(--ce-line);border-radius:7px}
+.cea-fields-table{border-collapse:collapse;table-layout:fixed;width:100%;font-size:12px;color:var(--ce-fg)}
+.cea-fields-check,.cea-fields-action{width:34px}
+.cea-fields-name{width:25%}.cea-fields-description{width:25%}
+.cea-fields-table th{font-weight:500;color:var(--ce-fg-2);background:var(--ce-surface-1);text-align:left;height:36px;padding:8px 10px}
+.cea-fields-table td{height:38px;padding:0;border-top:1px solid var(--ce-line)}
+.cea-fields-table th,.cea-fields-table td{border-right:1px solid var(--ce-line)}
+.cea-fields-table th:last-child,.cea-fields-table td:last-child{border-right:0}
+.cea-fields-table td:first-child{text-align:center}
+.cea-fields-table input[type=checkbox]{accent-color:var(--ce-accent);width:15px;height:15px;cursor:pointer;margin:0}
+.cea-fields-table input[type=checkbox]:disabled{opacity:.25;cursor:default}
+.cea-field-input{width:100%;min-width:0;height:38px;border:0;border-radius:0;background:transparent;color:var(--ce-fg);padding:8px 10px;font:inherit;outline-offset:-2px!important}
+.cea-field-input::placeholder{color:var(--ce-fg-3)}
+.cea-field-input:focus{background:var(--ce-accent-soft)}
+.cea-field-disabled .cea-field-input{color:var(--ce-fg-3)}
+.cea-field-delete{width:30px;height:30px;margin:2px}
+.cea-fields-footer{display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;padding:10px 0;color:var(--ce-fg-2);font-size:11px;line-height:1.5}
+.cea-sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0}
+@container (max-width:560px){
+ .cea-fields-description{display:none}
+ .cea-fields-name{width:36%}
+ .cea-root>.cea-bar{padding:10px}
+ .cea-workspace .cea-request-panel{padding:10px}
+ .cea-root .cea-request-tabs{padding:0 10px;gap:18px}
+}
+
+/* Entry points live in native left PanelRows; the right guide is a work area. */
+.ce-workspace-guide{height:100%;min-height:180px;box-sizing:border-box;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:24px;text-align:center;color:var(--dsw-alias-label-secondary,#9aa4b0);font-family:inherit}
+.ce-workspace-guide-icon{display:inline-flex;color:var(--dsw-alias-label-tertiary,#7b8794)}
+.ce-workspace-guide h2{margin:0;font-size:16px;font-weight:600;color:var(--dsw-alias-label-primary,#ddd)}
+.ce-workspace-guide p{margin:0;max-width:38ch;font-size:12px;line-height:1.7}
+.ce-left-notice{position:fixed;z-index:1000;bottom:24px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:12px;max-width:min(480px,calc(100vw - 32px));padding:10px 14px;border:1px solid var(--dsw-alias-border-l2,#48515e);border-radius:8px;background:var(--dsw-alias-bg-layer-2,#24272c);color:var(--dsw-alias-label-primary,#ddd);font:inherit;font-size:13px;line-height:1.5;box-shadow:0 6px 24px #0002}
+.ce-left-notice>span{min-width:0;overflow-wrap:anywhere}
+.ce-left-notice>button{flex:none;width:28px;height:28px;border:0;border-radius:4px;background:transparent;color:inherit;font:inherit;font-size:18px;cursor:pointer}
+.ce-left-notice>button:focus-visible{outline:2px solid var(--dsw-alias-button-info-fill,#4176e6)}
 `;

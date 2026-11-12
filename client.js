@@ -71,6 +71,14 @@ var ROW = 22;
 
 // src/client/locale.js
 var zh = {
+  "left.workspace": "工作区",
+  "left.guide": "从左侧选择开发工作台、接口调试、技能或其他工具，在这里继续工作。",
+  "left.openFailed": "无法切换工具",
+  "api.fieldEnabled": "启用",
+  "api.fieldName": "名称",
+  "api.fieldValue": "值",
+  "api.fieldDescription": "说明",
+  "api.fieldAddHint": "在末行输入以添加 · 取消勾选可停用",
   "search.inDirectory": "在此目录中搜索",
   "search.changesPlaceholder": "在当前变更文件中搜索代码…",
   "search.noChangedFiles": "当前没有可搜索的变更文件，不会扩大到整个工作区。",
@@ -90,10 +98,22 @@ var zh = {
   "api.resizePanels": "调整请求与响应区域高度",
   "api.resizeHint": "拖动调整高度 · 方向键微调 · 双击恢复",
   "skills.details": "说明与安装位置",
-  "type.label": "代码",
-  "guide.title": "代码浏览器",
-  "guide.description": "工作区代码浏览、当前分支变更、LSP 跳转定义/引用（Go/TS/Python）",
-  "toolbar.files": "文件",
+  "type.label": "开发工作台",
+  "guide.title": "开发工作台",
+  "guide.description": "文件浏览、代码编辑、搜索、Git 变更与 LSP 导航",
+  "command.title": "命令中心",
+  "command.placeholder": "输入命令名称…",
+  "command.empty": "没有匹配的命令",
+  "command.files": "打开资源管理器",
+  "command.changes": "打开源码管理",
+  "command.search": "搜索工作区代码",
+  "command.quickOpen": "快速打开文件",
+  "command.outline": "打开当前文件符号",
+  "command.outlineUnavailable": "当前文件没有可用的语言服务",
+  "command.wrap": "切换自动换行",
+  "command.toggleRail": "显示或隐藏侧栏",
+  "command.refresh": "刷新工作区",
+  "toolbar.files": "资源管理器",
   "toolbar.changes": "变更",
   refresh: "刷新",
   "clickJump.on": "点击弹引用：开（⌘点击直接跳定义）",
@@ -122,7 +142,7 @@ var zh = {
   "tree.failed": "无法读取目录",
   "tree.empty": "空目录",
   "editor.placeholder": "从左侧文件树选择文件，或在“变更”中查看 diff",
-  "editor.noSession": "没有可用会话：代码浏览器需要当前会话的工作目录。",
+  "editor.noSession": "没有可用会话：代码 IDE 需要当前会话的工作目录。",
   "jump.noCursor": "先点击一个标识符（函数/变量/类型），再触发跳转",
   "jump.noTarget": "未找到定义",
   "jump.busy": "语言服务器正在索引，稍后重试…",
@@ -361,7 +381,7 @@ var zh = {
   "skillsTab.label": "技能",
   "skillsGuide.title": "技能管理",
   "skillsGuide.description": "浏览、编辑、新建与删除已安装的 agent skills（SKILL.md）",
-  "launcher.code": "代码与文件",
+  "launcher.code": "开发工作台",
   "launcher.run": "终端与网页",
   "launcher.skills": "Agent 扩展",
   "launcher.more": "更多",
@@ -426,9 +446,17 @@ var zh = {
   "diff.scopeCommit": "提交",
   "diff.back": "返回文件",
   "changes.commitsToggle": "展开 / 收起提交列表",
-  "quickopen.command": "快速打开文件（代码浏览器）"
+  "quickopen.command": "快速打开文件（代码 IDE）"
 };
 var en = {
+  "left.workspace": "Workspace",
+  "left.guide": "Choose Dev Workspace, API Tester, Skills or another tool on the left to work here.",
+  "left.openFailed": "Could not toggle tool",
+  "api.fieldEnabled": "Enabled",
+  "api.fieldName": "Name",
+  "api.fieldValue": "Value",
+  "api.fieldDescription": "Description",
+  "api.fieldAddHint": "Type in the last row to add · Uncheck to disable",
   "search.inDirectory": "Find in this directory",
   "search.changesPlaceholder": "Search code in changed files…",
   "search.noChangedFiles": "No searchable changed files. The search will not expand to the workspace.",
@@ -448,10 +476,22 @@ var en = {
   "api.resizePanels": "Resize request and response panes",
   "api.resizeHint": "Drag to resize · Arrow keys to adjust · Double-click to reset",
   "skills.details": "Description & installation",
-  "type.label": "Code",
-  "guide.title": "Code Explorer",
-  "guide.description": "Workspace browsing, branch changes, LSP definition/reference jumps (Go/TS/Python)",
-  "toolbar.files": "Files",
+  "type.label": "Dev Workspace",
+  "guide.title": "Dev Workspace",
+  "guide.description": "Explore files, edit code, search, review Git changes, and navigate with LSP",
+  "command.title": "Command Center",
+  "command.placeholder": "Type a command…",
+  "command.empty": "No matching commands",
+  "command.files": "Open Explorer",
+  "command.changes": "Open Source Control",
+  "command.search": "Search Workspace",
+  "command.quickOpen": "Quick Open File",
+  "command.outline": "Open Current File Symbols",
+  "command.outlineUnavailable": "Language services are unavailable for this file",
+  "command.wrap": "Toggle Word Wrap",
+  "command.toggleRail": "Toggle Side Panel",
+  "command.refresh": "Refresh Workspace",
+  "toolbar.files": "Explorer",
   "toolbar.changes": "Changes",
   refresh: "Refresh",
   "clickJump.on": "Click pops references: on (⌘-click jumps to definition)",
@@ -719,7 +759,7 @@ var en = {
   "skillsTab.label": "Skills",
   "skillsGuide.title": "Skills manager",
   "skillsGuide.description": "Browse, edit, create and delete installed agent skills (SKILL.md)",
-  "launcher.code": "Code & files",
+  "launcher.code": "Dev Workspace",
   "launcher.run": "Terminal & web",
   "launcher.skills": "Agent extensions",
   "launcher.more": "More",
@@ -784,8 +824,31 @@ var en = {
   "diff.scopeCommit": "Commit",
   "diff.back": "Back to file",
   "changes.commitsToggle": "Show / hide commits",
-  "quickopen.command": "Quick Open File (Code Explorer)"
+  "quickopen.command": "Quick Open File (Code IDE)"
 };
+
+// src/client/closeguard.js
+var BEFORE_TOOL_CLOSE = "dsh-plugin-kit/before-tool-close";
+function useToolCloseGuard({ sessionId, kind, dirty, onBlocked }) {
+  const blocked = useRef(onBlocked);
+  blocked.current = onBlocked;
+  useEffect(() => {
+    if (!sessionId || !dirty || typeof document === "undefined") return void 0;
+    const beforeClose = (event) => {
+      if (event.detail?.sessionId !== sessionId || event.detail?.kind !== kind) return;
+      event.preventDefault();
+      blocked.current?.();
+    };
+    document.addEventListener(BEFORE_TOOL_CLOSE, beforeClose);
+    return () => document.removeEventListener(BEFORE_TOOL_CLOSE, beforeClose);
+  }, [sessionId, kind, dirty]);
+}
+function registerToolCloseGuard(sidebarRight, kind, message, doc = document) {
+  return sidebarRight.registerCloseHandler(kind, (sessionId) => {
+    const event = new CustomEvent(BEFORE_TOOL_CLOSE, { cancelable: true, detail: { sessionId, kind } });
+    if (!doc.dispatchEvent(event)) throw new Error(message());
+  });
+}
 
 // src/client/api.js
 async function api(route, body) {
@@ -968,6 +1031,76 @@ var IconArrowLeft = () => svg([h("path", { key: "p", d: "M20 12H5" }), h("path",
 var IconArrowRight = () => svg([h("path", { key: "p", d: "M4 12h15" }), h("path", { key: "q", d: "M13 6l6 6-6 6" })]);
 var IconSearch = () => svg([h("circle", { key: "c", cx: 10.5, cy: 10.5, r: 6.5 }), h("path", { key: "p", d: "M16 16l5 5" })]);
 var IconTextSearch = () => svg([h("path", { key: "a", d: "M4 5h16" }), h("path", { key: "b", d: "M4 10h11" }), h("path", { key: "c2", d: "M4 15h8" }), h("path", { key: "d", d: "M18 14.5l2.5 2.5" })]);
+
+// src/client/dismiss.js
+var registries = /* @__PURE__ */ new WeakMap();
+function containsEvent(node, event) {
+  return Boolean(node && (event.composedPath?.().includes(node) || node.contains?.(event.target)));
+}
+function registerDismissLayer(doc, layer) {
+  let registry = registries.get(doc);
+  if (!registry) {
+    const layers = [];
+    const top = () => [...layers].reverse().find((entry) => {
+      const node = entry.node();
+      return node && node.isConnected !== false && (!node.getClientRects || node.getClientRects().length > 0);
+    });
+    const pointer = (event) => {
+      if (typeof event.button === "number" && event.button !== 0) return;
+      const entry = top();
+      if (!entry || containsEvent(entry.node(), event) || entry.ignore?.(event)) return;
+      entry.dismiss("outside");
+    };
+    const key = (event) => {
+      if (event.key !== "Escape" || event.isComposing || event.keyCode === 229 || event.defaultPrevented) return;
+      const entry = top();
+      if (!entry) return;
+      event.preventDefault();
+      event.stopPropagation();
+      entry.dismiss("escape");
+    };
+    registry = { layers, pointer, key };
+    registries.set(doc, registry);
+    doc.addEventListener("pointerdown", pointer, true);
+    doc.addEventListener("keydown", key, true);
+  }
+  registry.layers.push(layer);
+  let registered = true;
+  return () => {
+    if (!registered) return;
+    registered = false;
+    const index = registry.layers.indexOf(layer);
+    if (index >= 0) registry.layers.splice(index, 1);
+    if (registry.layers.length) return;
+    doc.removeEventListener("pointerdown", registry.pointer, true);
+    doc.removeEventListener("keydown", registry.key, true);
+    registries.delete(doc);
+  };
+}
+function useDismissLayer({ open = true, onDismiss, ignoreSelector } = {}) {
+  const ref = useRef(null);
+  const latest = useRef(null);
+  latest.current = { onDismiss, ignoreSelector };
+  useEffect(() => {
+    if (!open || typeof document === "undefined") return void 0;
+    const doc = ref.current?.ownerDocument ?? document;
+    const active = doc.activeElement;
+    const root = ref.current?.closest?.(".ce-root");
+    const previousFocus = ref.current?.contains?.(active) ? (ignoreSelector ? root?.querySelector?.(ignoreSelector) : null) ?? root?.querySelector?.(".ce-code") : active;
+    return registerDismissLayer(doc, {
+      node: () => ref.current,
+      ignore: (event) => {
+        const trigger = latest.current.ignoreSelector && event.target?.closest?.(latest.current.ignoreSelector);
+        return Boolean(trigger && trigger.closest?.(".ce-root") === ref.current?.closest?.(".ce-root"));
+      },
+      dismiss: (reason) => {
+        latest.current.onDismiss?.(reason);
+        if (reason === "escape" && previousFocus?.isConnected !== false) previousFocus?.focus?.({ preventScroll: true });
+      }
+    });
+  }, [open]);
+  return ref;
+}
 
 // src/client/diff.js
 var SBS_KEY = "dsh.ce.diff.sbs.v1";
@@ -1153,6 +1286,7 @@ function DiffView({ t, diff, onClose, onOpenSource, canSource, onRevertHunk }) {
   const [sbs, setSbs] = useState(loadSbs);
   const [navIdx, setNavIdx] = useState(-1);
   const [confirmHunk, setConfirmHunk] = useState(-1);
+  const confirmRef = useDismissLayer({ open: confirmHunk >= 0, onDismiss: () => setConfirmHunk(-1) });
   const containerRef = useRef(null);
   const paired = useMemo(() => sbs ? pairRows(shown) : null, [sbs, shown]);
   const hunkIdxOf = useMemo(() => {
@@ -1229,7 +1363,7 @@ function DiffView({ t, diff, onClose, onOpenSource, canSource, onRevertHunk }) {
     if (confirmHunk === hunkIdx) {
       return h(
         "span",
-        { className: "ce-hunk-confirm" },
+        { className: "ce-hunk-confirm", ref: confirmRef },
         h("button", {
           type: "button",
           className: "ce-tool ce-tiny ce-hunk-revert-on",
@@ -1472,6 +1606,7 @@ function MarkdownView({ text }) {
 
 // src/client/branchpick.js
 function BranchPalette({ cwd, repo, current, t, onDone, onClose, onFetch, onPull, onPush, canPush }) {
+  const panelRef = useDismissLayer({ onDismiss: onClose, ignoreSelector: ".ce-branch" });
   const [query, setQuery] = useState("");
   const [list, setList] = useState(null);
   const [error, setError] = useState("");
@@ -1552,7 +1687,7 @@ function BranchPalette({ cwd, repo, current, t, onDone, onClose, onFetch, onPull
   };
   return h(
     "div",
-    { className: "ce-palette ce-bp" },
+    { className: "ce-palette ce-bp", ref: panelRef, role: "dialog", "aria-label": t("branch.title") },
     h(
       "div",
       { className: "ce-palette-head" },
@@ -1808,6 +1943,10 @@ function ChangeTree({ items, onOpen, onDiscard, onDiscardDir, onStage, onStageDi
   const [collapsed, setCollapsed] = useState(() => /* @__PURE__ */ new Set());
   const [confirmPath, setConfirmPath] = useState(null);
   const [confirmDir, setConfirmDir] = useState(null);
+  const confirmRef = useDismissLayer({ open: confirmPath !== null || confirmDir !== null, onDismiss: () => {
+    setConfirmPath(null);
+    setConfirmDir(null);
+  } });
   const tree = useMemo(() => buildTree(items ?? []), [items]);
   const dupNames = useMemo(() => {
     const counts = /* @__PURE__ */ new Map();
@@ -1864,8 +2003,8 @@ function ChangeTree({ items, onOpen, onDiscard, onDiscardDir, onStage, onStageDi
             }
           }, "−") : null,
           onDiscardDir ? confirmDir === id ? h(
-            Fragment,
-            null,
+            "span",
+            { ref: confirmRef },
             h("button", {
               type: "button",
               className: "cet-act cet-act-show cet-act-danger",
@@ -1889,6 +2028,7 @@ function ChangeTree({ items, onOpen, onDiscard, onDiscardDir, onStage, onStageDi
             title: t ? t("changes.discardDir") : "discard",
             onClick: (e) => {
               e.stopPropagation();
+              setConfirmPath(null);
               setConfirmDir(id);
             }
           }, "⟲") : null,
@@ -1940,8 +2080,8 @@ function ChangeTree({ items, onOpen, onDiscard, onDiscardDir, onStage, onStageDi
             }
           }, "−") : null,
           onDiscard && ["M", "D", "A"].includes(String(file.ch)) ? confirmPath === file.path ? h(
-            Fragment,
-            null,
+            "span",
+            { ref: confirmRef },
             h("button", {
               type: "button",
               className: "cet-act cet-act-show cet-act-danger",
@@ -1965,6 +2105,7 @@ function ChangeTree({ items, onOpen, onDiscard, onDiscardDir, onStage, onStageDi
             title: t ? t("changes.discard") : "discard",
             onClick: (e) => {
               e.stopPropagation();
+              setConfirmDir(null);
               setConfirmPath(file.path);
             }
           }, "⟲") : null,
@@ -1986,7 +2127,8 @@ function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshKey, onN
   const [dropDir, setDropDir] = useState(null);
   const [contextMenu, setContextMenu] = useState(null);
   const railRef = useRef(null);
-  const contextMenuRef = useRef(null);
+  const contextMenuRef = useDismissLayer({ open: Boolean(contextMenu), onDismiss: () => setContextMenu(null) });
+  const deleteRef = useDismissLayer({ open: action?.kind === "delete", onDismiss: () => setAction(null) });
   const lastRevealed = useRef(null);
   const revealTick = useRef(null);
   const loadDir = useCallback((path) => {
@@ -1998,21 +2140,6 @@ function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshKey, onN
       });
     });
   }, [cwd]);
-  useEffect(() => {
-    if (!contextMenu) return void 0;
-    const close = (event) => {
-      if (!event || !contextMenuRef.current?.contains(event.target)) setContextMenu(null);
-    };
-    const key = (event) => {
-      if (event.key === "Escape") close();
-    };
-    document.addEventListener("mousedown", close, true);
-    document.addEventListener("keydown", key, true);
-    return () => {
-      document.removeEventListener("mousedown", close, true);
-      document.removeEventListener("keydown", key, true);
-    };
-  }, [contextMenu]);
   useEffect(() => {
     setListing({});
     setExpanded([]);
@@ -2274,8 +2401,8 @@ function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshKey, onN
       }
     }, "✎"),
     action?.kind === "delete" && action.path === path ? h(
-      Fragment,
-      null,
+      "span",
+      { ref: deleteRef },
       h("button", {
         type: "button",
         className: "cet-act cet-act-show cet-act-danger",
@@ -2433,6 +2560,8 @@ function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commitsOpen, 
   const [stashUntracked, setStashUntracked] = useState(false);
   const [stashBusy, setStashBusy] = useState(false);
   const [stashConfirm, setStashConfirm] = useState(null);
+  const stashSaveRef = useDismissLayer({ open: stashSaving, onDismiss: () => setStashSaving(false), ignoreSelector: '[data-ce-popup-trigger="stash-save"]' });
+  const stashConfirmRef = useDismissLayer({ open: stashConfirm !== null, onDismiss: () => setStashConfirm(null) });
   const repoArgs = repoSel ? { cwd, repo: repoSel } : { cwd };
   const isRepo = Boolean(git && git.repo);
   const refreshStashes = useCallback(() => {
@@ -2663,15 +2792,20 @@ function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commitsOpen, 
         "div",
         { className: "ce-section" },
         h("span", null, `${t("stash.title")}${stashes.length ? ` · ${stashes.length}` : ""}`),
-        h("button", { className: "ce-link", type: "button", title: t("stash.saveTitle"), disabled: stashBusy, onClick: () => {
+        h("button", { className: "ce-link", type: "button", title: t("stash.saveTitle"), "data-ce-popup-trigger": "stash-save", disabled: stashBusy, onClick: () => {
+          setStashConfirm(null);
           setStashSaving((v) => !v);
           setStashOpen(true);
         } }, `+ ${t("stash.save")}`),
-        h("button", { className: "ce-tool ce-tiny", type: "button", title: t("stash.toggle"), "aria-expanded": stashOpen ? "true" : "false", onClick: () => setStashOpen((v) => !v) }, stashOpen ? "▾" : "▸")
+        h("button", { className: "ce-tool ce-tiny", type: "button", title: t("stash.toggle"), "aria-expanded": stashOpen ? "true" : "false", onClick: () => {
+          setStashConfirm(null);
+          setStashSaving(false);
+          setStashOpen((v) => !v);
+        } }, stashOpen ? "▾" : "▸")
       ),
       stashSaving ? h(
         "div",
-        { className: "ce-stash-save" },
+        { className: "ce-stash-save", ref: stashSaveRef },
         h("input", {
           className: "ce-input",
           placeholder: t("stash.msgPlaceholder"),
@@ -2701,8 +2835,8 @@ function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commitsOpen, 
           "span",
           { className: "ce-stashacts" },
           stashConfirm === s.ref ? h(
-            Fragment,
-            null,
+            "span",
+            { ref: stashConfirmRef },
             h("button", { type: "button", className: "cet-act cet-act-show cet-act-danger", disabled: stashBusy, onClick: () => stashDrop(s.ref) }, t("stash.confirm")),
             h("button", { type: "button", className: "cet-act cet-act-show", onClick: () => setStashConfirm(null) }, t("stash.cancel"))
           ) : h(
@@ -2710,7 +2844,10 @@ function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commitsOpen, 
             null,
             h("button", { type: "button", className: "ce-link", disabled: stashBusy, title: t("stash.applyTitle"), onClick: () => stashApply(s.ref, false) }, t("stash.apply")),
             h("button", { type: "button", className: "ce-link", disabled: stashBusy, title: t("stash.popTitle"), onClick: () => stashApply(s.ref, true) }, t("stash.pop")),
-            h("button", { type: "button", className: "ce-tool ce-tiny", title: t("stash.drop"), disabled: stashBusy, onClick: () => setStashConfirm(s.ref) }, "✕")
+            h("button", { type: "button", className: "ce-tool ce-tiny", title: t("stash.drop"), disabled: stashBusy, onClick: () => {
+              setStashSaving(false);
+              setStashConfirm(s.ref);
+            } }, "✕")
           )
         )
       )) : null
@@ -2720,9 +2857,10 @@ function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commitsOpen, 
 
 // src/client/overlays.js
 function LocationList({ t, overlay, cwd, onPick, onClose }) {
+  const panelRef = useDismissLayer({ onDismiss: onClose });
   return h(
     "div",
-    { className: "ce-overlay" },
+    { className: "ce-overlay", ref: panelRef, role: "dialog", "aria-label": overlay.title },
     h(
       "div",
       { className: "ce-overlay-head" },
@@ -2743,7 +2881,76 @@ function LocationList({ t, overlay, cwd, onPick, onClose }) {
     )
   );
 }
+function CommandPalette({ t, commands, onClose }) {
+  const [query, setQuery] = useState("");
+  const [sel, setSel] = useState(0);
+  const inputRef = useRef(null);
+  const listRef = useRef(null);
+  const panelRef = useDismissLayer({ onDismiss: onClose, ignoreSelector: ".ce-command-trigger" });
+  const items = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return (commands ?? []).filter((item) => !q || `${item.label} ${item.hint ?? ""}`.toLowerCase().includes(q));
+  }, [commands, query]);
+  useEffect(() => {
+    setSel(0);
+  }, [query]);
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
+  useEffect(() => {
+    listRef.current?.querySelector(`[data-command="${sel}"]`)?.scrollIntoView({ block: "nearest" });
+  }, [sel]);
+  const choose = (index) => {
+    const item = items[index];
+    if (!item) return;
+    onClose();
+    item.run();
+  };
+  const onKeyDown = (event) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      event.stopPropagation();
+      onClose();
+    } else if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setSel((value) => Math.min(Math.max(0, items.length - 1), value + 1));
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setSel((value) => Math.max(0, value - 1));
+    } else if (event.key === "Enter") {
+      event.preventDefault();
+      choose(sel);
+    }
+  };
+  return h(
+    "div",
+    { className: "ce-palette ce-command-palette", ref: panelRef, role: "dialog", "aria-label": t("command.title"), onKeyDown },
+    h(
+      "div",
+      { className: "ce-palette-head" },
+      h("span", { className: "ce-command-mark", "aria-hidden": true }, ">_"),
+      h("input", { ref: inputRef, className: "ce-input", type: "search", placeholder: t("command.placeholder"), "aria-label": t("command.placeholder"), value: query, onChange: (event) => setQuery(event.target.value), onKeyDown: (event) => {
+        event.stopPropagation();
+        onKeyDown(event);
+      }, autoComplete: "off" }),
+      h("button", { className: "ce-tool ce-tiny", type: "button", title: `${t("close")} (Esc)`, onClick: onClose }, "✕")
+    ),
+    h(
+      "div",
+      { className: "ce-palette-list ce-scroll", ref: listRef },
+      items.length === 0 ? h("div", { className: "ce-note" }, t("command.empty")) : null,
+      items.map((item, index) => h(
+        "button",
+        { key: item.id, type: "button", "data-command": index, className: `ce-command-item${index === sel ? " ce-qitem-sel" : ""}`, onMouseEnter: () => setSel(index), onClick: () => choose(index) },
+        h("span", { className: "ce-command-icon", "aria-hidden": true }, item.icon ?? "·"),
+        h("span", { className: "ce-command-label" }, item.label),
+        item.hint ? h("kbd", { className: "ce-command-hint" }, item.hint) : null
+      ))
+    )
+  );
+}
 function QuickOpen({ t, state, onQuery, onPick, onClose }) {
+  const panelRef = useDismissLayer({ onDismiss: onClose, ignoreSelector: ".ce-rail-quickopen" });
   const [sel, setSel] = useState(0);
   const inputRef = useRef(null);
   const listRef = useRef(null);
@@ -2779,7 +2986,7 @@ function QuickOpen({ t, state, onQuery, onPick, onClose }) {
   };
   return h(
     "div",
-    { className: "ce-palette", onKeyDown },
+    { className: "ce-palette", ref: panelRef, role: "dialog", "aria-label": t("quickopen.placeholder"), onKeyDown },
     h(
       "div",
       { className: "ce-palette-head" },
@@ -2790,7 +2997,10 @@ function QuickOpen({ t, state, onQuery, onPick, onClose }) {
         placeholder: t("quickopen.placeholder"),
         value: state.query,
         onChange: (event) => onQuery(event.target.value),
-        onKeyDown,
+        onKeyDown: (event) => {
+          event.stopPropagation();
+          onKeyDown(event);
+        },
         spellcheck: false,
         autoCapitalize: "off",
         autoComplete: "off"
@@ -2839,25 +3049,7 @@ function RefsPeek({ t, cwd, peek, scroll, totalLines, onPick, onClose }) {
   for (const g of groups) flat.push(...g.rows);
   const [sel, setSel] = useState(0);
   const bodyRef = useRef(null);
-  const panelRef = useRef(null);
-  useEffect(() => {
-    const dismissOutside = (event) => {
-      if (panelRef.current && !panelRef.current.contains(event.target)) onClose();
-    };
-    const dismissEscape = (event) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        event.stopPropagation();
-        onClose();
-      }
-    };
-    document.addEventListener("pointerdown", dismissOutside, true);
-    document.addEventListener("keydown", dismissEscape, true);
-    return () => {
-      document.removeEventListener("pointerdown", dismissOutside, true);
-      document.removeEventListener("keydown", dismissEscape, true);
-    };
-  }, [onClose]);
+  const panelRef = useDismissLayer({ onDismiss: onClose });
   useEffect(() => {
     setSel(0);
   }, [peek.symbol, peek.busy]);
@@ -2934,6 +3126,7 @@ function RefsPeek({ t, cwd, peek, scroll, totalLines, onPick, onClose }) {
 }
 var SYMBOL_GLYPHS = { 2: "▣", 3: "ƒ", 4: "Ω", 5: "◆", 6: "ƒ", 7: "◆", 8: "◈", 9: "#", 10: "◈", 11: "▣", 12: "✓", 13: "▣", 14: "🛡", 15: "ω", 16: "◆", 17: "◆", 18: "≡", 19: "◦", 20: "◦", 21: "≡", 22: "◆", 23: "◆", 24: "▣", 25: "•", 26: "•" };
 function SymbolPalette({ t, symbols, onPick, onClose }) {
+  const panelRef = useDismissLayer({ onDismiss: onClose });
   const [query, setQuery] = useState("");
   const [sel, setSel] = useState(0);
   const inputRef = useRef(null);
@@ -2969,7 +3162,7 @@ function SymbolPalette({ t, symbols, onPick, onClose }) {
   };
   return h(
     "div",
-    { className: "ce-palette", onKeyDown, onMouseDown: (event) => event.stopPropagation() },
+    { className: "ce-palette", ref: panelRef, role: "dialog", "aria-label": t("symbols.placeholder"), onKeyDown, onMouseDown: (event) => event.stopPropagation() },
     h(
       "div",
       { className: "ce-palette-head" },
@@ -2980,7 +3173,10 @@ function SymbolPalette({ t, symbols, onPick, onClose }) {
         placeholder: t("symbols.placeholder"),
         value: query,
         onChange: (event) => setQuery(event.target.value),
-        onKeyDown,
+        onKeyDown: (event) => {
+          event.stopPropagation();
+          onKeyDown(event);
+        },
         spellcheck: false
       }),
       h("button", { className: "ce-tool ce-tiny", type: "button", title: `${t("close")} (Esc)`, onClick: onClose }, "✕")
@@ -3009,6 +3205,7 @@ function SymbolPalette({ t, symbols, onPick, onClose }) {
   );
 }
 function GotoLinePalette({ t, totalLines, initial, onGo, onClose }) {
+  const panelRef = useDismissLayer({ onDismiss: onClose });
   const [value, setValue] = useState(String(initial ?? ""));
   const inputRef = useRef(null);
   useEffect(() => {
@@ -3032,7 +3229,7 @@ function GotoLinePalette({ t, totalLines, initial, onGo, onClose }) {
   };
   return h(
     "div",
-    { className: "ce-palette ce-goto", onMouseDown: (event) => event.stopPropagation() },
+    { className: "ce-palette ce-goto", ref: panelRef, role: "dialog", "aria-label": t("goto.title"), onMouseDown: (event) => event.stopPropagation() },
     h(
       "div",
       { className: "ce-palette-head" },
@@ -3044,7 +3241,10 @@ function GotoLinePalette({ t, totalLines, initial, onGo, onClose }) {
         placeholder: t("goto.placeholder", { n: totalLines }),
         value,
         onChange: (event) => setValue(event.target.value),
-        onKeyDown,
+        onKeyDown: (event) => {
+          event.stopPropagation();
+          onKeyDown(event);
+        },
         spellcheck: false,
         autoComplete: "off"
       }),
@@ -3053,9 +3253,10 @@ function GotoLinePalette({ t, totalLines, initial, onGo, onClose }) {
   );
 }
 function FileHistoryOverlay({ t, hist, onPick, onClose }) {
+  const panelRef = useDismissLayer({ onDismiss: onClose });
   return h(
     "div",
-    { className: "ce-overlay", onMouseDown: (event) => event.stopPropagation() },
+    { className: "ce-overlay", ref: panelRef, role: "dialog", "aria-label": t("history.title"), onMouseDown: (event) => event.stopPropagation() },
     h(
       "div",
       { className: "ce-overlay-head" },
@@ -3170,6 +3371,7 @@ function SearchPanel({ t, cwd, state, onQuery, onInclude, onDirectory, onToggleR
   const [replaceText, setReplaceText] = useState("");
   const [replaceBusy, setReplaceBusy] = useState(false);
   const [confirmAll, setConfirmAll] = useState(false);
+  const confirmRef = useDismissLayer({ open: confirmAll, onDismiss: () => setConfirmAll(false) });
   useEffect(() => {
     inputRef.current?.focus();
   }, []);
@@ -3359,6 +3561,7 @@ function SearchPanel({ t, cwd, state, onQuery, onInclude, onDirectory, onToggleR
       }),
       h("button", {
         className: "ce-sk-btn",
+        ref: confirmRef,
         type: "button",
         disabled: replaceBusy || groups.length === 0 || state.query.trim().length < 2,
         title: t("search.replaceAll"),
@@ -3946,12 +4149,14 @@ function CodeBody(props) {
   const [previewOn, setPreviewOn] = useState(false);
   const [delGroups, setDelGroups] = useState(null);
   const [delPreview, setDelPreview] = useState(null);
+  const delPreviewRef = useDismissLayer({ open: Boolean(delPreview), onDismiss: () => setDelPreview(null) });
   const [showDiffView, setShowDiffView] = useState(true);
   const [railW, setRailW] = useState(230);
   const [railVisible, setRailVisible] = useState(true);
   const [mobileView, setMobileView] = useState("files");
   const [symbols, setSymbols] = useState([]);
   const [symPalette, setSymPalette] = useState(null);
+  const [commandOpen, setCommandOpen] = useState(false);
   const [commitsOpen, setCommitsOpen] = useState(false);
   const peekNonce = useRef(0);
   const paletteTimer = useRef(null);
@@ -3972,6 +4177,8 @@ function CodeBody(props) {
   const tabViewRef = useRef({});
   const autoMarksTimer = useRef(null);
   const tabsRef = useRef(null);
+  const dirtyRef = useRef(false);
+  dirtyRef.current = editing && editText !== (doc?.raw ?? "");
   docRef.current = doc;
   cursorRef.current = cursor;
   peekRef.current = peek;
@@ -3981,6 +4188,7 @@ function CodeBody(props) {
     if (noticeTimer.current) clearTimeout(noticeTimer.current);
     if (kind !== "error") noticeTimer.current = setTimeout(() => setNotice({ text: "", kind: "info" }), 3800);
   }, []);
+  useToolCloseGuard({ sessionId, kind: TAB_KIND, dirty: dirtyRef.current, onBlocked: () => say(t("editor.dirtyGuard"), "error") });
   const scrollAreaToLine = useCallback((line) => {
     const area = codeRef.current;
     if (!area) return;
@@ -4051,9 +4259,33 @@ function CodeBody(props) {
     setTimeout(pull, 1800);
     setTimeout(pull, 4500);
   }, [cwd]);
+  const dismissPanels = useCallback(() => {
+    setSearchOpen(false);
+    setPalette(null);
+    if (paletteTimer.current) clearTimeout(paletteTimer.current);
+    setCommandOpen(false);
+    setBranchPickOpen(false);
+    setOverlay(null);
+    setPeek(null);
+    ++peekNonce.current;
+    setHover(null);
+    setFileHist(null);
+    setGotoOpen(false);
+    setSymPalette(null);
+    setDelPreview(null);
+  }, []);
+  useEffect(() => {
+    if (tab?.visible === false) dismissPanels();
+  }, [tab?.visible, dismissPanels]);
+  const canNavigate = useCallback(() => {
+    if (!dirtyRef.current) return true;
+    say(t("editor.dirtyGuard"), "error");
+    return false;
+  }, [say, t]);
   const loadFile = useCallback(
     async (path, line, col, mark, opts) => {
-      if (!cwd) return null;
+      if (!cwd || !canNavigate()) return null;
+      dismissPanels();
       const res = await api("fs.read", { cwd, path });
       if (!res.ok) {
         say(`${t("error")}: ${res.error}`, "error");
@@ -4170,10 +4402,11 @@ function CodeBody(props) {
       });
       return entry;
     },
-    [cwd, fetchDiagnostics, say, t, scrollAreaToLine]
+    [cwd, fetchDiagnostics, say, t, scrollAreaToLine, canNavigate, dismissPanels]
   );
   const openFile = useCallback(
     async (path, line, col, record = true, mark) => {
+      if (!canNavigate()) return;
       const current = docRef.current;
       if (record && current && modeRef.current === "code") {
         const cur = cursorRef.current;
@@ -4184,7 +4417,7 @@ function CodeBody(props) {
       }
       await loadFile(path, line, col, mark);
     },
-    [loadFile]
+    [loadFile, canNavigate]
   );
   const { sync, committing, doFetch, doPull, doPush, discardChange, discardMany, stageChange, unstageChange, commitChanges } = useGitActions({
     cwd,
@@ -4213,6 +4446,7 @@ function CodeBody(props) {
     }
   }, [doc, repos, cwd]);
   const goBack = useCallback(() => {
+    if (!canNavigate()) return;
     const stack = histRef.current;
     if (!stack.back.length) return;
     const current = docRef.current;
@@ -4223,8 +4457,9 @@ function CodeBody(props) {
     const prev = stack.back.pop();
     setHistTick((v) => v + 1);
     void openFile(prev.path, prev.line, prev.col, false, prev.word ? { line: prev.line, col: prev.col, word: prev.word } : null);
-  }, [openFile]);
+  }, [openFile, canNavigate]);
   const goForward = useCallback(() => {
+    if (!canNavigate()) return;
     const stack = histRef.current;
     if (!stack.forward.length) return;
     const current = docRef.current;
@@ -4235,7 +4470,7 @@ function CodeBody(props) {
     const next = stack.forward.pop();
     setHistTick((v) => v + 1);
     void openFile(next.path, next.line, next.col, false, next.word ? { line: next.line, col: next.col, word: next.word } : null);
-  }, [openFile]);
+  }, [openFile, canNavigate]);
   useEffect(() => {
     const p = doc?.path;
     if (typeof p !== "string" || p === "") return;
@@ -4249,6 +4484,8 @@ function CodeBody(props) {
   const switchTab = useCallback((path) => {
     if (!path) return;
     if (path === docRef.current?.path) {
+      dismissPanels();
+      setMobileView("editor");
       if (diff && showDiffView && (diff.scope === "working" || diff.scope === "branch" || diff.scope === "staged")) setShowDiffView(false);
       return;
     }
@@ -4258,7 +4495,7 @@ function CodeBody(props) {
     }
     const saved = tabViewRef.current[path];
     void openFile(path, saved?.line ?? 1, saved?.col ?? 1, false);
-  }, [editing, editText, openFile, say, t, diff, showDiffView]);
+  }, [editing, editText, openFile, say, t, diff, showDiffView, dismissPanels]);
   const closeTab = useCallback((path) => {
     const current = docRef.current;
     if (editing && current?.path === path && editText !== (current?.raw ?? "")) {
@@ -4326,7 +4563,8 @@ function CodeBody(props) {
   }, [scrollAreaToLine]);
   const openDiff = useCallback(
     async (path, scope) => {
-      if (!cwd) return;
+      if (!cwd || !canNavigate()) return;
+      dismissPanels();
       const repo = repoSelRef.current;
       const res = await api("git.diff", repo ? { cwd, path, scope, repo } : { cwd, path, scope });
       const value = res.ok ? res.value : { error: res.error };
@@ -4337,10 +4575,11 @@ function CodeBody(props) {
       setOverlay(null);
       setHover(null);
     },
-    [cwd]
+    [cwd, canNavigate, dismissPanels]
   );
   const openChangeSource = useCallback(async (path, scope) => {
-    if (!cwd) return;
+    if (!cwd || !canNavigate()) return;
+    dismissPanels();
     const repo = repoSelRef.current;
     const res = await api("git.diff", repo ? { cwd, path, scope, repo } : { cwd, path, scope });
     const text = res.ok ? res.value.diff ?? "" : "";
@@ -4351,10 +4590,11 @@ function CodeBody(props) {
     setDiff({ path, scope, text, base: res.ok ? res.value.base : void 0, note: res.ok ? res.value.note : void 0 });
     setShowDiffView(false);
     modeRef.current = "code";
-    await loadFile(path, first, 1, null, { noAutoMarks: true });
+    const loaded = await loadFile(path, first, 1, null, { noAutoMarks: true });
+    if (!loaded) return;
     setDiffMarks(marks);
     setDelGroups(deletedGroups(text));
-  }, [cwd, loadFile]);
+  }, [cwd, loadFile, canNavigate, dismissPanels]);
   useEffect(() => {
     if (!blameOn || !doc || !cwd) return void 0;
     let alive = true;
@@ -4375,7 +4615,8 @@ function CodeBody(props) {
   }, [blameOn, doc, cwd]);
   const openCommit = useCallback(
     async (commit) => {
-      if (!cwd) return;
+      if (!cwd || !canNavigate()) return;
+      dismissPanels();
       const repo = repoSelRef.current;
       const res = await api("git.diff", repo ? { cwd, scope: "commit", sha: commit.hash, repo } : { cwd, scope: "commit", sha: commit.hash });
       const value = res.ok ? res.value : { error: res.error };
@@ -4391,11 +4632,12 @@ function CodeBody(props) {
       setHover(null);
       setPeek(null);
     },
-    [cwd, say, t]
+    [cwd, say, t, canNavigate, dismissPanels]
   );
   const openFileHistory = useCallback(() => {
     const d = docRef.current;
     if (!cwd || !d) return;
+    dismissPanels();
     const path = d.path;
     setFileHist({ path, busy: true });
     const repo = repoSelRef.current;
@@ -4407,11 +4649,12 @@ function CodeBody(props) {
         return { path, commits: res.value?.commits ?? [] };
       });
     });
-  }, [cwd]);
+  }, [cwd, dismissPanels]);
   const openHistCommit = useCallback(
     async (commit) => {
       const path = fileHist?.path;
-      if (!cwd || !path || !commit?.hash) return;
+      if (!cwd || !path || !commit?.hash || !canNavigate()) return;
+      dismissPanels();
       const repo = repoSelRef.current;
       const res = await api("git.diff", repo ? { cwd, path, scope: "commit", sha: commit.hash, repo } : { cwd, path, scope: "commit", sha: commit.hash });
       const value = res.ok ? res.value ?? {} : { error: res.error };
@@ -4428,16 +4671,17 @@ function CodeBody(props) {
       setHover(null);
       setPeek(null);
     },
-    [cwd, fileHist, say, t]
+    [cwd, fileHist, say, t, canNavigate, dismissPanels]
   );
   const openPalette = useCallback(() => {
     if (!cwd) return;
+    dismissPanels();
     setMobileView("editor");
     setPalette({ query: "", results: [], busy: true });
     api("search.files", { cwd, query: "", limit: 80 }).then((res) => {
       setPalette((p) => p && p.query === "" ? { ...p, results: res.ok ? res.value.matches ?? [] : [], busy: false } : p);
     });
-  }, [cwd]);
+  }, [cwd, dismissPanels]);
   const onPaletteQuery = useCallback(
     (query) => {
       setPalette((p) => p ? { ...p, query, busy: true } : p);
@@ -4479,12 +4723,13 @@ function CodeBody(props) {
     [cwd]
   );
   const openSearch = useCallback((requested) => {
+    dismissPanels();
     const scope = requested?.kind === "directory" ? { kind: "directory", directory: requested.directory } : mode === "changes" ? { kind: "changes", repo: repoSelRef.current ?? void 0 } : { kind: "workspace" };
     ++searchNonce.current;
     setMobileView("editor");
     setSearchOpen(true);
     setSearch((s) => ({ ...s ?? { query: "", include: "", regex: false, words: false }, scope, results: void 0, engine: "", truncated: false, busy: false, error: void 0, scopeInfo: void 0 }));
-  }, [mode]);
+  }, [mode, dismissPanels]);
   const changeSearch = useCallback((patch) => {
     ++searchNonce.current;
     setSearch((s) => s ? { ...s, ...patch, results: void 0, busy: false, error: void 0, scopeInfo: void 0 } : s);
@@ -4503,7 +4748,6 @@ function CodeBody(props) {
   const onSearchPick = useCallback(
     (r) => {
       void openFile(r.path, r.line, 1);
-      setSearchOpen(false);
     },
     [openFile]
   );
@@ -4631,6 +4875,11 @@ function CodeBody(props) {
     if (value.status) setGit(value.status);
     await openDiff(path, "working");
   }, [cwd, diff, say, t, openDiff]);
+  const toggleCommand = useCallback(() => {
+    const next = !commandOpen;
+    dismissPanels();
+    setCommandOpen(next);
+  }, [commandOpen, dismissPanels]);
   const onRootKeyDown = useCallback(
     (event) => {
       if ((event.metaKey || event.ctrlKey) && !event.altKey && event.code === "KeyF" && !event.shiftKey) {
@@ -4665,8 +4914,14 @@ function CodeBody(props) {
       if ((event.metaKey || event.ctrlKey) && event.shiftKey && event.code === "KeyO") {
         if (LSP_RE.test(docRef.current?.path ?? "")) {
           event.preventDefault();
+          dismissPanels();
           setSymPalette({});
         }
+        return;
+      }
+      if ((event.metaKey || event.ctrlKey) && event.shiftKey && !event.altKey && event.code === "KeyP") {
+        event.preventDefault();
+        toggleCommand();
         return;
       }
       if ((event.metaKey || event.ctrlKey) && !event.altKey && event.code === "KeyP") {
@@ -4683,7 +4938,9 @@ function CodeBody(props) {
       if ((event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey && event.code === "KeyG") {
         if (modeRef.current === "code" && docRef.current && !editing) {
           event.preventDefault();
-          setGotoOpen((v) => !v);
+          const next = !gotoOpen;
+          dismissPanels();
+          setGotoOpen(next);
         }
         return;
       }
@@ -4695,6 +4952,12 @@ function CodeBody(props) {
         return;
       }
       if (event.key === "Escape") {
+        if (searchOpen || palette || commandOpen || branchPickOpen || fileHist || gotoOpen || symPalette || peek || overlay) {
+          event.preventDefault();
+          event.stopPropagation();
+          dismissPanels();
+          return;
+        }
         if (editing) {
           cancelEdit();
           return;
@@ -4726,7 +4989,7 @@ function CodeBody(props) {
         if (searchOpen) setSearchOpen(false);
       }
     },
-    [palette, closePalette, openPalette, openSearch, searchOpen, peek, closePeek, goBack, goForward, symPalette, editing, saveEdit, cancelEdit, findOpen, delPreview, gotoOpen, toggleWrap, fileHist]
+    [palette, closePalette, openPalette, openSearch, searchOpen, peek, closePeek, goBack, goForward, symPalette, editing, saveEdit, cancelEdit, findOpen, delPreview, gotoOpen, toggleWrap, fileHist, toggleCommand, dismissPanels, commandOpen, branchPickOpen, overlay]
   );
   const doJump = useCallback(
     async (kind, pos) => {
@@ -4912,6 +5175,34 @@ function CodeBody(props) {
     }
     return best;
   }, [symbols, cursor]);
+  const commands = useMemo(() => [
+    { id: "files", icon: "▱", label: t("command.files"), run: () => {
+      setMode("files");
+      dismissPanels();
+      setRailVisible(true);
+      setMobileView("files");
+    } },
+    { id: "changes", icon: "⑂", label: t("command.changes"), run: () => {
+      setMode("changes");
+      dismissPanels();
+      setRailVisible(true);
+      setMobileView("files");
+      refreshGit();
+    } },
+    { id: "search", icon: "⌕", label: t("command.search"), hint: "⇧⌘F", run: () => openSearch() },
+    { id: "quick-open", icon: "↗", label: t("command.quickOpen"), hint: "⌘P", run: () => openPalette() },
+    { id: "outline", icon: "☷", label: t("command.outline"), hint: "⌘⇧O", run: () => {
+      if (LSP_RE.test(docRef.current?.path ?? "")) setSymPalette({});
+      else say(t("command.outlineUnavailable"), "error");
+    } },
+    { id: "wrap", icon: "↩", label: t("command.wrap"), hint: "⌥Z", run: () => toggleWrap() },
+    { id: "toggle-rail", icon: "◧", label: t("command.toggleRail"), hint: "⌘B", run: () => setRailVisible((value) => !value) },
+    { id: "refresh", icon: "⟳", label: t("command.refresh"), run: () => {
+      refreshGit();
+      setTreeKey((key) => key + 1);
+      if (docRef.current) void loadFile(docRef.current.path, cursorRef.current?.line ?? 1, cursorRef.current?.col ?? 1);
+    } }
+  ], [t, refreshGit, openSearch, openPalette, toggleWrap, say, loadFile, dismissPanels]);
   const startRailDrag = useCallback((event) => {
     event.preventDefault();
     const startX = event.clientX;
@@ -4934,10 +5225,8 @@ function CodeBody(props) {
   useEffect(() => {
     const handler = (event) => {
       const detail = event.detail;
-      if (!detail || typeof detail.text !== "string") return;
-      setPeek(null);
-      setOverlay(null);
-      setHover(null);
+      if (!detail || typeof detail.text !== "string" || !canNavigate()) return;
+      dismissPanels();
       modeRef.current = "diff";
       setMobileView("editor");
       setShowDiffView(true);
@@ -4951,7 +5240,7 @@ function CodeBody(props) {
     };
     document.addEventListener("dsh-ce-open-calldiff", handler);
     return () => document.removeEventListener("dsh-ce-open-calldiff", handler);
-  }, []);
+  }, [canNavigate, dismissPanels]);
   if (!cwd) {
     return h("div", { className: "ce-root" }, h("div", { className: "ce-empty" }, t("editor.noSession")));
   }
@@ -4966,21 +5255,23 @@ function CodeBody(props) {
         { className: "ce-seg" },
         h("button", { type: "button", className: `ce-seg-btn${mode === "files" ? " ce-seg-on" : ""}`, onClick: () => {
           setMode("files");
-          setSearchOpen(false);
-          closePalette();
+          dismissPanels();
           setRailVisible(true);
           setMobileView("files");
         } }, t("toolbar.files")),
         h("button", { type: "button", className: `ce-seg-btn${mode === "changes" ? " ce-seg-on" : ""}`, onClick: () => {
           setMode("changes");
-          setSearchOpen(false);
-          closePalette();
+          dismissPanels();
           setRailVisible(true);
           setMobileView("files");
           refreshGit();
         } }, `${t("toolbar.changes")}${git?.repo ? ` · ${git.working.length}` : ""}`)
       ),
-      doc || diff ? h("button", { type: "button", className: "ce-mobile-open-editor ce-link", onClick: () => setMobileView("editor") }, t("layout.backEditor")) : null,
+      h("button", { type: "button", className: `ce-command-trigger${commandOpen ? " ce-tool-on" : ""}`, title: `${t("command.title")} (⌘⇧P / Ctrl+Shift+P)`, "aria-expanded": commandOpen, onClick: toggleCommand }, h("span", { className: "ce-command-mark", "aria-hidden": true }, ">_"), h("span", null, t("command.title")), h("kbd", null, "⌘⇧P")),
+      doc || diff ? h("button", { type: "button", className: "ce-mobile-open-editor ce-link", onClick: () => {
+        dismissPanels();
+        setMobileView("editor");
+      } }, t("layout.backEditor")) : null,
       git?.repo ? h(
         "button",
         {
@@ -4988,7 +5279,11 @@ function CodeBody(props) {
           className: "ce-branch",
           disabled: sync.busy,
           title: `${t("branch.title")}${git.upstream ? ` · ${git.upstream}${git.upstreamInferred ? " · auto" : ""}` : ""}`,
-          onClick: () => setBranchPickOpen(true)
+          onClick: () => {
+            const next = !branchPickOpen;
+            dismissPanels();
+            setBranchPickOpen(next);
+          }
         },
         h("span", null, `⎇ ${git.branch}`),
         sync.busy ? h("span", { className: "ce-spin ce-ico" }, h(IconRefresh)) : null,
@@ -4996,7 +5291,7 @@ function CodeBody(props) {
         !sync.busy && git.behind > 0 ? h("span", { className: "ce-ab ce-ab-behind" }, `↓${git.behind}`) : null
       ) : null,
       h("span", { className: "ce-spacer" }),
-      !railVisible ? h("button", { type: "button", className: "ce-tool", title: `${t("quickopen.placeholder")} (⌘P / Ctrl+P)`, onClick: openPalette }, h(IconSearch)) : null,
+      !railVisible ? h("button", { type: "button", className: "ce-tool", title: `${t("quickopen.placeholder")} (⌘P / Ctrl+P)`, onClick: () => palette ? closePalette() : openPalette() }, h(IconSearch)) : null,
       !railVisible ? h("button", { type: "button", className: "ce-tool ce-workspace-search", title: `${t(mode === "changes" ? "search.changesHint" : "search.workspaceHint")} (⇧⌘F / Ctrl+Shift+F)`, "aria-label": t(mode === "changes" ? "search.changesHint" : "search.workspaceHint"), onClick: openSearch }, h(IconTextSearch), h("span", null, t(mode === "changes" ? "search.changesAction" : "changes.searchWorkspace"))) : null,
       h("button", { type: "button", className: "ce-tool", title: `${statusTitle}`, onClick: () => {
         refreshGit();
@@ -5021,7 +5316,7 @@ function CodeBody(props) {
           "div",
           { className: "ce-rail-navigation" },
           h("button", { type: "button", className: "ce-rail-search", title: `${t(mode === "changes" ? "search.changesHint" : "search.workspaceHint")} (⇧⌘F / Ctrl+Shift+F)`, onClick: openSearch }, h(IconTextSearch), h("span", null, t(mode === "changes" ? "search.changesAction" : "changes.searchWorkspace"))),
-          h("button", { type: "button", className: "ce-tool ce-rail-quickopen", "aria-label": t("quickopen.placeholder"), title: `${t("quickopen.placeholder")} (⌘P / Ctrl+P)`, onClick: openPalette }, h(IconSearch))
+          h("button", { type: "button", className: "ce-tool ce-rail-quickopen", "aria-label": t("quickopen.placeholder"), title: `${t("quickopen.placeholder")} (⌘P / Ctrl+P)`, onClick: () => palette ? closePalette() : openPalette() }, h(IconSearch))
         ),
         mode === "files" ? h(TreePanel, {
           cwd,
@@ -5244,7 +5539,7 @@ function CodeBody(props) {
             }, onClose: () => setSymPalette(null) }) : null,
             delPreview ? h(
               "div",
-              { className: "ce-overlay" },
+              { className: "ce-overlay", ref: delPreviewRef, role: "dialog", "aria-label": t("diff.deletedAt") },
               h(
                 "div",
                 { className: "ce-overlay-head" },
@@ -5279,6 +5574,7 @@ function CodeBody(props) {
         }) : null
       )
     ),
+    commandOpen ? h(CommandPalette, { t, commands, onClose: () => setCommandOpen(false) }) : null,
     branchPickOpen && git?.repo ? h(BranchPalette, {
       cwd,
       repo: repoSel,
@@ -5781,7 +6077,7 @@ var CSS2 = `
 .cea-hurl{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:var(--dsw-alias-label-primary,#ccc);font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
 .cea-hname{flex:none;max-width:34%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:var(--dsw-alias-state-warn-primary,#e3b341)}
 .cea-hstatus{flex:none;font-size:11px}
-.cea-root{container-type:inline-size;overflow:hidden}
+.cea-root{container-type:inline-size;overflow:hidden;min-width:0;width:100%;max-width:100%}
 .cea-root>.cea-bar{display:grid;grid-template-columns:88px minmax(0,1fr) auto;gap:0;padding:12px 12px 8px;border:0}
 .cea-root>.cea-bar .cea-request-method{width:88px;height:36px;border-radius:6px 0 0 6px;font-weight:700}
 .cea-root>.cea-bar .cea-url{width:100%;height:36px;box-sizing:border-box;border-radius:0 6px 6px 0;border-left:0;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px}
@@ -5915,7 +6211,18 @@ var CSS2 = `
 .ce-commitbox-amend{font-size:11px;border-color:var(--ce-line);color:var(--ce-fg-2)}
 .ce-toolbar{flex-wrap:wrap}
 .ce-head{overflow-x:auto;scrollbar-width:thin}
-@media(prefers-reduced-motion:reduce){.ce-root button{transition:none}.ce-spin{animation:none}}
+.ce-command-trigger{display:inline-flex;align-items:center;gap:6px;min-width:0;border:1px solid var(--ce-line);border-radius:7px;background:var(--ce-surface-0);color:var(--ce-fg-2);padding:5px 8px;font:inherit;font-size:11px;cursor:pointer;white-space:nowrap}
+.ce-command-trigger:hover,.ce-command-trigger.ce-tool-on{background:var(--ce-accent-soft);color:var(--ce-fg);border-color:color-mix(in srgb,var(--ce-accent) 45%,var(--ce-line))}
+.ce-command-trigger kbd,.ce-command-hint{font:inherit;font-size:10px;color:var(--ce-fg-3);background:var(--ce-surface-1);border:1px solid var(--ce-line);border-radius:4px;padding:2px 5px}
+.ce-command-mark{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--ce-accent);font-weight:700;flex:none}
+.ce-command-palette{top:46px;max-width:620px}
+.ce-command-palette .ce-palette-head{gap:8px}
+.ce-command-item{display:flex;align-items:center;gap:10px;width:100%;border:0;background:transparent;color:var(--ce-fg-2);font:inherit;text-align:left;padding:8px 12px;cursor:pointer}
+.ce-command-item:hover,.ce-command-item.ce-qitem-sel{background:var(--ce-accent-soft);color:var(--ce-fg)}
+.ce-command-icon{width:20px;text-align:center;color:var(--ce-accent);font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.ce-command-label{flex:1;min-width:0}
+.ce-command-hint{flex:none}
+
 /* Task layouts: review files first; reserve stable space for the active document. */
 .ce-code-root{container-type:inline-size}
 .ce-code-root .ce-toolbar{flex-wrap:nowrap;min-width:0}
@@ -5970,7 +6277,7 @@ var CSS2 = `
  .ce-code-root[data-mobile-view="editor"] .ce-rail-wrap{display:none}
  .ce-code-root[data-mobile-view="editor"] .ce-mobile-back{display:block;flex:none;text-align:left;padding:8px 12px;border:0;border-bottom:1px solid var(--ce-line);background:var(--ce-surface-1);color:var(--ce-fg-2);font:inherit;font-size:12px;cursor:pointer}
  .ce-code-root[data-mobile-view="files"] .ce-mobile-open-editor{display:block;flex:none;font-size:11px}
- .ce-code-root .ce-branch{max-width:120px}
+ .ce-code-root .ce-branch{max-width:120px}.ce-code-root .ce-command-trigger{padding:5px 7px}.ce-code-root .ce-command-trigger>span:not(.ce-command-mark),.ce-code-root .ce-command-trigger>kbd{display:none}
  .ce-code-root .ce-workspace-search{width:26px;padding:0}
  .ce-code-root .ce-workspace-search>span{display:none}
  .ce-sk-detail-head{max-height:34%;padding:12px 16px 6px}
@@ -5984,38 +6291,64 @@ var CSS2 = `
 .ce-search-scope>.ce-tool{grid-column:2;grid-row:1/3}
 .ce-search-directory{display:flex;flex-wrap:wrap;align-items:center;gap:6px;font-size:11px;color:var(--ce-fg-2);flex:none}
 .ce-search-directory .ce-input{flex:1 1 160px;font-size:12px;min-width:0}
+
+/* Request builder: one primary request row, config tabs and editable tables. */
+.cea-root>.cea-tools{padding:6px 12px;min-height:34px;border-bottom:1px solid var(--ce-line);background:var(--ce-surface-0);gap:4px}
+.cea-root>.cea-bar{padding:14px 16px;background:var(--ce-surface-0);border-bottom:0}
+.cea-root>.cea-bar .cea-request-method,.cea-root>.cea-bar .cea-url{height:42px;background:var(--ce-surface-0);font-size:13px}
+.cea-root>.cea-bar .cea-request-method{border-right:0;border-radius:8px 0 0 8px;color:var(--dsw-alias-state-success-primary,#288252)}
+.cea-root>.cea-bar .cea-url{border-left:0;border-radius:0 8px 8px 0;font-family:inherit}
+.cea-root>.cea-bar .cea-send{height:42px;min-width:80px;margin-left:10px;border-radius:8px;font-size:13px}
+.cea-root .cea-request-tabs{padding:0 16px;gap:24px;background:var(--ce-surface-0)}
+.cea-root .cea-config-tab{padding:12px 0 10px;font-size:13px;color:var(--ce-fg-2)}
+.cea-root .cea-config-tab-on{color:var(--ce-fg);border-bottom-color:var(--ce-accent)}
+.cea-workspace .cea-request-panel{padding:16px}
+.cea-fields{min-width:0}
+.cea-fields-scroll{overflow:auto;border:1px solid var(--ce-line);border-radius:7px}
+.cea-fields-table{border-collapse:collapse;table-layout:fixed;width:100%;font-size:12px;color:var(--ce-fg)}
+.cea-fields-check,.cea-fields-action{width:34px}
+.cea-fields-name{width:25%}.cea-fields-description{width:25%}
+.cea-fields-table th{font-weight:500;color:var(--ce-fg-2);background:var(--ce-surface-1);text-align:left;height:36px;padding:8px 10px}
+.cea-fields-table td{height:38px;padding:0;border-top:1px solid var(--ce-line)}
+.cea-fields-table th,.cea-fields-table td{border-right:1px solid var(--ce-line)}
+.cea-fields-table th:last-child,.cea-fields-table td:last-child{border-right:0}
+.cea-fields-table td:first-child{text-align:center}
+.cea-fields-table input[type=checkbox]{accent-color:var(--ce-accent);width:15px;height:15px;cursor:pointer;margin:0}
+.cea-fields-table input[type=checkbox]:disabled{opacity:.25;cursor:default}
+.cea-field-input{width:100%;min-width:0;height:38px;border:0;border-radius:0;background:transparent;color:var(--ce-fg);padding:8px 10px;font:inherit;outline-offset:-2px!important}
+.cea-field-input::placeholder{color:var(--ce-fg-3)}
+.cea-field-input:focus{background:var(--ce-accent-soft)}
+.cea-field-disabled .cea-field-input{color:var(--ce-fg-3)}
+.cea-field-delete{width:30px;height:30px;margin:2px}
+.cea-fields-footer{display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;padding:10px 0;color:var(--ce-fg-2);font-size:11px;line-height:1.5}
+.cea-sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0}
+@container (max-width:560px){
+ .cea-fields-description{display:none}
+ .cea-fields-name{width:36%}
+ .cea-root>.cea-bar{padding:10px}
+ .cea-workspace .cea-request-panel{padding:10px}
+ .cea-root .cea-request-tabs{padding:0 10px;gap:18px}
+}
+
+/* Entry points live in native left PanelRows; the right guide is a work area. */
+.ce-workspace-guide{height:100%;min-height:180px;box-sizing:border-box;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:24px;text-align:center;color:var(--dsw-alias-label-secondary,#9aa4b0);font-family:inherit}
+.ce-workspace-guide-icon{display:inline-flex;color:var(--dsw-alias-label-tertiary,#7b8794)}
+.ce-workspace-guide h2{margin:0;font-size:16px;font-weight:600;color:var(--dsw-alias-label-primary,#ddd)}
+.ce-workspace-guide p{margin:0;max-width:38ch;font-size:12px;line-height:1.7}
+.ce-left-notice{position:fixed;z-index:1000;bottom:24px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:12px;max-width:min(480px,calc(100vw - 32px));padding:10px 14px;border:1px solid var(--dsw-alias-border-l2,#48515e);border-radius:8px;background:var(--dsw-alias-bg-layer-2,#24272c);color:var(--dsw-alias-label-primary,#ddd);font:inherit;font-size:13px;line-height:1.5;box-shadow:0 6px 24px #0002}
+.ce-left-notice>span{min-width:0;overflow-wrap:anywhere}
+.ce-left-notice>button{flex:none;width:28px;height:28px;border:0;border-radius:4px;background:transparent;color:inherit;font:inherit;font-size:18px;cursor:pointer}
+.ce-left-notice>button:focus-visible{outline:2px solid var(--dsw-alias-button-info-fill,#4176e6)}
 `;
 
 // src/client/register.js
-var GuideIcon = () => h(
-  "svg",
-  { viewBox: "0 0 64 64", width: 40, height: 40, "aria-hidden": true, fill: "none", stroke: "#59b7ff", strokeWidth: 5, strokeLinecap: "round", strokeLinejoin: "round", style: { display: "block" } },
-  h("path", { d: "M22 20 8 32l14 12" }),
-  h("path", { d: "M42 20 56 32 42 44" }),
-  h("path", { stroke: "#7de3a4", d: "M36 12 28 52" })
-);
-var SkillsGuideIcon = () => h(
-  "svg",
-  { viewBox: "0 0 64 64", width: 40, height: 40, "aria-hidden": true, fill: "none", stroke: "#e3b341", strokeWidth: 5, strokeLinecap: "round", strokeLinejoin: "round", style: { display: "block" } },
-  h("path", { d: "M32 8 12 18v28l20 10 20-10V18L32 8Z" }),
-  h("path", { d: "M32 8v48M12 18l20 10 20-10" })
-);
 var definition = (t) => ({
   id: TAB_ID,
   kind: TAB_KIND,
   priority: "extension",
   keepMounted: true,
   title: () => t("type.label"),
-  guide: [
-    {
-      id: "code",
-      commandId: "code.explorer",
-      order: 15,
-      title: () => t("guide.title"),
-      description: () => t("guide.description"),
-      icon: GuideIcon
-    }
-  ]
+  guide: []
 });
 var skillsDefinition = (t) => ({
   id: SKILLS_TAB_ID,
@@ -6023,16 +6356,7 @@ var skillsDefinition = (t) => ({
   priority: "extension",
   keepMounted: true,
   title: () => t("skillsTab.label"),
-  guide: [
-    {
-      id: "skills",
-      commandId: "code.skills",
-      order: 16,
-      title: () => t("skillsGuide.title"),
-      description: () => t("skillsGuide.description"),
-      icon: SkillsGuideIcon
-    }
-  ]
+  guide: []
 });
 var apiDefinition = (t) => ({
   id: API_TAB_ID,
@@ -6040,15 +6364,7 @@ var apiDefinition = (t) => ({
   priority: "extension",
   keepMounted: true,
   title: () => t("api.label"),
-  guide: [
-    {
-      id: "api",
-      order: 17,
-      title: () => t("apiGuide.title"),
-      description: () => t("apiGuide.description"),
-      icon: SkillsGuideIcon
-    }
-  ]
+  guide: []
 });
 function insertStyles() {
   const id = `${TAB_ID}/styles`;
@@ -6213,7 +6529,7 @@ function CallDiffRow(props) {
 function skillScope(source) {
   return String(source ?? "").startsWith("project") ? "project" : String(source ?? "").startsWith("user") ? "user" : "provided";
 }
-function SkillsView({ cwd, t, say }) {
+function SkillsView({ cwd, t, say, visible, sessionId }) {
   const [skills, setSkills] = useState(null);
   const [error, setError] = useState("");
   const [sel, setSel] = useState(null);
@@ -6227,6 +6543,14 @@ function SkillsView({ cwd, t, say }) {
   const [newName, setNewName] = useState("");
   const [scope, setScope] = useState("user");
   const [createOpen, setCreateOpen] = useState(false);
+  const createRef = useDismissLayer({ open: createOpen, onDismiss: () => setCreateOpen(false), ignoreSelector: '[data-ce-popup-trigger="skill-create"]' });
+  const deleteRef = useDismissLayer({ open: confirmDel, onDismiss: () => setConfirmDel(false), ignoreSelector: '[data-ce-popup-trigger="skill-delete"]' });
+  useEffect(() => {
+    if (visible === false) {
+      setCreateOpen(false);
+      setConfirmDel(false);
+    }
+  }, [visible]);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("all");
   const [editMode, setEditMode] = useState(false);
@@ -6236,6 +6560,7 @@ function SkillsView({ cwd, t, say }) {
   const listSeq = useRef(0);
   const readonly = sel !== null && skillScope(sel.source) === "provided";
   const dirty = content !== savedContent;
+  useToolCloseGuard({ sessionId, kind: SKILLS_TAB_KIND, dirty, onBlocked: () => say(t("editor.dirtyGuard"), "error") });
   const sourceLabel = (source) => t(`skills.scope.${skillScope(source)}`);
   const load = useCallback(() => {
     const seq = ++listSeq.current;
@@ -6397,13 +6722,16 @@ function SkillsView({ cwd, t, say }) {
         h("span", { className: "ce-sk-total" }, skills === null ? "…" : t("skills.total", { n: skills.length }))
       ),
       h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost", title: t("skills.refresh"), "aria-label": t("skills.refresh"), disabled: listing || busy, onClick: load }, "⟳"),
-      h("button", { type: "button", className: "ce-sk-btn ce-sk-primary", "aria-expanded": createOpen, disabled: busy, onClick: () => {
-        if (canLeave()) setCreateOpen((v) => !v);
+      h("button", { type: "button", className: "ce-sk-btn ce-sk-primary", "aria-expanded": createOpen, "data-ce-popup-trigger": "skill-create", disabled: busy, onClick: () => {
+        if (canLeave()) {
+          setConfirmDel(false);
+          setCreateOpen((v) => !v);
+        }
       } }, `+ ${t("skills.new")}`)
     ),
     createOpen ? h(
       "div",
-      { className: "ce-sk-create" },
+      { className: "ce-sk-create", ref: createRef },
       h("input", {
         className: "ce-input ce-sk-name-input",
         "aria-label": t("skills.createPlaceholder"),
@@ -6527,11 +6855,14 @@ function SkillsView({ cwd, t, say }) {
               h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost", disabled: busy, onClick: cancelEdit }, t("editor.cancel")),
               h("button", { type: "button", className: "ce-sk-btn ce-sk-primary", disabled: !dirty || busy, title: "⌘S / Ctrl+S", onClick: save }, t("editor.save"))
             ) : h("button", { type: "button", className: "ce-sk-btn", disabled: busy, onClick: () => setEditMode(true) }, t("editor.edit")) : null,
-            !readonly && !editMode ? h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost", disabled: busy, onClick: () => setConfirmDel((v) => !v) }, t("skills.delete")) : null
+            !readonly && !editMode ? h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost", disabled: busy, "data-ce-popup-trigger": "skill-delete", "aria-expanded": confirmDel, onClick: () => {
+              setCreateOpen(false);
+              setConfirmDel((v) => !v);
+            } }, t("skills.delete")) : null
           ),
           confirmDel ? h(
             "div",
-            { className: "ce-sk-delete-confirm", role: "alert" },
+            { className: "ce-sk-delete-confirm", ref: deleteRef, role: "alert" },
             h("span", null, t("skills.deleteQuestion", { name: sel.name })),
             h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-danger", disabled: busy, onClick: remove }, t("skills.deleteConfirm")),
             h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost", disabled: busy, onClick: () => setConfirmDel(false) }, t("skills.cancel"))
@@ -6553,7 +6884,8 @@ var SkillsGlyph = () => h(
   h("path", { d: "M8 2 3 4.5v7L8 14l5-2.5v-7L8 2Z" }),
   h("path", { d: "M8 2v12M3 4.5 8 7l5-2.5" })
 );
-function SkillsTabBody({ sessionId, useSessions, t }) {
+function SkillsTabBody({ sessionId, useSessions, useTabInfo, t }) {
+  const hostTab = useTabInfo ? useTabInfo()?.tab : null;
   const cwd = useSessions ? useSessions((sessions) => sessionId ? sessions.byId[sessionId]?.cwd : void 0) : void 0;
   const [note, setNote] = useState(null);
   const timerRef = useRef(null);
@@ -6567,7 +6899,7 @@ function SkillsTabBody({ sessionId, useSessions, t }) {
     "div",
     { className: "ce-root" },
     note && note.text ? h("div", { className: "ce-banner" }, h("span", { className: "ce-banner-text" }, note.text)) : null,
-    h(SkillsView, { cwd, t, say })
+    h(SkillsView, { cwd, t, say, sessionId, visible: hostTab?.visible })
   );
 }
 function SkillsTitle({ useTabInfo }) {
@@ -6744,7 +7076,7 @@ function toCurl(req) {
   const bodyType = req?.bodyType || "none";
   if (method !== "GET" || bodyType !== "none") parts.push(`-X ${method}`);
   parts.push(shellQuote(String(req?.url ?? "")));
-  const headers = (req?.headers ?? []).filter((hd) => String(hd?.name ?? "").trim() !== "");
+  const headers = (req?.headers ?? []).filter((hd) => hd?.enabled !== false && String(hd?.name ?? "").trim() !== "");
   for (const hd of headers) parts.push(`-H ${shellQuote(`${String(hd.name).trim()}: ${hd.value ?? ""}`)}`);
   const hasCT = headers.some((hd) => String(hd.name).trim().toLowerCase() === "content-type");
   if (bodyType === "raw") {
@@ -6753,15 +7085,60 @@ function toCurl(req) {
   } else if (bodyType === "form") {
     for (const p of req?.formPairs ?? []) {
       const name = String(p?.name ?? "").trim();
-      if (name) parts.push(`--data-urlencode ${shellQuote(`${name}=${p?.value ?? ""}`)}`);
+      if (name && p.enabled !== false) parts.push(`--data-urlencode ${shellQuote(`${name}=${p?.value ?? ""}`)}`);
     }
   } else if (bodyType === "multipart") {
     for (const p of req?.formPairs ?? []) {
       const name = String(p?.name ?? "").trim();
-      if (name) parts.push(`-F ${shellQuote(`${name}=${p?.value ?? ""}`)}`);
+      if (name && p.enabled !== false) parts.push(`-F ${shellQuote(`${name}=${p?.value ?? ""}`)}`);
     }
   }
   return parts.length <= 2 ? parts.join(" ") : parts.join(" \\\n  ");
+}
+
+// src/client/requestfields.js
+function RequestFields({ t, label, rows, onChange, hint }) {
+  const values = Array.isArray(rows) ? rows : [];
+  const isEmpty = (row) => !row.name && !row.value && !row.description;
+  const visible = values.length && isEmpty(values.at(-1)) ? values : [...values, { name: "", value: "", description: "" }];
+  const update = (index, patch) => onChange(index === values.length ? [...values, { enabled: true, name: "", value: "", ...patch }] : values.map((row, i) => i === index ? { ...row, ...patch } : row));
+  return h(
+    "div",
+    { className: "cea-fields" },
+    h(
+      "div",
+      { className: "cea-fields-scroll" },
+      h(
+        "table",
+        { className: "cea-fields-table", "aria-label": label },
+        h("colgroup", null, h("col", { className: "cea-fields-check" }), h("col", { className: "cea-fields-name" }), h("col", { className: "cea-fields-value" }), h("col", { className: "cea-fields-description" }), h("col", { className: "cea-fields-action" })),
+        h("thead", null, h(
+          "tr",
+          null,
+          h("th", { scope: "col" }, h("span", { className: "cea-sr-only" }, t("api.fieldEnabled"))),
+          h("th", { scope: "col" }, t("api.fieldName")),
+          h("th", { scope: "col" }, t("api.fieldValue")),
+          h("th", { scope: "col", className: "cea-fields-description" }, t("api.fieldDescription")),
+          h("th", { scope: "col" }, h("span", { className: "cea-sr-only" }, t("api.delete")))
+        )),
+        h("tbody", null, visible.map((row, index) => {
+          const draft = index === values.length;
+          return h(
+            "tr",
+            { key: index, className: !draft && row.enabled === false ? "cea-field-disabled" : void 0 },
+            h("td", null, h("input", { type: "checkbox", checked: row.enabled !== false, disabled: draft || isEmpty(row), "aria-label": `${label} · ${t("api.fieldEnabled")} ${index + 1}`, onChange: (event) => update(index, { enabled: event.target.checked }) })),
+            ...["name", "value", "description"].map((field) => h(
+              "td",
+              { key: field, className: field === "description" ? "cea-fields-description" : void 0 },
+              h("input", { className: "cea-field-input", type: "text", spellCheck: false, autoComplete: "off", placeholder: t(`api.field${field[0].toUpperCase()}${field.slice(1)}`), "aria-label": `${label} · ${t(`api.field${field[0].toUpperCase()}${field.slice(1)}`)} ${index + 1}`, value: row[field] ?? "", onChange: (event) => update(index, { [field]: event.target.value }) })
+            )),
+            h("td", null, !draft ? h("button", { type: "button", className: "ce-tool cea-field-delete", title: t("api.delete"), "aria-label": `${t("api.delete")} ${label} ${index + 1}`, onClick: () => onChange(values.filter((_, i) => i !== index)) }, "×") : null)
+          );
+        }))
+      )
+    ),
+    h("div", { className: "cea-fields-footer" }, hint ? h("span", null, hint) : null, h("span", null, t("api.fieldAddHint")))
+  );
 }
 
 // src/client/apiclient.js
@@ -6785,13 +7162,13 @@ function buildEnvMap(pairs) {
   const map = {};
   for (const p of pairs ?? []) {
     const name = String(p?.name ?? "").trim();
-    if (name) map[name] = p?.value ?? "";
+    if (name && p.enabled !== false) map[name] = p?.value ?? "";
   }
   return map;
 }
 function mergeParams(url, pairs) {
   const raw = String(url ?? "");
-  const active = (pairs ?? []).filter((p) => String(p?.name ?? "").trim() !== "");
+  const active = (pairs ?? []).filter((p) => p?.enabled !== false && String(p?.name ?? "").trim() !== "");
   if (active.length === 0) return raw;
   const hAt = raw.indexOf("#");
   const frag = hAt >= 0 ? raw.slice(hAt) : "";
@@ -6840,7 +7217,8 @@ function storeList(key, list) {
   } catch {
   }
 }
-function ApiView({ t }) {
+function ApiView({ t, useTabInfo }) {
+  const hostTab = useTabInfo ? useTabInfo()?.tab : null;
   const [method, setMethod] = useState("GET");
   const [url, setUrl] = useState("");
   const [headers, setHeaders] = useState([]);
@@ -6860,10 +7238,19 @@ function ApiView({ t }) {
   const [saved, setSaved] = useState([]);
   const [saveOpen, setSaveOpen] = useState(false);
   const [saveName, setSaveName] = useState("");
+  const importRef = useDismissLayer({ open: importOpen, onDismiss: () => setImportOpen(false), ignoreSelector: '[data-ce-popup-trigger="api-import"]' });
+  const saveRef = useDismissLayer({ open: saveOpen, onDismiss: () => setSaveOpen(false), ignoreSelector: '[data-ce-popup-trigger="api-save"]' });
+  const historyRef = useDismissLayer({ open: histOpen, onDismiss: () => setHistOpen(false), ignoreSelector: '[data-ce-popup-trigger="api-history"]' });
+  useEffect(() => {
+    if (hostTab?.visible === false) {
+      setImportOpen(false);
+      setSaveOpen(false);
+      setHistOpen(false);
+    }
+  }, [hostTab?.visible]);
   const [envPairs, setEnvPairs] = useState(() => loadList(ENV_KEY));
-  const [envOpen, setEnvOpen] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [paramPairs, setParamPairs] = useState([{ name: "", value: "" }]);
+  const [paramPairs, setParamPairs] = useState([]);
   const [requestTab, setRequestTab] = useState("params");
   const [responseCopied, setResponseCopied] = useState(false);
   const [timeoutMs, setTimeoutMs] = useState(3e4);
@@ -6941,17 +7328,17 @@ function ApiView({ t }) {
   const send = useCallback(() => {
     if (url.trim() === "" || sending) return;
     const envMap = buildEnvMap(envPairs);
-    const sendHeaders = headers.filter((hd) => String(hd.name ?? "").trim() !== "").map((hd) => ({ name: String(hd.name).trim(), value: substituteVars(String(hd.value ?? ""), envMap) }));
+    const sendHeaders = headers.filter((hd) => hd.enabled !== false && String(hd.name ?? "").trim() !== "").map((hd) => ({ name: String(hd.name).trim(), value: substituteVars(String(hd.value ?? ""), envMap) }));
     let sendBody;
     let multipart;
     if (bodyType === "raw") {
       sendBody = substituteVars(body, envMap);
       upsertHeader(sendHeaders, "Content-Type", SUB_CT[rawSub] ?? "text/plain");
     } else if (bodyType === "form") {
-      sendBody = new URLSearchParams(formPairs.filter((p) => String(p.name ?? "").trim() !== "").map((p) => [p.name.trim(), substituteVars(String(p.value ?? ""), envMap)])).toString();
+      sendBody = new URLSearchParams(formPairs.filter((p) => p.enabled !== false && String(p.name ?? "").trim() !== "").map((p) => [p.name.trim(), substituteVars(String(p.value ?? ""), envMap)])).toString();
       upsertHeader(sendHeaders, "Content-Type", "application/x-www-form-urlencoded");
     } else if (bodyType === "multipart") {
-      multipart = formPairs.filter((p) => String(p.name ?? "").trim() !== "").map((p) => ({ name: p.name.trim(), value: substituteVars(String(p.value ?? ""), envMap) }));
+      multipart = formPairs.filter((p) => p.enabled !== false && String(p.name ?? "").trim() !== "").map((p) => ({ name: p.name.trim(), value: substituteVars(String(p.value ?? ""), envMap) }));
     }
     const sentMethod = method;
     const sentUrl = substituteVars(mergeParams(url.trim(), paramPairs), envMap);
@@ -7063,17 +7450,36 @@ function ApiView({ t }) {
       return null;
     }
   }, [response]);
-  const setHeaderAt = (index, patch) => setHeaders((prev) => prev.map((hd, i) => i === index ? { ...hd, ...patch } : hd));
-  const activeParamCount = paramPairs.filter((p) => String(p?.name ?? "").trim() !== "").length;
+  const activeParamCount = paramPairs.filter((p) => p?.enabled !== false && String(p?.name ?? "").trim() !== "").length;
   return h(
     "div",
     { className: "ce-root cea-root", onKeyDown: (e) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === "Enter" && !importOpen && !saveOpen && !envOpen) {
+      if ((e.metaKey || e.ctrlKey) && e.key === "Enter" && !importOpen && !saveOpen) {
         e.preventDefault();
         e.stopPropagation();
         send();
       }
     } },
+    h(
+      "div",
+      { className: "cea-tools" },
+      h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost", title: t("api.importTitle"), "data-ce-popup-trigger": "api-import", "aria-expanded": importOpen, onClick: () => {
+        setImportOpen((value) => !value);
+        setHistOpen(false);
+        setSaveOpen(false);
+      } }, t("api.import")),
+      h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost", title: t("api.copyCurl"), disabled: url.trim() === "", onClick: copyCurl }, copied ? t("api.copied") : "⧉ curl"),
+      h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost", title: t("api.saveTitle"), "data-ce-popup-trigger": "api-save", "aria-expanded": saveOpen, onClick: () => {
+        setSaveOpen((value) => !value);
+        setHistOpen(false);
+        setImportOpen(false);
+      } }, t("api.saveBtn")),
+      h("button", { type: "button", className: `ce-sk-btn ce-sk-btn-ghost${histOpen ? " cea-btn-on" : ""}`, title: t("api.history"), "data-ce-popup-trigger": "api-history", "aria-expanded": histOpen, onClick: () => {
+        setHistOpen((v) => !v);
+        setSaveOpen(false);
+        setImportOpen(false);
+      } }, `${t("api.history")}${history.length ? ` ${history.length}` : ""}`)
+    ),
     h(
       "div",
       { className: "cea-bar" },
@@ -7098,38 +7504,9 @@ function ApiView({ t }) {
       }),
       h("button", { type: "button", className: "ce-sk-btn cea-send", title: t("api.sendShortcut"), disabled: sending || url.trim() === "", onClick: send }, sending ? t("api.sending") : t("api.send"))
     ),
-    h(
-      "div",
-      { className: "cea-tools" },
-      h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost", title: t("api.importTitle"), onClick: () => {
-        setImportOpen(true);
-        setHistOpen(false);
-        setSaveOpen(false);
-        setEnvOpen(false);
-      } }, t("api.import")),
-      h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost", title: t("api.copyCurl"), disabled: url.trim() === "", onClick: copyCurl }, copied ? t("api.copied") : "⧉ curl"),
-      h("button", { type: "button", className: `ce-sk-btn ce-sk-btn-ghost${envOpen ? " cea-btn-on" : ""}`, title: t("api.envTitle"), onClick: () => {
-        setEnvOpen((v) => !v);
-        setHistOpen(false);
-        setSaveOpen(false);
-        setImportOpen(false);
-      } }, `${t("api.environment")}${envPairs.length ? ` ${envPairs.length}` : ""}`),
-      h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost", title: t("api.saveTitle"), onClick: () => {
-        setSaveOpen(true);
-        setHistOpen(false);
-        setImportOpen(false);
-        setEnvOpen(false);
-      } }, t("api.saveBtn")),
-      h("button", { type: "button", className: `ce-sk-btn ce-sk-btn-ghost${histOpen ? " cea-btn-on" : ""}`, title: t("api.history"), onClick: () => {
-        setHistOpen((v) => !v);
-        setSaveOpen(false);
-        setImportOpen(false);
-        setEnvOpen(false);
-      } }, `${t("api.history")}${history.length ? ` ${history.length}` : ""}`)
-    ),
     histOpen ? h(
       "div",
-      { className: "cea-hist" },
+      { className: "cea-hist", ref: historyRef, role: "dialog", "aria-label": t("api.history") },
       h(
         "div",
         { className: "cea-hist-tabs" },
@@ -7177,11 +7554,7 @@ function ApiView({ t }) {
         h(
           "div",
           { className: "cea-request-tabs", role: "group", "aria-label": t("api.requestConfig") },
-          [["params", t("api.params"), activeParamCount], ["headers", t("api.headers"), headers.filter((p) => p.name?.trim()).length], ["body", t("api.body"), bodyType === "none" ? 0 : 1], ["settings", t("api.settings"), 0]].map(([id, label, count]) => h("button", { type: "button", key: id, className: `cea-config-tab${requestTab === id ? " cea-config-tab-on" : ""}`, "aria-pressed": requestTab === id, onClick: () => {
-            setRequestTab(id);
-            if (id === "params" && paramPairs.length === 0) setParamPairs([{ name: "", value: "" }]);
-            if (id === "headers" && headers.length === 0) setHeaders([{ name: "", value: "" }]);
-          } }, label, count ? h("span", { className: "cea-tab-count" }, count) : null))
+          [["params", t("api.params"), activeParamCount], ["headers", t("api.headers"), headers.filter((p) => p.enabled !== false && p.name?.trim()).length], ["body", t("api.body"), bodyType === "none" ? 0 : 1], ["variables", t("api.environment"), envPairs.filter((p) => p.enabled !== false && p.name?.trim()).length], ["settings", t("api.settings"), 0]].map(([id, label, count]) => h("button", { type: "button", key: id, className: `cea-config-tab${requestTab === id ? " cea-config-tab-on" : ""}`, "aria-pressed": requestTab === id, onClick: () => setRequestTab(id) }, label, count ? h("span", { className: "cea-tab-count" }, count) : null))
         ),
         h(
           "div",
@@ -7200,41 +7573,9 @@ function ApiView({ t }) {
               onChange: (e) => setTimeoutMs(Math.max(1e3, Math.min(12e4, Number(e.target.value) || 3e4)))
             })
           )) : null,
-          requestTab === "params" ? h(
-            Fragment,
-            null,
-            paramPairs.map((p, i) => h(
-              "div",
-              { key: i, className: "cea-hrow" },
-              h("input", { className: "ce-input cea-hkey", placeholder: "name", value: p.name ?? "", onChange: (e) => setParamPairs((prev) => prev.map((x, j) => j === i ? { ...x, name: e.target.value } : x)) }),
-              h("input", { className: "ce-input cea-hval", placeholder: "value", value: p.value ?? "", onChange: (e) => setParamPairs((prev) => prev.map((x, j) => j === i ? { ...x, value: e.target.value } : x)) }),
-              h("button", { type: "button", className: "ce-tool ce-tiny", onClick: () => setParamPairs((prev) => prev.filter((_, j) => j !== i)) }, "✕")
-            )),
-            h(
-              "div",
-              { className: "cea-hrow" },
-              h("button", { type: "button", className: "ce-tool ce-tiny", title: t("api.addParam"), onClick: () => setParamPairs((prev) => [...prev, { name: "", value: "" }]) }, "+"),
-              h("span", { className: "cea-hint" }, t("api.paramsHint"))
-            )
-          ) : null,
-          requestTab === "headers" ? h(
-            Fragment,
-            null,
-            h(
-              "div",
-              { className: "cea-sec" },
-              h("span", null, t("api.headers")),
-              h("span", { className: "ce-spacer" }),
-              h("button", { type: "button", className: "ce-tool ce-tiny", title: t("api.addHeader"), onClick: () => setHeaders((prev) => [...prev, { name: "", value: "" }]) }, "+")
-            ),
-            headers.map((hd, i) => h(
-              "div",
-              { key: i, className: "cea-hrow" },
-              h("input", { className: "ce-input cea-hkey", placeholder: "Header", value: hd.name ?? "", onChange: (e) => setHeaderAt(i, { name: e.target.value }) }),
-              h("input", { className: "ce-input cea-hval", placeholder: "Value", value: hd.value ?? "", onChange: (e) => setHeaderAt(i, { value: e.target.value }) }),
-              h("button", { type: "button", className: "ce-tool ce-tiny", onClick: () => setHeaders((prev) => prev.filter((_, j) => j !== i)) }, "✕")
-            ))
-          ) : null,
+          requestTab === "params" ? h(RequestFields, { t, label: t("api.params"), rows: paramPairs, onChange: setParamPairs, hint: t("api.paramsHint") }) : null,
+          requestTab === "headers" ? h(RequestFields, { t, label: t("api.headers"), rows: headers, onChange: setHeaders }) : null,
+          requestTab === "variables" ? h(RequestFields, { t, label: t("api.environment"), rows: envPairs, onChange: setEnvPairs, hint: t("api.envTitle") }) : null,
           requestTab === "body" ? h(
             Fragment,
             null,
@@ -7264,16 +7605,9 @@ function ApiView({ t }) {
                   h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost", onClick: beautify }, t("api.beautify")),
                   beautifyErr ? h("span", { className: "cea-err" }, beautifyErr) : null
                 ) : null
-              ) : null,
-              bodyType === "form" || bodyType === "multipart" ? h("button", { type: "button", className: "ce-tool ce-tiny", title: t("api.addHeader"), onClick: () => setFormPairs((prev) => [...prev, { name: "", value: "" }]) }, "+") : null
+              ) : null
             ),
-            bodyType === "form" || bodyType === "multipart" ? h(Fragment, null, formPairs.map((p, i) => h(
-              "div",
-              { key: i, className: "cea-hrow" },
-              h("input", { className: "ce-input cea-hkey", placeholder: "key", value: p.name ?? "", onChange: (e) => setFormPairs((prev) => prev.map((x, j) => j === i ? { ...x, name: e.target.value } : x)) }),
-              h("input", { className: "ce-input cea-hval", placeholder: "value", value: p.value ?? "", onChange: (e) => setFormPairs((prev) => prev.map((x, j) => j === i ? { ...x, value: e.target.value } : x)) }),
-              h("button", { type: "button", className: "ce-tool ce-tiny", onClick: () => setFormPairs((prev) => prev.filter((_, j) => j !== i)) }, "✕")
-            ))) : null,
+            bodyType === "form" || bodyType === "multipart" ? h(RequestFields, { t, label: t("api.body"), rows: formPairs, onChange: setFormPairs }) : null,
             bodyType === "raw" ? h("textarea", { className: "cea-body", "aria-label": t("api.body"), placeholder: rawSub === "json" ? '{\n  "key": "value"\n}' : t("api.body"), value: body, spellcheck: false, onKeyDown: (e) => {
               if (e.key !== "Tab" || e.shiftKey) return;
               e.preventDefault();
@@ -7370,14 +7704,14 @@ function ApiView({ t }) {
     ),
     importOpen ? h(
       "div",
-      { className: "ce-overlay" },
+      { className: "ce-overlay", ref: importRef, role: "dialog", "aria-label": t("api.importTitle") },
       h(
         "div",
         { className: "ce-overlay-head" },
         h("span", null, t("api.importTitle")),
         h("button", { type: "button", className: "ce-tool ce-tiny", onClick: () => setImportOpen(false) }, "✕")
       ),
-      h("textarea", { className: "cea-body cea-import", value: importText, spellcheck: false, placeholder: "curl -X POST 'https://…' -H 'K: V' -d '{…}'", onChange: (e) => setImportText(e.target.value) }),
+      h("textarea", { className: "cea-body cea-import", autoFocus: true, "aria-label": t("api.importTitle"), value: importText, spellcheck: false, placeholder: "curl -X POST 'https://…' -H 'K: V' -d '{…}'", onChange: (e) => setImportText(e.target.value) }),
       h(
         "div",
         { className: "cea-bar" },
@@ -7387,7 +7721,7 @@ function ApiView({ t }) {
     ) : null,
     saveOpen ? h(
       "div",
-      { className: "ce-overlay" },
+      { className: "ce-overlay", ref: saveRef, role: "dialog", "aria-label": t("api.saveTitle") },
       h(
         "div",
         { className: "ce-overlay-head" },
@@ -7400,6 +7734,7 @@ function ApiView({ t }) {
         h("input", {
           className: "ce-input",
           placeholder: t("api.savePlaceholder"),
+          "aria-label": t("api.savePlaceholder"),
           value: saveName,
           autoFocus: true,
           onChange: (e) => setSaveName(e.target.value),
@@ -7410,36 +7745,6 @@ function ApiView({ t }) {
           }
         }),
         h("button", { type: "button", className: "ce-sk-btn", disabled: saveName.trim() === "", onClick: doSaveFavorite }, t("api.saveConfirm"))
-      )
-    ) : null,
-    envOpen ? h(
-      "div",
-      { className: "ce-overlay" },
-      h(
-        "div",
-        { className: "ce-overlay-head" },
-        h("span", null, t("api.env")),
-        h("button", { type: "button", className: "ce-tool ce-tiny", onClick: () => setEnvOpen(false) }, "✕")
-      ),
-      h("div", { className: "ce-note" }, t("api.envTitle")),
-      h(
-        "div",
-        { className: "cea-scroll" },
-        envPairs.length === 0 ? h("div", { className: "ce-note" }, t("api.envEmpty")) : null,
-        envPairs.map((p, i) => h(
-          "div",
-          { key: i, className: "cea-hrow" },
-          h("input", { className: "ce-input cea-hkey", placeholder: "name", value: p.name ?? "", onChange: (e) => setEnvPairs((prev) => prev.map((x, j) => j === i ? { ...x, name: e.target.value } : x)) }),
-          h("input", { className: "ce-input cea-hval", placeholder: "value", value: p.value ?? "", onChange: (e) => setEnvPairs((prev) => prev.map((x, j) => j === i ? { ...x, value: e.target.value } : x)) }),
-          h("button", { type: "button", className: "ce-tool ce-tiny", title: t("api.delete"), onClick: () => setEnvPairs((prev) => prev.filter((_, j) => j !== i)) }, "✕")
-        ))
-      ),
-      h(
-        "div",
-        { className: "cea-bar" },
-        h("button", { type: "button", className: "ce-tool ce-tiny", title: t("api.addEnv"), onClick: () => setEnvPairs((prev) => [...prev, { name: "", value: "" }]) }, "+"),
-        h("span", { className: "ce-spacer" }),
-        h("button", { type: "button", className: "ce-sk-btn", onClick: () => setEnvOpen(false) }, t("close"))
       )
     ) : null
   );
@@ -7463,6 +7768,9 @@ var GROUPS = [
   { id: "code", test: (kind) => /^(files|code|document)/.test(kind) }
 ];
 var GROUP_ORDER = ["code", "run", "skills", "more"];
+function isRedundantWorkspaceFiles(def) {
+  return String(def?.kind ?? "") === "files";
+}
 function groupOf(kind) {
   return GROUPS.find((g) => g.test(String(kind)))?.id ?? "more";
 }
@@ -7475,7 +7783,7 @@ function collectBoxes(registry) {
   }
   const boxes = [];
   for (const def of defs ?? []) {
-    if (!def || typeof def !== "object") continue;
+    if (!def || typeof def !== "object" || isRedundantWorkspaceFiles(def)) continue;
     for (const entry of def.guide ?? []) {
       if (!entry || typeof entry !== "object") continue;
       boxes.push({ kind: def.kind, entry, group: groupOf(def.kind) });
@@ -7489,31 +7797,6 @@ function collectBoxes(registry) {
   });
   return boxes;
 }
-function shortcutCatalog(shortcuts) {
-  if (!shortcuts || typeof shortcuts !== "object") return /* @__PURE__ */ new Map();
-  for (const name of ["list", "catalog", "entries", "all"]) {
-    const fn = shortcuts[name];
-    if (typeof fn !== "function") continue;
-    try {
-      const value = fn.call(shortcuts);
-      if (!Array.isArray(value)) continue;
-      const map = /* @__PURE__ */ new Map();
-      for (const item of value) {
-        if (item && typeof item === "object" && typeof item.id === "string") map.set(item.id, item);
-      }
-      return map;
-    } catch {
-    }
-  }
-  return /* @__PURE__ */ new Map();
-}
-function bindingLabel(cat) {
-  if (!cat) return "";
-  for (const value of [cat.bindingLabel, cat.binding?.label, cat.binding, cat.accelerator, cat.keys, cat.currentLabel]) {
-    if (typeof value === "string" && value !== "") return value;
-  }
-  return "";
-}
 function makeBrowserOpener(sidebarRight, now = Date.now) {
   let pendingSession;
   let openedAt = -Infinity;
@@ -7523,6 +7806,7 @@ function makeBrowserOpener(sidebarRight, now = Date.now) {
       const tabs = typeof sidebarRight.tabsIn === "function" ? sidebarRight.tabsIn(sessionId) : sidebarRight.openTabs?.getSnapshot?.()?.filter((tab) => tab.sessionId === sessionId) ?? [];
       const existing = tabs.find((tab) => tab.kind === "browser");
       if (existing) {
+        if (sidebarRight.isExpanded?.() === false) sidebarRight.toggleExpanded();
         sidebarRight.focus(existing.id ?? existing.tabId);
         return;
       }
@@ -7539,55 +7823,160 @@ function makeBrowserOpener(sidebarRight, now = Date.now) {
     }
   };
 }
-function makeLauncher({ registry, sidebarRight, getShortcuts, t }) {
-  const openBrowser = makeBrowserOpener(sidebarRight);
-  return function Launcher() {
-    const boxes = collectBoxes(registry);
-    if (boxes.length === 0) return null;
-    const catalog = shortcutCatalog(getShortcuts ? getShortcuts() : null);
-    const sections = [];
-    let currentGroup = null;
-    for (const box of boxes) {
-      if (box.group !== currentGroup) {
-        currentGroup = box.group;
-        sections.push(h("div", { key: `s:${currentGroup}`, className: "cel-section" }, t(`launcher.${currentGroup}`)));
+
+// src/client/lefttools.js
+var LEFT_TOOL_PREFIX = "dsh-plugin-kit/workspace/";
+var OWN_TOOLS = [
+  { kind: TAB_KIND, label: "guide.title", description: "guide.description", glyph: "code" },
+  { kind: API_TAB_KIND, label: "apiGuide.title", description: "apiGuide.description", glyph: "api" },
+  { kind: SKILLS_TAB_KIND, label: "skillsGuide.title", description: "skillsGuide.description", glyph: "skills" }
+];
+function ToolGlyph({ size = 16, glyph = "code" }) {
+  if (glyph === "code") return h(IconCode, { size });
+  return h(
+    "svg",
+    { viewBox: "0 0 24 24", width: size, height: size, fill: "none", stroke: "currentColor", strokeWidth: 1.7, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true },
+    glyph === "api" ? [h("path", { key: "a", d: "M8 3v5m8-5v5M6 8h12v5a6 6 0 0 1-12 0V8Zm6 11v3" })] : [h("path", { key: "s", d: "m12 3 9 5v8l-9 5-9-5V8l9-5Zm0 10 9-5M3 8l9 5v8" })]
+  );
+}
+function collectLeftTools(registry, t) {
+  const definitions = registry.entries();
+  const available = new Set(definitions.map((definition2) => definition2.kind));
+  const ownKinds = new Set(OWN_TOOLS.map((tool) => tool.kind));
+  const own = OWN_TOOLS.filter((tool) => available.has(tool.kind)).map((tool) => ({
+    id: `${LEFT_TOOL_PREFIX}${encodeURIComponent(tool.kind)}`,
+    kind: tool.kind,
+    label: () => t(tool.label),
+    description: () => t(tool.description),
+    icon: (props) => h(ToolGlyph, { ...props, glyph: tool.glyph })
+  }));
+  const seen = /* @__PURE__ */ new Set();
+  const others = collectBoxes(registry).filter(({ kind, entry }) => {
+    const key = `${kind}/${entry.id}`;
+    if (ownKinds.has(kind) || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).map(({ kind, entry }) => ({
+    id: `${LEFT_TOOL_PREFIX}${encodeURIComponent(kind)}/${encodeURIComponent(entry.id)}`,
+    kind,
+    label: typeof entry.title === "function" ? entry.title : () => String(entry.id),
+    description: typeof entry.description === "function" ? entry.description : () => "",
+    icon: typeof entry.icon === "function" ? entry.icon : IconCode
+  }));
+  return [...own, ...others];
+}
+function makeLeftToolRouter({ layout, sidebarRight, getTools, report, t }) {
+  let openBrowser = makeBrowserOpener(sidebarRight);
+  let routing = false;
+  return () => {
+    if (routing) return;
+    const id = layout.panelInfo.getSnapshot().activePanelId;
+    const tool = getTools().find((entry) => entry.id === id);
+    if (!tool) return;
+    routing = true;
+    try {
+      layout.selectPanel(null);
+      const target = sidebarRight.commandTarget(null);
+      if (target === void 0) {
+        report(t("shortcut.noSession"));
+        return;
       }
-      const { entry, kind } = box;
-      const icon = typeof entry.icon === "function" ? h(entry.icon, {}) : null;
-      const kbd = bindingLabel(catalog.get(entry.commandId));
-      sections.push(h(
-        "button",
-        {
-          key: `${kind}:${entry.id}`,
-          type: "button",
-          className: "cel-row",
-          title: typeof entry.description === "function" ? entry.description() : "",
-          onClick: () => {
-            try {
-              if (kind === "browser") openBrowser();
-              else sidebarRight.openTab(kind);
-            } catch (error) {
-              console.warn("code-explorer: launcher open failed", error);
-            }
-          }
-        },
-        h("span", { className: `cel-ico cel-ico-${box.group}` }, icon),
-        h(
-          "span",
-          { className: "cel-mid" },
-          h("span", { className: "cel-title" }, typeof entry.title === "function" ? entry.title() : String(entry.id)),
-          typeof entry.description === "function" ? h("span", { className: "cel-desc" }, entry.description()) : null
-        ),
-        kbd ? h("kbd", { className: "cel-kbd" }, kbd) : null
-      ));
+      report("");
+      const inventory = () => typeof sidebarRight.tabsIn === "function" ? sidebarRight.tabsIn(target.sessionId) : (sidebarRight.openTabs?.getSnapshot?.() ?? []).filter((tab) => tab.sessionId === target.sessionId);
+      const matching = inventory().filter((tab) => tab.kind === tool.kind);
+      const active = sidebarRight.active?.();
+      const existing = matching.find((tab) => (tab.id ?? tab.tabId) === (active?.id ?? active?.tabId)) ?? matching.at(-1);
+      if (existing) {
+        const tabId = existing.id ?? existing.tabId;
+        if (sidebarRight.isExpanded() === false) {
+          sidebarRight.toggleExpanded();
+          sidebarRight.focus(tabId);
+          return;
+        }
+        sidebarRight.close(tabId);
+        const remaining = inventory().filter((tab) => tab.kind !== "guide" && (tab.id ?? tab.tabId) !== tabId);
+        if (remaining.length === 0 && sidebarRight.isExpanded()) sidebarRight.toggleExpanded();
+        if (tool.kind === "browser") openBrowser = makeBrowserOpener(sidebarRight);
+        return;
+      }
+      if (tool.kind === "browser") openBrowser();
+      else sidebarRight.openTabFromTarget(tool.kind, target);
+    } catch (error) {
+      report(`${t("left.openFailed")}: ${error?.message ?? error}`);
+    } finally {
+      routing = false;
     }
-    return h("div", { className: "cel-root ce-scroll" }, sections);
+  };
+}
+function WorkspaceGuide({ t }) {
+  return h(
+    "div",
+    { className: "ce-workspace-guide" },
+    h("span", { className: "ce-workspace-guide-icon" }, h(IconCode, { size: 28 })),
+    h("h2", null, t("left.workspace")),
+    h("p", null, t("left.guide"))
+  );
+}
+function installLeftTools(ctx, t) {
+  const registrations = /* @__PURE__ */ new Map();
+  let tools = [];
+  let message = "";
+  const listeners = /* @__PURE__ */ new Set();
+  const report = (next) => {
+    message = next;
+    for (const listener of listeners) listener(next);
+  };
+  function Notice() {
+    const [text, setText] = useState(message);
+    useEffect(() => {
+      listeners.add(setText);
+      setText(message);
+      return () => listeners.delete(setText);
+    }, []);
+    useEffect(() => {
+      if (!text) return void 0;
+      const timer = setTimeout(() => report(""), 5e3);
+      return () => clearTimeout(timer);
+    }, [text]);
+    return text ? h("div", { className: "ce-left-notice", role: "status" }, h("span", null, text), h("button", { type: "button", "aria-label": t("close"), onClick: () => report("") }, "×")) : null;
+  }
+  const sync = () => {
+    const next = collectLeftTools(ctx.sidebarRightTabs, t);
+    const ids = new Set(next.map((tool) => tool.id));
+    for (const [id, dispose] of registrations) if (!ids.has(id)) {
+      dispose();
+      registrations.delete(id);
+    }
+    tools = next;
+    for (const [index, tool] of next.entries()) {
+      if (registrations.has(tool.id)) continue;
+      const disposeMain = ctx.slots.inject("main", () => ctx.slots.register({ name: "main", key: tool.id, locale: NS }, () => h(WorkspaceGuide, { t })));
+      const disposeNav = ctx.slots.inject("sidebar.panellist", () => ctx.slots.register({ name: "sidebar.panellist", id: tool.id, order: 20 + index, label: tool.label, locale: NS }, tool.icon));
+      registrations.set(tool.id, () => {
+        disposeNav();
+        disposeMain();
+      });
+    }
+  };
+  const route = makeLeftToolRouter({ layout: ctx.layout, sidebarRight: ctx.sidebarRight, getTools: () => tools, report, t });
+  const stopRouting = ctx.layout.panelInfo.subscribe(route);
+  sync();
+  const stopRegistry = ctx.sidebarRightTabs.subscribe(sync);
+  const disposeNotice = ctx.slots.inject("shell.overlay", () => ctx.slots.register({ name: "shell.overlay", id: "dsh-plugin-kit/tool-notice", order: 50 }, Notice));
+  return () => {
+    stopRegistry();
+    stopRouting();
+    disposeNotice();
+    if (tools.some((tool) => tool.id === ctx.layout.panelInfo.getSnapshot().activePanelId)) ctx.layout.selectPanel(null);
+    for (const dispose of registrations.values()) dispose();
+    registrations.clear();
+    listeners.clear();
   };
 }
 
 // src/client/index.js
 var index_default = {
-  inject: ["slots", "locale", "sidebarRightTabs", "sidebarRight"],
+  inject: ["slots", "locale", "sidebarRightTabs", "sidebarRight", "layout"],
   apply(ctx) {
     const safe = (label, fn) => {
       try {
@@ -7598,7 +7987,6 @@ var index_default = {
     };
     safe("styles", insertStyles);
     const bound = ctx.locale.bind(NS);
-    let shortcutsSvc = null;
     safe("dictionaries", () => ctx.locale.register(NS, { zh, en }));
     safe("tab type", () => ctx.sidebarRightTabs.register(definition(bound)));
     const Bound = (props) => h(CodeBody, { ...props, t: props.t ?? bound });
@@ -7629,6 +8017,9 @@ var index_default = {
       key: API_TAB_ID,
       locale: NS
     }, ApiBound)));
+    for (const kind of [TAB_KIND, SKILLS_TAB_KIND]) {
+      safe(`unsaved close guard: ${kind}`, () => registerToolCloseGuard(ctx.sidebarRight, kind, () => bound("editor.dirtyGuard")));
+    }
     safe("api tab title", () => ctx.slots.inject("sidebar.right.pane.tab.title", () => ctx.slots.register({
       name: "sidebar.right.pane.tab.title",
       key: API_TAB_ID
@@ -7648,7 +8039,6 @@ var index_default = {
       yield ctx.slots.register({ name: "tool.call.toolview", key: "write", priority: -1, inject: () => bridge }, CallDiffRow);
     }));
     ctx.inject(["shortcuts"], (shortcutCtx) => {
-      shortcutsSvc = shortcutCtx.shortcuts;
       try {
         shortcutCtx.effect(() => shortcutCtx.shortcuts.register({
           id: "code.explorer",
@@ -7728,17 +8118,13 @@ var index_default = {
         console.warn("code-explorer: skills shortcut not registered", error);
       }
     });
-    const Launcher = makeLauncher({
-      registry: ctx.sidebarRightTabs,
-      sidebarRight: ctx.sidebarRight,
-      getShortcuts: () => shortcutsSvc,
-      t: bound
-    });
-    safe("guide launcher", () => ctx.slots.inject("sidebar.right.tab.guide", () => ctx.slots.register({
+    safe("left tool entries", () => installLeftTools(ctx, bound));
+    const Guide = () => h(WorkspaceGuide, { t: bound });
+    safe("workspace guide", () => ctx.slots.inject("sidebar.right.tab.guide", () => ctx.slots.register({
       name: "sidebar.right.tab.guide",
       order: -100,
       select: (owner) => owner && typeof owner === "object" ? true : null
-    }, Launcher)));
+    }, Guide)));
   }
 };
 		return module.exports;

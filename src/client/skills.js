@@ -2,7 +2,10 @@
 
 import { Fragment, h, useCallback, useEffect, useMemo, useRef, useState } from "./react.js";
 import { api } from "./api.js";
+import { SKILLS_TAB_KIND } from "./constants.js";
+import { useToolCloseGuard } from "./closeguard.js";
 import { MarkdownView } from "./markdown.js";
+import { useDismissLayer } from "./dismiss.js";
 
 /** Group installation sources into the three scopes users choose between. */
 export function skillScope(source) {
@@ -10,7 +13,7 @@ export function skillScope(source) {
 		: String(source ?? "").startsWith("user") ? "user" : "provided";
 }
 
-export function SkillsView({ cwd, t, say }) {
+export function SkillsView({ cwd, t, say, visible, sessionId }) {
 	const [skills, setSkills] = useState(null);
 	const [error, setError] = useState("");
 	const [sel, setSel] = useState(null);
@@ -24,6 +27,11 @@ export function SkillsView({ cwd, t, say }) {
 	const [newName, setNewName] = useState("");
 	const [scope, setScope] = useState("user");
 	const [createOpen, setCreateOpen] = useState(false);
+	const createRef = useDismissLayer({ open: createOpen, onDismiss: () => setCreateOpen(false), ignoreSelector: '[data-ce-popup-trigger="skill-create"]' });
+	const deleteRef = useDismissLayer({ open: confirmDel, onDismiss: () => setConfirmDel(false), ignoreSelector: '[data-ce-popup-trigger="skill-delete"]' });
+	useEffect(() => {
+		if (visible === false) { setCreateOpen(false); setConfirmDel(false); }
+	}, [visible]);
 	const [query, setQuery] = useState("");
 	const [filter, setFilter] = useState("all");
 	const [editMode, setEditMode] = useState(false);
@@ -33,6 +41,7 @@ export function SkillsView({ cwd, t, say }) {
 	const listSeq = useRef(0);
 	const readonly = sel !== null && skillScope(sel.source) === "provided";
 	const dirty = content !== savedContent;
+	useToolCloseGuard({ sessionId, kind: SKILLS_TAB_KIND, dirty, onBlocked: () => say(t("editor.dirtyGuard"), "error") });
 	const sourceLabel = (source) => t(`skills.scope.${skillScope(source)}`);
 
 	const load = useCallback(() => {
@@ -137,9 +146,9 @@ export function SkillsView({ cwd, t, say }) {
 				h("span", { className: "ce-sk-total" }, skills === null ? "…" : t("skills.total", { n: skills.length })),
 			),
 			h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost", title: t("skills.refresh"), "aria-label": t("skills.refresh"), disabled: listing || busy, onClick: load }, "⟳"),
-			h("button", { type: "button", className: "ce-sk-btn ce-sk-primary", "aria-expanded": createOpen, disabled: busy, onClick: () => { if (canLeave()) setCreateOpen((v) => !v); } }, `+ ${t("skills.new")}`),
+			h("button", { type: "button", className: "ce-sk-btn ce-sk-primary", "aria-expanded": createOpen, "data-ce-popup-trigger": "skill-create", disabled: busy, onClick: () => { if (canLeave()) { setConfirmDel(false); setCreateOpen((v) => !v); } } }, `+ ${t("skills.new")}`),
 		),
-		createOpen ? h("div", { className: "ce-sk-create" },
+		createOpen ? h("div", { className: "ce-sk-create", ref: createRef },
 			h("input", { className: "ce-input ce-sk-name-input", "aria-label": t("skills.createPlaceholder"), placeholder: t("skills.createPlaceholder"), value: newName, disabled: busy, autoFocus: true,
 				onChange: (e) => setNewName(e.target.value), onKeyDown: (e) => { e.stopPropagation(); if (e.key === "Enter") create(); if (e.key === "Escape") setCreateOpen(false); } }),
 			h("select", { className: "ce-sk-scope", "aria-label": t("skills.scopeTitle"), value: scope, disabled: busy, onChange: (e) => setScope(e.target.value) },
@@ -201,9 +210,9 @@ export function SkillsView({ cwd, t, say }) {
 							h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost", disabled: busy, onClick: cancelEdit }, t("editor.cancel")),
 							h("button", { type: "button", className: "ce-sk-btn ce-sk-primary", disabled: !dirty || busy, title: "⌘S / Ctrl+S", onClick: save }, t("editor.save")),
 						) : h("button", { type: "button", className: "ce-sk-btn", disabled: busy, onClick: () => setEditMode(true) }, t("editor.edit"))) : null,
-						!readonly && !editMode ? h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost", disabled: busy, onClick: () => setConfirmDel((v) => !v) }, t("skills.delete")) : null,
+						!readonly && !editMode ? h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost", disabled: busy, "data-ce-popup-trigger": "skill-delete", "aria-expanded": confirmDel, onClick: () => { setCreateOpen(false); setConfirmDel((v) => !v); } }, t("skills.delete")) : null,
 					),
-					confirmDel ? h("div", { className: "ce-sk-delete-confirm", role: "alert" },
+					confirmDel ? h("div", { className: "ce-sk-delete-confirm", ref: deleteRef, role: "alert" },
 						h("span", null, t("skills.deleteQuestion", { name: sel.name })),
 						h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-danger", disabled: busy, onClick: remove }, t("skills.deleteConfirm")),
 						h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost", disabled: busy, onClick: () => setConfirmDel(false) }, t("skills.cancel"))) : null,
@@ -227,7 +236,8 @@ const SkillsGlyph = () => h("svg", { viewBox: "0 0 16 16", width: 14, height: 14
 );
 
 /** Body of the top-level "Skills" sidebar tab: resolves the session cwd itself. */
-export function SkillsTabBody({ sessionId, useSessions, t }) {
+export function SkillsTabBody({ sessionId, useSessions, useTabInfo, t }) {
+	const hostTab = useTabInfo ? useTabInfo()?.tab : null;
 	const cwd = useSessions ? useSessions((sessions) => (sessionId ? sessions.byId[sessionId]?.cwd : void 0)) : void 0;
 	const [note, setNote] = useState(null);
 	const timerRef = useRef(null);
@@ -239,7 +249,7 @@ export function SkillsTabBody({ sessionId, useSessions, t }) {
 	if (!cwd) return h("div", { className: "ce-root" }, h("div", { className: "ce-empty" }, t("editor.noSession")));
 	return h("div", { className: "ce-root" },
 		note && note.text ? h("div", { className: "ce-banner" }, h("span", { className: "ce-banner-text" }, note.text)) : null,
-		h(SkillsView, { cwd, t, say }),
+		h(SkillsView, { cwd, t, say, sessionId, visible: hostTab?.visible }),
 	);
 }
 

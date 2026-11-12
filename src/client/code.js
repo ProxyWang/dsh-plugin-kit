@@ -1,7 +1,8 @@
 /* ---------------- Code tab: stateful orchestrator (toolbar, rail, editor, diff, status) ---------------- */
 
 import { Fragment, h, useCallback, useEffect, useMemo, useRef, useState } from "./react.js";
-import { ROW } from "./constants.js";
+import { ROW, TAB_KIND } from "./constants.js";
+import { useToolCloseGuard } from "./closeguard.js";
 import { api } from "./api.js";
 import { buildLineStates, langFor, wordAt } from "./highlight.js";
 import { IconArrowLeft, IconArrowRight, IconCode, IconRefresh, IconSearch, IconTextSearch } from "./icons.js";
@@ -11,11 +12,12 @@ import { BranchPalette } from "./branchpick.js";
 import { RelPath, toAbs } from "./pathtools.js";
 import { TreePanel } from "./tree.js";
 import { ChangesPanel } from "./changes.js";
-import { LocationList, QuickOpen, RefsPeek, SymbolPalette, GotoLinePalette, FileHistoryOverlay } from "./overlays.js";
+import { LocationList, QuickOpen, CommandPalette, RefsPeek, SymbolPalette, GotoLinePalette, FileHistoryOverlay } from "./overlays.js";
 import { SearchPanel } from "./searchpanel.js";
 import { computeGutter, computeVisible, computeWrapRows, compileFindRe, findRangesInLine, WRAP_LINE_CAP } from "./codeview.js";
 import { useGitActions } from "./usegit.js";
 import { useNavPersistence } from "./usepersistence.js";
+import { useDismissLayer } from "./dismiss.js";
 
 /** Files that open in rendered preview by default: markdown, html and svg. */
 const PREVIEW_RE = /\.(md|markdown|html?|svg)$/i;
@@ -74,12 +76,14 @@ export function CodeBody(props) {
 	const [previewOn, setPreviewOn] = useState(false);
 	const [delGroups, setDelGroups] = useState(null);
 	const [delPreview, setDelPreview] = useState(null);
+	const delPreviewRef = useDismissLayer({ open: Boolean(delPreview), onDismiss: () => setDelPreview(null) });
 	const [showDiffView, setShowDiffView] = useState(true); // {symbol, anchorLine, busy, def, refs, error}
 	const [railW, setRailW] = useState(230);
 	const [railVisible, setRailVisible] = useState(true);
 	const [mobileView, setMobileView] = useState("files");
 	const [symbols, setSymbols] = useState([]);
 	const [symPalette, setSymPalette] = useState(null); // {query}
+	const [commandOpen, setCommandOpen] = useState(false);
 	const [commitsOpen, setCommitsOpen] = useState(false);
 	const peekNonce = useRef(0);
 	const paletteTimer = useRef(null);
@@ -101,6 +105,8 @@ export function CodeBody(props) {
 	const tabViewRef = useRef({}); // path → {line, col, scroll} restored when switching tabs
 	const autoMarksTimer = useRef(null);
 	const tabsRef = useRef(null);
+	const dirtyRef = useRef(false);
+	dirtyRef.current = editing && editText !== (doc?.raw ?? "");
 
 	docRef.current = doc;
 	cursorRef.current = cursor;
@@ -112,6 +118,8 @@ export function CodeBody(props) {
 		if (noticeTimer.current) clearTimeout(noticeTimer.current);
 		if (kind !== "error") noticeTimer.current = setTimeout(() => setNotice({ text: "", kind: "info" }), 3800);
 	}, []);
+
+	useToolCloseGuard({ sessionId, kind: TAB_KIND, dirty: dirtyRef.current, onBlocked: () => say(t("editor.dirtyGuard"), "error") });
 
 	// Center `line` in the code area. Word-wrap mode has variable row heights,
 	// so it locates the flow node by its data-wl marker instead of ROW math;
@@ -195,9 +203,36 @@ export function CodeBody(props) {
 		setTimeout(pull, 4500);
 	}, [cwd]);
 
+	// Navigation owns the editor surface: dismiss transient panels, retaining
+	// search inputs so reopening search does not discard the user's query.
+	const dismissPanels = useCallback(() => {
+		setSearchOpen(false);
+		setPalette(null);
+		if (paletteTimer.current) clearTimeout(paletteTimer.current);
+		setCommandOpen(false);
+		setBranchPickOpen(false);
+		setOverlay(null);
+		setPeek(null);
+		++peekNonce.current;
+		setHover(null);
+		setFileHist(null);
+		setGotoOpen(false);
+		setSymPalette(null);
+		setDelPreview(null);
+	}, []);
+	useEffect(() => {
+		if (tab?.visible === false) dismissPanels();
+	}, [tab?.visible, dismissPanels]);
+	const canNavigate = useCallback(() => {
+		if (!dirtyRef.current) return true;
+		say(t("editor.dirtyGuard"), "error");
+		return false;
+	}, [say, t]);
+
 	const loadFile = useCallback(
 		async (path, line, col, mark, opts) => {
-			if (!cwd) return null;
+			if (!cwd || !canNavigate()) return null;
+			dismissPanels();
 			const res = await api("fs.read", { cwd, path });
 			if (!res.ok) {
 				say(`${t("error")}: ${res.error}`, "error");
@@ -324,11 +359,12 @@ export function CodeBody(props) {
 			});
 			return entry;
 		},
-		[cwd, fetchDiagnostics, say, t, scrollAreaToLine],
+		[cwd, fetchDiagnostics, say, t, scrollAreaToLine, canNavigate, dismissPanels],
 	);
 
 	const openFile = useCallback(
 		async (path, line, col, record = true, mark) => {
+			if (!canNavigate()) return;
 			const current = docRef.current;
 			if (record && current && modeRef.current === "code") {
 				const cur = cursorRef.current;
@@ -339,7 +375,7 @@ export function CodeBody(props) {
 			}
 			await loadFile(path, line, col, mark);
 		},
-		[loadFile],
+		[loadFile, canNavigate],
 	);
 
 
@@ -367,6 +403,7 @@ export function CodeBody(props) {
 	}, [doc, repos, cwd]);
 
 	const goBack = useCallback(() => {
+		if (!canNavigate()) return;
 		const stack = histRef.current;
 		if (!stack.back.length) return;
 		const current = docRef.current;
@@ -377,9 +414,10 @@ export function CodeBody(props) {
 		const prev = stack.back.pop();
 		setHistTick((v) => v + 1);
 		void openFile(prev.path, prev.line, prev.col, false, prev.word ? { line: prev.line, col: prev.col, word: prev.word } : null);
-	}, [openFile]);
+	}, [openFile, canNavigate]);
 
 	const goForward = useCallback(() => {
+		if (!canNavigate()) return;
 		const stack = histRef.current;
 		if (!stack.forward.length) return;
 		const current = docRef.current;
@@ -390,7 +428,7 @@ export function CodeBody(props) {
 		const next = stack.forward.pop();
 		setHistTick((v) => v + 1);
 		void openFile(next.path, next.line, next.col, false, next.word ? { line: next.line, col: next.col, word: next.word } : null);
-	}, [openFile]);
+	}, [openFile, canNavigate]);
 
 	// Editor tabs: every loaded doc joins the strip (deduped, capped); the
 	// per-path view state lets a tab switch restore cursor and scroll.
@@ -408,6 +446,8 @@ export function CodeBody(props) {
 	const switchTab = useCallback((path) => {
 		if (!path) return;
 		if (path === docRef.current?.path) {
+			dismissPanels();
+			setMobileView("editor");
 			// Clicking the active tab while its diff is shown returns to the source view.
 			if (diff && showDiffView && (diff.scope === "working" || diff.scope === "branch" || diff.scope === "staged")) setShowDiffView(false);
 			return;
@@ -418,7 +458,7 @@ export function CodeBody(props) {
 		}
 		const saved = tabViewRef.current[path];
 		void openFile(path, saved?.line ?? 1, saved?.col ?? 1, false);
-	}, [editing, editText, openFile, say, t, diff, showDiffView]);
+	}, [editing, editText, openFile, say, t, diff, showDiffView, dismissPanels]);
 
 	const closeTab = useCallback((path) => {
 		const current = docRef.current;
@@ -471,7 +511,8 @@ export function CodeBody(props) {
 
 	const openDiff = useCallback(
 		async (path, scope) => {
-			if (!cwd) return;
+			if (!cwd || !canNavigate()) return;
+			dismissPanels();
 			const repo = repoSelRef.current;
 			const res = await api("git.diff", repo ? { cwd, path, scope, repo } : { cwd, path, scope });
 			const value = res.ok ? res.value : { error: res.error };
@@ -482,12 +523,13 @@ export function CodeBody(props) {
 			setOverlay(null);
 			setHover(null);
 		},
-		[cwd],
+		[cwd, canNavigate, dismissPanels],
 	);
 	// Whole-file presentation: load the current file and mark the changed
 	// new-side lines, keeping gopls jumps and edit mode available on top.
 	const openChangeSource = useCallback(async (path, scope) => {
-		if (!cwd) return;
+		if (!cwd || !canNavigate()) return;
+		dismissPanels();
 		const repo = repoSelRef.current;
 		const res = await api("git.diff", repo ? { cwd, path, scope, repo } : { cwd, path, scope });
 		const text = res.ok ? res.value.diff ?? "" : "";
@@ -498,10 +540,11 @@ export function CodeBody(props) {
 		setDiff({ path, scope, text, base: res.ok ? res.value.base : void 0, note: res.ok ? res.value.note : void 0 });
 		setShowDiffView(false);
 		modeRef.current = "code";
-		await loadFile(path, first, 1, null, { noAutoMarks: true });
+		const loaded = await loadFile(path, first, 1, null, { noAutoMarks: true });
+		if (!loaded) return;
 		setDiffMarks(marks);
 		setDelGroups(deletedGroups(text));
-	}, [cwd, loadFile]);
+	}, [cwd, loadFile, canNavigate, dismissPanels]);
 	// Blame column data: refetched per open file while the toggle is on.
 	useEffect(() => {
 		if (!blameOn || !doc || !cwd) return void 0;
@@ -524,7 +567,8 @@ export function CodeBody(props) {
 
 	const openCommit = useCallback(
 		async (commit) => {
-			if (!cwd) return;
+			if (!cwd || !canNavigate()) return;
+			dismissPanels();
 			const repo = repoSelRef.current;
 			const res = await api("git.diff", repo ? { cwd, scope: "commit", sha: commit.hash, repo } : { cwd, scope: "commit", sha: commit.hash });
 			const value = res.ok ? res.value : { error: res.error };
@@ -540,13 +584,14 @@ export function CodeBody(props) {
 			setHover(null);
 			setPeek(null);
 		},
-		[cwd, say, t],
+		[cwd, say, t, canNavigate, dismissPanels],
 	);
 
 	// File history (🕘): commits that touched the open file, newest first.
 	const openFileHistory = useCallback(() => {
 		const d = docRef.current;
 		if (!cwd || !d) return;
+		dismissPanels();
 		const path = d.path;
 		setFileHist({ path, busy: true });
 		const repo = repoSelRef.current;
@@ -558,13 +603,14 @@ export function CodeBody(props) {
 				return { path, commits: res.value?.commits ?? [] };
 			});
 		});
-	}, [cwd]);
+	}, [cwd, dismissPanels]);
 
 	// Clicking a history row shows that commit's diff for this file only.
 	const openHistCommit = useCallback(
 		async (commit) => {
 			const path = fileHist?.path;
-			if (!cwd || !path || !commit?.hash) return;
+			if (!cwd || !path || !commit?.hash || !canNavigate()) return;
+			dismissPanels();
 			const repo = repoSelRef.current;
 			const res = await api("git.diff", repo ? { cwd, path, scope: "commit", sha: commit.hash, repo } : { cwd, path, scope: "commit", sha: commit.hash });
 			const value = res.ok ? res.value ?? {} : { error: res.error };
@@ -581,19 +627,20 @@ export function CodeBody(props) {
 			setHover(null);
 			setPeek(null);
 		},
-		[cwd, fileHist, say, t],
+		[cwd, fileHist, say, t, canNavigate, dismissPanels],
 	);
 
 	/* quick open (file picker) */
 
 	const openPalette = useCallback(() => {
 		if (!cwd) return;
+		dismissPanels();
 		setMobileView("editor");
 		setPalette({ query: "", results: [], busy: true });
 		api("search.files", { cwd, query: "", limit: 80 }).then((res) => {
 			setPalette((p) => (p && p.query === "" ? { ...p, results: res.ok ? res.value.matches ?? [] : [], busy: false } : p));
 		});
-	}, [cwd]);
+	}, [cwd, dismissPanels]);
 
 	const onPaletteQuery = useCallback(
 		(query) => {
@@ -642,6 +689,7 @@ export function CodeBody(props) {
 	);
 
 	const openSearch = useCallback((requested) => {
+		dismissPanels();
 		const scope = requested?.kind === "directory"
 			? { kind: "directory", directory: requested.directory }
 			: mode === "changes" ? { kind: "changes", repo: repoSelRef.current ?? undefined } : { kind: "workspace" };
@@ -649,7 +697,7 @@ export function CodeBody(props) {
 		setMobileView("editor");
 		setSearchOpen(true);
 		setSearch((s) => ({ ...(s ?? { query: "", include: "", regex: false, words: false }), scope, results: undefined, engine: "", truncated: false, busy: false, error: undefined, scopeInfo: undefined }));
-	}, [mode]);
+	}, [mode, dismissPanels]);
 	const changeSearch = useCallback((patch) => {
 		++searchNonce.current;
 		setSearch((s) => s ? { ...s, ...patch, results: undefined, busy: false, error: undefined, scopeInfo: undefined } : s);
@@ -672,7 +720,6 @@ export function CodeBody(props) {
 	const onSearchPick = useCallback(
 		(r) => {
 			void openFile(r.path, r.line, 1);
-			setSearchOpen(false);
 		},
 		[openFile],
 	);
@@ -817,6 +864,12 @@ export function CodeBody(props) {
 		if (value.status) setGit(value.status);
 		await openDiff(path, "working");
 	}, [cwd, diff, say, t, openDiff]);
+	const toggleCommand = useCallback(() => {
+		const next = !commandOpen;
+		dismissPanels();
+		setCommandOpen(next);
+	}, [commandOpen, dismissPanels]);
+
 	const onRootKeyDown = useCallback(
 		(event) => {
 			if ((event.metaKey || event.ctrlKey) && !event.altKey && event.code === "KeyF" && !event.shiftKey) {
@@ -852,8 +905,14 @@ export function CodeBody(props) {
 			if ((event.metaKey || event.ctrlKey) && event.shiftKey && event.code === "KeyO") {
 				if (LSP_RE.test(docRef.current?.path ?? "")) {
 					event.preventDefault();
+					dismissPanels();
 					setSymPalette({});
 				}
+				return;
+			}
+			if ((event.metaKey || event.ctrlKey) && event.shiftKey && !event.altKey && event.code === "KeyP") {
+				event.preventDefault();
+				toggleCommand();
 				return;
 			}
 			if ((event.metaKey || event.ctrlKey) && !event.altKey && event.code === "KeyP") {
@@ -870,7 +929,9 @@ export function CodeBody(props) {
 			if ((event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey && event.code === "KeyG") {
 				if (modeRef.current === "code" && docRef.current && !editing) {
 					event.preventDefault();
-					setGotoOpen((v) => !v);
+					const next = !gotoOpen;
+					dismissPanels();
+					setGotoOpen(next);
 				}
 				return;
 			}
@@ -882,6 +943,12 @@ export function CodeBody(props) {
 				return;
 			}
 			if (event.key === "Escape") {
+				if (searchOpen || palette || commandOpen || branchPickOpen || fileHist || gotoOpen || symPalette || peek || overlay) {
+					event.preventDefault();
+					event.stopPropagation();
+					dismissPanels();
+					return;
+				}
 				if (editing) {
 					cancelEdit();
 					return;
@@ -913,7 +980,7 @@ export function CodeBody(props) {
 				if (searchOpen) setSearchOpen(false);
 			}
 		},
-		[palette, closePalette, openPalette, openSearch, searchOpen, peek, closePeek, goBack, goForward, symPalette, editing, saveEdit, cancelEdit, findOpen, delPreview, gotoOpen, toggleWrap, fileHist],
+		[palette, closePalette, openPalette, openSearch, searchOpen, peek, closePeek, goBack, goForward, symPalette, editing, saveEdit, cancelEdit, findOpen, delPreview, gotoOpen, toggleWrap, fileHist, toggleCommand, dismissPanels, commandOpen, branchPickOpen, overlay],
 	);
 
 	const doJump = useCallback(
@@ -1119,6 +1186,17 @@ export function CodeBody(props) {
 		return best;
 	}, [symbols, cursor]);
 
+	const commands = useMemo(() => [
+		{ id: "files", icon: "▱", label: t("command.files"), run: () => { setMode("files"); dismissPanels(); setRailVisible(true); setMobileView("files"); } },
+		{ id: "changes", icon: "⑂", label: t("command.changes"), run: () => { setMode("changes"); dismissPanels(); setRailVisible(true); setMobileView("files"); refreshGit(); } },
+		{ id: "search", icon: "⌕", label: t("command.search"), hint: "⇧⌘F", run: () => openSearch() },
+		{ id: "quick-open", icon: "↗", label: t("command.quickOpen"), hint: "⌘P", run: () => openPalette() },
+		{ id: "outline", icon: "☷", label: t("command.outline"), hint: "⌘⇧O", run: () => { if (LSP_RE.test(docRef.current?.path ?? "")) setSymPalette({}); else say(t("command.outlineUnavailable"), "error"); } },
+		{ id: "wrap", icon: "↩", label: t("command.wrap"), hint: "⌥Z", run: () => toggleWrap() },
+		{ id: "toggle-rail", icon: "◧", label: t("command.toggleRail"), hint: "⌘B", run: () => setRailVisible((value) => !value) },
+		{ id: "refresh", icon: "⟳", label: t("command.refresh"), run: () => { refreshGit(); setTreeKey((key) => key + 1); if (docRef.current) void loadFile(docRef.current.path, cursorRef.current?.line ?? 1, cursorRef.current?.col ?? 1); } },
+	], [t, refreshGit, openSearch, openPalette, toggleWrap, say, loadFile, dismissPanels]);
+
 	const startRailDrag = useCallback((event) => {
 		event.preventDefault();
 		const startX = event.clientX;
@@ -1146,10 +1224,8 @@ export function CodeBody(props) {
 	useEffect(() => {
 		const handler = (event) => {
 			const detail = event.detail;
-			if (!detail || typeof detail.text !== "string") return;
-			setPeek(null);
-			setOverlay(null);
-			setHover(null);
+			if (!detail || typeof detail.text !== "string" || !canNavigate()) return;
+			dismissPanels();
 			modeRef.current = "diff";
 			setMobileView("editor");
 			setShowDiffView(true);
@@ -1163,7 +1239,7 @@ export function CodeBody(props) {
 		};
 		document.addEventListener("dsh-ce-open-calldiff", handler);
 		return () => document.removeEventListener("dsh-ce-open-calldiff", handler);
-	}, []);
+	}, [canNavigate, dismissPanels]);
 
 	if (!cwd) {
 		return h("div", { className: "ce-root" }, h("div", { className: "ce-empty" }, t("editor.noSession")));
@@ -1178,10 +1254,12 @@ export function CodeBody(props) {
 			h(
 				"div",
 				{ className: "ce-seg" },
-				h("button", { type: "button", className: `ce-seg-btn${mode === "files" ? " ce-seg-on" : ""}`, onClick: () => { setMode("files"); setSearchOpen(false); closePalette(); setRailVisible(true); setMobileView("files"); } }, t("toolbar.files")),
-				h("button", { type: "button", className: `ce-seg-btn${mode === "changes" ? " ce-seg-on" : ""}`, onClick: () => { setMode("changes"); setSearchOpen(false); closePalette(); setRailVisible(true); setMobileView("files"); refreshGit(); } }, `${t("toolbar.changes")}${git?.repo ? ` · ${git.working.length}` : ""}`),
+				h("button", { type: "button", className: `ce-seg-btn${mode === "files" ? " ce-seg-on" : ""}`, onClick: () => { setMode("files"); dismissPanels(); setRailVisible(true); setMobileView("files"); } }, t("toolbar.files")),
+				h("button", { type: "button", className: `ce-seg-btn${mode === "changes" ? " ce-seg-on" : ""}`, onClick: () => { setMode("changes"); dismissPanels(); setRailVisible(true); setMobileView("files"); refreshGit(); } }, `${t("toolbar.changes")}${git?.repo ? ` · ${git.working.length}` : ""}`),
 			),
-			(doc || diff) ? h("button", { type: "button", className: "ce-mobile-open-editor ce-link", onClick: () => setMobileView("editor") }, t("layout.backEditor")) : null,
+			 h("button", { type: "button", className: `ce-command-trigger${commandOpen ? " ce-tool-on" : ""}`, title: `${t("command.title")} (⌘⇧P / Ctrl+Shift+P)`, "aria-expanded": commandOpen, onClick: toggleCommand }, h("span", { className: "ce-command-mark", "aria-hidden": true }, ">_"), h("span", null, t("command.title")), h("kbd", null, "⌘⇧P")),
+			(doc || diff) ? h("button", { type: "button", className: "ce-mobile-open-editor ce-link", onClick: () => { dismissPanels(); setMobileView("editor"); } }, t("layout.backEditor")) : null,
+
 			git?.repo
 				? h(
 					"button",
@@ -1190,7 +1268,7 @@ export function CodeBody(props) {
 						className: "ce-branch",
 						disabled: sync.busy,
 						title: `${t("branch.title")}${git.upstream ? ` · ${git.upstream}${git.upstreamInferred ? " · auto" : ""}` : ""}`,
-						onClick: () => setBranchPickOpen(true),
+						onClick: () => { const next = !branchPickOpen; dismissPanels(); setBranchPickOpen(next); },
 					},
 					h("span", null, `⎇ ${git.branch}`),
 					sync.busy ? h("span", { className: "ce-spin ce-ico" }, h(IconRefresh)) : null,
@@ -1199,7 +1277,7 @@ export function CodeBody(props) {
 				)
 				: null,
 			h("span", { className: "ce-spacer" }),
-			!railVisible ? h("button", { type: "button", className: "ce-tool", title: `${t("quickopen.placeholder")} (⌘P / Ctrl+P)`, onClick: openPalette }, h(IconSearch)) : null,
+			!railVisible ? h("button", { type: "button", className: "ce-tool", title: `${t("quickopen.placeholder")} (⌘P / Ctrl+P)`, onClick: () => palette ? closePalette() : openPalette() }, h(IconSearch)) : null,
 			!railVisible ? h("button", { type: "button", className: "ce-tool ce-workspace-search", title: `${t(mode === "changes" ? "search.changesHint" : "search.workspaceHint")} (⇧⌘F / Ctrl+Shift+F)`, "aria-label": t(mode === "changes" ? "search.changesHint" : "search.workspaceHint"), onClick: openSearch }, h(IconTextSearch), h("span", null, t(mode === "changes" ? "search.changesAction" : "changes.searchWorkspace"))) : null,
 			h("button", { type: "button", className: "ce-tool", title: `${statusTitle}`, onClick: () => { refreshGit(); setTreeKey((k) => k + 1); if (docRef.current) void loadFile(docRef.current.path, cursorRef.current?.line ?? 1, cursorRef.current?.col ?? 1); } }, h(IconRefresh)),
 			h("span", { className: `ce-dot ce-dot-${status.state}`, title: statusTitle }),
@@ -1219,7 +1297,7 @@ export function CodeBody(props) {
 				? h("div", { className: "ce-rail-wrap ce-rail-with-search", style: { width: `${railW}px` } },
 					h("div", { className: "ce-rail-navigation" },
 						h("button", { type: "button", className: "ce-rail-search", title: `${t(mode === "changes" ? "search.changesHint" : "search.workspaceHint")} (⇧⌘F / Ctrl+Shift+F)`, onClick: openSearch }, h(IconTextSearch), h("span", null, t(mode === "changes" ? "search.changesAction" : "changes.searchWorkspace"))),
-						h("button", { type: "button", className: "ce-tool ce-rail-quickopen", "aria-label": t("quickopen.placeholder"), title: `${t("quickopen.placeholder")} (⌘P / Ctrl+P)`, onClick: openPalette }, h(IconSearch)),
+						h("button", { type: "button", className: "ce-tool ce-rail-quickopen", "aria-label": t("quickopen.placeholder"), title: `${t("quickopen.placeholder")} (⌘P / Ctrl+P)`, onClick: () => palette ? closePalette() : openPalette() }, h(IconSearch)),
 					),
 					mode === "files"
 					? h(TreePanel, {
@@ -1444,7 +1522,7 @@ export function CodeBody(props) {
 							peek ? h(RefsPeek, { t, cwd, peek, scroll, totalLines: doc.lines.length, onPick: pickPeek, onClose: closePeek }) : null,
 							symPalette ? h(SymbolPalette, { t, symbols, onPick: (s) => { setSymPalette(null); revealPosition(s.line, s.col, s.name); }, onClose: () => setSymPalette(null) }) : null,
 							delPreview
-								? h("div", { className: "ce-overlay" },
+								? h("div", { className: "ce-overlay", ref: delPreviewRef, role: "dialog", "aria-label": t("diff.deletedAt") },
 									h("div", { className: "ce-overlay-head" },
 										h("span", null, `${t("diff.deletedAt")} · L${delPreview.anchor}`),
 										h("button", { type: "button", className: "ce-tool ce-tiny", title: t("close"), onClick: () => setDelPreview(null) }, "✕"),
@@ -1480,6 +1558,7 @@ export function CodeBody(props) {
 				}) : null,
 			),
 		),
+		commandOpen ? h(CommandPalette, { t, commands, onClose: () => setCommandOpen(false) }) : null,
 		branchPickOpen && git?.repo
 			? h(BranchPalette, {
 				cwd,

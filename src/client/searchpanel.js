@@ -1,6 +1,7 @@
 /* ---------------- workspace search panel: query UI, match highlighting, context expansion, replace ---------------- */
 
 import { Fragment, h, useEffect, useMemo, useRef, useState } from "./react.js";
+import { useDismissLayer } from "./dismiss.js";
 import { api } from "./api.js";
 import { IconSearch } from "./icons.js";
 import { RelPath } from "./pathtools.js";
@@ -67,6 +68,7 @@ export function SearchPanel({ t, cwd, state, onQuery, onInclude, onDirectory, on
 	const [replaceText, setReplaceText] = useState("");
 	const [replaceBusy, setReplaceBusy] = useState(false);
 	const [confirmAll, setConfirmAll] = useState(false);
+	const confirmRef = useDismissLayer({ open: confirmAll, onDismiss: () => setConfirmAll(false) });
 	useEffect(() => {
 		inputRef.current?.focus();
 	}, []);
@@ -262,6 +264,7 @@ export function SearchPanel({ t, cwd, state, onQuery, onInclude, onDirectory, on
 				}),
 				h("button", {
 					className: "ce-sk-btn",
+					ref: confirmRef,
 					type: "button",
 					disabled: replaceBusy || groups.length === 0 || state.query.trim().length < 2,
 					title: t("search.replaceAll"),
