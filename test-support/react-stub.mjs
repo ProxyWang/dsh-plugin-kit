@@ -10,12 +10,22 @@ export const Fragment = Symbol.for("react.fragment");
 // this verifies event/state transitions, not browser layout. Pass { effects: true }
 // and flushEffects() after assigning refs to test listener lifecycle explicitly.
 let renderState = null;
+// Expand function-type elements (child components) depth-first while the render
+// state is live, so their hooks join the one cursor in deterministic tree order,
+// the way a real reconciler would give them their own frames.
+function expand(node) {
+	if (Array.isArray(node)) return node.flatMap(expand);
+	if (!node || typeof node !== "object") return node;
+	if (typeof node.type === "function") return expand(node.type(node.props));
+	if (node.type === Fragment) return (node.children ?? []).flatMap(expand);
+	return { ...node, children: (node.children ?? []).flatMap(expand) };
+}
 export function createHookRenderer(component, props, options = {}) {
-	const state = { slots: [], cursor: 0, runEffects: options.effects === true, effects: new Map(), pending: new Map() };
+	const state = { slots: [], cursor: 0, runEffects: options.effects === true, expand: options.expand === true, effects: new Map(), pending: new Map() };
 	const render = () => {
 		state.cursor = 0;
 		renderState = state;
-		try { return component(props); } finally { renderState = null; }
+		try { return state.expand ? expand(component(props)) : component(props); } finally { renderState = null; }
 	};
 	render.flushEffects = () => {
 		for (const [index, { effect, deps }] of [...state.pending]) {

@@ -6,6 +6,7 @@ const paths = {
  bookmarks: "M6 3h12v18l-6-4-6 4V3Z",
  globe: "M3 12h18M12 3c5 5 5 13 0 18-5-5-5-13 0-18Z",
  arrow: "M5 12h14m-6-6 6 6-6 6",
+ plus: "M12 5v14M5 12h14",
  close: "m6 6 12 12M18 6 6 18",
 };
 export function BrowserGlyph({ name, filled = false, size = 16 }) {

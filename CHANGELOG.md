@@ -2,6 +2,7 @@
 
 ## Unreleased — refined browser chrome
 
+- The browser tab is now a window with its own sub-tab strip: every sub-tab owns a carrier (Desktop webview guest / Web iframe), address history and title; the strip switches, closes per tab and adds tabs with + (new tabs follow the configured start page). Desktop keeps every guest resident; Web keeps only the foreground page alive and restores the others from the per-window checkpoint. Page popups (`window.open` / `target=_blank`) open as background sub-tabs; the host strip keeps the fixed browser label while page titles live on the sub-tab chips. Legacy single-page checkpoints migrate into a one-tab window; up to 10 sub-tabs per window.
 - Grouped back/forward/reload controls and secondary tools around a prominent address field, with bookmark and Go actions inside the field.
 - Replaced character glyphs with consistent SVG icons, added selected tool states and local Cmd/Ctrl+L address focus, and replaced the loading text row with a reduced-motion-aware progress line.
 - Refined bookmark/settings hierarchy and empty states; narrow panels use a predictable two-row toolbar. Rendering remains owned by the existing DSH carrier.

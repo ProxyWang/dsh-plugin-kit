@@ -104,6 +104,11 @@ var zh = {
   "browser.forward": "前进",
   "browser.reload": "刷新网页",
   "browser.home": "主页",
+  "browser.newTab": "新建标签页",
+  "browser.strip": "浏览器标签",
+  "browser.untitled": "新标签页",
+  "browser.closeTab": "关闭标签",
+  "browser.tabLimit": "最多同时打开 10 个标签",
   "browser.address": "输入网址，如 https://example.com",
   "browser.go": "前往",
   "browser.editBookmark": "编辑书签",
@@ -547,6 +552,11 @@ var en = {
   "browser.forward": "Forward",
   "browser.reload": "Reload page",
   "browser.home": "Home",
+  "browser.newTab": "New tab",
+  "browser.strip": "Browser tabs",
+  "browser.untitled": "New tab",
+  "browser.closeTab": "Close tab",
+  "browser.tabLimit": "Up to 10 tabs at once",
   "browser.address": "Enter a URL, e.g. https://example.com",
   "browser.go": "Go",
   "browser.editBookmark": "Edit bookmark",
@@ -6696,6 +6706,19 @@ var CSS2 = `
 
 /* Browser chrome: persistent carrier viewport with task pages above it. */
 .ceb-root{container-type:inline-size;overflow:hidden}
+.ceb-strip{display:flex;align-items:flex-end;gap:4px;flex:none;padding:6px 8px 0;background:var(--ce-surface-2);border-bottom:1px solid var(--ce-line);overflow-x:auto;overflow-y:hidden}
+.ceb-sub{display:flex;align-items:center;flex:none;max-width:170px;min-width:56px;height:28px;border:1px solid var(--ce-line);border-bottom:0;border-radius:8px 8px 0 0;background:transparent;color:var(--ce-fg-2)}
+.ceb-sub-active{background:var(--ce-surface-1);color:var(--ce-fg);border-color:var(--ce-line-strong);border-bottom:1px solid var(--ce-surface-1);margin-bottom:-1px}
+.ceb-sub-open{flex:1;min-width:0;height:100%;border:0;background:transparent;color:inherit;font:inherit;font-size:12px;text-align:left;padding:0 2px 0 10px;cursor:pointer}
+.ceb-sub-title{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ceb-sub-close{flex:none;display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;margin:0 4px 0 2px;border:0;border-radius:5px;background:transparent;color:inherit;cursor:pointer;opacity:.65}
+.ceb-sub-close:hover{background:var(--ce-accent-soft);color:var(--ce-accent);opacity:1}
+.ceb-sub-close svg{width:12px;height:12px;display:block}
+.ceb-strip-add{flex:none;display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;margin:0 0 2px 2px;border:0;border-radius:6px;background:transparent;color:var(--ce-fg-2);cursor:pointer}
+.ceb-strip-add:hover{background:var(--ce-accent-soft);color:var(--ce-accent)}
+.ceb-strip-add svg{width:14px;height:14px;display:block}
+.ceb-strip-note{flex:none;align-self:center;font-size:11px;color:var(--ce-fg-2);padding:0 6px}
+.ceb-page{display:flex;flex-direction:column;flex:1;min-height:0;min-width:0}
 .ceb-toolbar{display:flex;align-items:center;gap:12px;flex:none;padding:10px 12px;background:var(--ce-surface-1);min-width:0}
 .ceb-nav-group,.ceb-action-group{display:flex;align-items:center;gap:3px;flex:none}
 .ceb-toolbar .ceb-tool{flex:none;width:30px;height:32px;border-radius:6px;color:var(--ce-fg-2)}
@@ -8653,6 +8676,57 @@ async function resolveBrowserWorkspace(source, sessionId, signal) {
   return workspace ? `cwd:${workspace.path}` : `session:${sessionId}`;
 }
 
+// src/client/browsersubs.js
+var MAX_SUBTABS = 10;
+var subDocKey = (sessionId, tabId) => `dsh.plugin-kit.browser.tabs.v2.${sessionId}.${tabId}`;
+var legacyPageKey = (sessionId, tabId) => `dsh.plugin-kit.browser.page.v1.${sessionId}.${tabId}`;
+function newSubId() {
+  return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+}
+var cleanEntry = (entry) => ({
+  id: String(entry?.id ?? newSubId()),
+  url: entry?.url ? String(entry.url) : "",
+  title: String(entry?.title ?? "").slice(0, 240)
+});
+function loadSubDoc(sessionId, tabId) {
+  try {
+    const raw = JSON.parse(localStorage.getItem(subDocKey(sessionId, tabId)) ?? "null");
+    if (raw && Array.isArray(raw.tabs) && raw.tabs.length) {
+      const tabs = raw.tabs.slice(0, MAX_SUBTABS).map(cleanEntry);
+      const activeId = tabs.some((entry) => entry.id === raw.activeId) ? String(raw.activeId) : tabs[0].id;
+      return { tabs, activeId, navigationRevision: raw.navigationRevision, initialUrl: raw.initialUrl, restored: true };
+    }
+    const legacy = JSON.parse(localStorage.getItem(legacyPageKey(sessionId, tabId)) ?? "null");
+    if (legacy?.url) {
+      const only = cleanEntry(legacy);
+      return { tabs: [only], activeId: only.id, navigationRevision: legacy.navigationRevision, initialUrl: legacy.initialUrl, restored: true };
+    }
+  } catch {
+  }
+  return null;
+}
+function saveSubDoc(sessionId, tabId, doc) {
+  try {
+    localStorage.setItem(subDocKey(sessionId, tabId), JSON.stringify({
+      tabs: doc.tabs.map((entry) => ({ id: entry.id, url: entry.url, title: entry.title })),
+      activeId: doc.activeId,
+      navigationRevision: doc.navigationRevision,
+      initialUrl: doc.initialUrl
+    }));
+  } catch {
+  }
+}
+function clearSubDoc(sessionId, tabId) {
+  try {
+    localStorage.removeItem(subDocKey(sessionId, tabId));
+  } catch {
+  }
+  try {
+    localStorage.removeItem(legacyPageKey(sessionId, tabId));
+  } catch {
+  }
+}
+
 // src/client/browsericons.js
 var paths = {
   home: "m3 10 9-7 9 7M5 9v11h5v-6h4v6h5V9",
@@ -8661,6 +8735,7 @@ var paths = {
   bookmarks: "M6 3h12v18l-6-4-6 4V3Z",
   globe: "M3 12h18M12 3c5 5 5 13 0 18-5-5-5-13 0-18Z",
   arrow: "M5 12h14m-6-6 6 6-6 6",
+  plus: "M12 5v14M5 12h14",
   close: "m6 6 12 12M18 6 6 18"
 };
 function BrowserGlyph({ name, filled = false, size = 16 }) {
@@ -8669,19 +8744,125 @@ function BrowserGlyph({ name, filled = false, size = 16 }) {
 }
 
 // src/client/browser.js
-var checkpointKey = (sessionId, tabId) => `dsh.plugin-kit.browser.page.v1.${sessionId}.${tabId}`;
-function checkpoint(key) {
+var hostLabel = (url) => {
   try {
-    const value = JSON.parse(localStorage.getItem(key) ?? "null");
-    return value?.url ? { url: normalizeBrowserUrl(value.url), title: String(value.title ?? "").slice(0, 240), navigationRevision: value.navigationRevision, initialUrl: value.initialUrl } : null;
+    return new URL(url).hostname;
   } catch {
-    return null;
+    return "";
   }
-}
+};
 function EnhancedBrowser({ sessionId, useSessions, useTabInfo, useBrowserLibrary, loadLibrary, changeLibrary, desktopBridge, browserWorkspaces, t }) {
   const info = useTabInfo();
   const tab = info.tab;
   const library = useBrowserLibrary((value) => value);
+  const [doc, setDoc] = useState(() => {
+    const loaded = loadSubDoc(sessionId, tab.id);
+    if (loaded) return loaded;
+    const id = newSubId();
+    return { tabs: [{ id, url: "", title: "" }], activeId: id, restored: false };
+  });
+  const docRef = useRef(doc);
+  docRef.current = doc;
+  const liveRef = useRef(/* @__PURE__ */ new Set());
+  const [stripNotice, setStripNotice] = useState("");
+  useEffect(() => {
+    if (!stripNotice) return void 0;
+    const timer = setTimeout(() => setStripNotice(""), 4e3);
+    return () => clearTimeout(timer);
+  }, [stripNotice]);
+  useEffect(() => {
+    saveSubDoc(sessionId, tab.id, doc);
+  }, [doc, sessionId, tab.id]);
+  useEffect(() => () => {
+    if (tab.signal.aborted) clearSubDoc(sessionId, tab.id);
+  }, [sessionId, tab.id, tab.signal]);
+  const addSub = (url, activate = true) => {
+    const current = docRef.current;
+    if (current.tabs.length >= MAX_SUBTABS) {
+      setStripNotice(t("browser.tabLimit"));
+      return void 0;
+    }
+    const id = newSubId();
+    setDoc({ ...current, tabs: [...current.tabs, { id, url: url ?? "", title: "" }], activeId: activate ? id : current.activeId });
+    return id;
+  };
+  const closeSub = (id) => {
+    const current = docRef.current;
+    const index = current.tabs.findIndex((entry) => entry.id === id);
+    if (index < 0) return;
+    liveRef.current.delete(id);
+    if (current.tabs.length === 1) {
+      const fresh = newSubId();
+      setDoc({ ...current, tabs: [{ id: fresh, url: "", title: "" }], activeId: fresh });
+      return;
+    }
+    const tabs = current.tabs.filter((entry) => entry.id !== id);
+    const activeId = current.activeId === id ? tabs[Math.min(index, tabs.length - 1)].id : current.activeId;
+    const next = { ...current, tabs, activeId };
+    setDoc(next);
+  };
+  const activateSub = (id) => {
+    const current = docRef.current;
+    if (current.activeId === id) return;
+    setDoc({ ...current, activeId: id });
+  };
+  const patchSub = (id, patch) => {
+    const { url, title, navigationRevision, initialUrl } = patch;
+    setDoc((current) => ({
+      ...current,
+      tabs: current.tabs.map((entry) => entry.id === id ? { ...entry, ...url !== void 0 ? { url } : {}, ...title !== void 0 ? { title } : {} } : entry),
+      ...navigationRevision !== void 0 ? { navigationRevision, initialUrl } : {}
+    }));
+  };
+  return h(
+    "div",
+    { className: "ce-root ceb-root" },
+    h(
+      "div",
+      { className: "ceb-strip", role: "tablist", "aria-label": t("browser.strip") },
+      doc.tabs.map((sub) => {
+        const active = sub.id === doc.activeId;
+        return h(
+          "div",
+          { key: sub.id, className: active ? "ceb-sub ceb-sub-active" : "ceb-sub", role: "tab", "aria-selected": active },
+          h(
+            "button",
+            { type: "button", className: "ceb-sub-open", title: sub.title || sub.url || t("browser.untitled"), onClick: () => activateSub(sub.id) },
+            h("span", { className: "ceb-sub-title" }, sub.title || hostLabel(sub.url) || t("browser.untitled"))
+          ),
+          h("button", { type: "button", className: "ceb-sub-close", title: t("browser.closeTab"), "aria-label": t("browser.closeTab"), onClick: () => closeSub(sub.id) }, h(BrowserGlyph, { name: "close", size: 12 }))
+        );
+      }),
+      h("button", { type: "button", className: "ceb-strip-add", title: t("browser.newTab"), "aria-label": t("browser.newTab"), onClick: () => addSub("") }, h(BrowserGlyph, { name: "plus", size: 14 })),
+      stripNotice ? h("span", { className: "ceb-strip-note", role: "status" }, stripNotice) : null
+    ),
+    doc.tabs.map((sub) => {
+      const active = sub.id === doc.activeId;
+      if (!desktopBridge && !active) return null;
+      return h(BrowserPage, {
+        key: sub.id,
+        sessionId,
+        tab,
+        sub,
+        active,
+        confirmRestore: Boolean(doc.restored && sub.url && !liveRef.current.has(sub.id)),
+        envelope: { navigationRevision: doc.navigationRevision, initialUrl: doc.initialUrl },
+        library,
+        loadLibrary,
+        changeLibrary,
+        desktopBridge,
+        browserWorkspaces,
+        t,
+        onPopup: (url) => addSub(url, false),
+        onPage: patchSub,
+        onLive: (id) => {
+          liveRef.current.add(id);
+        }
+      });
+    })
+  );
+}
+function BrowserPage({ sessionId, tab, sub, active, confirmRestore, envelope, library, loadLibrary, changeLibrary, desktopBridge, browserWorkspaces, t, onPopup, onPage, onLive }) {
   const settings = library.data?.settings ?? DEFAULT_BROWSER_SETTINGS;
   const bookmarks = library.data?.bookmarks ?? [];
   const [page, setPage] = useState({ url: "", title: "", loading: false, unknown: false, canBack: false, canForward: false, error: "" });
@@ -8705,12 +8886,12 @@ function EnhancedBrowser({ sessionId, useSessions, useTabInfo, useBrowserLibrary
   const carrierRef = useRef(null);
   const startRef = useRef(false);
   const lastTarget = useRef("");
-  const initial = useRef(checkpoint(checkpointKey(sessionId, tab.id)));
-  const [restore, setRestore] = useState(initial.current);
+  const [restore, setRestore] = useState(confirmRestore ? { url: sub.url, title: sub.title } : null);
   const alive = useRef(true);
   const editorRef = useDismissLayer({ open: editor !== null, onDismiss: () => setEditor(null), ignoreSelector: '[data-ce-browser-action="bookmark"]' });
   const removeRef = useDismissLayer({ open: confirmDelete !== null, onDismiss: () => setConfirmDelete(null) });
   const origin = typeof window === "undefined" ? void 0 : window.location.origin;
+  const envelopeRef = useRef(envelope);
   const textError = (error) => {
     const message = String(error?.message ?? error);
     return message.startsWith("browser.") ? t(message) : message;
@@ -8737,18 +8918,13 @@ function EnhancedBrowser({ sessionId, useSessions, useTabInfo, useBrowserLibrary
         bridge: desktopBridge,
         workspace,
         applicationOrigin: origin,
-        onOpen: (url) => tab.actions.openTab("browser", { params: { url }, revealIfOpened: false }),
+        onOpen: (url) => onPopup(url),
         onState: (next) => {
           setPage(next);
           if (!next.unknown) {
             if (next.url !== lastTarget.current) setAddress(next.url);
             lastTarget.current = next.url;
-          }
-          if (next.url && !next.unknown) {
-            try {
-              localStorage.setItem(checkpointKey(sessionId, tab.id), JSON.stringify({ url: next.url, title: next.title, navigationRevision: tab.navigation?.revision, initialUrl: tab.navigation?.params?.url }));
-            } catch {
-            }
+            if (next.url) onPage(sub.id, { url: next.url, title: next.title, navigationRevision: tab.navigation?.revision, initialUrl: tab.navigation?.params?.url });
           }
         }
       });
@@ -8765,7 +8941,7 @@ function EnhancedBrowser({ sessionId, useSessions, useTabInfo, useBrowserLibrary
       carrierRef.current = null;
       void carrier?.dispose().catch((error) => console.error("toolbox browser release", error));
     };
-  }, [sessionId, tab.id, tab.signal, browserWorkspaces, desktopBridge]);
+  }, [sessionId, sub.id, tab.signal, browserWorkspaces, desktopBridge]);
   const navigate = (input) => {
     try {
       const url = normalizeBrowserUrl(input, origin);
@@ -8780,6 +8956,7 @@ function EnhancedBrowser({ sessionId, useSessions, useTabInfo, useBrowserLibrary
         setConfirmDelete(null);
         setRestore(null);
         setNotice("");
+        onLive(sub.id);
       }
     } catch (error) {
       setNotice(textError(error));
@@ -8790,33 +8967,34 @@ function EnhancedBrowser({ sessionId, useSessions, useTabInfo, useBrowserLibrary
     if (!tab.navigation?.params?.url && !library.data && !library.error) return;
     startRef.current = true;
     const supplied = tab.navigation?.params?.url;
-    if (supplied && (!initial.current || initial.current.navigationRevision !== tab.navigation?.revision || initial.current.initialUrl !== supplied)) navigate(supplied);
-    else if (!initial.current) {
+    const env = envelopeRef.current;
+    if (active && supplied && (!env || env.navigationRevision !== tab.navigation?.revision || env.initialUrl !== supplied)) navigate(supplied);
+    else if (!restore && sub.url) navigate(sub.url);
+    else if (!restore && !sub.url) {
       if (settings.startPage === "bookmarks") setPanel("bookmarks");
       else navigate(settings.homeUrl);
     }
-  }, [epoch, library.data, library.error, settings.startPage, settings.homeUrl]);
+  }, [epoch, library.data, library.error, settings.startPage, settings.homeUrl, active]);
   const seenRevision = useRef(tab.navigation?.revision);
   useEffect(() => {
+    if (!active) {
+      seenRevision.current = tab.navigation?.revision;
+      return;
+    }
     if (seenRevision.current === tab.navigation?.revision || !carrierRef.current) return;
     seenRevision.current = tab.navigation?.revision;
     if (tab.navigation?.params?.url) navigate(tab.navigation.params.url);
-  }, [tab.navigation?.revision, epoch]);
-  useEffect(() => tab.actions.bindCommands?.({ refresh: () => carrierRef.current?.reload() }), [tab.actions]);
+  }, [tab.navigation?.revision, epoch, active]);
+  useEffect(() => {
+    if (!active) return void 0;
+    return tab.actions.bindCommands?.({ refresh: () => carrierRef.current?.reload() });
+  }, [tab.actions, active]);
   useEffect(() => {
     if (tab.visible === false) {
       setEditor(null);
       setConfirmDelete(null);
     }
   }, [tab.visible]);
-  useEffect(() => () => {
-    if (tab.signal.aborted) {
-      try {
-        localStorage.removeItem(checkpointKey(sessionId, tab.id));
-      } catch {
-      }
-    }
-  }, [sessionId, tab.id, tab.signal]);
   const mutate = async (request, done) => {
     if (busy) return;
     setBusy(true);
@@ -8857,7 +9035,7 @@ function EnhancedBrowser({ sessionId, useSessions, useTabInfo, useBrowserLibrary
   const tool = (label, child, click, disabled = false, extra = {}) => h("button", { type: "button", className: "ce-tool ceb-tool", title: label, "aria-label": label, disabled, onClick: click, ...extra }, child);
   return h(
     "div",
-    { className: "ce-root ceb-root", onKeyDown: (event) => {
+    { className: "ceb-page", style: { display: active ? "flex" : "none" }, onKeyDown: (event) => {
       if ((event.ctrlKey || event.metaKey) && !event.altKey && event.code === "KeyL") {
         event.preventDefault();
         event.currentTarget.querySelector(".ceb-address")?.focus();
@@ -9036,7 +9214,7 @@ function installBrowser(ctx, t) {
     locale: NS,
     inject: () => ({ hooks: { browserLibrary: model }, desktopBridge: bridge, browserWorkspaces: ctx.workspaces?.list, loadLibrary: () => model.load(), changeLibrary: (request) => model.change(request) })
   }, EnhancedBrowser));
-  const stopTitle = ctx.slots.inject("sidebar.right.pane.tab.title", () => ctx.slots.register({ name: "sidebar.right.pane.tab.title", key: BROWSER_TAB_ID }, ({ useTabInfo }) => h("span", null, useTabInfo()?.tab?.title ?? t("browser.label"))));
+  const stopTitle = ctx.slots.inject("sidebar.right.pane.tab.title", () => ctx.slots.register({ name: "sidebar.right.pane.tab.title", key: BROWSER_TAB_ID }, () => h("span", null, t("browser.label"))));
   return () => {
     stopTitle();
     stopBody();

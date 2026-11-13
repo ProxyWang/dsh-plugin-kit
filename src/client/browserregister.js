@@ -16,7 +16,7 @@ export function installBrowser(ctx, t) {
 		name: "sidebar.right.pane.tab", key: BROWSER_TAB_ID, locale: NS,
 		inject: () => ({ hooks: { browserLibrary: model }, desktopBridge: bridge, browserWorkspaces: ctx.workspaces?.list, loadLibrary: () => model.load(), changeLibrary: (request) => model.change(request) }),
 	}, EnhancedBrowser));
-	const stopTitle = ctx.slots.inject("sidebar.right.pane.tab.title", () => ctx.slots.register({ name: "sidebar.right.pane.tab.title", key: BROWSER_TAB_ID }, ({ useTabInfo }) => h("span", null, useTabInfo()?.tab?.title ?? t("browser.label"))));
+	const stopTitle = ctx.slots.inject("sidebar.right.pane.tab.title", () => ctx.slots.register({ name: "sidebar.right.pane.tab.title", key: BROWSER_TAB_ID }, () => h("span", null, t("browser.label"))));
 	return () => { stopTitle(); stopBody(); stopType(); };
 }
 function BrowserIcon({ size = 18 }) {

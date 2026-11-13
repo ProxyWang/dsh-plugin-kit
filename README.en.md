@@ -31,14 +31,14 @@ These screenshots render the current plugin components with fictional fixtures a
 | Left navigation | **Dev Workspace** | Unified file explorer, code editor, search, LSP navigation, and Git changes workbench. |
 | Left navigation | **API Tester** | Import or copy curl, edit URLs, params, headers, bodies and environment variables, send HTTP requests, inspect responses, and save history and favorites. |
 | Left navigation | New terminal | Open the built-in DSH terminal to run commands in the session workspace. |
-| Left navigation | **Browser** | Uses DSH-approved embedded Chromium with bookmarks, favorites, folders, home-page and new-tab settings. |
+| Left navigation | **Browser** | Uses DSH-approved embedded Chromium in a multi-tab window (sub-tab strip), with bookmarks, favorites, folders, home-page and new-tab settings. |
 | Left navigation | **Skills Manager** | Search, preview, edit, create and delete installed Agent skills; filter by project, user, built-in and plugin sources. |
 
 **Scope:** the plugin provides Dev Workspace, API Tester, Skills Manager and left navigation integration. Host tool entries follow the live tab registry. Files are explored in Dev Workspace; browser and terminal capabilities depend on your profile. With no current session, navigation prompts you to select one and never queues the tool into a future unrelated session.
 
 ### Browser bookmarks and settings
 
-Open Browser on the left. **☆** bookmarks the current page, **▤** opens searchable bookmarks with folders, favorites, editing and confirmed deletion, and **⚙** configures Home, the new-tab start page and favorites bar. Data persists in this Host’s DSH profile. Use Open in system browser when a site cannot be embedded. The `browser_bookmarks` agent tool shares the same validated service.
+Open Browser on the left. The window carries its own **sub-tab strip**: **+** opens another tab inside the same window, each tab keeping its own address, history and title, and new tabs start on the configured start page (home or bookmarks); click a tab to switch, × to close. On Desktop, page-initiated `window.open` / `target=_blank` links open as background sub-tabs; the host strip keeps the fixed Browser label while page titles show on the sub-tab chips. **☆** bookmarks the current page, **▤** opens searchable bookmarks with folders, favorites, editing and confirmed deletion, and **⚙** configures Home, the new-tab start page and favorites bar. Data persists in this Host’s DSH profile. Use Open in system browser when a site cannot be embedded. The `browser_bookmarks` agent tool shares the same validated service.
 
 **Extension limitation:** the current DSH Desktop bridge exposes no Chrome extension installation, activation or configuration API; CRX, unpacked extensions and system extension import are unavailable. These are toolbox browser settings, not Chrome extension management. Sign-in storage and downloads follow host policy; sign-in persistence across app restarts is not guaranteed. Web clients use a restricted iframe, and bookmarking is disabled when its actual address is unknown.
 

@@ -734,6 +734,19 @@ export const CSS = `
 
 /* Browser chrome: persistent carrier viewport with task pages above it. */
 .ceb-root{container-type:inline-size;overflow:hidden}
+.ceb-strip{display:flex;align-items:flex-end;gap:4px;flex:none;padding:6px 8px 0;background:var(--ce-surface-2);border-bottom:1px solid var(--ce-line);overflow-x:auto;overflow-y:hidden}
+.ceb-sub{display:flex;align-items:center;flex:none;max-width:170px;min-width:56px;height:28px;border:1px solid var(--ce-line);border-bottom:0;border-radius:8px 8px 0 0;background:transparent;color:var(--ce-fg-2)}
+.ceb-sub-active{background:var(--ce-surface-1);color:var(--ce-fg);border-color:var(--ce-line-strong);border-bottom:1px solid var(--ce-surface-1);margin-bottom:-1px}
+.ceb-sub-open{flex:1;min-width:0;height:100%;border:0;background:transparent;color:inherit;font:inherit;font-size:12px;text-align:left;padding:0 2px 0 10px;cursor:pointer}
+.ceb-sub-title{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ceb-sub-close{flex:none;display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;margin:0 4px 0 2px;border:0;border-radius:5px;background:transparent;color:inherit;cursor:pointer;opacity:.65}
+.ceb-sub-close:hover{background:var(--ce-accent-soft);color:var(--ce-accent);opacity:1}
+.ceb-sub-close svg{width:12px;height:12px;display:block}
+.ceb-strip-add{flex:none;display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;margin:0 0 2px 2px;border:0;border-radius:6px;background:transparent;color:var(--ce-fg-2);cursor:pointer}
+.ceb-strip-add:hover{background:var(--ce-accent-soft);color:var(--ce-accent)}
+.ceb-strip-add svg{width:14px;height:14px;display:block}
+.ceb-strip-note{flex:none;align-self:center;font-size:11px;color:var(--ce-fg-2);padding:0 6px}
+.ceb-page{display:flex;flex-direction:column;flex:1;min-height:0;min-width:0}
 .ceb-toolbar{display:flex;align-items:center;gap:12px;flex:none;padding:10px 12px;background:var(--ce-surface-1);min-width:0}
 .ceb-nav-group,.ceb-action-group{display:flex;align-items:center;gap:3px;flex:none}
 .ceb-toolbar .ceb-tool{flex:none;width:30px;height:32px;border-radius:6px;color:var(--ce-fg-2)}

@@ -13,6 +13,10 @@ let passed = 0;
 async function test(name, body) { await body(); passed++; console.log(`  ok  ${name}`); }
 const tick = () => new Promise((resolve) => setImmediate(resolve));
 const collect = (node) => !node || typeof node !== "object" ? [] : Array.isArray(node) ? node.flatMap(collect) : [node, ...(node.children ?? []).flatMap(collect)];
+if (typeof globalThis.localStorage === "undefined") {
+	const store = new Map();
+	globalThis.localStorage = { getItem: (key) => (store.has(key) ? store.get(key) : null), setItem: (key, value) => { store.set(key, String(value)); }, removeItem: (key) => { store.delete(key); }, clear: () => store.clear() };
+}
 
 await test("browser URL normalization handles bare hosts and localhost ports", () => { assert.equal(normalizeBrowserUrl("example.test/path"), "https://example.test/path"); assert.equal(normalizeBrowserUrl("localhost:3000"), "https://localhost:3000/"); });
 await test("browser rejects script file data credentials and DSH application origin", () => {
@@ -80,7 +84,7 @@ await test("browser model shares Host results and reports storage failure", asyn
 });
 const uiData = { data: { ...emptyBrowserData(), bookmarks: [{ id: "one", url: "https://example.test/", title: "Example", folder: "Docs", favorite: true, createdAt: 1 }] }, error: "", busy: false };
 const changes = [];
-const renderBrowser = createHookRenderer(EnhancedBrowser, { sessionId: "demo", useSessions: (select) => select({ byId: { demo: { cwd: "/demo" } } }), useTabInfo: () => ({ tab: { id: "browser-demo", navigation: { revision: 0, params: {} }, signal: new AbortController().signal, actions: { openTab() {}, bindCommands() { return () => {}; } } } }), useBrowserLibrary: (select) => select(uiData), loadLibrary() {}, async changeLibrary(request) { changes.push(request); }, t: (key) => key });
+const renderBrowser = createHookRenderer(EnhancedBrowser, { sessionId: "demo", useSessions: (select) => select({ byId: { demo: { cwd: "/demo" } } }), useTabInfo: () => ({ tab: { id: "browser-demo", navigation: { revision: 0, params: {} }, signal: new AbortController().signal, actions: { openTab() {}, bindCommands() { return () => {}; } } } }), useBrowserLibrary: (select) => select(uiData), loadLibrary() {}, async changeLibrary(request) { changes.push(request); }, t: (key) => key }, { expand: true });
 let tree = renderBrowser();
 const node = (fn) => collect(tree).find(fn);
 await test("browser exposes saved favorites and bookmark manager", () => { assert.ok(node((value) => value.props.className === "ceb-bookmarks-bar")); node((value) => value.props.title === "browser.bookmarks").props.onClick(); tree = renderBrowser(); assert.ok(node((value) => value.props.className === "ceb-bookmark-open")); });
@@ -92,11 +96,86 @@ await test("browser settings draft does not change current page until submitted"
 await tick();
 await test("browser settings are saved through shared service callback", () => { assert.equal(changes[1].settings.homeUrl, "https://home.example.test/"); });
 await test("boolean-only settings update saves without requiring home URL", async () => { const form = node((value) => value.props.className === "ceb-settings-form"); const checkbox = collect(form).find((value) => value.type === "input" && value.props.type === "checkbox"); checkbox.props.onChange({ target: { checked: false } }); tree = renderBrowser(); node((value) => value.props.className === "ceb-settings-form").props.onSubmit({ preventDefault() {} }); await tick(); assert.equal(changes.at(-1).settings.showBookmarksBar, false); assert.equal(changes.at(-1).settings.homeUrl, undefined); });
-await test("browser registration extends carrier kind and restores native on disposal", () => { const definitions = [], cells = new Map(); let removed = 0; const dispose = installBrowser({ sidebarRightTabs: { get: () => ({ priority: "builtin" }), register(definition) { definitions.push(definition); return () => removed++; } }, slots: { inject(_name, run) { return run(); }, register(options) { cells.set(options.key + options.name, options); return () => cells.delete(options.key + options.name); } } }, (key) => key); assert.equal(definitions[0].kind, "browser"); assert.equal(definitions[0].priority, "extension"); assert.equal(definitions[0].id, BROWSER_TAB_ID); dispose(); assert.equal(removed, 1); assert.equal(cells.size, 0); });
+const stripTab = { id: "strip-browser", navigation: { revision: 0, params: {} }, signal: new AbortController().signal, actions: { openTab() {}, bindCommands() { return () => {}; } } };
+const chipsOf = (view) => collect(view).filter((node) => node.props.className === "ceb-sub" || node.props.className === "ceb-sub ceb-sub-active");
+const subDocOf = (sessionId, tabId) => JSON.parse(localStorage.getItem(`dsh.plugin-kit.browser.tabs.v2.${sessionId}.${tabId}`) ?? "null");
+await test("sub-tab strip adds focused pages inside one browser window", () => {
+	localStorage.clear();
+	const draw = createHookRenderer(EnhancedBrowser, { sessionId: "strip-session", useTabInfo: () => ({ tab: stripTab }), useBrowserLibrary: (select) => select(uiData), loadLibrary() {}, changeLibrary() {}, t: (key) => key }, { effects: true, expand: true });
+	let view = draw();
+	assert.equal(chipsOf(view).length, 1);
+	collect(view).find((node) => node.props.className === "ceb-strip-add").props.onClick();
+	view = draw();
+	const chips = chipsOf(view);
+	assert.equal(chips.length, 2, "the new page stays inside the same window");
+	assert.equal(chips[1].props.className, "ceb-sub ceb-sub-active");
+	assert.equal(collect(view).filter((node) => node.props.className === "ceb-toolbar").length, 1, "Web keeps only the foreground page alive");
+	draw.flushEffects();
+	const saved = subDocOf("strip-session", "strip-browser");
+	assert.equal(saved.tabs.length, 2);
+	assert.equal(saved.activeId, saved.tabs[1].id);
+	draw.unmount();
+});
+await test("closing the active sub-tab activates its neighbour and last close resets", () => {
+	const draw = createHookRenderer(EnhancedBrowser, { sessionId: "strip-session", useTabInfo: () => ({ tab: stripTab }), useBrowserLibrary: (select) => select(uiData), loadLibrary() {}, changeLibrary() {}, t: (key) => key }, { effects: true, expand: true });
+	let view = draw();
+	let chips = chipsOf(view);
+	assert.equal(chips.length, 2, "the persisted window is restored");
+	collect(chips[1]).find((node) => node.props.className === "ceb-sub-close").props.onClick();
+	view = draw(); chips = chipsOf(view);
+	assert.equal(chips.length, 1);
+	assert.equal(chips[0].props.className, "ceb-sub ceb-sub-active");
+	collect(chips[0]).find((node) => node.props.className === "ceb-sub-close").props.onClick();
+	view = draw(); chips = chipsOf(view);
+	assert.equal(chips.length, 1, "closing the last page leaves a fresh one");
+	draw.flushEffects();
+	assert.equal(subDocOf("strip-session", "strip-browser").tabs.length, 1);
+	draw.unmount();
+	localStorage.clear();
+});
+await test("page popups open as background sub-tabs and load on Desktop", async () => {
+	localStorage.clear();
+	const popupHostA = { ...host };
+	const popupHostB = { ...host };
+	const draw = createHookRenderer(EnhancedBrowser, { sessionId: "popup-session", useTabInfo: () => ({ tab: { ...stripTab, id: "popup-browser" } }), useBrowserLibrary: (select) => select(uiData), loadLibrary() {}, changeLibrary() {}, desktopBridge: bridge, browserWorkspaces: { getSnapshot: () => ({ phase: "ready", items: [] }) }, t: (key) => key }, { effects: true, expand: true });
+	let view = draw();
+	collect(view).find((node) => node.props.className === "ceb-viewport").props.ref.current = popupHostA;
+	draw.flushEffects(); await tick();
+	view = draw(); draw.flushEffects(); await tick();
+	assert.ok(openListener, "carrier registers the popup route");
+	openListener("https://popup.example.test/");
+	view = draw();
+	const chips = chipsOf(view);
+	assert.equal(chips.length, 2);
+	assert.equal(chips[0].props.className, "ceb-sub ceb-sub-active", "popups do not steal the foreground");
+	const viewports = collect(view).filter((node) => node.props.className === "ceb-viewport");
+	assert.equal(viewports.length, 2, "Desktop keeps every guest resident");
+	viewports[1].props.ref.current = popupHostB;
+	draw.flushEffects(); await tick(); view = draw(); draw.flushEffects(); await tick();
+	popupHostB.child.dispatchEvent(new Event("dom-ready"));
+	assert.equal(popupHostB.child.loaded[0], "https://popup.example.test/");
+	draw.unmount(); await tick();
+	localStorage.clear();
+});
+await test("legacy single-page checkpoint migrates into a restorable sub-tab", () => {
+	localStorage.clear();
+	localStorage.setItem("dsh.plugin-kit.browser.page.v1.legacy-session.legacy-browser", JSON.stringify({ url: "https://legacy.example.test/", title: "Legacy page", navigationRevision: 2, initialUrl: "https://legacy.example.test/" }));
+	const draw = createHookRenderer(EnhancedBrowser, { sessionId: "legacy-session", useTabInfo: () => ({ tab: { ...stripTab, id: "legacy-browser" } }), useBrowserLibrary: (select) => select(uiData), loadLibrary() {}, changeLibrary() {}, t: (key) => key }, { expand: true });
+	const view = draw();
+	const chips = chipsOf(view);
+	assert.equal(chips.length, 1);
+	assert.equal(collect(chips[0]).find((node) => node.props.className === "ceb-sub-title").children[0], "Legacy page");
+	assert.ok(collect(view).find((node) => node.type === "button" && node.children[0] === "browser.restoreAction"), "the migrated page offers restore instead of auto-loading");
+	localStorage.clear();
+});
+await test("browser registration extends carrier kind and restores native on disposal", () => { const definitions = [], cells = new Map(); let removed = 0; const dispose = installBrowser({ sidebarRightTabs: { get: () => ({ priority: "builtin" }), register(definition) { definitions.push(definition); return () => removed++; } }, slots: { inject(_name, run) { return run(); }, register(options, component) { cells.set(options.key + options.name, component); return () => cells.delete(options.key + options.name); } } }, (key) => key); assert.equal(definitions[0].kind, "browser"); assert.equal(definitions[0].priority, "extension"); assert.equal(definitions[0].id, BROWSER_TAB_ID);
+	const titleNode = cells.get(BROWSER_TAB_ID + "sidebar.right.pane.tab.title")({ useTabInfo: () => ({ tab: { title: "Some page" } }) });
+	assert.equal(titleNode.children[0], "browser.label", "the host strip keeps the fixed browser label");
+	dispose(); assert.equal(removed, 1); assert.equal(cells.size, 0); });
 await test("address draft survives old page title and loading events but explicit navigation updates it", async () => {
  const stableTab = { id: "draft-browser", navigation: { revision: 0, params: { url: "https://old.example.test/" } }, signal: new AbortController().signal, actions: { openTab() {}, bindCommands() { return () => {}; } } };
  const draftHost = { ...host };
- const draw = createHookRenderer(EnhancedBrowser, { sessionId: "draft-session", useTabInfo: () => ({ tab: stableTab }), useBrowserLibrary: (select) => select(uiData), loadLibrary() {}, changeLibrary() {}, desktopBridge: bridge, browserWorkspaces: { getSnapshot: () => ({ phase: "ready", items: [] }) }, t: (key) => key }, { effects: true });
+ const draw = createHookRenderer(EnhancedBrowser, { sessionId: "draft-session", useTabInfo: () => ({ tab: stableTab }), useBrowserLibrary: (select) => select(uiData), loadLibrary() {}, changeLibrary() {}, desktopBridge: bridge, browserWorkspaces: { getSnapshot: () => ({ phase: "ready", items: [] }) }, t: (key) => key }, { effects: true, expand: true });
  let view = draw(); collect(view).find((n) => n.props.className === "ceb-viewport").props.ref.current = draftHost;
  draw.flushEffects(); await tick(); view = draw(); draw.flushEffects(); await tick();
  const guest = draftHost.child; assert.ok(guest); guest.dispatchEvent(new Event("dom-ready")); guest.dispatchEvent(new Event("did-navigate")); view = draw();
