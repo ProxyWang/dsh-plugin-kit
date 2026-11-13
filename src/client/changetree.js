@@ -6,6 +6,8 @@
 
 import { Fragment, h, useMemo, useState } from "./react.js";
 import { useDismissLayer } from "./dismiss.js";
+import { fileDragProps } from "./filedrag.js";
+import { CopyChangePathButton } from "./copypath.js";
 
 /**
  * Nest flat repo-relative paths into a directory tree. Single-child directory
@@ -108,7 +110,7 @@ function guideStyle(depth) {
  * Optional row actions: onStage/onUnstage per file, onStageDir/onUnstageDir per
  * folder (called with the folder's repo-relative path), and the two-step-confirm
  * onDiscard/onDiscardDir pair. */
-export function ChangeTree({ items, onOpen, onDiscard, onDiscardDir, onStage, onStageDir, onUnstage, onUnstageDir, keyPrefix, t }) {
+export function ChangeTree({ items, onOpen, onDiscard, onDiscardDir, onStage, onStageDir, onUnstage, onUnstageDir, keyPrefix, t, cwd, repo, scope = "working", sessionId, onCopyPath }) {
 	const [collapsed, setCollapsed] = useState(() => new Set());
 	const [confirmPath, setConfirmPath] = useState(null);
 	const [confirmDir, setConfirmDir] = useState(null);
@@ -134,19 +136,20 @@ export function ChangeTree({ items, onOpen, onDiscard, onDiscardDir, onStage, on
 		for (const dir of [...node.dirs.values()].sort(byName)) {
 			const id = prefix + dir.name;
 			const isCollapsed = collapsed.has(id);
-			rows.push(h("button", {
+			rows.push(h("div", {
 				key: `d:${keyPrefix}:${id}`,
-				type: "button",
 				className: "ce-row cet-row cet-dir",
 				style: { paddingLeft: `${4 + depth * 14}px`, ...guideStyle(depth) },
 				title: `${dir.name}/ · ${dir.count}`,
 				"aria-expanded": String(!isCollapsed),
 				onClick: () => toggle(id),
 			},
-			h("span", { className: `cet-tw${isCollapsed ? "" : " cet-tw-open"}` }, "▶"),
-			h("span", { className: "cet-fico cet-fico-dir" }, h(FolderGlyph)),
-			h("span", { className: "ce-name cet-dirname" }, dir.name),
+			h("button", { type: "button", className: "ctp-entry-open", "aria-expanded": !isCollapsed },
+				h("span", { className: `cet-tw${isCollapsed ? "" : " cet-tw-open"}` }, "▶"),
+				h("span", { className: "cet-fico cet-fico-dir" }, h(FolderGlyph)),
+				h("span", { className: "ce-name cet-dirname" }, dir.name)),
 			h("span", { className: "cet-right" },
+				onCopyPath ? h(CopyChangePathButton, { path: id, onCopyPath, t }) : null,
 				onStageDir
 					? h("button", {
 						type: "button",
@@ -210,20 +213,20 @@ export function ChangeTree({ items, onOpen, onDiscard, onDiscardDir, onStage, on
 			const base = file.path.split("/").pop();
 			const dirPart = file.path.slice(0, file.path.length - base.length).replace(/\/$/, "");
 			const dup = (dupNames.get(base) ?? 0) > 1 && dirPart !== "";
-			rows.push(h("button", {
+			rows.push(h("div", {
 				key: `f:${keyPrefix}:${file.path}`,
-				type: "button",
+				...fileDragProps({ cwd, repo, path: file.path, scope, source: "changes", sessionId }),
 				className: "ce-row cet-row",
 				style: { paddingLeft: `${4 + depth * 14 + 14}px`, ...guideStyle(depth + 1) },
 				title: file.from ? `${file.path} ← ${file.from}` : file.path,
 				onClick: () => onOpen(file),
 			},
-			h("span", { className: `cet-fico ${fileTint(file.path)}` }, h(FileGlyph)),
-			h("span", { className: "ce-name" },
-				base,
-				dup ? h("span", { className: "cet-dirhint" }, dirPart) : null,
-			),
+			h("button", { type: "button", className: "ctp-entry-open" },
+				h("span", { className: `cet-fico ${fileTint(file.path)}` }, h(FileGlyph)),
+				h("span", { className: "ce-name" }, base,
+					dup ? h("span", { className: "cet-dirhint" }, dirPart) : null)),
 			h("span", { className: "cet-right" },
+				onCopyPath ? h(CopyChangePathButton, { path: file.path, onCopyPath, t }) : null,
 				onStage
 					? h("button", {
 						type: "button",

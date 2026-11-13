@@ -10,6 +10,7 @@ import { SkillsTabBody, SkillsTitle } from "./skills.js";
 import { ApiView, ApiTitle } from "./apiclient.js";
 import { installLeftTools, WorkspaceGuide } from "./lefttools.js";
 import { registerToolCloseGuard } from "./closeguard.js";
+import { installBrowser } from "./browserregister.js";
 
 export default {
 	inject: ["slots", "locale", "sidebarRightTabs", "sidebarRight", "layout"],
@@ -25,6 +26,9 @@ export default {
 		safe("styles", insertStyles);
 		const bound = ctx.locale.bind(NS);
 		safe("dictionaries", () => ctx.locale.register(NS, { zh, en }));
+		ctx.inject(["workspaces"], (browserCtx) => {
+			browserCtx.effect(() => installBrowser(browserCtx, bound), "toolbox: enhanced browser");
+		});
 		safe("tab type", () => ctx.sidebarRightTabs.register(definition(bound)));
 		const Bound = (props) => h(CodeBody, { ...props, t: props.t ?? bound });
 		safe("tab body", () => ctx.slots.inject("sidebar.right.pane.tab", () => ctx.slots.register({

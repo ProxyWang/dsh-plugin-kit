@@ -26,8 +26,19 @@ import { textCache } from "./lib/host/fence.js";
 import { servers } from "./lib/host/lsp.js";
 import { routes } from "./lib/host/routes.js";
 import { setSkillsRegistry } from "./lib/host/skills.js";
+import { createBrowserService, browserTool } from "./lib/host/browser.js";
 
 function apply(ctx) {
+	let browser;
+	ctx.inject(["storageDomain"], (storageCtx) => {
+		if (!storageCtx.storageDomain) return;
+		const instance = createBrowserService(storageCtx.storageDomain);
+		browser = instance;
+		ctx.effect(() => () => { if (browser === instance) browser = undefined; return instance.close(); }, "toolbox: browser data lifetime");
+		ctx.inject(["tools"], (toolCtx) => {
+			if (toolCtx.tools) ctx.effect(() => toolCtx.tools.register(browserTool(instance)), "toolbox: browser bookmarks tool");
+		});
+	});
 	ctx.inject(["skills"], (skillsCtx) => {
 		setSkillsRegistry(skillsCtx.skills);
 	});
@@ -40,13 +51,14 @@ function apply(ctx) {
 				path: API_PREFIX,
 				handler: async (req, res) => {
 					const route = (req.url ?? "/").split("?")[0].slice(API_PREFIX.length + 1);
-					if (req.method !== "POST" || !Object.hasOwn(routes, route)) {
+					if (req.method !== "POST" || (!Object.hasOwn(routes, route) && route !== "browser.data")) {
 						respondJson(res, 404, { ok: false, error: `unknown route: ${route}` });
 						return;
 					}
 					try {
 						const body = await readJsonBody(req);
-						const value = await routes[route](body);
+						if (route === "browser.data" && !browser) throw new Error("Browser storage is unavailable in this profile");
+						const value = route === "browser.data" ? await browser.execute(body) : await routes[route](body);
 						respondJson(res, 200, { ok: true, value });
 					} catch (error) {
 						respondJson(res, 200, { ok: false, error: String(error?.message ?? error) });

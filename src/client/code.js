@@ -17,6 +17,7 @@ import { SearchPanel } from "./searchpanel.js";
 import { computeGutter, computeVisible, computeWrapRows, compileFindRe, findRangesInLine, WRAP_LINE_CAP } from "./codeview.js";
 import { useGitActions } from "./usegit.js";
 import { useNavPersistence } from "./usepersistence.js";
+import { fileDragProps, hasFileDrag, readFileDrag, dragFilePath, reorderFileTabs } from "./filedrag.js";
 import { useDismissLayer } from "./dismiss.js";
 
 /** Files that open in rendered preview by default: markdown, html and svg. */
@@ -84,6 +85,8 @@ export function CodeBody(props) {
 	const [symbols, setSymbols] = useState([]);
 	const [symPalette, setSymPalette] = useState(null); // {query}
 	const [commandOpen, setCommandOpen] = useState(false);
+	const [fileDropOver, setFileDropOver] = useState(false);
+	const [tabDropOver, setTabDropOver] = useState(null);
 	const [commitsOpen, setCommitsOpen] = useState(false);
 	const peekNonce = useRef(0);
 	const paletteTimer = useRef(null);
@@ -510,10 +513,10 @@ export function CodeBody(props) {
 	}, [scrollAreaToLine]);
 
 	const openDiff = useCallback(
-		async (path, scope) => {
+		async (path, scope, repoOverride) => {
 			if (!cwd || !canNavigate()) return;
 			dismissPanels();
-			const repo = repoSelRef.current;
+			const repo = repoOverride ?? repoSelRef.current;
 			const res = await api("git.diff", repo ? { cwd, path, scope, repo } : { cwd, path, scope });
 			const value = res.ok ? res.value : { error: res.error };
 			modeRef.current = "diff";
@@ -1241,13 +1244,37 @@ export function CodeBody(props) {
 		return () => document.removeEventListener("dsh-ce-open-calldiff", handler);
 	}, [canNavigate, dismissPanels]);
 
+	const dropEditorFile = (event, before) => {
+		if (!hasFileDrag(event.dataTransfer)) return;
+		event.preventDefault(); event.stopPropagation();
+		setFileDropOver(false); setTabDropOver(null);
+		const value = readFileDrag(event.dataTransfer, cwd, sessionId);
+		if (!value || value.kind !== "file") { say(t("drag.unsupported"), "error"); return; }
+		if (value.source === "tab") {
+			setTabs((current) => reorderFileTabs(current, value.path, before));
+			return;
+		}
+		if (!canNavigate()) return;
+		if (value.source === "changes") void openDiff(value.path, value.scope, value.repo);
+		else void openFile(dragFilePath(value), 1, 1);
+	};
+	const editorDropProps = (before) => ({
+		onDragOver: (event) => {
+			if (!hasFileDrag(event.dataTransfer)) return;
+			event.preventDefault(); event.stopPropagation(); event.dataTransfer.dropEffect = "copy";
+			setFileDropOver(true); setTabDropOver(before ?? null);
+		},
+		onDragLeave: (event) => { if (!event.relatedTarget || !event.currentTarget.contains(event.relatedTarget)) { setFileDropOver(false); setTabDropOver(null); } },
+		onDrop: (event) => dropEditorFile(event, before),
+	});
+
 	if (!cwd) {
 		return h("div", { className: "ce-root" }, h("div", { className: "ce-empty" }, t("editor.noSession")));
 	}
 
 	return h(
 		"div",
-		{ className: "ce-root ce-code-root", "data-mobile-view": (doc || diff || searchOpen || palette) && (!railVisible || mobileView === "editor") ? "editor" : "files", onKeyDown: onRootKeyDown },
+		{ className: "ce-root ce-code-root", "data-mobile-view": (doc || diff || searchOpen || palette) && (!railVisible || mobileView === "editor") ? "editor" : "files", onKeyDown: onRootKeyDown, onDragEnd: () => { setFileDropOver(false); setTabDropOver(null); } },
 		h(
 			"div",
 			{ className: "ce-toolbar" },
@@ -1301,7 +1328,7 @@ export function CodeBody(props) {
 					),
 					mode === "files"
 					? h(TreePanel, {
-						cwd,
+						cwd, sessionId,
 						t,
 						onOpenFile: (path, line, col) => void openFile(path, line, col),
 						onSearchDirectory: (directory) => openSearch({ kind: "directory", directory }),
@@ -1320,7 +1347,7 @@ export function CodeBody(props) {
 						},
 					})
 					: h(ChangesPanel, {
-						cwd,
+						cwd, sessionId,
 						t,
 						git,
 						repos,
@@ -1351,7 +1378,8 @@ export function CodeBody(props) {
 				: h("button", { type: "button", className: "ce-rail-tab", title: "展开侧栏 (⌘B / Ctrl+B)", onClick: () => setRailVisible(true) }, "▸"),
 			h(
 				"div",
-				{ className: "ce-editor" },
+				{ className: `ce-editor${fileDropOver ? " ce-editor-file-drop" : ""}`, ...editorDropProps(), onDragEnd: () => { setFileDropOver(false); setTabDropOver(null); } },
+				fileDropOver ? h("div", { className: "ce-file-drop-hint", role: "status" }, t("drag.openHere")) : null,
 				h("button", { type: "button", className: "ce-mobile-back", onClick: () => { setSearchOpen(false); closePalette(); setRailVisible(true); setMobileView("files"); } }, `← ${t("layout.backFiles")}`),
 				tabs.length > 0
 					? h("div", { className: "ce-tabs", ref: tabsRef },
@@ -1362,7 +1390,10 @@ export function CodeBody(props) {
 								"div",
 								{
 									key: p,
-									className: `ce-tab${active ? " ce-tab-active" : ""}`,
+									className: `ce-tab${active ? " ce-tab-active" : ""}${tabDropOver === p ? " ce-tab-drop-before" : ""}`,
+									...fileDragProps({ cwd, path: p, source: "tab", sessionId }),
+									...editorDropProps(p),
+									onDragEnd: () => { setFileDropOver(false); setTabDropOver(null); },
 									title: RelPath(cwd, p) || p,
 									onClick: () => switchTab(p),
 									onAuxClick: (e) => {

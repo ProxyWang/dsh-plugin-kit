@@ -24,6 +24,7 @@
       "immediately": true,
       "inject": [
         "@deepseek-ai/dsh-client-ui-sidebar-right",
+        "@deepseek-ai/dsh-client-ui-sidebar-browser",
         "@deepseek-ai/dsh-client-ui-sidebar",
         "@deepseek-ai/dsh-client-ui-layout",
         "@deepseek-ai/dsh-client-shortcuts"
@@ -32,7 +33,7 @@
   },
   "scripts": {
     "build": "node scripts/build-client.mjs",
-    "test": "node scripts/build-client.mjs && node test-host.mjs && node test-client.mjs && node test-search.mjs && node test-nested.mjs && node test-parent.mjs && node test-remote.mjs"
+    "test": "node scripts/build-client.mjs && node test-host.mjs && node test-client.mjs && node test-browser.mjs && node test-search.mjs && node test-nested.mjs && node test-parent.mjs && node test-remote.mjs"
   },
   "icon": "icon.svg",
   "files": [
@@ -46,5 +47,8 @@
   ],
   "devDependencies": {
     "esbuild": "^0.28.2"
+  },
+  "dependencies": {
+    "zod": "^4.6.7"
   }
 }

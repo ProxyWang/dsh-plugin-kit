@@ -191,7 +191,12 @@ check("canDropInto allows cross-folder and to-root moves", canDropInto("a/x.txt"
 check("canDropInto refuses self, descendant and same-folder", canDropInto("a", "a") === false && canDropInto("a", "a/b") === false && canDropInto("a/x.txt", "a") === false, null);
 check("canDropInto refuses root no-op for top-level file", canDropInto("top.txt", "") === false, null);
 const { fileTint } = await import("./src/client/changetree.js");
-check("fileTint maps extensions", fileTint("x.go") === "cet-go" && fileTint("y.json") === "cet-json" && fileTint("z.unknown") === "cet-file", [fileTint("x.go"), fileTint("z.unknown")]);
+const { uniqueDirectoryEntries, createDirectoryRequests } = await import("./src/client/treemodel.js");
+const duplicateDirectoryEntries = uniqueDirectoryEntries([{ name: "app", type: "directory" }, { name: "app", type: "directory" }, { name: "app", type: "file" }, { name: "bad/name", type: "directory" }, { name: "..", type: "directory" }]);
+check("workspace listing dedupes duplicate directory names and unsafe entries", duplicateDirectoryEntries.length === 1 && duplicateDirectoryEntries[0].name === "app", duplicateDirectoryEntries);
+const directoryRequests = createDirectoryRequests();
+const oldDirectory = directoryRequests.begin("src"); directoryRequests.reset(); const newDirectory = directoryRequests.begin("src");
+check("old directory request becomes stale after workspace reset", !oldDirectory() && newDirectory(), null);
 
 // --- changes panel: staged/unstaged split + commit box --------------------------------------
 const { ChangesPanel, isStagedXy } = await import("./src/client/changes.js");
@@ -253,6 +258,40 @@ check("changes panel renders the stash section", sections.some((s) => JSON.strin
 
 const changesSearch = panelNodes.find((n) => n.props?.className === "ce-changes-search");
 check("changes panel keeps path filtering separate from shared toolbar search", Boolean(changesSearch) && collect(changesSearch).some((n) => n.type === "input" && n.props.type === "search") && !collect(changesSearch).some((n) => n.type === "button"), null);
+
+// --- Changes path copying in tree/list and staged/working/branch sections -------------------
+const { copyChangePath, CopyChangePathButton } = await import("./src/client/copypath.js");
+const navigatorDescriptor = Object.getOwnPropertyDescriptor(globalThis, "navigator");
+const copiedChangePaths = [], copyFeedback = [];
+Object.defineProperty(globalThis, "navigator", { configurable: true, value: { clipboard: { writeText: async (path) => copiedChangePaths.push(path) } } });
+try {
+ await copyChangePath({ cwd: "/workspace", repo: "/workspace/nested-repo", path: "src/deleted.go", t: (key) => key, onNotify: (text) => copyFeedback.push(text) });
+ check("changes absolute copy resolves against repository root including deleted files", copiedChangePaths.at(-1) === "/workspace/nested-repo/src/deleted.go", copiedChangePaths);
+ await copyChangePath({ cwd: "/workspace", repo: "/workspace/nested-repo", path: "src/deleted.go", relative: true, t: (key) => key });
+ check("changes relative copy retains repo-relative path", copiedChangePaths.at(-1) === "src/deleted.go", copiedChangePaths);
+ const copyTree = collect(ChangeTreeCmp({ items: [{ path: "src/deep/deleted.go", ch: "D" }], cwd: "/workspace", repo: "/workspace/nested-repo", scope: "working", t: (key) => key, onCopyPath: (path, relative) => copyChangePath({ cwd: "/workspace", repo: "/workspace/nested-repo", path, relative, t: (key) => key }), onOpen() { throw Error("copy must not open diff"); } }));
+ const copies = copyTree.filter((n) => n.type === CopyChangePathButton);
+ check("change tree exposes copy on compressed directories and files", copies.some((n) => n.props.path === "src/deep") && copies.some((n) => n.props.path === "src/deep/deleted.go"), copies.map((n) => n.props.path));
+ let copyStopped = false;
+ const directoryCopy = CopyChangePathButton(copies.find((n) => n.props.path === "src/deep").props);
+ directoryCopy.props.onClick({ altKey: false, stopPropagation() { copyStopped = true; } });
+ await new Promise((resolve) => setImmediate(resolve));
+ check("directory copy does not expand row and copies absolute path", copyStopped && copiedChangePaths.at(-1) === "/workspace/nested-repo/src/deep", copiedChangePaths);
+ const fileCopy = CopyChangePathButton(copies.find((n) => n.props.path.endsWith("deleted.go")).props);
+ fileCopy.props.onClick({ altKey: true, stopPropagation() {} }); await new Promise((resolve) => setImmediate(resolve));
+ check("Alt-click on file copy chooses relative path", copiedChangePaths.at(-1) === "src/deep/deleted.go", copiedChangePaths);
+ check("copy-enabled change rows contain no nested buttons", copyTree.filter((n) => n.type === "button").every((n) => !collect(n.children).some((child) => child.type === "button")), null);
+ const { createHookRenderer: createCopyRenderer } = await import("./test-support/react-stub.mjs");
+ const renderCopyPanel = createCopyRenderer(ChangesPanel, { cwd: "/workspace", t: (key) => key, git: { ...fakeGit, root: "/workspace/nested-repo", base: { name: "origin/main" }, branchFiles: ["committed.go"] }, onOpenDiff() {}, onSelectRepo() {} });
+ let copyPanel = renderCopyPanel();
+ check("staged working and branch trees receive copy callbacks", collect(copyPanel).filter((n) => n.type === ChangeTreeCmp).length === 3 && collect(copyPanel).filter((n) => n.type === ChangeTreeCmp).every((n) => typeof n.props.onCopyPath === "function"), null);
+ collect(copyPanel).find((n) => n.props.title === "changes.toList").props.onClick(); copyPanel = renderCopyPanel();
+ const listCopyNodes = collect(copyPanel).filter((n) => n.type === CopyChangePathButton);
+ check("flat changes list exposes copy for all change scopes", ["a.go", "b.go", "c.txt", "committed.go"].every((path) => listCopyNodes.some((n) => n.props.path === path)), listCopyNodes.map((n) => n.props.path));
+ globalThis.navigator.clipboard.writeText = async () => { throw Error("permission denied"); };
+ const copied = await copyChangePath({ cwd: "/workspace", path: "a.go", t: (key) => key, onNotify: (text, kind) => copyFeedback.push({ text, kind }) });
+ check("clipboard failure reports an error rather than false success", copied === false && copyFeedback.at(-1).text === "changes.copyFailed" && copyFeedback.at(-1).kind === "error", copyFeedback);
+} finally { if (navigatorDescriptor) Object.defineProperty(globalThis, "navigator", navigatorDescriptor); else delete globalThis.navigator; }
 
 // --- file history overlay ------------------------------------------------------------------------
 const { FileHistoryOverlay } = await import("./src/client/overlays.js");
@@ -361,6 +400,25 @@ check("highlightText splits into before/mark/after", Array.isArray(hlOut) && hlO
 check("highlightText no ranges returns raw string", highlightText("plain", []) === "plain", null);
 const hlFull = highlightText("xx", [[0, 2]]);
 check("highlightText full-range has no empty tails", Array.isArray(hlFull) && hlFull.length === 1, hlFull);
+
+// --- Internal file drags keep opening, tab ordering and disk moves distinct ----------------
+const { FILE_DRAG_TYPE, fileDragProps, readFileDrag, hasFileDrag, reorderFileTabs, dragFilePath } = await import("./src/client/filedrag.js");
+const makeTransfer = () => ({ data: new Map(), types: [], effectAllowed: "", setData(type, value) { this.data.set(type, value); this.types = [...this.data.keys()]; }, getData(type) { return this.data.get(type) ?? ""; } });
+const fileTransfer = makeTransfer();
+fileDragProps({ cwd: "/w", path: "src/file.ts", sessionId: "A" }).onDragStart({ dataTransfer: fileTransfer, stopPropagation() {}, preventDefault() {} });
+check("tree drag publishes typed payload and allows open or move", hasFileDrag(fileTransfer) && readFileDrag(fileTransfer, "/w", "A")?.source === "tree" && fileTransfer.effectAllowed === "copyMove", null);
+check("file drop refuses another session or workspace", readFileDrag(fileTransfer, "/w", "B") === null && readFileDrag(fileTransfer, "/other", "A") === null, null);
+check("plain text external files are never treated as internal drags", !hasFileDrag({ types: ["text/plain", "Files"] }) && readFileDrag({ getData: () => "src/file.ts" }, "/w", "A") === null, null);
+const traversalTransfer = makeTransfer(); traversalTransfer.setData(FILE_DRAG_TYPE, JSON.stringify({ version: 1, cwd: "/w", path: "../secret", kind: "file", source: "tree" }));
+check("typed drop refuses parent traversal", readFileDrag(traversalTransfer, "/w", "A") === null, null);
+const changeTransfer = makeTransfer();
+fileDragProps({ cwd: "/w", repo: "/w/nested", path: "deleted.ts", scope: "staged", source: "changes", sessionId: "A" }).onDragStart({ dataTransfer: changeTransfer, stopPropagation() {}, preventDefault() {} });
+check("changes drag retains exact repo and diff scope", readFileDrag(changeTransfer, "/w", "A")?.scope === "staged" && dragFilePath(readFileDrag(changeTransfer, "/w", "A")) === "/w/nested/deleted.ts" && changeTransfer.effectAllowed === "copy", null);
+const order = ["a", "b", "c"];
+check("editor tab drop reorders without adding duplicate tabs", reorderFileTabs(order, "c", "a").join() === "c,a,b" && reorderFileTabs(order, "a").join() === "b,c,a" && reorderFileTabs(order, "b", "b") === order, null);
+const dragChangeNodes = collect(ChangeTreeCmp({ items: [{ path: "deleted.ts", ch: "D" }], cwd: "/w", repo: "/w/repo", scope: "working", sessionId: "A", onOpen() {}, t: (key) => key }));
+const deletedDragRow = dragChangeNodes.find((value) => value.props.title === "deleted.ts");
+check("deleted change files remain draggable for diff viewing", deletedDragRow?.props.draggable === true && typeof deletedDragRow.props.onDragStart === "function", null);
 
 // --- guide launcher contract ---------------------------------------------------------------
 const { collectBoxes, groupOf, makeLauncher } = await import("./src/client/launcher.js");
@@ -536,7 +594,7 @@ const browserSidebar = {
 };
 const openBrowser = makeBrowserOpener(browserSidebar, () => browserTime);
 openBrowser(); openBrowser();
-check("rapid browser clicks allocate only one page before inventory catches up", browserOpens.length === 1 && browserOpens[0].options.params.url === "https://www.doubao.com/", browserOpens);
+check("rapid browser clicks allocate only one page before inventory catches up", browserOpens.length === 1 && browserOpens[0].options === undefined, browserOpens);
 browserTabs.set("A", [{ id: "existing-browser", kind: "browser", contentId: "sidebar://browser/old-uuid" }]);
 browserTime = 1000; openBrowser();
 check("browser launcher reuses historical UUID tab without resetting its URL", browserOpens.length === 1 && browserFocuses.at(-1) === "existing-browser", browserFocuses);
@@ -781,10 +839,22 @@ try {
 	getCode((n) => n.type === TreePanelCmp).props.onOpenFile("readme.txt", 1, 1);
 	await new Promise((resolve) => setImmediate(resolve)); codeTree = renderCode();
 	check("opening a file switches narrow workspace to editor", codeTree.props["data-mobile-view"] === "editor", codeTree.props["data-mobile-view"]);
+	const editTransfer = makeTransfer();
+	fileDragProps({ cwd: "/w", path: "drop-open.txt", sessionId: "layout" }).onDragStart({ dataTransfer: editTransfer, stopPropagation() {}, preventDefault() {} });
+	const beforeEditorDrop = navRequests.length;
+	getCode((n) => n.props.className === "ce-editor").props.onDrop({ dataTransfer: editTransfer, preventDefault() {}, stopPropagation() {} });
+	await new Promise((resolve) => setImmediate(resolve)); codeTree = renderCode();
+	check("editor drop opens file without filesystem mutation", getCode((n) => n.props.className === "ce-head-path")?.children[0] === "drop-open.txt" && navRequests.slice(beforeEditorDrop).some((request) => request.url.endsWith("/fs.read")) && !navRequests.slice(beforeEditorDrop).some((request) => /fs\.(rename|write|delete)$/.test(request.url)), null);
+	const scopedTransfer = makeTransfer();
+	fileDragProps({ cwd: "/w", repo: "/w/nested", path: "deleted.ts", scope: "staged", source: "changes", sessionId: "layout" }).onDragStart({ dataTransfer: scopedTransfer, stopPropagation() {}, preventDefault() {} });
+	getCode((n) => n.props.className === "ce-editor").props.onDrop({ dataTransfer: scopedTransfer, preventDefault() {}, stopPropagation() {} });
+	await new Promise((resolve) => setImmediate(resolve)); codeTree = renderCode();
+	check("changes drop requests captured repository diff including deleted file", navRequests.at(-1)?.url.endsWith("/git.diff") && navRequests.at(-1).body.repo === "/w/nested" && navRequests.at(-1).body.scope === "staged" && navRequests.at(-1).body.path === "deleted.ts", navRequests.at(-1));
+
 	getCode((n) => n.props.className === "ce-mobile-back").props.onClick(); codeTree = renderCode();
 	check("back to files retains the open editor document", codeTree.props["data-mobile-view"] === "files" && Boolean(getCode((n) => n.props.className === "ce-mobile-open-editor ce-link")), null);
 	getCode((n) => n.props.className === "ce-mobile-open-editor ce-link").props.onClick(); codeTree = renderCode();
-	check("return to editor does not reload or lose current document", codeTree.props["data-mobile-view"] === "editor" && navRequests.filter((r) => r.url.endsWith("/fs.read")).length === 1, navRequests);
+	check("return to editor does not reload or lose current document", codeTree.props["data-mobile-view"] === "editor" && navRequests.filter((r) => r.url.endsWith("/fs.read")).length === 2, navRequests);
 	getCode((n) => n.props.className === "ce-mobile-back").props.onClick(); codeTree = renderCode();
 	// File navigation must reclaim the editor from search/quick-open overlays.
 	getCode((n) => n.props.className === "ce-rail-search").props.onClick(); codeTree = renderCode();
@@ -807,6 +877,11 @@ try {
 	getCode((n) => n.type === "button" && n.props.title === "editor.edit").props.onClick(); codeTree = renderCode();
 	getCode((n) => n.type === "textarea" && n.props.className.startsWith("ce-edit-ta")).props.onChange({ target: { value: "unsaved draft" } }); codeTree = renderCode();
 	const readsBeforeDirtyNavigation = navRequests.filter((r) => r.url.endsWith("/fs.read")).length;
+	const blockedDrop = makeTransfer(); fileDragProps({ cwd: "/w", path: "blocked-drop.txt", sessionId: "layout" }).onDragStart({ dataTransfer: blockedDrop, preventDefault() {}, stopPropagation() {} });
+	getCode((n) => n.props.className === "ce-editor").props.onDrop({ dataTransfer: blockedDrop, preventDefault() {}, stopPropagation() {} });
+	await new Promise((resolve) => setImmediate(resolve)); codeTree = renderCode();
+	check("file drop preserves unsaved draft and issues no reload", getCode((n) => n.type === "textarea" && n.props.className.startsWith("ce-edit-ta"))?.props.value === "unsaved draft" && navRequests.filter((r) => r.url.endsWith("/fs.read")).length === readsBeforeDirtyNavigation, null);
+
 	getCode((n) => n.type === TreePanelCmp).props.onOpenFile("blocked.txt", 1, 1);
 	await new Promise((resolve) => setImmediate(resolve)); codeTree = renderCode();
 	check("tree navigation preserves unsaved draft and refuses reload", getCode((n) => n.type === "textarea" && n.props.className.startsWith("ce-edit-ta"))?.props.value === "unsaved draft" && navRequests.filter((r) => r.url.endsWith("/fs.read")).length === readsBeforeDirtyNavigation, null);
@@ -853,6 +928,42 @@ try {
 }
 const composerDetails = panelNodes.find((n) => n.type === "details" && n.props.className === "ce-commit-disclosure");
 check("changes review shows file tree before collapsed commit form", Boolean(composerDetails) && !composerDetails.props.open && panelNodes.indexOf(workingTree) < panelNodes.indexOf(composerDetails), null);
+
+// --- File-tree deletion has explicit visible confirmation and reliable sibling controls ------
+const savedDeleteFetch = globalThis.fetch;
+const deleteCalls = [], deleteNotices = [], deletedPaths = [];
+let deleteFailure = true, deleteFinish;
+const deleteEntries = [{ name: "demo-folder", type: "directory" }, { name: "demo.txt", type: "file" }];
+globalThis.fetch = async (url, options) => {
+ const body = JSON.parse(options.body); deleteCalls.push({ url, body });
+ if (url.endsWith("/fs.list")) return { json: async () => ({ ok: true, value: { entries: body.path === "" ? deleteEntries : [] } }) };
+ if (url.endsWith("/fs.delete")) return { json: () => new Promise((resolve) => { deleteFinish = resolve; }) };
+ throw Error("unexpected deletion fixture route");
+};
+try {
+ const drawDeleteTree = createHookRenderer(TreePanelCmp, { cwd: "/demo", sessionId: "delete-session", t: (key, values) => values ? `${key}:${values.name}` : key, onNotify: (text) => deleteNotices.push(text), onDeleted: (path) => deletedPaths.push(path) }, { effects: true });
+ let deleteTree = drawDeleteTree(); drawDeleteTree.flushEffects(); await new Promise((resolve) => setImmediate(resolve)); deleteTree = drawDeleteTree();
+ const findDeleteNode = (predicate) => collect(deleteTree).find(predicate);
+ const folderRow = () => findDeleteNode((n) => n.props["data-tp"] === "demo-folder");
+ const clickRowDelete = (row) => collect(row).find((n) => n.props.hint === "tree.delete").props.onClick({ stopPropagation() {} });
+ check("file and directory rows keep action buttons outside open buttons", collect(deleteTree).filter((n) => n.props["data-tp"]).every((row) => row.type === "div" && collect(row).filter((n) => n.type === "button").every((button) => !collect(button.children).some((child) => child.type === "button"))), null);
+ clickRowDelete(folderRow()); deleteTree = drawDeleteTree();
+ check("first directory delete click displays named confirmation without deleting", Boolean(findDeleteNode((n) => n.props.className === "ctp-delete-panel")) && collect(deleteTree).some((n) => n.type === "strong" && n.children[0] === "tree.deleteDirQuestion:demo-folder") && !deleteCalls.some((call) => call.url.endsWith("/fs.delete")), null);
+ findDeleteNode((n) => n.type === "button" && n.children[0] === "changes.cancel").props.onClick(); deleteTree = drawDeleteTree();
+ check("cancelling directory delete removes confirmation without request", !findDeleteNode((n) => n.props.className === "ctp-delete-panel") && !deleteCalls.some((call) => call.url.endsWith("/fs.delete")), null);
+ clickRowDelete(folderRow()); deleteTree = drawDeleteTree();
+ const confirmDirectoryDelete = findDeleteNode((n) => n.type === "button" && n.children[0] === "tree.confirmDelete");
+ confirmDirectoryDelete.props.onClick(); confirmDirectoryDelete.props.onClick(); deleteTree = drawDeleteTree();
+ check("confirmed directory delete sends exactly one request and shows progress", deleteCalls.filter((call) => call.url.endsWith("/fs.delete")).length === 1 && findDeleteNode((n) => n.type === "button" && n.children[0] === "tree.deleting")?.props.disabled === true, deleteCalls);
+ await new Promise((resolve) => setImmediate(resolve));
+ deleteFinish({ ok: false, error: "permission denied" }); await new Promise((resolve) => setImmediate(resolve)); deleteTree = drawDeleteTree();
+ check("failed delete stays visible and reports the actual error", findDeleteNode((n) => n.props.role === "alert")?.children[0].includes("permission denied") && deletedPaths.length === 0 && Boolean(findDeleteNode((n) => n.children[0] === "tree.confirmDelete")), null);
+ findDeleteNode((n) => n.type === "button" && n.children[0] === "tree.confirmDelete").props.onClick(); await new Promise((resolve) => setImmediate(resolve)); deleteFinish({ ok: true, value: { path: "demo-folder" } }); await new Promise((resolve) => setImmediate(resolve)); deleteTree = drawDeleteTree();
+ check("successful directory delete notifies editor and closes confirmation", deletedPaths[0] === "demo-folder" && !findDeleteNode((n) => n.props.className === "ctp-delete-panel") && deleteCalls.filter((call) => call.url.endsWith("/fs.delete")).at(-1).body.path === "demo-folder", null);
+ const fileRow = findDeleteNode((n) => n.props["data-tp"] === "demo.txt"); clickRowDelete(fileRow); deleteTree = drawDeleteTree();
+ check("file delete also uses a visible named confirmation", collect(deleteTree).some((n) => n.type === "strong" && n.children[0] === "tree.deleteFileQuestion:demo.txt"), null);
+ drawDeleteTree.unmount();
+} finally { globalThis.fetch = savedDeleteFetch; }
 
 // --- Skills navigation, read races, and editor protections -----------------------------------
 const { SkillsView, skillScope } = await import("./src/client/skills.js");

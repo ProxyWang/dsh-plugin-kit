@@ -1,5 +1,38 @@
 # Changelog
 
+## Unreleased — refined browser chrome
+
+- Grouped back/forward/reload controls and secondary tools around a prominent address field, with bookmark and Go actions inside the field.
+- Replaced character glyphs with consistent SVG icons, added selected tool states and local Cmd/Ctrl+L address focus, and replaced the loading text row with a reduced-motion-aware progress line.
+- Refined bookmark/settings hierarchy and empty states; narrow panels use a predictable two-row toolbar. Rendering remains owned by the existing DSH carrier.
+- Verified syntax, full regressions and UI rule scan. Authenticated live visual inspection remains unavailable.
+
+## Unreleased — copy paths from Changes
+
+- Added accessible copy-path actions to file and directory rows in Changes tree and flat views, covering staged, working and branch changes, including deleted files. Click copies an absolute path; Alt-click copies the repository-relative path.
+- Paths resolve against the Git repository root for nested/multiple repositories. Clipboard errors surface instead of reporting false success.
+- Split Changes row navigation and actions into sibling controls, preserving drag handles without nesting buttons.
+
+## Unreleased — reliable file-tree deletion
+
+- Split Explorer row navigation and action buttons into sibling controls, removing nested interactive buttons.
+- Deleting a file or folder now shows a named confirmation below the row, independent of hover actions. Confirming shows progress and refuses duplicate requests; failures remain visible for retry.
+- Added file/folder cancellation, confirmed deletion, duplicate prevention, failure feedback and editor notification regressions.
+
+## Unreleased — Explorer and Changes file dragging
+
+- Added typed internal drag data for Explorer, Changes tree/list and editor tabs, scoped to the workspace and Session.
+- Drop Explorer files into the editor to open source, or Changes files to view their captured repository/scope diff, including deleted files. Editor tab drags reorder views without moving files.
+- Explorer folder moves retain their existing disk-move behavior. Plain text, OS files, directory-to-editor and foreign-session drops are not accepted; unsaved edits remain protected.
+
+## Unreleased — embedded browser bookmarks and settings
+
+- Added an enhanced Browser page using the DSH lease-scoped Desktop browser bridge (restricted iframe fallback on Web), without bundling another browser engine. Native history, approved popups, Workspace storage isolation, explicit page restore and system-browser escape remain available.
+- Added profile-persistent bookmarks, favorites bar, folders, search, edit/delete, home URL and new-tab start settings. Host persistence serializes writes and rejects stale revisions; UI and `browser_bookmarks` use the same service.
+- Settings accurately explain that DSH currently exposes no Chrome extension install/enable/configuration API.
+- Added browser regressions for URL policy, durable data, conflict/retry behavior, guest acquisition/disposal/crash recovery, requested URL preservation, Workspace partitioning and UI settings flows.
+- Verified real Host browser-data initialization; live authenticated Electron page rendering and extension support remain outside automated verification.
+
 ## Unreleased — left tool entries toggle workspace tabs
 
 - Left entries now close an already open matching tool tab. The last real tool tab also collapses the right workspace; retained guide tabs do not keep it open. Other tools and other sessions remain untouched.

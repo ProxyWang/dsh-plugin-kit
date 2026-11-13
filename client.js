@@ -71,6 +71,71 @@ var ROW = 22;
 
 // src/client/locale.js
 var zh = {
+  "browser.navigation": "网页导航",
+  "browser.tools": "浏览器工具",
+  "browser.bookmarkCount": "{n} 个书签 · 常用页面，随时继续",
+  "browser.settingsCaption": "管理主页、起始页与收藏栏",
+  "changes.copyPath": "复制路径（Alt/⌥ 点击复制仓库相对路径）",
+  "changes.copyFailed": "路径复制失败，请检查剪贴板权限后重试。",
+  "tree.deleteDirQuestion": "删除文件夹「{name}」？",
+  "tree.deleteFileQuestion": "删除文件「{name}」？",
+  "tree.deleteDirHint": "此操作会删除该目录及全部内容，无法通过本插件撤销。",
+  "tree.deleteFileHint": "此操作会从磁盘删除文件，无法通过本插件撤销。",
+  "tree.deleting": "正在删除…",
+  "tree.confirmDelete": "确认删除",
+  "drag.openHere": "松开以打开文件或查看变更 · 拖动标签可调整顺序",
+  "drag.unsupported": "请拖入当前会话的文件；不支持拖入目录或其他工作区。",
+  "browser.retryStorage": "重新加载书签与设置",
+  "browser.external": "在系统浏览器打开",
+  "browser.label": "浏览器",
+  "browser.guide": "DSH 内嵌浏览器、书签收藏与主页设置",
+  "browser.invalidUrl": "请输入有效的 HTTP(S) 地址，不支持带账号密码的 URL。",
+  "browser.applicationOrigin": "不能在内嵌浏览器中打开 DSH 自身地址。",
+  "browser.notFound": "书签已不存在，请刷新后重试。",
+  "browser.duplicate": "该地址已有书签。",
+  "browser.limit": "最多支持 500 个书签。",
+  "browser.invalidAction": "不支持的浏览器操作。",
+  "browser.conflict": "数据已在其他页面更新，已刷新列表，请检查后重新保存。",
+  "browser.saved": "已保存",
+  "browser.initializing": "浏览器正在初始化，请稍后重试。",
+  "browser.guestGone": "浏览器进程已结束，点击刷新可重新创建页面。",
+  "browser.loadFailed": "网页加载失败，请检查地址并重试。",
+  "browser.back": "后退",
+  "browser.forward": "前进",
+  "browser.reload": "刷新网页",
+  "browser.home": "主页",
+  "browser.address": "输入网址，如 https://example.com",
+  "browser.go": "前往",
+  "browser.editBookmark": "编辑书签",
+  "browser.bookmarkPage": "收藏当前页面",
+  "browser.bookmarks": "书签管理",
+  "browser.settings": "浏览器设置",
+  "browser.favorites": "收藏栏",
+  "browser.unknown": "网页已在框架内跳转，当前真实地址不可读取。请从地址栏重新打开后再收藏。",
+  "browser.restore": "恢复上次页面",
+  "browser.restoreAction": "恢复页面",
+  "browser.welcome": "内嵌浏览器",
+  "browser.startHint": "输入网址开始浏览，也可以从书签管理打开已保存的页面。",
+  "browser.searchBookmarks": "搜索书签名称、网址或分组…",
+  "browser.folder": "分组",
+  "browser.allFolders": "全部分组",
+  "browser.favoritesOnly": "仅收藏",
+  "browser.addBookmark": "添加书签",
+  "browser.noMatch": "没有匹配的书签。",
+  "browser.emptyBookmarks": "还没有书签。浏览网页后点击 ☆ 收藏，或手动添加网址。",
+  "browser.confirmDelete": "确认删除",
+  "browser.settingsScope": "书签与这些设置保存在当前 DSH profile，由该 Host 的工具页共享。修改主页不影响已打开的网页。",
+  "browser.homeUrl": "主页地址",
+  "browser.startPage": "新标签起始页",
+  "browser.showBookmarksBar": "显示收藏栏",
+  "browser.extensions": "浏览器扩展 / 插件",
+  "browser.extensionsUnavailable": "当前 DSH 桌面桥接未提供 Chrome 扩展的安装、启用或配置接口，因此此处不能安装 CRX、加载本地扩展目录或导入系统浏览器扩展。工具箱设置不等同于 Chrome 扩展管理。",
+  "browser.carrier": "浏览器运行方式",
+  "browser.desktopPolicy": "使用 DSH 批准的 Chromium webview。网页隔离、弹窗、下载和权限由宿主管理；浏览器登录存储当前不保证跨应用重启保留。",
+  "browser.webPolicy": "当前页面使用受限 iframe。部分网站禁止嵌入；跨域跳转后可能无法读取真实地址。此插件不绕过站点限制。",
+  "browser.name": "名称",
+  "browser.url": "网址",
+  "browser.pinFavorite": "加入收藏栏",
   "left.workspace": "工作区",
   "left.guide": "从左侧选择开发工作台、接口调试、技能或其他工具，在这里继续工作。",
   "left.openFailed": "无法切换工具",
@@ -449,6 +514,71 @@ var zh = {
   "quickopen.command": "快速打开文件（代码 IDE）"
 };
 var en = {
+  "browser.navigation": "Page navigation",
+  "browser.tools": "Browser tools",
+  "browser.bookmarkCount": "{n} bookmarks · Keep useful pages close",
+  "browser.settingsCaption": "Home, start page and favorites bar",
+  "changes.copyPath": "Copy path (Alt-click for repository-relative path)",
+  "changes.copyFailed": "Could not copy the path. Check clipboard permissions and retry.",
+  "tree.deleteDirQuestion": "Delete folder “{name}”?",
+  "tree.deleteFileQuestion": "Delete file “{name}”?",
+  "tree.deleteDirHint": "This deletes the folder and all its contents from disk. The toolbox cannot undo this action.",
+  "tree.deleteFileHint": "This deletes the file from disk. The toolbox cannot undo this action.",
+  "tree.deleting": "Deleting…",
+  "tree.confirmDelete": "Confirm delete",
+  "drag.openHere": "Drop to open file or diff · Drag tabs to reorder",
+  "drag.unsupported": "Drag a file from this session. Folders and other workspaces are not supported here.",
+  "browser.retryStorage": "Reload bookmarks and settings",
+  "browser.external": "Open in system browser",
+  "browser.label": "Browser",
+  "browser.guide": "DSH embedded browser with bookmarks and home-page settings",
+  "browser.invalidUrl": "Enter a valid HTTP(S) URL without embedded credentials.",
+  "browser.applicationOrigin": "The DSH application origin cannot be opened here.",
+  "browser.notFound": "Bookmark no longer exists. Refresh and try again.",
+  "browser.duplicate": "This URL already has a bookmark.",
+  "browser.limit": "Up to 500 bookmarks are supported.",
+  "browser.invalidAction": "Unsupported browser operation.",
+  "browser.conflict": "Another page updated the data. The list was refreshed; review and save again.",
+  "browser.saved": "Saved",
+  "browser.initializing": "The browser is initializing. Try again shortly.",
+  "browser.guestGone": "Browser process ended. Reload to recreate the page.",
+  "browser.loadFailed": "Page failed to load. Check the URL and retry.",
+  "browser.back": "Back",
+  "browser.forward": "Forward",
+  "browser.reload": "Reload page",
+  "browser.home": "Home",
+  "browser.address": "Enter a URL, e.g. https://example.com",
+  "browser.go": "Go",
+  "browser.editBookmark": "Edit bookmark",
+  "browser.bookmarkPage": "Bookmark current page",
+  "browser.bookmarks": "Bookmarks",
+  "browser.settings": "Browser settings",
+  "browser.favorites": "Favorites bar",
+  "browser.unknown": "The frame navigated to an unreadable address. Open a known URL before bookmarking.",
+  "browser.restore": "Restore previous page",
+  "browser.restoreAction": "Restore page",
+  "browser.welcome": "Embedded browser",
+  "browser.startHint": "Enter a URL or open a saved bookmark.",
+  "browser.searchBookmarks": "Search titles, URLs or folders…",
+  "browser.folder": "Folder",
+  "browser.allFolders": "All folders",
+  "browser.favoritesOnly": "Favorites only",
+  "browser.addBookmark": "Add bookmark",
+  "browser.noMatch": "No matching bookmarks.",
+  "browser.emptyBookmarks": "No bookmarks yet. Click ☆ on a page or add a URL manually.",
+  "browser.confirmDelete": "Confirm delete",
+  "browser.settingsScope": "Bookmarks and settings persist in this DSH profile and are shared by this Host’s tool pages. Changing Home does not navigate existing pages.",
+  "browser.homeUrl": "Home-page URL",
+  "browser.startPage": "New-tab start page",
+  "browser.showBookmarksBar": "Show favorites bar",
+  "browser.extensions": "Browser extensions / plugins",
+  "browser.extensionsUnavailable": "The current DSH Desktop bridge exposes no Chrome extension installation, activation or configuration API. CRX installation, unpacked extensions and system-browser extension import are unavailable. Toolbox settings are separate from Chrome extension management.",
+  "browser.carrier": "Browser carrier",
+  "browser.desktopPolicy": "Uses a DSH-approved Chromium webview. The host owns isolation, popups, downloads and permissions. Browser sign-in storage is not guaranteed to survive app restart.",
+  "browser.webPolicy": "Uses a restricted iframe in this client. Some sites refuse embedding, and cross-origin navigation can hide the actual URL. This plugin does not bypass site restrictions.",
+  "browser.name": "Name",
+  "browser.url": "URL",
+  "browser.pinFavorite": "Add to favorites bar",
   "left.workspace": "Workspace",
   "left.guide": "Choose Dev Workspace, API Tester, Skills or another tool on the left to work here.",
   "left.openFailed": "Could not toggle tool",
@@ -1763,6 +1893,57 @@ function canDropInto(dragPath, targetDir) {
   return true;
 }
 
+// src/client/filedrag.js
+var FILE_DRAG_TYPE = "application/x-dsh-toolbox-file";
+function safePath(path) {
+  return typeof path === "string" && path.length > 0 && path.length < 16384 && !/[\0\r\n]/.test(path) && !path.replace(/\\/g, "/").split("/").some((part) => part === ".." || part === ".");
+}
+function fileDragProps({ cwd, path, source = "tree", kind = "file", scope, repo, sessionId }) {
+  return {
+    draggable: true,
+    onDragStart(event) {
+      if (!safePath(path) || !cwd) {
+        event.preventDefault();
+        return;
+      }
+      if (event.target?.closest?.("button,input,textarea,select") && event.target.closest("button,input,textarea,select") !== event.currentTarget && !event.target.closest(".ctp-entry-open")) {
+        event.preventDefault();
+        return;
+      }
+      event.stopPropagation();
+      const value = { version: 1, cwd, path, kind, source, ...scope ? { scope } : {}, ...repo ? { repo } : {}, ...sessionId ? { sessionId } : {} };
+      event.dataTransfer.setData(FILE_DRAG_TYPE, JSON.stringify(value));
+      event.dataTransfer.setData("text/plain", path);
+      event.dataTransfer.effectAllowed = source === "tree" ? "copyMove" : "copy";
+    }
+  };
+}
+function hasFileDrag(transfer) {
+  return Array.from(transfer?.types ?? []).includes(FILE_DRAG_TYPE);
+}
+function readFileDrag(transfer, cwd, sessionId) {
+  try {
+    const value = JSON.parse(transfer.getData(FILE_DRAG_TYPE));
+    if (value.version !== 1 || value.cwd !== cwd || (sessionId || value.sessionId) && value.sessionId !== sessionId || !safePath(value.path)) return null;
+    if (!["tree", "changes", "tab"].includes(value.source) || !["file", "directory"].includes(value.kind)) return null;
+    if (value.source === "changes" && !["working", "staged", "branch"].includes(value.scope)) return null;
+    if (value.repo && (!safePath(value.repo) || value.repo !== cwd && !value.repo.startsWith(`${cwd.replace(/\/$/, "")}/`))) return null;
+    return value;
+  } catch {
+    return null;
+  }
+}
+function dragFilePath(value) {
+  return value.source === "changes" ? toAbs(value.repo ?? value.cwd, value.path) : value.path;
+}
+function reorderFileTabs(tabs, from, before) {
+  if (from === before || !tabs.includes(from) || before && !tabs.includes(before)) return tabs;
+  const next = tabs.filter((path) => path !== from);
+  const index = before ? next.indexOf(before) : next.length;
+  next.splice(index, 0, from);
+  return next;
+}
+
 // src/client/hint.js
 var nextHintId = 0;
 var dismissCurrent = null;
@@ -1849,6 +2030,37 @@ function HintButton({ hint, title: _nativeTitle, ...props }) {
       props.onKeyDown?.(e);
     }
   }, props.children);
+}
+
+// src/client/copypath.js
+async function copyChangePath({ cwd, repo, path, relative = false, onNotify, t }) {
+  const value = relative ? path : toAbs(repo || cwd, path);
+  try {
+    if (typeof globalThis.navigator?.clipboard?.writeText !== "function") throw Error("Clipboard unavailable");
+    await globalThis.navigator.clipboard.writeText(value);
+    onNotify?.(t("tree.copied"));
+    return true;
+  } catch {
+    onNotify?.(t("changes.copyFailed"), "error");
+    return false;
+  }
+}
+function CopyChangePathButton({ path, onCopyPath, t }) {
+  return h("button", {
+    type: "button",
+    className: "cet-act cet-copy-path",
+    title: t("changes.copyPath"),
+    "aria-label": `${t("changes.copyPath")} · ${path}`,
+    onClick: (event) => {
+      event.stopPropagation();
+      void onCopyPath?.(path, event.altKey);
+    }
+  }, h(
+    "svg",
+    { viewBox: "0 0 16 16", width: 14, height: 14, fill: "none", stroke: "currentColor", strokeWidth: 1.3, "aria-hidden": true },
+    h("rect", { x: 5, y: 5, width: 8, height: 9, rx: 1.2 }),
+    h("path", { d: "M10 4V2H2v9h2" })
+  ));
 }
 
 // src/client/changetree.js
@@ -1939,7 +2151,7 @@ function guideStyle(depth) {
     backgroundPosition: images.map((_, i) => `${7 + i * 14}px 0`).join(",")
   };
 }
-function ChangeTree({ items, onOpen, onDiscard, onDiscardDir, onStage, onStageDir, onUnstage, onUnstageDir, keyPrefix, t }) {
+function ChangeTree({ items, onOpen, onDiscard, onDiscardDir, onStage, onStageDir, onUnstage, onUnstageDir, keyPrefix, t, cwd, repo, scope = "working", sessionId, onCopyPath }) {
   const [collapsed, setCollapsed] = useState(() => /* @__PURE__ */ new Set());
   const [confirmPath, setConfirmPath] = useState(null);
   const [confirmDir, setConfirmDir] = useState(null);
@@ -1968,22 +2180,26 @@ function ChangeTree({ items, onOpen, onDiscard, onDiscardDir, onStage, onStageDi
       const id = prefix + dir.name;
       const isCollapsed = collapsed.has(id);
       rows.push(h(
-        "button",
+        "div",
         {
           key: `d:${keyPrefix}:${id}`,
-          type: "button",
           className: "ce-row cet-row cet-dir",
           style: { paddingLeft: `${4 + depth * 14}px`, ...guideStyle(depth) },
           title: `${dir.name}/ · ${dir.count}`,
           "aria-expanded": String(!isCollapsed),
           onClick: () => toggle(id)
         },
-        h("span", { className: `cet-tw${isCollapsed ? "" : " cet-tw-open"}` }, "▶"),
-        h("span", { className: "cet-fico cet-fico-dir" }, h(FolderGlyph)),
-        h("span", { className: "ce-name cet-dirname" }, dir.name),
+        h(
+          "button",
+          { type: "button", className: "ctp-entry-open", "aria-expanded": !isCollapsed },
+          h("span", { className: `cet-tw${isCollapsed ? "" : " cet-tw-open"}` }, "▶"),
+          h("span", { className: "cet-fico cet-fico-dir" }, h(FolderGlyph)),
+          h("span", { className: "ce-name cet-dirname" }, dir.name)
+        ),
         h(
           "span",
           { className: "cet-right" },
+          onCopyPath ? h(CopyChangePathButton, { path: id, onCopyPath, t }) : null,
           onStageDir ? h("button", {
             type: "button",
             className: "cet-act",
@@ -2042,25 +2258,30 @@ function ChangeTree({ items, onOpen, onDiscard, onDiscardDir, onStage, onStageDi
       const dirPart = file.path.slice(0, file.path.length - base.length).replace(/\/$/, "");
       const dup = (dupNames.get(base) ?? 0) > 1 && dirPart !== "";
       rows.push(h(
-        "button",
+        "div",
         {
           key: `f:${keyPrefix}:${file.path}`,
-          type: "button",
+          ...fileDragProps({ cwd, repo, path: file.path, scope, source: "changes", sessionId }),
           className: "ce-row cet-row",
           style: { paddingLeft: `${4 + depth * 14 + 14}px`, ...guideStyle(depth + 1) },
           title: file.from ? `${file.path} ← ${file.from}` : file.path,
           onClick: () => onOpen(file)
         },
-        h("span", { className: `cet-fico ${fileTint(file.path)}` }, h(FileGlyph)),
         h(
-          "span",
-          { className: "ce-name" },
-          base,
-          dup ? h("span", { className: "cet-dirhint" }, dirPart) : null
+          "button",
+          { type: "button", className: "ctp-entry-open" },
+          h("span", { className: `cet-fico ${fileTint(file.path)}` }, h(FileGlyph)),
+          h(
+            "span",
+            { className: "ce-name" },
+            base,
+            dup ? h("span", { className: "cet-dirhint" }, dirPart) : null
+          )
         ),
         h(
           "span",
           { className: "cet-right" },
+          onCopyPath ? h(CopyChangePathButton, { path: file.path, onCopyPath, t }) : null,
           onStage ? h("button", {
             type: "button",
             className: "cet-act",
@@ -2118,22 +2339,60 @@ function ChangeTree({ items, onOpen, onDiscard, onDiscardDir, onStage, onStageDi
   return h(Fragment, null, rows);
 }
 
+// src/client/treemodel.js
+function createDirectoryRequests() {
+  let generation = 0;
+  const latest = /* @__PURE__ */ new Map();
+  return {
+    reset() {
+      generation++;
+      latest.clear();
+    },
+    begin(path) {
+      const epoch = generation;
+      const token = {};
+      latest.set(path, token);
+      return () => epoch === generation && latest.get(path) === token;
+    }
+  };
+}
+function uniqueDirectoryEntries(entries) {
+  const seen = /* @__PURE__ */ new Set();
+  return (Array.isArray(entries) ? entries : []).filter((entry) => {
+    if (!entry || typeof entry.name !== "string" || !entry.name || entry.name === "." || entry.name === ".." || entry.name.includes("/") || entry.name.includes("\0") || !["file", "directory"].includes(entry.type) || seen.has(entry.name)) return false;
+    seen.add(entry.name);
+    return true;
+  });
+}
+
 // src/client/tree.js
-function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshKey, onNotify, onDeleted, onSearchDirectory }) {
+function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshKey, onNotify, onDeleted, onSearchDirectory, sessionId }) {
   const [listing, setListing] = useState({});
   const [expanded, setExpanded] = useState([]);
   const [action, setAction] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
+  const deletePending = useRef(false);
   const [dragPath, setDragPath] = useState(null);
   const [dropDir, setDropDir] = useState(null);
   const [contextMenu, setContextMenu] = useState(null);
   const railRef = useRef(null);
   const contextMenuRef = useDismissLayer({ open: Boolean(contextMenu), onDismiss: () => setContextMenu(null) });
-  const deleteRef = useDismissLayer({ open: action?.kind === "delete", onDismiss: () => setAction(null) });
+  const deleteRef = useDismissLayer({ open: action?.kind === "delete", onDismiss: () => {
+    if (!deletePending.current) {
+      setAction(null);
+      setDeleteError("");
+    }
+  }, ignoreSelector: '[data-ce-popup-trigger="tree-delete"]' });
   const lastRevealed = useRef(null);
   const revealTick = useRef(null);
+  const requestsRef = useRef(null);
+  if (requestsRef.current === null) requestsRef.current = createDirectoryRequests();
   const loadDir = useCallback((path) => {
+    const isCurrent = requestsRef.current.begin(path);
     setListing((current) => current[path]?.entries ? current : { ...current, [path]: { loading: true } });
     api("fs.list", { cwd, path }).then((res) => {
+      if (!isCurrent()) return;
       setListing((current) => {
         if (!res.ok) return current[path]?.entries ? current : { ...current, [path]: { error: res.error } };
         return { ...current, [path]: res.value };
@@ -2141,6 +2400,7 @@ function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshKey, onN
     });
   }, [cwd]);
   useEffect(() => {
+    requestsRef.current.reset();
     setListing({});
     setExpanded([]);
     setAction(null);
@@ -2211,19 +2471,55 @@ function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshKey, onN
     const dir = parentOf(path);
     api("fs.rename", { cwd, path, to: dir === "" ? clean : `${dir}/${clean}` }).then((res) => finish(res, t("tree.renamed"), dir));
   };
-  const runDelete = (path) => {
-    api("fs.delete", { cwd, path }).then((res) => {
+  const runDelete = async (path) => {
+    if (deletePending.current || action?.kind !== "delete" || action.path !== path) return;
+    deletePending.current = true;
+    setDeleting(true);
+    setDeleteError("");
+    try {
+      const res = await api("fs.delete", { cwd, path });
       if (!res.ok || res.value?.error) {
-        onNotify?.(`${t("error")}: ${res.value?.error ?? res.error}`, "error");
-        setAction(null);
+        const text = `${t("error")}: ${res.value?.error ?? res.error}`;
+        setDeleteError(text);
+        onNotify?.(text, "error");
         return;
       }
       onNotify?.(t("tree.deleted"));
       onDeleted?.(path);
       loadDir(parentOf(path));
       setAction(null);
-    });
+    } finally {
+      deletePending.current = false;
+      setDeleting(false);
+    }
   };
+  const requestDelete = (path, isDir) => {
+    if (deletePending.current) return;
+    setDeleteError("");
+    setAction((current) => current?.kind === "delete" && current.path === path ? null : { kind: "delete", path, isDir });
+  };
+  const deleteRow = (path) => action?.kind === "delete" && action.path === path ? h(
+    "section",
+    {
+      key: `delete-confirm:${path}`,
+      ref: deleteRef,
+      className: "ctp-delete-panel",
+      role: "group",
+      "aria-label": t("tree.delete")
+    },
+    h("strong", null, t(action.isDir ? "tree.deleteDirQuestion" : "tree.deleteFileQuestion", { name: path.split("/").pop() })),
+    h("p", null, t(action.isDir ? "tree.deleteDirHint" : "tree.deleteFileHint")),
+    deleteError ? h("p", { className: "ctp-delete-error", role: "alert" }, deleteError) : null,
+    h(
+      "div",
+      { className: "ctp-delete-buttons" },
+      h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-danger", disabled: deleting, onClick: () => void runDelete(path) }, deleting ? t("tree.deleting") : t("tree.confirmDelete")),
+      h("button", { type: "button", className: "ce-sk-btn", disabled: deleting, onClick: () => {
+        setAction(null);
+        setDeleteError("");
+      } }, t("changes.cancel"))
+    )
+  ) : null;
   const runMove = (from, toDir) => {
     const name = from.split("/").pop();
     const to = toDir === "" ? name : `${toDir}/${name}`;
@@ -2239,21 +2535,20 @@ function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshKey, onN
       loadDir(toDir);
     });
   };
-  const dragProps = (path) => ({
-    draggable: true,
-    onDragStart: (e) => {
-      setDragPath(path);
-      try {
-        e.dataTransfer.setData("text/plain", path);
-        e.dataTransfer.effectAllowed = "move";
-      } catch {
+  const dragProps = (path, kind = "file") => {
+    const props = fileDragProps({ cwd, path, kind, sessionId });
+    return {
+      ...props,
+      onDragStart: (event) => {
+        props.onDragStart(event);
+        if (!event.defaultPrevented) setDragPath(path);
+      },
+      onDragEnd: () => {
+        setDragPath(null);
+        setDropDir(null);
       }
-    },
-    onDragEnd: () => {
-      setDragPath(null);
-      setDropDir(null);
-    }
-  });
+    };
+  };
   const dropProps = (dirPath) => ({
     onDragOver: (e) => {
       if (!dragPath || !canDropInto(dragPath, dirPath)) return;
@@ -2336,7 +2631,7 @@ function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshKey, onN
   };
   const contextDelete = () => {
     if (!contextMenu) return;
-    setAction({ kind: "delete", path: contextMenu.path });
+    requestDelete(contextMenu.path, contextMenu.isDir);
     setContextMenu(null);
   };
   const contextCreate = (kind) => {
@@ -2400,32 +2695,16 @@ function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshKey, onN
         setAction({ kind: "rename", path, value: path.split("/").pop() });
       }
     }, "✎"),
-    action?.kind === "delete" && action.path === path ? h(
-      "span",
-      { ref: deleteRef },
-      h("button", {
-        type: "button",
-        className: "cet-act cet-act-show cet-act-danger",
-        onClick: (e) => {
-          e.stopPropagation();
-          runDelete(path);
-        }
-      }, t("changes.confirm")),
-      h("button", {
-        type: "button",
-        className: "cet-act cet-act-show",
-        onClick: (e) => {
-          e.stopPropagation();
-          setAction(null);
-        }
-      }, t("changes.cancel"))
-    ) : h(HintButton, {
+    h(HintButton, {
       type: "button",
       className: "cet-act",
       hint: t("tree.delete"),
-      onClick: (e) => {
-        e.stopPropagation();
-        setAction({ kind: "delete", path });
+      "data-ce-popup-trigger": "tree-delete",
+      "aria-expanded": action?.kind === "delete" && action.path === path,
+      disabled: deleting,
+      onClick: (event) => {
+        event.stopPropagation();
+        requestDelete(path, isDir);
       }
     }, "✕")
   );
@@ -2434,7 +2713,7 @@ function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshKey, onN
     if (!state) return null;
     if (state.loading) return h("div", { key: `${path}-l`, className: "ce-note", style: { paddingLeft: 8 + depth * 14 } }, t("loading"));
     if (state.error) return h("div", { key: `${path}-l`, className: "ce-note", style: { paddingLeft: 8 + depth * 14 } }, `${t("tree.failed")}: ${state.error}`);
-    const entries = [...state.entries ?? []].sort((a, b) => a.type === b.type ? a.name.localeCompare(b.name) : a.type === "directory" ? -1 : 1);
+    const entries = uniqueDirectoryEntries(state.entries).sort((a, b) => a.type === b.type ? a.name.localeCompare(b.name) : a.type === "directory" ? -1 : 1);
     const rows = [];
     for (const entry of entries) {
       const childPath = path === "" ? entry.name : `${path}/${entry.name}`;
@@ -2442,7 +2721,7 @@ function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshKey, onN
         const open = expanded.includes(childPath);
         rows.push(
           h(
-            "button",
+            "div",
             {
               key: childPath,
               "data-tp": childPath,
@@ -2450,15 +2729,19 @@ function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshKey, onN
               style: { paddingLeft: 6 + depth * 14 },
               onClick: () => toggle(childPath),
               onContextMenu: (e) => openContextMenu(e, childPath, true),
-              type: "button",
-              ...dragProps(childPath),
+              ...dragProps(childPath, "directory"),
               ...dropProps(childPath)
             },
-            h("span", { className: "ce-ico" }, h(IconFolder, { open })),
-            h("span", { className: "ce-name" }, entry.name),
+            h(
+              "button",
+              { type: "button", className: "ctp-entry-open", "aria-expanded": open },
+              h("span", { className: "ce-ico" }, h(IconFolder, { open })),
+              h("span", { className: "ce-name" }, entry.name)
+            ),
             acts(childPath, true)
           )
         );
+        rows.push(deleteRow(childPath));
         if (action?.kind === "rename" && action.path === childPath) rows.push(inputRow(childPath, "rename", t("tree.renamePlaceholder")));
         if (open && action?.kind === "newfile" && action.path === childPath) rows.push(inputRow(childPath, "file", t("tree.newFilePlaceholder")));
         if (open && action?.kind === "newdir" && action.path === childPath) rows.push(inputRow(childPath, "dir", t("tree.newDirPlaceholder")));
@@ -2466,28 +2749,32 @@ function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshKey, onN
       } else if (entry.type === "file") {
         rows.push(
           h(
-            "button",
+            "div",
             {
               key: childPath,
               "data-tp": childPath,
               className: `ce-row${activePath && (activePath === childPath || activePath.endsWith(`/${childPath}`)) ? " ce-active" : ""}`,
               style: { paddingLeft: 6 + depth * 14 },
-              type: "button",
               onClick: () => onOpenFile(childPath, 1, 1),
               onContextMenu: (e) => openContextMenu(e, childPath, false),
               ...dragProps(childPath),
               ...fileDropProps(childPath)
             },
-            h("span", { className: `cet-fico ce-tree-ico ${fileTint(childPath)}` }, h(FileGlyph)),
-            h("span", { className: "ce-name" }, entry.name),
+            h(
+              "button",
+              { type: "button", className: "ctp-entry-open" },
+              h("span", { className: `cet-fico ce-tree-ico ${fileTint(childPath)}` }, h(FileGlyph)),
+              h("span", { className: "ce-name" }, entry.name)
+            ),
             acts(childPath, false)
           )
         );
+        rows.push(deleteRow(childPath));
         if (action?.kind === "rename" && action.path === childPath) rows.push(inputRow(path, "rename", t("tree.renamePlaceholder")));
       }
     }
     if (!rows.length) rows.push(h("div", { key: `${path}-e`, className: "ce-note", style: { paddingLeft: 8 + depth * 14 } }, t("tree.empty")));
-    return h(Fragment, { key: path }, rows);
+    return h(Fragment, { key: `tree-level:${path || "root"}` }, rows);
   };
   return h(
     "div",
@@ -2548,7 +2835,7 @@ function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshKey, onN
 function isStagedXy(xy) {
   return typeof xy === "string" && xy.length > 0 && xy[0] !== " " && xy[0] !== "?";
 }
-function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commitsOpen, setCommitsOpen, onOpenCommit, onOpenDiff, onDiscard, onDiscardDir, onStage, onStageDir, onUnstage, onUnstageDir, onCommit, committing, onNotify, refresh }) {
+function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commitsOpen, setCommitsOpen, onOpenCommit, onOpenDiff, onDiscard, onDiscardDir, onStage, onStageDir, onUnstage, onUnstageDir, onCommit, committing, onNotify, refresh, sessionId }) {
   const [treeView, setTreeView] = useState(true);
   const [message, setMessage] = useState("");
   const [amend, setAmend] = useState(false);
@@ -2619,6 +2906,7 @@ function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commitsOpen, 
   if (!git) return h("div", { className: "ce-rail ce-scroll" }, selector, h("div", { className: "ce-note" }, t("loading")));
   if (git.error) return h("div", { className: "ce-rail ce-scroll" }, selector, h("div", { className: "ce-note" }, git.error));
   if (!git.repo) return h("div", { className: "ce-rail ce-scroll" }, selector, repos && repos.length === 0 ? h("div", { className: "ce-note" }, t("changes.notRepo")) : null);
+  const onCopyPath = (path, relative) => copyChangePath({ cwd, repo: git.root || repoSel, path, relative, onNotify, t });
   const badge = (xy) => xy === "??" ? "U" : xy.trim()[0] === "A" || xy.trim()[0] === "?" ? "A" : xy.trim()[0] || "M";
   const staged = git.working.filter((f) => isStagedXy(f.xy));
   const unstaged = git.working.filter((f) => !isStagedXy(f.xy));
@@ -2629,10 +2917,15 @@ function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commitsOpen, 
   const visibleBranchFiles = (git.branchFiles ?? []).filter(matchesPath);
   const flatRows = (files, prefix, scope) => files.map(
     (file) => h(
-      "button",
-      { key: `${prefix}:${file.path}`, className: "ce-row", type: "button", title: file.path, onClick: () => onOpenDiff(file.path, scope) },
-      h("span", { className: `ce-badge ce-badge-${badge(file.xy).toLowerCase()}` }, badge(file.xy)),
-      h("span", { className: "ce-name" }, file.path)
+      "div",
+      { ...fileDragProps({ cwd, repo: git.root, path: file.path, scope, source: "changes", sessionId }), key: `${prefix}:${file.path}`, className: "ce-row cet-row", title: file.path },
+      h(
+        "button",
+        { type: "button", className: "ctp-entry-open", onClick: () => onOpenDiff(file.path, scope) },
+        h("span", { className: `ce-badge ce-badge-${badge(file.xy).toLowerCase()}` }, badge(file.xy)),
+        h("span", { className: "ce-name" }, file.path)
+      ),
+      h("span", { className: "cet-right" }, h(CopyChangePathButton, { path: file.path, onCopyPath, t }))
     )
   );
   const submit = () => {
@@ -2673,6 +2966,11 @@ function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commitsOpen, 
           onUnstage: (item) => onUnstage && onUnstage(item),
           onUnstageDir: (dirPath) => onUnstageDir && onUnstageDir(dirPath),
           keyPrefix: "s",
+          cwd,
+          repo: git.root,
+          scope: "staged",
+          sessionId,
+          onCopyPath,
           t
         }) : flatRows(visibleStaged, "s", "staged")
       ) : null,
@@ -2693,6 +2991,11 @@ function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commitsOpen, 
         onStage: (item) => onStage && onStage(item),
         onStageDir: (dirPath) => onStageDir && onStageDir(dirPath),
         keyPrefix: "w",
+        cwd,
+        repo: git.root,
+        scope: "working",
+        sessionId,
+        onCopyPath,
         t
       }) : flatRows(visibleUnstaged, "w", "working")
     ),
@@ -2774,15 +3077,13 @@ function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commitsOpen, 
           items: visibleBranchFiles.map((p) => ({ path: p, ch: "C" })),
           onOpen: (item) => onOpenDiff(item.path, "branch"),
           keyPrefix: "b",
+          cwd,
+          repo: git.root,
+          scope: "branch",
+          sessionId,
+          onCopyPath,
           t
-        }) : visibleBranchFiles.map(
-          (path) => h(
-            "button",
-            { key: `b:${path}`, className: "ce-row", type: "button", title: path, onClick: () => onOpenDiff(path, "branch") },
-            h("span", { className: "ce-badge ce-badge-c" }, "C"),
-            h("span", { className: "ce-name" }, path)
-          )
-        )
+        }) : flatRows(visibleBranchFiles.map((path) => ({ path, xy: "C" })), "b", "branch")
       ) : h("div", { className: "ce-note" }, t("changes.baseNone"))
     ),
     h(
@@ -3405,13 +3706,13 @@ function SearchPanel({ t, cwd, state, onQuery, onInclude, onDirectory, onToggleR
     else next.add(path);
     return next;
   });
-  const runReplace = async (paths) => {
-    if (replaceBusy || paths.length === 0) return;
+  const runReplace = async (paths2) => {
+    if (replaceBusy || paths2.length === 0) return;
     setReplaceBusy(true);
     let files = 0;
     let hits = 0;
     const errors = [];
-    const capped = paths.slice(0, 200);
+    const capped = paths2.slice(0, 200);
     for (const path of capped) {
       const res = await api("fs.read", { cwd, path });
       if (!res.ok || res.value.kind !== "text") {
@@ -3438,7 +3739,7 @@ function SearchPanel({ t, cwd, state, onQuery, onInclude, onDirectory, onToggleR
     if (hits > 0) onNotify?.(t("search.replaceDone", { hits, files }));
     else onNotify?.(t("search.replaceNone"), "error");
     if (errors.length > 0) onNotify?.(`${t("search.replaceFail", { n: errors.length })}: ${errors[0]}`, "error");
-    if (paths.length > capped.length) onNotify?.(t("search.replaceCapped"), "error");
+    if (paths2.length > capped.length) onNotify?.(t("search.replaceCapped"), "error");
     onSubmit();
   };
   const toggleCtx = (r) => {
@@ -4157,6 +4458,8 @@ function CodeBody(props) {
   const [symbols, setSymbols] = useState([]);
   const [symPalette, setSymPalette] = useState(null);
   const [commandOpen, setCommandOpen] = useState(false);
+  const [fileDropOver, setFileDropOver] = useState(false);
+  const [tabDropOver, setTabDropOver] = useState(null);
   const [commitsOpen, setCommitsOpen] = useState(false);
   const peekNonce = useRef(0);
   const paletteTimer = useRef(null);
@@ -4562,10 +4865,10 @@ function CodeBody(props) {
     codeRef.current?.focus({ preventScroll: true });
   }, [scrollAreaToLine]);
   const openDiff = useCallback(
-    async (path, scope) => {
+    async (path, scope, repoOverride) => {
       if (!cwd || !canNavigate()) return;
       dismissPanels();
-      const repo = repoSelRef.current;
+      const repo = repoOverride ?? repoSelRef.current;
       const res = await api("git.diff", repo ? { cwd, path, scope, repo } : { cwd, path, scope });
       const value = res.ok ? res.value : { error: res.error };
       modeRef.current = "diff";
@@ -5241,12 +5544,51 @@ function CodeBody(props) {
     document.addEventListener("dsh-ce-open-calldiff", handler);
     return () => document.removeEventListener("dsh-ce-open-calldiff", handler);
   }, [canNavigate, dismissPanels]);
+  const dropEditorFile = (event, before) => {
+    if (!hasFileDrag(event.dataTransfer)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    setFileDropOver(false);
+    setTabDropOver(null);
+    const value = readFileDrag(event.dataTransfer, cwd, sessionId);
+    if (!value || value.kind !== "file") {
+      say(t("drag.unsupported"), "error");
+      return;
+    }
+    if (value.source === "tab") {
+      setTabs((current) => reorderFileTabs(current, value.path, before));
+      return;
+    }
+    if (!canNavigate()) return;
+    if (value.source === "changes") void openDiff(value.path, value.scope, value.repo);
+    else void openFile(dragFilePath(value), 1, 1);
+  };
+  const editorDropProps = (before) => ({
+    onDragOver: (event) => {
+      if (!hasFileDrag(event.dataTransfer)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      event.dataTransfer.dropEffect = "copy";
+      setFileDropOver(true);
+      setTabDropOver(before ?? null);
+    },
+    onDragLeave: (event) => {
+      if (!event.relatedTarget || !event.currentTarget.contains(event.relatedTarget)) {
+        setFileDropOver(false);
+        setTabDropOver(null);
+      }
+    },
+    onDrop: (event) => dropEditorFile(event, before)
+  });
   if (!cwd) {
     return h("div", { className: "ce-root" }, h("div", { className: "ce-empty" }, t("editor.noSession")));
   }
   return h(
     "div",
-    { className: "ce-root ce-code-root", "data-mobile-view": (doc || diff || searchOpen || palette) && (!railVisible || mobileView === "editor") ? "editor" : "files", onKeyDown: onRootKeyDown },
+    { className: "ce-root ce-code-root", "data-mobile-view": (doc || diff || searchOpen || palette) && (!railVisible || mobileView === "editor") ? "editor" : "files", onKeyDown: onRootKeyDown, onDragEnd: () => {
+      setFileDropOver(false);
+      setTabDropOver(null);
+    } },
     h(
       "div",
       { className: "ce-toolbar" },
@@ -5320,6 +5662,7 @@ function CodeBody(props) {
         ),
         mode === "files" ? h(TreePanel, {
           cwd,
+          sessionId,
           t,
           onOpenFile: (path, line, col) => void openFile(path, line, col),
           onSearchDirectory: (directory) => openSearch({ kind: "directory", directory }),
@@ -5338,6 +5681,7 @@ function CodeBody(props) {
           }
         }) : h(ChangesPanel, {
           cwd,
+          sessionId,
           t,
           git,
           repos,
@@ -5366,7 +5710,11 @@ function CodeBody(props) {
       railVisible ? h("div", { className: "ce-splitter", onMouseDown: startRailDrag, onDoubleClick: () => setRailVisible(false), title: "⇔ 拖动调宽 · 双击收起" }) : h("button", { type: "button", className: "ce-rail-tab", title: "展开侧栏 (⌘B / Ctrl+B)", onClick: () => setRailVisible(true) }, "▸"),
       h(
         "div",
-        { className: "ce-editor" },
+        { className: `ce-editor${fileDropOver ? " ce-editor-file-drop" : ""}`, ...editorDropProps(), onDragEnd: () => {
+          setFileDropOver(false);
+          setTabDropOver(null);
+        } },
+        fileDropOver ? h("div", { className: "ce-file-drop-hint", role: "status" }, t("drag.openHere")) : null,
         h("button", { type: "button", className: "ce-mobile-back", onClick: () => {
           setSearchOpen(false);
           closePalette();
@@ -5383,7 +5731,13 @@ function CodeBody(props) {
               "div",
               {
                 key: p,
-                className: `ce-tab${active ? " ce-tab-active" : ""}`,
+                className: `ce-tab${active ? " ce-tab-active" : ""}${tabDropOver === p ? " ce-tab-drop-before" : ""}`,
+                ...fileDragProps({ cwd, path: p, source: "tab", sessionId }),
+                ...editorDropProps(p),
+                onDragEnd: () => {
+                  setFileDropOver(false);
+                  setTabDropOver(null);
+                },
                 title: RelPath(cwd, p) || p,
                 onClick: () => switchTab(p),
                 onAuxClick: (e) => {
@@ -6339,6 +6693,89 @@ var CSS2 = `
 .ce-left-notice>span{min-width:0;overflow-wrap:anywhere}
 .ce-left-notice>button{flex:none;width:28px;height:28px;border:0;border-radius:4px;background:transparent;color:inherit;font:inherit;font-size:18px;cursor:pointer}
 .ce-left-notice>button:focus-visible{outline:2px solid var(--dsw-alias-button-info-fill,#4176e6)}
+
+/* Browser chrome: persistent carrier viewport with task pages above it. */
+.ceb-root{container-type:inline-size;overflow:hidden}
+.ceb-toolbar{display:flex;align-items:center;gap:12px;flex:none;padding:10px 12px;background:var(--ce-surface-1);min-width:0}
+.ceb-nav-group,.ceb-action-group{display:flex;align-items:center;gap:3px;flex:none}
+.ceb-toolbar .ceb-tool{flex:none;width:30px;height:32px;border-radius:6px;color:var(--ce-fg-2)}
+.ceb-toolbar .ceb-tool svg{width:16px;height:16px;display:block}
+.ceb-toolbar .ceb-tool:disabled{opacity:.45;cursor:default}
+.ceb-toolbar .ceb-tool[aria-pressed=true]{background:var(--ce-accent-soft);color:var(--ce-accent)}
+.ceb-address-shell{display:flex;align-items:center;gap:4px;flex:1;min-width:80px;height:36px;padding:0 5px 0 10px;border:1px solid var(--ce-line-strong);border-radius:9px;background:var(--ce-surface-0);transition:border-color .15s ease}
+.ceb-address-shell:focus-within{border-color:var(--ce-accent)}
+.ceb-address-icon{display:inline-flex;flex:none;color:var(--ce-fg-3)}
+.ceb-root .ceb-address{flex:1;min-width:0;width:100%;height:32px;padding:0 5px;border:0;border-radius:0;background:transparent;color:var(--ce-fg);font-family:inherit;font-size:12px;box-shadow:none;outline:none}
+.ceb-root .ceb-address:focus-visible{outline:none;box-shadow:none}
+.ceb-go{display:inline-flex;align-items:center;justify-content:center;flex:none;width:26px;height:26px;padding:0;border:0;border-radius:5px;background:var(--ce-accent-soft);color:var(--ce-accent);cursor:pointer}
+.ceb-go:disabled{opacity:.3;cursor:default}
+.ceb-toolbar .ceb-star{width:26px;height:26px}
+.ceb-toolbar .ceb-star-saved{color:var(--ce-accent)}
+.ceb-progress{position:relative;height:2px;flex:none;overflow:hidden;background:var(--ce-line)}
+.ceb-progress>span{display:none}
+.ceb-progress-active>span{display:block;position:absolute;inset:0 auto 0 0;width:35%;background:var(--ce-accent);animation:ceb-loading 1.3s ease-in-out infinite}
+@keyframes ceb-loading{from{transform:translateX(-100%)}to{transform:translateX(390%)}}
+@media(prefers-reduced-motion:reduce){.ceb-progress-active>span{animation:none;width:100%;opacity:.5}.ceb-address-shell{transition:none}}
+
+.ceb-bookmarks-bar{display:flex;align-items:center;gap:5px;overflow:auto;flex:none;padding:5px 8px;border-bottom:1px solid var(--ce-line)}
+.ceb-bookmarks-bar button{flex:none;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:4px 8px;border:0;border-radius:4px;background:transparent;color:var(--ce-fg-2);font:inherit;font-size:11px;cursor:pointer}
+.ceb-bookmarks-bar button:hover{background:var(--ce-accent-soft)}
+.ceb-content{position:relative;flex:1;min-height:0;min-width:0;overflow:hidden}
+.ceb-viewport{position:absolute;inset:0;display:flex;min-height:0;min-width:0}
+.ceb-guest{flex:1;display:flex;width:100%;height:100%;border:0;background:var(--ce-surface-0)}
+.ceb-panel{position:absolute;inset:0;background:var(--ce-surface-0);padding:24px clamp(16px,4%,40px);z-index:1}
+.ceb-panel-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:16px}
+.ceb-panel-head h2,.ceb-start h2{margin:0;font-size:18px;line-height:1.4;font-weight:600;letter-spacing:-.02em}
+.ceb-panel-caption{margin:5px 0 0;font-size:12px;line-height:1.6;color:var(--ce-fg-2)}
+.ceb-start-icon{display:flex;align-items:center;justify-content:center;width:56px;height:56px;border-radius:14px;background:var(--ce-surface-1);border:1px solid var(--ce-line);color:var(--ce-fg-2);margin-bottom:6px}
+.ceb-list-tools{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:14px}
+.ceb-list-tools>.ce-input{flex:1 1 180px;font-size:12px}
+.ceb-list-tools label,.ceb-checkbox{display:flex;align-items:center;gap:6px;font-size:12px}
+.ceb-bookmark-row{display:flex;align-items:center;gap:8px;padding:14px 0;border-bottom:1px solid var(--ce-line);min-width:0}
+.ceb-bookmark-open{flex:1;min-width:0;display:flex;flex-direction:column;align-items:flex-start;gap:5px;border:0;background:transparent;text-align:left;color:var(--ce-fg);font:inherit;cursor:pointer}
+.ceb-bookmark-open strong{font-size:13px;font-weight:600;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ceb-bookmark-open span{font-size:11px;color:var(--ce-fg-2);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ceb-bookmark-open .ceb-bookmark-title{display:flex;align-items:center;gap:8px;max-width:100%;color:var(--ce-fg)}
+.ceb-bookmark-open .ceb-bookmark-glyph{display:inline-flex;flex:none;color:var(--ce-accent)}
+.ceb-bookmark-open small{font-size:11px;color:var(--ce-fg-3)}
+.ceb-confirm{display:inline-flex;align-items:center;gap:4px;flex:none}
+.ceb-empty{padding:32px 12px;color:var(--ce-fg-2);font-size:13px;line-height:1.7}
+.ceb-feedback:not([hidden]){padding:8px 12px;font-size:12px;line-height:1.5;background:var(--ce-surface-2);color:var(--ce-fg);overflow-wrap:anywhere;flex:none}
+.ceb-loading{font-size:11px;color:var(--ce-fg-2);padding:3px 10px;flex:none}
+.ceb-setting-hint,.ceb-capabilities p{font-size:12px;line-height:1.7;color:var(--ce-fg-2)}
+.ceb-settings-form{padding:18px 0;border-block:1px solid var(--ce-line);display:flex;flex-direction:column;align-items:flex-start;gap:14px;margin:18px 0;max-width:620px}
+.ceb-settings-form>label:not(.ceb-checkbox){display:flex;flex-direction:column;align-self:stretch;gap:7px;font-size:12px}
+.ceb-settings-form .ce-input{flex:none}
+.ceb-capabilities{border-top:1px solid var(--ce-line);margin-top:22px;padding-top:12px;max-width:76ch}
+.ceb-capabilities h3{font-size:13px;margin:12px 0 6px}
+.ceb-bookmark-editor{max-height:calc(100% - 58px);overflow:auto;position:absolute;z-index:8;top:48px;right:10px;width:min(400px,calc(100% - 20px));display:flex;flex-direction:column;gap:12px;padding:16px;border:1px solid var(--ce-line-strong);border-radius:8px;background:var(--ce-surface-1);box-shadow:0 8px 28px #0003}
+.ceb-bookmark-editor header,.ceb-bookmark-editor footer{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:13px}
+.ceb-bookmark-editor footer{justify-content:flex-end}
+.ceb-bookmark-editor>label:not(.ceb-checkbox){display:flex;flex-direction:column;gap:5px;font-size:12px}
+.ceb-bookmark-editor .ce-input{flex:none;font-size:12px}
+.ceb-start{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:24px;text-align:center;background:var(--ce-surface-0);color:var(--ce-fg-2);overflow:auto}
+.ceb-start p{margin:0;font-size:12px;line-height:1.7;overflow-wrap:anywhere;max-width:100%}
+.ceb-root input[type=checkbox]{accent-color:var(--ce-accent)}
+@container (max-width:620px){.ceb-toolbar{display:grid;grid-template-columns:1fr auto;gap:7px;padding:8px 10px}.ceb-nav-group{grid-column:1;grid-row:1}.ceb-action-group{grid-column:2;grid-row:1}.ceb-address-shell{grid-column:1/-1;grid-row:2;min-width:0;width:100%}.ceb-bookmark-row{flex-wrap:wrap}.ceb-bookmark-open{flex:1 1 100%}.ceb-panel{padding:18px 14px}.ceb-bookmark-editor{top:94px;max-height:calc(100% - 104px)}}
+@media(pointer:coarse){.ceb-toolbar .ceb-tool{min-width:36px;min-height:36px}.ceb-bookmark-editor .ceb-tool{min-width:36px;min-height:36px}}
+
+
+.ce-editor-file-drop{outline:2px solid var(--ce-accent);outline-offset:-2px}
+.ce-file-drop-hint{position:absolute;z-index:12;bottom:14px;left:50%;transform:translateX(-50%);max-width:calc(100% - 24px);padding:8px 12px;border:1px solid var(--ce-accent);border-radius:6px;background:var(--ce-surface-1);color:var(--ce-fg);font-size:12px;line-height:1.5;pointer-events:none;text-align:center}
+.ce-tab-drop-before{box-shadow:inset 2px 0 0 var(--ce-accent)}
+
+.ctp-entry-open{display:flex;align-items:center;gap:6px;flex:1;min-width:0;align-self:stretch;border:0;padding:0;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}
+.ctp-entry-open>.ce-ico,.ctp-entry-open>.cet-fico{flex:none}
+.ctp-entry-open>.ce-name{flex:1}
+.ctp-delete-panel{margin:5px 8px 9px;padding:12px;border:1px solid var(--ce-line-strong);border-radius:6px;background:var(--ce-surface-1);color:var(--ce-fg);font-size:12px;line-height:1.6;overflow-wrap:anywhere}
+.ctp-delete-panel strong{font-size:12px;font-weight:600}
+.ctp-delete-panel p{margin:6px 0;color:var(--ce-fg-2)}
+.ctp-delete-panel .ctp-delete-error{color:var(--dsw-alias-state-error-primary)}
+.ctp-delete-buttons{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px}
+
+.cet-row:focus-within .cet-act,.cet-copy-path:focus-visible{opacity:1}
+.cet-copy-path{display:inline-flex;align-items:center;justify-content:center;min-width:24px;min-height:24px;padding:4px}
+@media(hover:none){.cet-copy-path{opacity:1}}
 `;
 
 // src/client/register.js
@@ -7816,7 +8253,7 @@ function makeBrowserOpener(sidebarRight, now = Date.now) {
     pendingSession = sessionId;
     openedAt = time;
     try {
-      sidebarRight.openTab("browser", { params: { url: "https://www.doubao.com/" } });
+      sidebarRight.openTab("browser");
     } catch (error) {
       openedAt = -Infinity;
       throw error;
@@ -7974,6 +8411,642 @@ function installLeftTools(ctx, t) {
   };
 }
 
+// src/client/browserdata.js
+var DEFAULT_BROWSER_SETTINGS = Object.freeze({ homeUrl: "https://www.doubao.com/", showBookmarksBar: true, startPage: "home" });
+function normalizeBrowserUrl(input, applicationOrigin) {
+  const value = String(input ?? "").trim();
+  if (!value || value.length > 16384) throw Error("browser.invalidUrl");
+  const explicit = /^[A-Za-z][A-Za-z\d+.-]*:(?!\d+(?:[/?#]|$))/.test(value);
+  let url;
+  try {
+    url = new URL(explicit ? value : `https://${value}`);
+  } catch {
+    throw Error("browser.invalidUrl");
+  }
+  if (!["http:", "https:"].includes(url.protocol) || url.username || url.password) throw Error("browser.invalidUrl");
+  if (applicationOrigin && applicationOrigin !== "null" && url.origin === applicationOrigin) throw Error("browser.applicationOrigin");
+  return url.href;
+}
+
+// src/client/browsercarrier.js
+function createBrowserCarrier({ host, bridge, workspace, applicationOrigin, onState, onOpen }) {
+  let disposed = false, element, reservation, offOpen, acquiring, ready = false, pending, lastUrl = "", firstDocument = true;
+  let state = { url: "", title: "", loading: false, unknown: false, canBack: false, canForward: false, error: "" };
+  const removers = [];
+  const releases = /* @__PURE__ */ new Set();
+  const release = (lease) => {
+    const done = Promise.resolve().then(() => bridge.release(lease)).catch((error) => fail(error)).finally(() => releases.delete(done));
+    releases.add(done);
+    return done;
+  };
+  const dropGuest = () => {
+    for (const remove of removers.splice(0)) remove();
+    offOpen?.();
+    offOpen = void 0;
+    const guest = element;
+    element = void 0;
+    ready = false;
+    guest?.remove();
+    const lease = reservation;
+    reservation = void 0;
+    return lease ? release(lease.lease) : Promise.resolve();
+  };
+  const publish = (patch) => {
+    if (!disposed) {
+      state = { ...state, ...patch };
+      onState(state);
+    }
+  };
+  const listen = (node, type, callback) => {
+    node.addEventListener(type, callback);
+    removers.push(() => node.removeEventListener(type, callback));
+  };
+  const fail = (error) => publish({ loading: false, error: String(error?.message ?? error) });
+  const validate = (url) => normalizeBrowserUrl(url, applicationOrigin);
+  const observe = (committed = true) => {
+    if (!ready || !element || disposed) return;
+    try {
+      let url;
+      try {
+        if (committed) url = validate(element.getURL());
+      } catch {
+      }
+      if (url && firstDocument) {
+        element.clearHistory();
+        firstDocument = false;
+      }
+      if (url) element.setAttribute("aria-label", element.getTitle() || new URL(url).hostname);
+      publish({ ...url ? { url, title: element.getTitle() || new URL(url).hostname, unknown: false } : {}, loading: element.isLoading(), canBack: element.canGoBack(), canForward: element.canGoForward() });
+    } catch (error) {
+      fail(error);
+    }
+  };
+  const loadPending = () => {
+    if (!ready || !pending || disposed) return;
+    const url = pending;
+    pending = void 0;
+    const guest = element;
+    try {
+      Promise.resolve(guest.loadURL(url)).catch((error) => {
+        if (element === guest && state.url === url && error?.code !== "ERR_ABORTED") fail(error);
+      });
+    } catch (error) {
+      fail(error);
+    }
+  };
+  const initializeDesktop = () => {
+    if (acquiring || element || disposed) return;
+    acquiring = bridge.acquire(workspace).then(async (lease) => {
+      if (disposed) {
+        await release(lease.lease);
+        return;
+      }
+      reservation = lease;
+      element = host.ownerDocument.createElement("webview");
+      element.className = "ceb-guest";
+      element.dataset.sidebarBrowserFrame = "webview";
+      element.setAttribute("name", lease.lease);
+      element.setAttribute("partition", lease.partition);
+      element.setAttribute("allowpopups", "");
+      element.setAttribute("src", `about:blank#${lease.lease}`);
+      offOpen = bridge.onOpenRequested(lease.lease, (url) => {
+        if (!disposed) {
+          try {
+            onOpen(validate(url));
+          } catch (error) {
+            fail(error);
+          }
+        }
+      });
+      listen(element, "dom-ready", () => {
+        ready = true;
+        observe(!pending);
+        loadPending();
+      });
+      listen(element, "did-navigate", () => observe(true));
+      listen(element, "page-title-updated", () => observe(!state.loading));
+      for (const name of ["did-start-loading", "did-stop-loading"]) listen(element, name, () => observe(false));
+      listen(element, "did-navigate-in-page", (event) => {
+        if (event.isMainFrame) observe();
+      });
+      listen(element, "did-start-navigation", (event) => {
+        if (event.isMainFrame) publish({ loading: true, error: "" });
+      });
+      listen(element, "did-fail-load", (event) => {
+        if (event.isMainFrame && event.errorCode !== -3) fail(`${event.errorCode}: ${event.errorDescription}`);
+      });
+      listen(element, "render-process-gone", () => {
+        void dropGuest();
+        firstDocument = true;
+        fail("browser.guestGone");
+      });
+      host.append(element);
+    }).catch(async (error) => {
+      await dropGuest();
+      fail(error);
+    }).finally(() => {
+      acquiring = void 0;
+    });
+  };
+  const load = (input) => {
+    try {
+      const url = validate(input);
+      lastUrl = url;
+      publish({ url, title: new URL(url).hostname, loading: true, unknown: false, error: "" });
+      if (bridge) {
+        pending = url;
+        initializeDesktop();
+        loadPending();
+      } else {
+        element?.remove();
+        for (const remove of removers.splice(0)) remove();
+        const frame = host.ownerDocument.createElement("iframe");
+        element = frame;
+        frame.className = "ceb-guest";
+        frame.title = new URL(url).hostname;
+        frame.setAttribute("sandbox", "allow-scripts allow-forms allow-same-origin allow-popups allow-popups-to-escape-sandbox");
+        frame.setAttribute("referrerpolicy", "no-referrer");
+        let loaded = false;
+        listen(frame, "load", () => {
+          if (frame !== element) return;
+          publish({ loading: false, unknown: loaded, canBack: false, canForward: false });
+          loaded = true;
+        });
+        listen(frame, "error", () => {
+          if (frame === element) fail("browser.loadFailed");
+        });
+        frame.src = url;
+        host.append(frame);
+      }
+      return true;
+    } catch (error) {
+      fail(error);
+      return false;
+    }
+  };
+  return {
+    load,
+    reload() {
+      if (bridge && ready) {
+        try {
+          element.reload();
+        } catch (error) {
+          fail(error);
+        }
+      } else if (lastUrl) load(lastUrl);
+    },
+    back() {
+      if (bridge && ready && state.canBack) {
+        try {
+          element.goBack();
+        } catch (error) {
+          fail(error);
+        }
+      }
+    },
+    forward() {
+      if (bridge && ready && state.canForward) {
+        try {
+          element.goForward();
+        } catch (error) {
+          fail(error);
+        }
+      }
+    },
+    async dispose() {
+      if (disposed) return;
+      disposed = true;
+      pending = void 0;
+      await dropGuest();
+      await acquiring;
+      await Promise.all(releases);
+    }
+  };
+}
+
+// src/client/browserworkspace.js
+async function resolveBrowserWorkspace(source, sessionId, signal) {
+  if (!source) throw Error("Browser workspace service is unavailable");
+  signal.throwIfAborted();
+  if (source.getSnapshot().phase !== "ready") {
+    await new Promise((resolve, reject) => {
+      let stop = () => {
+      };
+      const abort = () => {
+        stop();
+        reject(signal.reason ?? Error("Aborted"));
+      };
+      const check = () => {
+        if (source.getSnapshot().phase !== "ready") return;
+        stop();
+        signal.removeEventListener("abort", abort);
+        resolve();
+      };
+      stop = source.subscribe(check);
+      signal.addEventListener("abort", abort, { once: true });
+      if (signal.aborted) abort();
+      else check();
+    });
+  }
+  signal.throwIfAborted();
+  const workspace = source.getSnapshot().items.find((item) => item.sessionIds.includes(sessionId));
+  return workspace ? `cwd:${workspace.path}` : `session:${sessionId}`;
+}
+
+// src/client/browsericons.js
+var paths = {
+  home: "m3 10 9-7 9 7M5 9v11h5v-6h4v6h5V9",
+  external: "M14 3h7v7M21 3 10 14M11 5H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-6",
+  star: "m12 3 2.8 5.7 6.3.9-4.6 4.5 1.1 6.3-5.6-3-5.6 3 1.1-6.3L3 9.6l6.2-.9L12 3Z",
+  bookmarks: "M6 3h12v18l-6-4-6 4V3Z",
+  globe: "M3 12h18M12 3c5 5 5 13 0 18-5-5-5-13 0-18Z",
+  arrow: "M5 12h14m-6-6 6 6-6 6",
+  close: "m6 6 12 12M18 6 6 18"
+};
+function BrowserGlyph({ name, filled = false, size = 16 }) {
+  const children = name === "settings" ? [h("path", { key: "gear", d: "m9 3-.6 2.4-2 1.2L4 6l-2 3.5 1.8 1.7v2.4L2 15.3l2 3.5 2.4-.6 2 1.2L9 22h4l.6-2.6 2-1.2 2.4.6 2-3.5-1.8-1.7v-2.4L20 9l-2-3.5-2.4.6-2-1.2L13 3H9Z" }), h("circle", { key: "center", cx: 11, cy: 12.5, r: 3 })] : [name === "globe" ? h("circle", { key: "circle", cx: 12, cy: 12, r: 9 }) : null, h("path", { key: "path", d: paths[name] ?? paths.globe })];
+  return h("svg", { width: size, height: size, viewBox: "0 0 24 24", fill: filled ? "currentColor" : "none", stroke: "currentColor", strokeWidth: 1.65, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true }, children);
+}
+
+// src/client/browser.js
+var checkpointKey = (sessionId, tabId) => `dsh.plugin-kit.browser.page.v1.${sessionId}.${tabId}`;
+function checkpoint(key) {
+  try {
+    const value = JSON.parse(localStorage.getItem(key) ?? "null");
+    return value?.url ? { url: normalizeBrowserUrl(value.url), title: String(value.title ?? "").slice(0, 240), navigationRevision: value.navigationRevision, initialUrl: value.initialUrl } : null;
+  } catch {
+    return null;
+  }
+}
+function EnhancedBrowser({ sessionId, useSessions, useTabInfo, useBrowserLibrary, loadLibrary, changeLibrary, desktopBridge, browserWorkspaces, t }) {
+  const info = useTabInfo();
+  const tab = info.tab;
+  const library = useBrowserLibrary((value) => value);
+  const settings = library.data?.settings ?? DEFAULT_BROWSER_SETTINGS;
+  const bookmarks = library.data?.bookmarks ?? [];
+  const [page, setPage] = useState({ url: "", title: "", loading: false, unknown: false, canBack: false, canForward: false, error: "" });
+  const [address, setAddress] = useState("");
+  const [panel, setPanel] = useState(null);
+  const [filter, setFilter] = useState("");
+  const [favoritesOnly, setFavoritesOnly] = useState(false);
+  const [folder, setFolder] = useState("");
+  const [editor, setEditor] = useState(null);
+  const editorCurrent = useRef(null);
+  editorCurrent.current = editor;
+  const bookmarkDraft = useRef(null);
+  if (editor) bookmarkDraft.current = editor;
+  const [confirmDelete, setConfirmDelete] = useState(null);
+  const [settingsDraft, setSettingsDraft] = useState(null);
+  const settingsBase = useRef(null);
+  const [notice, setNotice] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [epoch, setEpoch] = useState(0);
+  const hostRef = useRef(null);
+  const carrierRef = useRef(null);
+  const startRef = useRef(false);
+  const lastTarget = useRef("");
+  const initial = useRef(checkpoint(checkpointKey(sessionId, tab.id)));
+  const [restore, setRestore] = useState(initial.current);
+  const alive = useRef(true);
+  const editorRef = useDismissLayer({ open: editor !== null, onDismiss: () => setEditor(null), ignoreSelector: '[data-ce-browser-action="bookmark"]' });
+  const removeRef = useDismissLayer({ open: confirmDelete !== null, onDismiss: () => setConfirmDelete(null) });
+  const origin = typeof window === "undefined" ? void 0 : window.location.origin;
+  const textError = (error) => {
+    const message = String(error?.message ?? error);
+    return message.startsWith("browser.") ? t(message) : message;
+  };
+  useEffect(() => {
+    void loadLibrary();
+  }, [loadLibrary]);
+  useEffect(() => {
+    if (!notice) return void 0;
+    const timer = setTimeout(() => setNotice(""), 5e3);
+    return () => clearTimeout(timer);
+  }, [notice]);
+  useEffect(() => {
+    alive.current = true;
+    const host = hostRef.current;
+    if (!host) return void 0;
+    const lifetime = new AbortController();
+    let carrier;
+    const initialize = async () => {
+      const workspace = desktopBridge ? await resolveBrowserWorkspace(browserWorkspaces, sessionId, lifetime.signal) : `session:${sessionId}`;
+      if (lifetime.signal.aborted) return;
+      carrier = createBrowserCarrier({
+        host,
+        bridge: desktopBridge,
+        workspace,
+        applicationOrigin: origin,
+        onOpen: (url) => tab.actions.openTab("browser", { params: { url }, revealIfOpened: false }),
+        onState: (next) => {
+          setPage(next);
+          if (!next.unknown) {
+            if (next.url !== lastTarget.current) setAddress(next.url);
+            lastTarget.current = next.url;
+          }
+          if (next.url && !next.unknown) {
+            try {
+              localStorage.setItem(checkpointKey(sessionId, tab.id), JSON.stringify({ url: next.url, title: next.title, navigationRevision: tab.navigation?.revision, initialUrl: tab.navigation?.params?.url }));
+            } catch {
+            }
+          }
+        }
+      });
+      carrierRef.current = carrier;
+      if (lastTarget.current) carrier.load(lastTarget.current);
+      setEpoch((value) => value + 1);
+    };
+    void initialize().catch((error) => {
+      if (!lifetime.signal.aborted) setNotice(textError(error));
+    });
+    return () => {
+      alive.current = false;
+      lifetime.abort();
+      carrierRef.current = null;
+      void carrier?.dispose().catch((error) => console.error("toolbox browser release", error));
+    };
+  }, [sessionId, tab.id, tab.signal, browserWorkspaces, desktopBridge]);
+  const navigate = (input) => {
+    try {
+      const url = normalizeBrowserUrl(input, origin);
+      if (!carrierRef.current) {
+        setNotice(t("browser.initializing"));
+        return;
+      }
+      setAddress(url);
+      if (carrierRef.current.load(url)) {
+        setPanel(null);
+        setEditor(null);
+        setConfirmDelete(null);
+        setRestore(null);
+        setNotice("");
+      }
+    } catch (error) {
+      setNotice(textError(error));
+    }
+  };
+  useEffect(() => {
+    if (!carrierRef.current || startRef.current) return;
+    if (!tab.navigation?.params?.url && !library.data && !library.error) return;
+    startRef.current = true;
+    const supplied = tab.navigation?.params?.url;
+    if (supplied && (!initial.current || initial.current.navigationRevision !== tab.navigation?.revision || initial.current.initialUrl !== supplied)) navigate(supplied);
+    else if (!initial.current) {
+      if (settings.startPage === "bookmarks") setPanel("bookmarks");
+      else navigate(settings.homeUrl);
+    }
+  }, [epoch, library.data, library.error, settings.startPage, settings.homeUrl]);
+  const seenRevision = useRef(tab.navigation?.revision);
+  useEffect(() => {
+    if (seenRevision.current === tab.navigation?.revision || !carrierRef.current) return;
+    seenRevision.current = tab.navigation?.revision;
+    if (tab.navigation?.params?.url) navigate(tab.navigation.params.url);
+  }, [tab.navigation?.revision, epoch]);
+  useEffect(() => tab.actions.bindCommands?.({ refresh: () => carrierRef.current?.reload() }), [tab.actions]);
+  useEffect(() => {
+    if (tab.visible === false) {
+      setEditor(null);
+      setConfirmDelete(null);
+    }
+  }, [tab.visible]);
+  useEffect(() => () => {
+    if (tab.signal.aborted) {
+      try {
+        localStorage.removeItem(checkpointKey(sessionId, tab.id));
+      } catch {
+      }
+    }
+  }, [sessionId, tab.id, tab.signal]);
+  const mutate = async (request, done) => {
+    if (busy) return;
+    setBusy(true);
+    setNotice("");
+    try {
+      if (request.action === "save") normalizeBrowserUrl(request.url, origin);
+      if (request.action === "settings" && request.settings.homeUrl !== void 0) normalizeBrowserUrl(request.settings.homeUrl, origin);
+      await changeLibrary(request);
+      if (alive.current) {
+        done?.();
+        setNotice(t("browser.saved"));
+      }
+    } catch (error) {
+      if (alive.current) setNotice(textError(error));
+    } finally {
+      if (alive.current) setBusy(false);
+    }
+  };
+  const currentBookmark = bookmarks.find((entry) => entry.url === page.url);
+  const openBookmark = () => {
+    if (editor) {
+      setEditor(null);
+      return;
+    }
+    if (!page.url || page.unknown) return;
+    setEditor(bookmarkDraft.current?.url === page.url ? bookmarkDraft.current : currentBookmark ? { ...currentBookmark } : { title: page.title || new URL(page.url).hostname, url: page.url, folder: "", favorite: true });
+  };
+  const choosePanel = (next) => {
+    setPanel((current) => current === next ? null : next);
+    setEditor(null);
+    setConfirmDelete(null);
+    if (next === "settings") {
+      settingsBase.current = { ...settings };
+      setSettingsDraft({ ...settings });
+    }
+  };
+  const visibleBookmarks = bookmarks.filter((entry) => (!favoritesOnly || entry.favorite) && (!folder || entry.folder === folder) && (!filter.trim() || `${entry.title} ${entry.url} ${entry.folder}`.toLowerCase().includes(filter.trim().toLowerCase())));
+  const tool = (label, child, click, disabled = false, extra = {}) => h("button", { type: "button", className: "ce-tool ceb-tool", title: label, "aria-label": label, disabled, onClick: click, ...extra }, child);
+  return h(
+    "div",
+    { className: "ce-root ceb-root", onKeyDown: (event) => {
+      if ((event.ctrlKey || event.metaKey) && !event.altKey && event.code === "KeyL") {
+        event.preventDefault();
+        event.currentTarget.querySelector(".ceb-address")?.focus();
+      }
+      if (event.key === "Escape" && !event.isComposing && panel && !editor && !confirmDelete) {
+        event.preventDefault();
+        event.stopPropagation();
+        setPanel(null);
+      }
+    } },
+    h(
+      "form",
+      { className: "ceb-toolbar", onSubmit: (event) => {
+        event.preventDefault();
+        navigate(address);
+      } },
+      h(
+        "div",
+        { className: "ceb-nav-group", role: "group", "aria-label": t("browser.navigation") },
+        tool(t("browser.back"), h(IconArrowLeft), () => carrierRef.current?.back(), !page.canBack),
+        tool(t("browser.forward"), h(IconArrowRight), () => carrierRef.current?.forward(), !page.canForward),
+        tool(t("browser.reload"), h(IconRefresh), () => restore ? navigate(restore.url) : carrierRef.current?.reload(), !page.url && !restore)
+      ),
+      h(
+        "div",
+        { className: "ceb-address-shell" },
+        h("span", { className: "ceb-address-icon" }, h(BrowserGlyph, { name: "globe", size: 15 })),
+        h("input", { className: "ce-input ceb-address", "aria-label": t("browser.address"), placeholder: t("browser.address"), value: address, spellCheck: false, autoComplete: "off", onFocus: (event) => event.target.select(), onChange: (event) => setAddress(event.target.value) }),
+        tool(t(currentBookmark ? "browser.editBookmark" : "browser.bookmarkPage"), h(BrowserGlyph, { name: "star", filled: Boolean(currentBookmark) }), openBookmark, !library.data || !page.url || page.unknown || page.loading, { className: `ce-tool ceb-tool ceb-star${currentBookmark ? " ceb-star-saved" : ""}`, "data-ce-browser-action": "bookmark", "aria-expanded": editor !== null, "aria-pressed": Boolean(currentBookmark) }),
+        h("button", { className: "ceb-go", type: "submit", disabled: !address.trim(), title: t("browser.go"), "aria-label": t("browser.go") }, h(BrowserGlyph, { name: "arrow" }))
+      ),
+      h(
+        "div",
+        { className: "ceb-action-group", role: "group", "aria-label": t("browser.tools") },
+        tool(t("browser.home"), h(BrowserGlyph, { name: "home" }), () => navigate(settings.homeUrl)),
+        tool(t("browser.external"), h(BrowserGlyph, { name: "external" }), () => {
+          try {
+            window.open(normalizeBrowserUrl(page.url, origin), "_blank", "noopener,noreferrer");
+          } catch (error) {
+            setNotice(textError(error));
+          }
+        }, !page.url || page.unknown),
+        tool(t("browser.bookmarks"), h(BrowserGlyph, { name: "bookmarks" }), () => choosePanel("bookmarks"), false, { "aria-expanded": panel === "bookmarks", "aria-pressed": panel === "bookmarks" }),
+        tool(t("browser.settings"), h(BrowserGlyph, { name: "settings" }), () => choosePanel("settings"), false, { "aria-expanded": panel === "settings", "aria-pressed": panel === "settings" })
+      )
+    ),
+    settings.showBookmarksBar && bookmarks.some((entry) => entry.favorite) ? h("nav", { className: "ceb-bookmarks-bar", "aria-label": t("browser.favorites") }, bookmarks.filter((entry) => entry.favorite).map((entry) => h("button", { key: entry.id, type: "button", title: entry.url, onClick: () => navigate(entry.url) }, entry.title))) : null,
+    h("div", { className: "ceb-feedback", role: "status", hidden: !notice && !library.error && !page.error }, textError(page.error || library.error) || notice),
+    library.error ? h("button", { type: "button", className: "ce-link", onClick: () => void loadLibrary() }, t("browser.retryStorage")) : null,
+    h("div", { className: `ceb-progress${page.loading && !panel ? " ceb-progress-active" : ""}`, role: page.loading && !panel ? "progressbar" : void 0, "aria-label": page.loading && !panel ? t("loading") : void 0 }, h("span")),
+    page.unknown ? h("div", { className: "ce-note" }, t("browser.unknown")) : null,
+    h(
+      "div",
+      { className: "ceb-content" },
+      h("div", { className: "ceb-viewport", ref: hostRef, style: { visibility: panel || editor || restore ? "hidden" : "visible" }, "aria-hidden": Boolean(panel || editor || restore) }),
+      !panel && restore ? h("section", { className: "ceb-start" }, h("span", { className: "ceb-start-icon" }, h(BrowserGlyph, { name: "globe", size: 30 })), h("h2", null, t("browser.restore")), h("p", null, restore.title), h("p", null, restore.url), h("button", { type: "button", className: "ce-sk-btn ce-sk-primary", onClick: () => navigate(restore.url) }, t("browser.restoreAction"))) : null,
+      !panel && !restore && !page.url && !page.loading ? h("div", { className: "ceb-start" }, h("span", { className: "ceb-start-icon" }, h(BrowserGlyph, { name: "globe", size: 30 })), h("h2", null, t("browser.welcome")), h("p", null, t("browser.startHint"))) : null,
+      panel ? h(
+        "section",
+        { className: "ceb-panel ce-scroll", "aria-label": t(panel === "bookmarks" ? "browser.bookmarks" : "browser.settings") },
+        h("header", { className: "ceb-panel-head" }, h("div", null, h("h2", null, t(panel === "bookmarks" ? "browser.bookmarks" : "browser.settings")), h("p", { className: "ceb-panel-caption" }, panel === "bookmarks" ? t("browser.bookmarkCount", { n: bookmarks.length }) : t("browser.settingsCaption"))), tool(t("close"), h(BrowserGlyph, { name: "close" }), () => setPanel(null))),
+        panel === "bookmarks" ? h(
+          Fragment,
+          null,
+          h(
+            "div",
+            { className: "ceb-list-tools" },
+            h("input", { type: "search", className: "ce-input", "aria-label": t("browser.searchBookmarks"), placeholder: t("browser.searchBookmarks"), value: filter, onChange: (event) => setFilter(event.target.value) }),
+            h("select", { className: "ce-sk-scope", "aria-label": t("browser.folder"), value: folder, onChange: (event) => setFolder(event.target.value) }, h("option", { value: "" }, t("browser.allFolders")), [...new Set(bookmarks.map((entry) => entry.folder).filter(Boolean))].map((name) => h("option", { key: name, value: name }, name))),
+            h("label", null, h("input", { type: "checkbox", checked: favoritesOnly, onChange: (event) => setFavoritesOnly(event.target.checked) }), t("browser.favoritesOnly")),
+            h("button", { type: "button", className: "ce-sk-btn", disabled: !library.data, onClick: () => setEditor(bookmarkDraft.current ?? { title: "", url: "", folder: "", favorite: false }) }, t("browser.addBookmark"))
+          ),
+          !library.data ? h("p", null, t("loading")) : !visibleBookmarks.length ? h("div", { className: "ceb-empty" }, t(bookmarks.length ? "browser.noMatch" : "browser.emptyBookmarks")) : visibleBookmarks.map((entry) => h(
+            "article",
+            { key: entry.id, className: "ceb-bookmark-row" },
+            h("button", { type: "button", className: "ceb-bookmark-open", onClick: () => navigate(entry.url), title: entry.url }, h("span", { className: "ceb-bookmark-title" }, h("span", { className: "ceb-bookmark-glyph" }, h(BrowserGlyph, { name: entry.favorite ? "star" : "globe", size: 15 })), h("strong", null, entry.title)), h("span", null, entry.url), entry.folder ? h("small", null, entry.folder) : null),
+            h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost", "aria-label": `${t("editor.edit")} ${entry.title}`, onClick: () => setEditor({ ...entry }) }, t("editor.edit")),
+            confirmDelete === entry.id ? h("span", { ref: removeRef, className: "ceb-confirm" }, h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-danger", disabled: busy, onClick: () => void mutate({ action: "delete", id: entry.id }, () => setConfirmDelete(null)) }, t("browser.confirmDelete")), h("button", { type: "button", className: "ce-sk-btn", onClick: () => setConfirmDelete(null) }, t("editor.cancel"))) : h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost", "aria-label": `${t("skills.delete")} ${entry.title}`, onClick: () => setConfirmDelete(entry.id) }, t("skills.delete"))
+          ))
+        ) : h(
+          Fragment,
+          null,
+          h("p", { className: "ceb-setting-hint" }, t("browser.settingsScope")),
+          h(
+            "form",
+            { className: "ceb-settings-form", onSubmit: (event) => {
+              event.preventDefault();
+              void mutate({ action: "settings", settings: Object.fromEntries(Object.entries(settingsDraft ?? settings).filter(([key, value]) => value !== settingsBase.current?.[key])) }, () => {
+                settingsBase.current = { ...settingsDraft ?? settings };
+              });
+            } },
+            h("label", null, t("browser.homeUrl"), h("input", { className: "ce-input", value: (settingsDraft ?? settings).homeUrl, onChange: (event) => setSettingsDraft({ ...settingsDraft ?? settings, homeUrl: event.target.value }) })),
+            h("label", null, t("browser.startPage"), h("select", { className: "ce-sk-scope", value: (settingsDraft ?? settings).startPage, onChange: (event) => setSettingsDraft({ ...settingsDraft ?? settings, startPage: event.target.value }) }, h("option", { value: "home" }, t("browser.home")), h("option", { value: "bookmarks" }, t("browser.bookmarks")))),
+            h("label", { className: "ceb-checkbox" }, h("input", { type: "checkbox", checked: (settingsDraft ?? settings).showBookmarksBar, onChange: (event) => setSettingsDraft({ ...settingsDraft ?? settings, showBookmarksBar: event.target.checked }) }), t("browser.showBookmarksBar")),
+            h("button", { type: "submit", className: "ce-sk-btn ce-sk-primary", disabled: busy || !library.data }, t("editor.save"))
+          ),
+          h("section", { className: "ceb-capabilities" }, h("h3", null, t("browser.extensions")), h("p", null, t("browser.extensionsUnavailable")), h("h3", null, t("browser.carrier")), h("p", null, t(desktopBridge ? "browser.desktopPolicy" : "browser.webPolicy")))
+        )
+      ) : null
+    ),
+    editor ? h(
+      "form",
+      { className: "ceb-bookmark-editor", ref: editorRef, role: "dialog", "aria-label": t("browser.editBookmark"), onSubmit: (event) => {
+        event.preventDefault();
+        const saving = editor;
+        void mutate({ action: "save", ...saving }, () => {
+          if (editorCurrent.current === saving) {
+            bookmarkDraft.current = null;
+            setEditor(null);
+          }
+        });
+      } },
+      h("header", null, h("strong", null, t(editor.id ? "browser.editBookmark" : "browser.addBookmark")), tool(t("close"), h(BrowserGlyph, { name: "close" }), () => setEditor(null))),
+      ...[["title", "browser.name"], ["url", "browser.url"], ["folder", "browser.folder"]].map(([key, label]) => h("label", { key }, t(label), h("input", { className: "ce-input", autoFocus: key === "title", value: editor[key], required: key === "url", onChange: (event) => setEditor({ ...editor, [key]: event.target.value }) }))),
+      h("label", { className: "ceb-checkbox" }, h("input", { type: "checkbox", checked: editor.favorite, onChange: (event) => setEditor({ ...editor, favorite: event.target.checked }) }), t("browser.pinFavorite")),
+      h("footer", null, h("button", { type: "button", className: "ce-sk-btn", onClick: () => setEditor(null) }, t("editor.cancel")), h("button", { type: "submit", className: "ce-sk-btn ce-sk-primary", disabled: busy || !editor.url.trim() }, t("editor.save")))
+    ) : null
+  );
+}
+
+// src/client/browsermodel.js
+function createBrowserDataModel(call = api) {
+  let snapshot = { data: null, error: "", busy: false };
+  const listeners = /* @__PURE__ */ new Set();
+  let refresh;
+  const publish = (patch) => {
+    snapshot = { ...snapshot, ...patch };
+    for (const listener of listeners) listener();
+  };
+  const accept = (data) => {
+    if (!snapshot.data || data.revision >= snapshot.data.revision) publish({ data, error: "" });
+  };
+  return {
+    getSnapshot: () => snapshot,
+    subscribe(listener) {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+    load() {
+      if (refresh) return refresh;
+      publish({ busy: true });
+      refresh = call("browser.data", { action: "list" }).then((result) => {
+        if (!result.ok) throw Error(result.error);
+        accept(result.value);
+      }).catch((error) => publish({ error: error.message })).finally(() => {
+        refresh = void 0;
+        publish({ busy: false });
+      });
+      return refresh;
+    },
+    async change(request) {
+      const result = await call("browser.data", { ...request, baseRevision: snapshot.data?.revision });
+      if (!result.ok) {
+        if (result.error === "browser.conflict") await this.load();
+        throw Error(result.error);
+      }
+      accept(result.value);
+    }
+  };
+}
+
+// src/client/browserregister.js
+var BROWSER_TAB_ID = "dsh-plugin-kit/browser";
+function installBrowser(ctx, t) {
+  const native = ctx.sidebarRightTabs.get("browser");
+  if (!native || native.priority === "extension") return () => {
+  };
+  const carrier = globalThis.dshDesktop;
+  const bridge = carrier?.protocolVersion === 1 ? carrier.browser : void 0;
+  const model = createBrowserDataModel();
+  const definition2 = { id: BROWSER_TAB_ID, kind: "browser", priority: "extension", multiple: true, keepMounted: Boolean(bridge), title: () => t("browser.label"), guide: [{ id: "new", order: 30, title: () => t("browser.label"), description: () => t("browser.guide"), icon: BrowserIcon }] };
+  const stopType = ctx.sidebarRightTabs.register(definition2);
+  const stopBody = ctx.slots.inject("sidebar.right.pane.tab", () => ctx.slots.register({
+    name: "sidebar.right.pane.tab",
+    key: BROWSER_TAB_ID,
+    locale: NS,
+    inject: () => ({ hooks: { browserLibrary: model }, desktopBridge: bridge, browserWorkspaces: ctx.workspaces?.list, loadLibrary: () => model.load(), changeLibrary: (request) => model.change(request) })
+  }, EnhancedBrowser));
+  const stopTitle = ctx.slots.inject("sidebar.right.pane.tab.title", () => ctx.slots.register({ name: "sidebar.right.pane.tab.title", key: BROWSER_TAB_ID }, ({ useTabInfo }) => h("span", null, useTabInfo()?.tab?.title ?? t("browser.label"))));
+  return () => {
+    stopTitle();
+    stopBody();
+    stopType();
+  };
+}
+function BrowserIcon({ size = 18 }) {
+  return h("svg", { viewBox: "0 0 24 24", width: size, height: size, fill: "none", stroke: "currentColor", strokeWidth: 1.6, "aria-hidden": true }, h("circle", { cx: 12, cy: 12, r: 9 }), h("path", { d: "M3 12h18M12 3c5 5 5 13 0 18-5-5-5-13 0-18Z" }));
+}
+
 // src/client/index.js
 var index_default = {
   inject: ["slots", "locale", "sidebarRightTabs", "sidebarRight", "layout"],
@@ -7988,6 +9061,9 @@ var index_default = {
     safe("styles", insertStyles);
     const bound = ctx.locale.bind(NS);
     safe("dictionaries", () => ctx.locale.register(NS, { zh, en }));
+    ctx.inject(["workspaces"], (browserCtx) => {
+      browserCtx.effect(() => installBrowser(browserCtx, bound), "toolbox: enhanced browser");
+    });
     safe("tab type", () => ctx.sidebarRightTabs.register(definition(bound)));
     const Bound = (props) => h(CodeBody, { ...props, t: props.t ?? bound });
     safe("tab body", () => ctx.slots.inject("sidebar.right.pane.tab", () => ctx.slots.register({

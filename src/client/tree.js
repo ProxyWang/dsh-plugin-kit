@@ -2,29 +2,38 @@
 
 import { Fragment, h, useCallback, useEffect, useRef, useState } from "./react.js";
 import { api } from "./api.js";
+import { fileDragProps } from "./filedrag.js";
 import { useDismissLayer } from "./dismiss.js";
 import { HintButton } from "./hint.js";
 import { IconFolder } from "./icons.js";
 import { FileGlyph, fileTint } from "./changetree.js";
 import { ancestorDirs, canDropInto, parentDir, toAbs } from "./pathtools.js";
+import { createDirectoryRequests, uniqueDirectoryEntries } from "./treemodel.js";
 
-export function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshKey, onNotify, onDeleted, onSearchDirectory }) {
+export function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshKey, onNotify, onDeleted, onSearchDirectory, sessionId }) {
 	const [listing, setListing] = useState({});
 	const [expanded, setExpanded] = useState([]);
-	const [action, setAction] = useState(null); // {kind: newfile|newdir|rename|delete, path, value}
+	const [action, setAction] = useState(null);
+	const [deleting, setDeleting] = useState(false);
+	const [deleteError, setDeleteError] = useState("");
+	const deletePending = useRef(false); // {kind: newfile|newdir|rename|delete, path, value}
 	const [dragPath, setDragPath] = useState(null); // path being dragged (move source)
 	const [dropDir, setDropDir] = useState(null); // dir currently highlighted as drop target
 	const [contextMenu, setContextMenu] = useState(null); // {path, isDir, x, y}
 	const railRef = useRef(null);
 	const contextMenuRef = useDismissLayer({ open: Boolean(contextMenu), onDismiss: () => setContextMenu(null) });
-	const deleteRef = useDismissLayer({ open: action?.kind === "delete", onDismiss: () => setAction(null) });
+	const deleteRef = useDismissLayer({ open: action?.kind === "delete", onDismiss: () => { if (!deletePending.current) { setAction(null); setDeleteError(""); } }, ignoreSelector: '[data-ce-popup-trigger="tree-delete"]' });
 	const lastRevealed = useRef(null);
 	const revealTick = useRef(null);
+	const requestsRef = useRef(null);
+	if (requestsRef.current === null) requestsRef.current = createDirectoryRequests();
 	const loadDir = useCallback((path) => {
+		const isCurrent = requestsRef.current.begin(path);
 		// Keep showing the previous listing while refetching — replacing it with
 		// a loading state made every reveal/refresh flicker the subtree away.
 		setListing((current) => (current[path]?.entries ? current : { ...current, [path]: { loading: true } }));
 		api("fs.list", { cwd, path }).then((res) => {
+			if (!isCurrent()) return;
 			setListing((current) => {
 				if (!res.ok) return current[path]?.entries ? current : { ...current, [path]: { error: res.error } };
 				return { ...current, [path]: res.value };
@@ -33,6 +42,7 @@ export function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshK
 	}, [cwd]);
 
 	useEffect(() => {
+		requestsRef.current.reset();
 		setListing({});
 		setExpanded([]);
 		setAction(null);
@@ -108,19 +118,36 @@ export function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshK
 		const dir = parentOf(path);
 		api("fs.rename", { cwd, path, to: dir === "" ? clean : `${dir}/${clean}` }).then((res) => finish(res, t("tree.renamed"), dir));
 	};
-	const runDelete = (path) => {
-		api("fs.delete", { cwd, path }).then((res) => {
+	const runDelete = async (path) => {
+		if (deletePending.current || action?.kind !== "delete" || action.path !== path) return;
+		deletePending.current = true; setDeleting(true); setDeleteError("");
+		try {
+			const res = await api("fs.delete", { cwd, path });
 			if (!res.ok || res.value?.error) {
-				onNotify?.(`${t("error")}: ${res.value?.error ?? res.error}`, "error");
-				setAction(null);
-				return;
+				const text = `${t("error")}: ${res.value?.error ?? res.error}`;
+				setDeleteError(text); onNotify?.(text, "error"); return;
 			}
-			onNotify?.(t("tree.deleted"));
-			onDeleted?.(path);
-			loadDir(parentOf(path));
-			setAction(null);
-		});
+			onNotify?.(t("tree.deleted")); onDeleted?.(path);
+			loadDir(parentOf(path)); setAction(null);
+		} finally { deletePending.current = false; setDeleting(false); }
 	};
+	const requestDelete = (path, isDir) => {
+		if (deletePending.current) return;
+		setDeleteError("");
+		setAction((current) => current?.kind === "delete" && current.path === path ? null : { kind: "delete", path, isDir });
+	};
+	const deleteRow = (path) => action?.kind === "delete" && action.path === path ? h("section", {
+		key: `delete-confirm:${path}`, ref: deleteRef, className: "ctp-delete-panel", role: "group", "aria-label": t("tree.delete"),
+	},
+		h("strong", null, t(action.isDir ? "tree.deleteDirQuestion" : "tree.deleteFileQuestion", { name: path.split("/").pop() })),
+		h("p", null, t(action.isDir ? "tree.deleteDirHint" : "tree.deleteFileHint")),
+		deleteError ? h("p", { className: "ctp-delete-error", role: "alert" }, deleteError) : null,
+		h("div", { className: "ctp-delete-buttons" },
+			h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-danger", disabled: deleting, onClick: () => void runDelete(path) }, deleting ? t("tree.deleting") : t("tree.confirmDelete")),
+			h("button", { type: "button", className: "ce-sk-btn", disabled: deleting, onClick: () => { setAction(null); setDeleteError(""); } }, t("changes.cancel")),
+		),
+	) : null;
+
 	// Drag-move: drop onto a folder (or the panel background for the root)
 	// renames the entry into it; both directories refresh afterwards.
 	const runMove = (from, toDir) => {
@@ -138,20 +165,14 @@ export function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshK
 			loadDir(toDir);
 		});
 	};
-	const dragProps = (path) => ({
-		draggable: true,
-		onDragStart: (e) => {
-			setDragPath(path);
-			try {
-				e.dataTransfer.setData("text/plain", path);
-				e.dataTransfer.effectAllowed = "move";
-			} catch { /* older browsers */ }
-		},
-		onDragEnd: () => {
-			setDragPath(null);
-			setDropDir(null);
-		},
-	});
+	const dragProps = (path, kind = "file") => {
+		const props = fileDragProps({ cwd, path, kind, sessionId });
+		return { ...props,
+			onDragStart: (event) => { props.onDragStart(event); if (!event.defaultPrevented) setDragPath(path); },
+			onDragEnd: () => { setDragPath(null); setDropDir(null); },
+		};
+	};
+
 	const dropProps = (dirPath) => ({
 		onDragOver: (e) => {
 			if (!dragPath || !canDropInto(dragPath, dirPath)) return;
@@ -235,7 +256,7 @@ export function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshK
 	};
 	const contextDelete = () => {
 		if (!contextMenu) return;
-		setAction({ kind: "delete", path: contextMenu.path });
+		requestDelete(contextMenu.path, contextMenu.isDir);
 		setContextMenu(null);
 	};
 	const contextCreate = (kind) => {
@@ -294,41 +315,19 @@ export function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshK
 				setAction({ kind: "rename", path, value: path.split("/").pop() });
 			},
 		}, "✎"),
-		action?.kind === "delete" && action.path === path
-			? h("span", { ref: deleteRef },
-				h("button", {
-					type: "button",
-					className: "cet-act cet-act-show cet-act-danger",
-					onClick: (e) => {
-						e.stopPropagation();
-						runDelete(path);
-					},
-				}, t("changes.confirm")),
-				h("button", {
-					type: "button",
-					className: "cet-act cet-act-show",
-					onClick: (e) => {
-						e.stopPropagation();
-						setAction(null);
-					},
-				}, t("changes.cancel")),
-			)
-			: h(HintButton, {
-				type: "button",
-				className: "cet-act",
-				hint: t("tree.delete"),
-				onClick: (e) => {
-					e.stopPropagation();
-					setAction({ kind: "delete", path });
-				},
-			}, "✕"),
+		h(HintButton, {
+			type: "button", className: "cet-act", hint: t("tree.delete"),
+			"data-ce-popup-trigger": "tree-delete", "aria-expanded": action?.kind === "delete" && action.path === path,
+			disabled: deleting,
+			onClick: (event) => { event.stopPropagation(); requestDelete(path, isDir); },
+		}, "✕"),
 	);
 	const renderLevel = (path, depth) => {
 		const state = listing[path];
 		if (!state) return null;
 		if (state.loading) return h("div", { key: `${path}-l`, className: "ce-note", style: { paddingLeft: 8 + depth * 14 } }, t("loading"));
 		if (state.error) return h("div", { key: `${path}-l`, className: "ce-note", style: { paddingLeft: 8 + depth * 14 } }, `${t("tree.failed")}: ${state.error}`);
-		const entries = [...(state.entries ?? [])].sort((a, b) => (a.type === b.type ? a.name.localeCompare(b.name) : a.type === "directory" ? -1 : 1));
+		const entries = uniqueDirectoryEntries(state.entries).sort((a, b) => (a.type === b.type ? a.name.localeCompare(b.name) : a.type === "directory" ? -1 : 1));
 		const rows = [];
 		for (const entry of entries) {
 			const childPath = path === "" ? entry.name : `${path}/${entry.name}`;
@@ -336,7 +335,7 @@ export function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshK
 				const open = expanded.includes(childPath);
 				rows.push(
 					h(
-						"button",
+						"div",
 						{
 							key: childPath,
 							"data-tp": childPath,
@@ -344,15 +343,16 @@ export function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshK
 							style: { paddingLeft: 6 + depth * 14 },
 							onClick: () => toggle(childPath),
 							onContextMenu: (e) => openContextMenu(e, childPath, true),
-							type: "button",
-							...dragProps(childPath),
+							...dragProps(childPath, "directory"),
 							...dropProps(childPath),
 						},
-						h("span", { className: "ce-ico" }, h(IconFolder, { open })),
-						h("span", { className: "ce-name" }, entry.name),
+						h("button", { type: "button", className: "ctp-entry-open", "aria-expanded": open },
+							h("span", { className: "ce-ico" }, h(IconFolder, { open })),
+							h("span", { className: "ce-name" }, entry.name)),
 						acts(childPath, true),
 					),
 				);
+				rows.push(deleteRow(childPath));
 				if (action?.kind === "rename" && action.path === childPath) rows.push(inputRow(childPath, "rename", t("tree.renamePlaceholder")));
 				if (open && action?.kind === "newfile" && action.path === childPath) rows.push(inputRow(childPath, "file", t("tree.newFilePlaceholder")));
 				if (open && action?.kind === "newdir" && action.path === childPath) rows.push(inputRow(childPath, "dir", t("tree.newDirPlaceholder")));
@@ -360,28 +360,29 @@ export function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshK
 			} else if (entry.type === "file") {
 				rows.push(
 					h(
-						"button",
+						"div",
 						{
 							key: childPath,
 							"data-tp": childPath,
 							className: `ce-row${activePath && (activePath === childPath || activePath.endsWith(`/${childPath}`)) ? " ce-active" : ""}`,
 							style: { paddingLeft: 6 + depth * 14 },
-							type: "button",
 							onClick: () => onOpenFile(childPath, 1, 1),
 							onContextMenu: (e) => openContextMenu(e, childPath, false),
 							...dragProps(childPath),
 							...fileDropProps(childPath),
 						},
-						h("span", { className: `cet-fico ce-tree-ico ${fileTint(childPath)}` }, h(FileGlyph)),
-						h("span", { className: "ce-name" }, entry.name),
+						h("button", { type: "button", className: "ctp-entry-open" },
+							h("span", { className: `cet-fico ce-tree-ico ${fileTint(childPath)}` }, h(FileGlyph)),
+							h("span", { className: "ce-name" }, entry.name)),
 						acts(childPath, false),
 					),
 				);
+				rows.push(deleteRow(childPath));
 				if (action?.kind === "rename" && action.path === childPath) rows.push(inputRow(path, "rename", t("tree.renamePlaceholder")));
 			}
 		}
 		if (!rows.length) rows.push(h("div", { key: `${path}-e`, className: "ce-note", style: { paddingLeft: 8 + depth * 14 } }, t("tree.empty")));
-		return h(Fragment, { key: path }, rows);
+		return h(Fragment, { key: `tree-level:${path || "root"}` }, rows);
 	};
 	return h("div", {
 		className: "ce-scroll ce-rail",

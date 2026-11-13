@@ -105,7 +105,7 @@ export function makeBrowserOpener(sidebarRight, now = Date.now) {
 		pendingSession = sessionId;
 		openedAt = time;
 		try {
-			sidebarRight.openTab("browser", { params: { url: "https://www.doubao.com/" } });
+			sidebarRight.openTab("browser");
 		} catch (error) {
 			openedAt = -Infinity;
 			throw error;

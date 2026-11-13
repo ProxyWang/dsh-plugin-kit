@@ -2,6 +2,8 @@
 
 import { Fragment, h, useCallback, useEffect, useState } from "./react.js";
 import { api } from "./api.js";
+import { fileDragProps } from "./filedrag.js";
+import { copyChangePath, CopyChangePathButton } from "./copypath.js";
 import { IconRefresh } from "./icons.js";
 import { ChangeTree } from "./changetree.js";
 import { useDismissLayer } from "./dismiss.js";
@@ -11,7 +13,7 @@ export function isStagedXy(xy) {
 	return typeof xy === "string" && xy.length > 0 && xy[0] !== " " && xy[0] !== "?";
 }
 
-export function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commitsOpen, setCommitsOpen, onOpenCommit, onOpenDiff, onDiscard, onDiscardDir, onStage, onStageDir, onUnstage, onUnstageDir, onCommit, committing, onNotify, refresh }) {
+export function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commitsOpen, setCommitsOpen, onOpenCommit, onOpenDiff, onDiscard, onDiscardDir, onStage, onStageDir, onUnstage, onUnstageDir, onCommit, committing, onNotify, refresh, sessionId }) {
 	const [treeView, setTreeView] = useState(true);
 	const [message, setMessage] = useState("");
 	const [amend, setAmend] = useState(false);
@@ -92,6 +94,7 @@ export function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commit
 	if (!git) return h("div", { className: "ce-rail ce-scroll" }, selector, h("div", { className: "ce-note" }, t("loading")));
 	if (git.error) return h("div", { className: "ce-rail ce-scroll" }, selector, h("div", { className: "ce-note" }, git.error));
 	if (!git.repo) return h("div", { className: "ce-rail ce-scroll" }, selector, repos && repos.length === 0 ? h("div", { className: "ce-note" }, t("changes.notRepo")) : null);
+	const onCopyPath = (path, relative) => copyChangePath({ cwd, repo: git.root || repoSel, path, relative, onNotify, t });
 	const badge = (xy) => (xy === "??" ? "U" : xy.trim()[0] === "A" || xy.trim()[0] === "?" ? "A" : xy.trim()[0] || "M");
 	const staged = git.working.filter((f) => isStagedXy(f.xy));
 	const unstaged = git.working.filter((f) => !isStagedXy(f.xy));
@@ -101,13 +104,14 @@ export function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commit
 	const visibleUnstaged = unstaged.filter(matchesPath);
 	const visibleBranchFiles = (git.branchFiles ?? []).filter(matchesPath);
 	const flatRows = (files, prefix, scope) => files.map((file) =>
-		h(
-			"button",
-			{ key: `${prefix}:${file.path}`, className: "ce-row", type: "button", title: file.path, onClick: () => onOpenDiff(file.path, scope) },
-			h("span", { className: `ce-badge ce-badge-${badge(file.xy).toLowerCase()}` }, badge(file.xy)),
-			h("span", { className: "ce-name" }, file.path),
+		h("div", { ...fileDragProps({ cwd, repo: git.root, path: file.path, scope, source: "changes", sessionId }), key: `${prefix}:${file.path}`, className: "ce-row cet-row", title: file.path },
+			h("button", { type: "button", className: "ctp-entry-open", onClick: () => onOpenDiff(file.path, scope) },
+				h("span", { className: `ce-badge ce-badge-${badge(file.xy).toLowerCase()}` }, badge(file.xy)),
+				h("span", { className: "ce-name" }, file.path)),
+			h("span", { className: "cet-right" }, h(CopyChangePathButton, { path: file.path, onCopyPath, t })),
 		),
 	);
+
 	// Enter (or the button) commits; with an empty index the button stages
 	// everything first, labelled explicitly so the behavior is no surprise.
 	// Amend mode rewrites the previous commit instead (never stage-all then).
@@ -149,6 +153,7 @@ export function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commit
 						onUnstage: (item) => onUnstage && onUnstage(item),
 						onUnstageDir: (dirPath) => onUnstageDir && onUnstageDir(dirPath),
 						keyPrefix: "s",
+					cwd, repo: git.root, scope: "staged", sessionId, onCopyPath,
 						t,
 					})
 					: flatRows(visibleStaged, "s", "staged"),
@@ -174,6 +179,7 @@ export function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commit
 				onStage: (item) => onStage && onStage(item),
 				onStageDir: (dirPath) => onStageDir && onStageDir(dirPath),
 				keyPrefix: "w",
+					cwd, repo: git.root, scope: "working", sessionId, onCopyPath,
 				t,
 			})
 			: flatRows(visibleUnstaged, "w", "working"),
@@ -251,16 +257,10 @@ export function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commit
 						items: visibleBranchFiles.map((p) => ({ path: p, ch: "C" })),
 						onOpen: (item) => onOpenDiff(item.path, "branch"),
 						keyPrefix: "b",
+					cwd, repo: git.root, scope: "branch", sessionId, onCopyPath,
 						t,
 					})
-					: visibleBranchFiles.map((path) =>
-						h(
-							"button",
-							{ key: `b:${path}`, className: "ce-row", type: "button", title: path, onClick: () => onOpenDiff(path, "branch") },
-							h("span", { className: "ce-badge ce-badge-c" }, "C"),
-							h("span", { className: "ce-name" }, path),
-						),
-					),
+					: flatRows(visibleBranchFiles.map((path) => ({ path, xy: "C" })), "b", "branch"),
 			)
 			: h("div", { className: "ce-note" }, t("changes.baseNone")),
 		),
