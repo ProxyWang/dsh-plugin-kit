@@ -7,6 +7,21 @@ import { IconCode } from "./icons.js";
 import { collectBoxes, makeBrowserOpener } from "./launcher.js";
 
 export const LEFT_TOOL_PREFIX = "dsh-plugin-kit/workspace/";
+/**
+ * Host tool kinds the left navigation no longer lists, because Dev Workspace
+ * carries the entry itself. The terminal row opened a tab in the current pane
+ * with toggle-close semantics; the workspace entry opens a new instance and
+ * asks the pane to split, which is the shape people expect while editing code.
+ * The global Control+backquote shortcut is untouched, so the terminal stays
+ * reachable without opening the workspace first.
+ */
+export const LEFT_TOOL_HIDDEN_KINDS = ["terminal"];
+
+/** Whether a host kind is folded into the workspace instead of the left rail. */
+export function isHiddenLeftToolKind(kind) {
+	return LEFT_TOOL_HIDDEN_KINDS.includes(String(kind));
+}
+
 const OWN_TOOLS = [
 	{ kind: TAB_KIND, label: "guide.title", description: "guide.description", glyph: "code" },
 	{ kind: API_TAB_KIND, label: "apiGuide.title", description: "apiGuide.description", glyph: "api" },
@@ -35,7 +50,7 @@ export function collectLeftTools(registry, t) {
 	const seen = new Set();
 	const others = collectBoxes(registry).filter(({ kind, entry }) => {
 		const key = `${kind}/${entry.id}`;
-		if (ownKinds.has(kind) || seen.has(key)) return false;
+		if (ownKinds.has(kind) || isHiddenLeftToolKind(kind) || seen.has(key)) return false;
 		seen.add(key);
 		return true;
 	}).map(({ kind, entry }) => ({
@@ -56,7 +71,20 @@ export function makeLeftToolRouter({ layout, sidebarRight, getTools, report, t }
 		if (routing) return;
 		const id = layout.panelInfo.getSnapshot().activePanelId;
 		const tool = getTools().find((entry) => entry.id === id);
-		if (!tool) return;
+		if (!tool) {
+			// A restored selection for a tool we no longer list would strand the
+			// main panel on an id that has no seat, so hand it back to
+			// Conversation instead of showing a blank page forever.
+			if (typeof id === "string" && id.startsWith(LEFT_TOOL_PREFIX)) {
+				routing = true;
+				try {
+					layout.selectPanel(null);
+				} finally {
+					routing = false;
+				}
+			}
+			return;
+		}
 		routing = true;
 		try {
 			// Host panelInfo updates its on-screen Session synchronously here.

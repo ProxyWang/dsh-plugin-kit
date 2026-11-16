@@ -183,6 +183,12 @@ var zh = {
   "command.wrap": "切换自动换行",
   "command.toggleRail": "显示或隐藏侧栏",
   "command.refresh": "刷新工作区",
+  "command.terminal": "新建终端",
+  "toolbar.terminal": "新建终端",
+  "toolbar.terminalHint": "新建终端，有空间时在旁侧分栏打开；命令在当前会话目录运行",
+  "terminal.fail.noSession": "没有当前会话，无法打开终端",
+  "terminal.fail.unavailable": "当前环境没有提供终端",
+  "terminal.fail.failed": "打开终端失败",
   "toolbar.files": "资源管理器",
   "toolbar.changes": "变更",
   refresh: "刷新",
@@ -631,6 +637,12 @@ var en = {
   "command.wrap": "Toggle Word Wrap",
   "command.toggleRail": "Toggle Side Panel",
   "command.refresh": "Refresh Workspace",
+  "command.terminal": "New Terminal",
+  "toolbar.terminal": "New Terminal",
+  "toolbar.terminalHint": "Open a new terminal, in a split pane beside the workspace when there is room; commands run in the session directory",
+  "terminal.fail.noSession": "No session is on screen to open a terminal",
+  "terminal.fail.unavailable": "This environment provides no terminal",
+  "terminal.fail.failed": "Could not open the terminal",
   "toolbar.files": "Explorer",
   "toolbar.changes": "Changes",
   refresh: "Refresh",
@@ -1167,10 +1179,48 @@ function svg(children, size = 16) {
 var IconCode = ({ size }) => svg([h("path", { key: "a", d: "M9 6 3.5 12 9 18" }), h("path", { key: "b", d: "M15 6 20.5 12 15 18" })], size ?? 16);
 var IconFolder = ({ open }) => svg(open ? h("path", { key: "p", d: "M3 19 6 8h13l-3 11Z M6 8V5h5l2 3" }) : h("path", { key: "p", d: "M3 6h6l2 2h10v12H3Z" }));
 var IconRefresh = () => svg([h("path", { key: "p", d: "M20 12a8 8 0 1 1-2.3-5.7" }), h("path", { key: "q", d: "M20 3v5h-5" })]);
+var IconTerminal = () => svg([h("rect", { key: "r", x: 2.5, y: 4, width: 19, height: 16, rx: 2 }), h("path", { key: "p", d: "M6.5 9.5 10 12.5 6.5 15.5" }), h("path", { key: "c", d: "M12.5 16h5" })]);
 var IconArrowLeft = () => svg([h("path", { key: "p", d: "M20 12H5" }), h("path", { key: "q", d: "M11 6 5 12l6 6" })]);
 var IconArrowRight = () => svg([h("path", { key: "p", d: "M4 12h15" }), h("path", { key: "q", d: "M13 6l6 6-6 6" })]);
 var IconSearch = () => svg([h("circle", { key: "c", cx: 10.5, cy: 10.5, r: 6.5 }), h("path", { key: "p", d: "M16 16l5 5" })]);
 var IconTextSearch = () => svg([h("path", { key: "a", d: "M4 5h16" }), h("path", { key: "b", d: "M4 10h11" }), h("path", { key: "c2", d: "M4 15h8" }), h("path", { key: "d", d: "M18 14.5l2.5 2.5" })]);
+
+// src/client/terminal.js
+var TERMINAL_KIND = "terminal";
+function terminalKindRegistered(tabs) {
+  try {
+    const entries = typeof tabs?.entries === "function" ? tabs.entries() : [];
+    return (entries ?? []).some((def) => String(def?.kind ?? "") === TERMINAL_KIND);
+  } catch {
+    return false;
+  }
+}
+function createTerminalEntry({ sidebarRight, sidebarRightTabs } = {}) {
+  const available = () => Boolean(sidebarRight && sidebarRightTabs) && terminalKindRegistered(sidebarRightTabs);
+  const currentSession = () => {
+    try {
+      return sidebarRight?.mounted?.getSnapshot?.();
+    } catch {
+      return void 0;
+    }
+  };
+  const open = () => {
+    if (!available()) return { ok: false, reason: "unavailable" };
+    const sessionId = currentSession();
+    if (!sessionId) return { ok: false, reason: "noSession" };
+    try {
+      sidebarRight.openTab(TERMINAL_KIND, { preferNewPane: true });
+    } catch {
+      return { ok: false, reason: "failed" };
+    }
+    return { ok: true, sessionId };
+  };
+  return { available, open };
+}
+var inertTerminalEntry = {
+  available: () => false,
+  open: () => ({ ok: false, reason: "unavailable" })
+};
 
 // src/client/dismiss.js
 var registries = /* @__PURE__ */ new WeakMap();
@@ -4421,7 +4471,8 @@ function addTabPath(list, path, cap = 15) {
   return next;
 }
 function CodeBody(props) {
-  const { useTabInfo, sessionId, useSessions, t } = props;
+  const { useTabInfo, sessionId, useSessions, t, terminal } = props;
+  const terminalEntry = terminal ?? inertTerminalEntry;
   const tabInfo = useTabInfo ? useTabInfo() : null;
   const tab = tabInfo?.tab;
   const cwd = useSessions ? useSessions((sessions) => sessionId ? sessions.byId[sessionId]?.cwd : void 0) : void 0;
@@ -5488,6 +5539,15 @@ function CodeBody(props) {
     }
     return best;
   }, [symbols, cursor]);
+  const openTerminal = useCallback(() => {
+    const res = terminalEntry.open();
+    if (res.ok) {
+      say("");
+      return;
+    }
+    const key = res.reason === "noSession" ? "terminal.fail.noSession" : res.reason === "unavailable" ? "terminal.fail.unavailable" : "terminal.fail.failed";
+    say(t(key), "error");
+  }, [say, t, terminalEntry]);
   const commands = useMemo(() => [
     { id: "files", icon: "▱", label: t("command.files"), run: () => {
       setMode("files");
@@ -5514,8 +5574,9 @@ function CodeBody(props) {
       refreshGit();
       setTreeKey((key) => key + 1);
       if (docRef.current) void loadFile(docRef.current.path, cursorRef.current?.line ?? 1, cursorRef.current?.col ?? 1);
-    } }
-  ], [t, refreshGit, openSearch, openPalette, toggleWrap, say, loadFile, dismissPanels]);
+    } },
+    ...terminalEntry.available() ? [{ id: "terminal", icon: "‣", label: t("command.terminal"), run: openTerminal }] : []
+  ], [t, refreshGit, openSearch, openPalette, toggleWrap, say, loadFile, dismissPanels, openTerminal, terminalEntry]);
   const startRailDrag = useCallback((event) => {
     event.preventDefault();
     const startX = event.clientX;
@@ -5645,6 +5706,9 @@ function CodeBody(props) {
       h("span", { className: "ce-spacer" }),
       !railVisible ? h("button", { type: "button", className: "ce-tool", title: `${t("quickopen.placeholder")} (⌘P / Ctrl+P)`, onClick: () => palette ? closePalette() : openPalette() }, h(IconSearch)) : null,
       !railVisible ? h("button", { type: "button", className: "ce-tool ce-workspace-search", title: `${t(mode === "changes" ? "search.changesHint" : "search.workspaceHint")} (⇧⌘F / Ctrl+Shift+F)`, "aria-label": t(mode === "changes" ? "search.changesHint" : "search.workspaceHint"), onClick: openSearch }, h(IconTextSearch), h("span", null, t(mode === "changes" ? "search.changesAction" : "changes.searchWorkspace"))) : null,
+      // The host terminal sits with the tool icons: the command centre
+      // trigger already reads as ">_", which would double the glyph.
+      terminalEntry.available() ? h("button", { type: "button", className: "ce-tool", title: t("toolbar.terminalHint"), "aria-label": t("toolbar.terminal"), onClick: openTerminal }, h(IconTerminal)) : null,
       h("button", { type: "button", className: "ce-tool", title: `${statusTitle}`, onClick: () => {
         refreshGit();
         setTreeKey((k) => k + 1);
@@ -8286,6 +8350,10 @@ function makeBrowserOpener(sidebarRight, now = Date.now) {
 
 // src/client/lefttools.js
 var LEFT_TOOL_PREFIX = "dsh-plugin-kit/workspace/";
+var LEFT_TOOL_HIDDEN_KINDS = ["terminal"];
+function isHiddenLeftToolKind(kind) {
+  return LEFT_TOOL_HIDDEN_KINDS.includes(String(kind));
+}
 var OWN_TOOLS = [
   { kind: TAB_KIND, label: "guide.title", description: "guide.description", glyph: "code" },
   { kind: API_TAB_KIND, label: "apiGuide.title", description: "apiGuide.description", glyph: "api" },
@@ -8313,7 +8381,7 @@ function collectLeftTools(registry, t) {
   const seen = /* @__PURE__ */ new Set();
   const others = collectBoxes(registry).filter(({ kind, entry }) => {
     const key = `${kind}/${entry.id}`;
-    if (ownKinds.has(kind) || seen.has(key)) return false;
+    if (ownKinds.has(kind) || isHiddenLeftToolKind(kind) || seen.has(key)) return false;
     seen.add(key);
     return true;
   }).map(({ kind, entry }) => ({
@@ -8332,7 +8400,17 @@ function makeLeftToolRouter({ layout, sidebarRight, getTools, report, t }) {
     if (routing) return;
     const id = layout.panelInfo.getSnapshot().activePanelId;
     const tool = getTools().find((entry) => entry.id === id);
-    if (!tool) return;
+    if (!tool) {
+      if (typeof id === "string" && id.startsWith(LEFT_TOOL_PREFIX)) {
+        routing = true;
+        try {
+          layout.selectPanel(null);
+        } finally {
+          routing = false;
+        }
+      }
+      return;
+    }
     routing = true;
     try {
       layout.selectPanel(null);
@@ -9239,11 +9317,12 @@ var index_default = {
     safe("styles", insertStyles);
     const bound = ctx.locale.bind(NS);
     safe("dictionaries", () => ctx.locale.register(NS, { zh, en }));
+    const terminal = createTerminalEntry({ sidebarRight: ctx.sidebarRight, sidebarRightTabs: ctx.sidebarRightTabs });
     ctx.inject(["workspaces"], (browserCtx) => {
       browserCtx.effect(() => installBrowser(browserCtx, bound), "toolbox: enhanced browser");
     });
     safe("tab type", () => ctx.sidebarRightTabs.register(definition(bound)));
-    const Bound = (props) => h(CodeBody, { ...props, t: props.t ?? bound });
+    const Bound = (props) => h(CodeBody, { ...props, t: props.t ?? bound, terminal });
     safe("tab body", () => ctx.slots.inject("sidebar.right.pane.tab", () => ctx.slots.register({
       name: "sidebar.right.pane.tab",
       key: TAB_ID,

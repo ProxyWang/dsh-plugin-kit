@@ -11,6 +11,7 @@ import { ApiView, ApiTitle } from "./apiclient.js";
 import { installLeftTools, WorkspaceGuide } from "./lefttools.js";
 import { registerToolCloseGuard } from "./closeguard.js";
 import { installBrowser } from "./browserregister.js";
+import { createTerminalEntry } from "./terminal.js";
 
 export default {
 	inject: ["slots", "locale", "sidebarRightTabs", "sidebarRight", "layout"],
@@ -26,11 +27,15 @@ export default {
 		safe("styles", insertStyles);
 		const bound = ctx.locale.bind(NS);
 		safe("dictionaries", () => ctx.locale.register(NS, { zh, en }));
+		// The host owns interactive terminals; the workspace only opens one
+		// beside itself, so availability is a registry probe rather than a
+		// capability this plugin implements.
+		const terminal = createTerminalEntry({ sidebarRight: ctx.sidebarRight, sidebarRightTabs: ctx.sidebarRightTabs });
 		ctx.inject(["workspaces"], (browserCtx) => {
 			browserCtx.effect(() => installBrowser(browserCtx, bound), "toolbox: enhanced browser");
 		});
 		safe("tab type", () => ctx.sidebarRightTabs.register(definition(bound)));
-		const Bound = (props) => h(CodeBody, { ...props, t: props.t ?? bound });
+		const Bound = (props) => h(CodeBody, { ...props, t: props.t ?? bound, terminal });
 		safe("tab body", () => ctx.slots.inject("sidebar.right.pane.tab", () => ctx.slots.register({
 			name: "sidebar.right.pane.tab",
 			key: TAB_ID,

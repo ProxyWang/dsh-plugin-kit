@@ -6,7 +6,7 @@ English | [简体中文](README.md)
 
 `dsh-plugin-kit` places tool entry points in the DSH left navigation, alongside Plugins and Automations. Choose **Dev Workspace, API Tester, Skills Manager**, or an available browser/terminal entry to open it in the current session’s right workspace while keeping the conversation in the center. The right Start page is an empty-workspace guide rather than a duplicate launcher.
 
-Dev Workspace combines file exploration, editing, search, symbols and Git review, with a keyboard-first Command Center (`⌘/Ctrl+Shift+P`). All surfaces support DSH light and dark themes.
+Dev Workspace combines file exploration, editing, search, symbols, Git review and a terminal entry beside the workspace, with a keyboard-first Command Center (`⌘/Ctrl+Shift+P`). All surfaces support DSH light and dark themes.
 
 ## Screenshots and privacy
 
@@ -30,11 +30,11 @@ These screenshots render the current plugin components with fictional fixtures a
 | --- | --- | --- |
 | Left navigation | **Dev Workspace** | Unified file explorer, code editor, search, LSP navigation, and Git changes workbench. |
 | Left navigation | **API Tester** | Import or copy curl, edit URLs, params, headers, bodies and environment variables, send HTTP requests, inspect responses, and save history and favorites. |
-| Left navigation | New terminal | Open the built-in DSH terminal to run commands in the session workspace. |
+| Inside Dev Workspace | **New Terminal** | Toolbar button and Command Center entry: opens the built-in DSH terminal, in a split pane beside the workspace when there is room; commands run in the session directory. The global `` ⌃` `` shortcut is unaffected. |
 | Left navigation | **Browser** | Uses DSH-approved embedded Chromium in a multi-tab window (sub-tab strip), with bookmarks, favorites, folders, home-page and new-tab settings. |
 | Left navigation | **Skills Manager** | Search, preview, edit, create and delete installed Agent skills; filter by project, user, built-in and plugin sources. |
 
-**Scope:** the plugin provides Dev Workspace, API Tester, Skills Manager and left navigation integration. Host tool entries follow the live tab registry. Files are explored in Dev Workspace; browser and terminal capabilities depend on your profile. With no current session, navigation prompts you to select one and never queues the tool into a future unrelated session.
+**Scope:** the plugin provides Dev Workspace, API Tester, Skills Manager and left navigation integration. Host tool entries follow the live tab registry. Files are explored in Dev Workspace, and so is the terminal entry (the terminal itself stays DSH's own); browser and other host capabilities appear in the left rail when registered. With no current session, navigation prompts you to select one and never queues the tool into a future unrelated session.
 
 ### Browser bookmarks and settings
 
@@ -46,7 +46,7 @@ Open Browser on the left. The window carries its own **sub-tab strip**: **+** op
 
 After installing, select a session and choose a tool from **left navigation** to open it in the right workspace. Click an already open tool entry again to close its tab; closing the last tool tab collapses the right sidebar. Unsaved code or skill text blocks closing and prompts you to save first.
 
-- **Review Agent changes:** open Dev Workspace → Changes, then select a file for marked source or side-by-side diffs. You can also click an edit/write tool call in chat to inspect that specific change.
+- **Review Agent changes:** open Dev Workspace → Changes, then select a file for marked source or side-by-side diffs. You can also click an edit/write tool call in chat to inspect that specific change. Need a shell? The **New Terminal** toolbar button (or the Command Center entry of the same name) opens DSH's own terminal in a split pane beside the workspace when there is room, and as a tab when there is not; it starts in the session directory, and `` ⌃` `` still works. The terminal belongs to DSH itself: commands typed there run with your system-user permissions and are **not** bound by the Agent's sandbox or approval policy.
 - **Find code:** use quick file open, find-in-file or workspace full-text search. Go, TS/JS and Python support definition/reference jumps when the matching language server is installed.
 - **Test an API:** import curl or enter a request, edit the Params / Headers / Body / Settings tabs, then press `⌘/Ctrl+Enter` to send and inspect the response.
 - **Maintain skills:** search and select a skill, switch between preview and source, and save editable skills with `⌘/Ctrl+S`. Built-in and plugin-provided skills remain read-only.
@@ -72,6 +72,7 @@ After installing, select a session and choose a tool from **left navigation** to
   - **Branch committed changes**: whole-tree diff + file list against the **remote baseline branch** (the remote-tracking branch `origin/HEAD` points at, e.g. origin/master; local main/master only as a no-remote fallback); entries whose diff has no content hunks (mode/permission-only, binary, rename metadata, empty additions) show an explanatory note instead of "0 changed lines"
   - Change review: **whole-file view with changed-line marks** (green tint + gutter marks + folded deletion bars + a clickable change rail); the hunk view supports a **▥ side-by-side / ≡ unified toggle**, **word-level intra-line highlight**, **↑↓ change navigation**, and **⟲ per-hunk revert (git apply -R)**
   - Branch switcher: click the branch chip for a searchable palette (local/remote groups, fetch / ff-only pull / push)
+  - **Terminal entry**: the "New Terminal" toolbar button and the Command Center entry of the same name open DSH's own terminal through the host navigation API — split beside the workspace when there is room, otherwise as a tab. The plugin renders no terminal of its own: xterm.js, input ownership, window holds, reload bindings and the permission model stay with the host. The host's left-rail terminal row is folded away under the one-entry rule, and the global Control+backquote shortcut is unaffected. Commands typed there run with your system-user permissions, outside the Agent's sandbox and approval policy
   - Markdown / HTML / **SVG** files open in **rendered preview by default**, toggleable to raw
 - **Skills**: search by name/description/path and filter project/user/built-in or plugin sources; compact list + detail columns on wide panels, list/detail navigation on narrow panels. Create inline on demand; Markdown preview/source view, editing with ⌘S save, and two-step deletion. Provided skills stay read-only, truncated content cannot be edited, unsaved changes block navigation, and stale reads cannot replace the selected skill; writes remain strictly fenced to the skill roots
 - **API**: a basic Postman — one-click curl import (**-F parses into multipart fields**) and **⧉ copy-as-curl export**, **query params table (merged into the URL at send, same names override)**, **per-request timeout (1–120 s)**, **environment variables `{{var}}` (substituted in URL/headers/body at send time)**, method/URL/headers/body editors (form-urlencoded / **multipart** / raw with JSON beautify), Host-proxied send (no CORS issues), status/time/size + response headers + pretty JSON, **request history (last 30 sends recorded automatically, one-click restore)**, **named favorites**

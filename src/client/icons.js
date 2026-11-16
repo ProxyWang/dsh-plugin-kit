@@ -9,6 +9,7 @@ export const IconCode = ({ size }) => svg([h("path", { key: "a", d: "M9 6 3.5 12
 export const IconFolder = ({ open }) => svg(open ? h("path", { key: "p", d: "M3 19 6 8h13l-3 11Z M6 8V5h5l2 3" }) : h("path", { key: "p", d: "M3 6h6l2 2h10v12H3Z" }));
 export const IconFile = () => svg(h("path", { key: "p", d: "M6 2h8l4 4v16H6Z M14 2v4h4" }));
 export const IconRefresh = () => svg([h("path", { key: "p", d: "M20 12a8 8 0 1 1-2.3-5.7" }), h("path", { key: "q", d: "M20 3v5h-5" })]);
+export const IconTerminal = () => svg([h("rect", { key: "r", x: 2.5, y: 4, width: 19, height: 16, rx: 2 }), h("path", { key: "p", d: "M6.5 9.5 10 12.5 6.5 15.5" }), h("path", { key: "c", d: "M12.5 16h5" })]);
 export const IconArrowLeft = () => svg([h("path", { key: "p", d: "M20 12H5" }), h("path", { key: "q", d: "M11 6 5 12l6 6" })]);
 export const IconArrowRight = () => svg([h("path", { key: "p", d: "M4 12h15" }), h("path", { key: "q", d: "M13 6l6 6-6 6" })]);
 export const IconBolt = ({ on }) => svg(h("path", { key: "p", d: "M13 2 4 14h6l-1 8 9-12h-6Z", fill: on ? "currentColor" : "none" }));

@@ -5,7 +5,8 @@ import { ROW, TAB_KIND } from "./constants.js";
 import { useToolCloseGuard } from "./closeguard.js";
 import { api } from "./api.js";
 import { buildLineStates, langFor, wordAt } from "./highlight.js";
-import { IconArrowLeft, IconArrowRight, IconCode, IconRefresh, IconSearch, IconTextSearch } from "./icons.js";
+import { IconArrowLeft, IconArrowRight, IconCode, IconRefresh, IconSearch, IconTerminal, IconTextSearch } from "./icons.js";
+import { inertTerminalEntry } from "./terminal.js";
 import { DiffView, changedNewLines, deletedGroups, changeBlobs } from "./diff.js";
 import { MarkdownView } from "./markdown.js";
 import { BranchPalette } from "./branchpick.js";
@@ -37,7 +38,10 @@ export function addTabPath(list, path, cap = 15) {
 }
 
 export function CodeBody(props) {
-	const { useTabInfo, sessionId, useSessions, t } = props;
+	const { useTabInfo, sessionId, useSessions, t, terminal } = props;
+	// The host owns interactive terminals; the workspace only opens one beside
+	// itself. Absent capability hides the entry instead of failing loudly.
+	const terminalEntry = terminal ?? inertTerminalEntry;
 	const tabInfo = useTabInfo ? useTabInfo() : null;
 	const tab = tabInfo?.tab;
 	const cwd = useSessions ? useSessions((sessions) => (sessionId ? sessions.byId[sessionId]?.cwd : undefined)) : undefined;
@@ -1189,6 +1193,19 @@ export function CodeBody(props) {
 		return best;
 	}, [symbols, cursor]);
 
+	// The host terminal opens beside the workspace in its own docked pane. A
+	// failure here is always a state problem (no Session on screen, or the host
+	// tab type went away), so it reports through the same banner as git errors.
+	const openTerminal = useCallback(() => {
+		const res = terminalEntry.open();
+		// A successful open is its own feedback (the column expands and focuses
+		// the new pane), but an earlier failure banner does not expire on its
+		// own, so clear it instead of leaving a stale contradiction.
+		if (res.ok) { say(""); return; }
+		const key = res.reason === "noSession" ? "terminal.fail.noSession" : res.reason === "unavailable" ? "terminal.fail.unavailable" : "terminal.fail.failed";
+		say(t(key), "error");
+	}, [say, t, terminalEntry]);
+
 	const commands = useMemo(() => [
 		{ id: "files", icon: "▱", label: t("command.files"), run: () => { setMode("files"); dismissPanels(); setRailVisible(true); setMobileView("files"); } },
 		{ id: "changes", icon: "⑂", label: t("command.changes"), run: () => { setMode("changes"); dismissPanels(); setRailVisible(true); setMobileView("files"); refreshGit(); } },
@@ -1198,7 +1215,8 @@ export function CodeBody(props) {
 		{ id: "wrap", icon: "↩", label: t("command.wrap"), hint: "⌥Z", run: () => toggleWrap() },
 		{ id: "toggle-rail", icon: "◧", label: t("command.toggleRail"), hint: "⌘B", run: () => setRailVisible((value) => !value) },
 		{ id: "refresh", icon: "⟳", label: t("command.refresh"), run: () => { refreshGit(); setTreeKey((key) => key + 1); if (docRef.current) void loadFile(docRef.current.path, cursorRef.current?.line ?? 1, cursorRef.current?.col ?? 1); } },
-	], [t, refreshGit, openSearch, openPalette, toggleWrap, say, loadFile, dismissPanels]);
+		...(terminalEntry.available() ? [{ id: "terminal", icon: "‣", label: t("command.terminal"), run: openTerminal }] : []),
+	], [t, refreshGit, openSearch, openPalette, toggleWrap, say, loadFile, dismissPanels, openTerminal, terminalEntry]);
 
 	const startRailDrag = useCallback((event) => {
 		event.preventDefault();
@@ -1306,6 +1324,11 @@ export function CodeBody(props) {
 			h("span", { className: "ce-spacer" }),
 			!railVisible ? h("button", { type: "button", className: "ce-tool", title: `${t("quickopen.placeholder")} (⌘P / Ctrl+P)`, onClick: () => palette ? closePalette() : openPalette() }, h(IconSearch)) : null,
 			!railVisible ? h("button", { type: "button", className: "ce-tool ce-workspace-search", title: `${t(mode === "changes" ? "search.changesHint" : "search.workspaceHint")} (⇧⌘F / Ctrl+Shift+F)`, "aria-label": t(mode === "changes" ? "search.changesHint" : "search.workspaceHint"), onClick: openSearch }, h(IconTextSearch), h("span", null, t(mode === "changes" ? "search.changesAction" : "changes.searchWorkspace"))) : null,
+			// The host terminal sits with the tool icons: the command centre
+			// trigger already reads as ">_", which would double the glyph.
+			terminalEntry.available()
+				? h("button", { type: "button", className: "ce-tool", title: t("toolbar.terminalHint"), "aria-label": t("toolbar.terminal"), onClick: openTerminal }, h(IconTerminal))
+				: null,
 			h("button", { type: "button", className: "ce-tool", title: `${statusTitle}`, onClick: () => { refreshGit(); setTreeKey((k) => k + 1); if (docRef.current) void loadFile(docRef.current.path, cursorRef.current?.line ?? 1, cursorRef.current?.col ?? 1); } }, h(IconRefresh)),
 			h("span", { className: `ce-dot ce-dot-${status.state}`, title: statusTitle }),
 		),

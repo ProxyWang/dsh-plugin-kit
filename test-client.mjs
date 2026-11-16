@@ -439,8 +439,29 @@ const Launch = makeLauncher({ registry: fakeRegistry, sidebarRight: { openTab: (
 check("launcher renders element", Launch({}) != null, null);
 check("launcher null on empty registry", makeLauncher({ registry: { entries: () => [] }, sidebarRight: { openTab: () => {} }, getShortcuts: () => null, t: (k) => k })({}) === null, null);
 
+// --- Host terminal entry: the workspace opens the product's terminal beside itself ----------
+const { createTerminalEntry, terminalKindRegistered, inertTerminalEntry } = await import("./src/client/terminal.js");
+check("terminal entry probes the host tab registry", terminalKindRegistered(fakeRegistry) === true && terminalKindRegistered({ entries: () => [{ kind: "code" }] }) === false && terminalKindRegistered({ entries: () => { throw new Error("x"); } }) === false, null);
+const hiddenEntry = createTerminalEntry({ sidebarRight: { openTab: () => { throw new Error("must not open"); } }, sidebarRightTabs: { entries: () => [] } });
+check("terminal entry hides and refuses without the host tab type", hiddenEntry.available() === false && hiddenEntry.open().reason === "unavailable", hiddenEntry.open());
+const terminalOpens = [];
+const terminalSidebar = { mounted: { getSnapshot: () => "s1" }, openTab: (kind, options) => { terminalOpens.push([kind, options]); } };
+const entry = createTerminalEntry({ sidebarRight: terminalSidebar, sidebarRightTabs: fakeRegistry });
+check("terminal entry asks the docked pane to split", entry.open().ok === true && terminalOpens[0][0] === "terminal" && terminalOpens[0][1].preferNewPane === true, terminalOpens[0]);
+check("terminal entry trusts the host instead of diffing tabs", entry.open().sessionId === "s1" && terminalOpens.length === 2, terminalOpens.length);
+const noSessionEntry = createTerminalEntry({ sidebarRight: { mounted: { getSnapshot: () => undefined }, openTab: () => {} }, sidebarRightTabs: fakeRegistry });
+check("terminal entry reports a missing session", noSessionEntry.open().reason === "noSession", noSessionEntry.open());
+const failingEntry = createTerminalEntry({ sidebarRight: { mounted: { getSnapshot: () => "s" }, openTab: () => { throw new Error("no surface"); } }, sidebarRightTabs: fakeRegistry });
+check("terminal entry turns an openTab failure into a reason", failingEntry.open().reason === "failed", failingEntry.open());
+check("terminal entry survives a hostile registry", createTerminalEntry({ sidebarRight: terminalSidebar, sidebarRightTabs: { entries: () => { throw new Error("x"); } } }).available() === false, null);
+check("inert terminal entry never claims a terminal", inertTerminalEntry.available() === false && inertTerminalEntry.open().ok === false, null);
+const terminalCopy = ["toolbar.terminal", "toolbar.terminalHint", "command.terminal", "terminal.fail.noSession", "terminal.fail.unavailable", "terminal.fail.failed"];
+const { zh: zhDict, en: enDict } = await import("./src/client/locale.js");
+check("terminal copy exists in both dictionaries", terminalCopy.every((key) => typeof zhDict[key] === "string" && zhDict[key] !== "" && typeof enDict[key] === "string" && enDict[key] !== ""), terminalCopy.filter((key) => typeof zhDict[key] !== "string" || typeof enDict[key] !== "string"));
+check("zh and en dictionaries stay key-identical", Object.keys(zhDict).length === Object.keys(enDict).length && Object.keys(zhDict).every((key) => key in enDict) && Object.keys(enDict).every((key) => key in zhDict), [Object.keys(zhDict).filter((key) => !(key in enDict)), Object.keys(enDict).filter((key) => !(key in zhDict))]);
+
 // --- Native left navigation routes tools to the current right-side workspace ----------------
-const { collectLeftTools, makeLeftToolRouter, installLeftTools, WorkspaceGuide } = await import("./src/client/lefttools.js");
+const { collectLeftTools, makeLeftToolRouter, installLeftTools, WorkspaceGuide, LEFT_TOOL_PREFIX, isHiddenLeftToolKind } = await import("./src/client/lefttools.js");
 const { definition, apiDefinition, skillsDefinition } = await import("./src/client/register.js");
 const leftDefinitions = [definition((k) => k), apiDefinition((k) => k), skillsDefinition((k) => k),
  { kind: "files", guide: [{ id: "f", title: () => "Files" }] },
@@ -450,7 +471,8 @@ const leftDefinitions = [definition((k) => k), apiDefinition((k) => k), skillsDe
 const leftRegistryListeners = new Set();
 const leftRegistry = { entries: () => leftDefinitions, subscribe(fn) { leftRegistryListeners.add(fn); return () => leftRegistryListeners.delete(fn); } };
 const leftTools = collectLeftTools(leftRegistry, (k) => k);
-check("left navigation collects workspace API skills browser and terminal", leftTools.map((tool) => tool.kind).join() === "code,code-api,code-skills,browser,terminal", leftTools.map((tool) => tool.kind));
+check("left navigation collects workspace API skills and browser", leftTools.map((tool) => tool.kind).join() === "code,code-api,code-skills,browser", leftTools.map((tool) => tool.kind));
+check("terminal entry is folded into the workspace instead of the left rail", isHiddenLeftToolKind("terminal") === true && isHiddenLeftToolKind("browser") === false && leftTools.every((tool) => tool.kind !== "terminal"), leftTools.map((tool) => tool.kind));
 check("owned tools have no duplicate right guide entries", leftDefinitions.slice(0,3).every((entry) => entry.guide.length === 0), null);
 check("right workspace guide contains no launcher buttons", !collect(WorkspaceGuide({ t: (k) => k })).some((node) => node.type === "button"), null);
 let selectedLeftPanel = null;
@@ -486,6 +508,9 @@ const contextLeft = {
 };
 const disposeLeftTools = installLeftTools(contextLeft, (k) => k);
 check("tools use native same-level panel rows with matching main seats", leftTools.every((tool) => leftSlots.has(`sidebar.panellist:${tool.id}`) && leftSlots.has(`main:${tool.id}`)), [...leftSlots.keys()]);
+selectedLeftPanel = `${LEFT_TOOL_PREFIX}terminal/new`;
+for (const listener of leftLayoutListeners) listener();
+check("restored selection of a folded-away tool returns to Conversation", selectedLeftPanel === null && onScreenSession === leftSession, selectedLeftPanel);
 for (const kind of ["code", "code-api", "code-skills"]) {
  leftLayout.selectPanel(leftTools.find((tool) => tool.kind === kind).id);
  check(`left ${kind} opens in current right workspace and preserves Conversation`, selectedLeftPanel === null && leftNavigationCalls.at(-1)?.kind === kind && leftNavigationCalls.at(-1)?.sessionId === "session-A", leftNavigationCalls.at(-1));
@@ -572,12 +597,14 @@ clickToggle("browser"); clickToggle("browser"); const browserBeforeReopen = togg
 clickToggle("browser");
 check("browser can reopen immediately after being toggled closed", toggleSerial === browserBeforeReopen + 1 && toggleSidebar.tabsIn("A").some((tab) => tab.kind === "browser"), toggleCalls);
 clickToggle("browser");
-toggleSessions.set("A", [{ id: "guide-A", kind: "guide" }, { id: "terminal-one", kind: "terminal" }, { id: "terminal-two", kind: "terminal" }]);
-toggleExpanded.set("A", true); toggleActive.set("A", "terminal-one");
-clickToggle("terminal");
-check("multiple terminals close the active matching instance only", toggleCalls.at(-1)?.close === "terminal-one" && toggleSidebar.tabsIn("A").some((tab) => tab.id === "terminal-two") && toggleSidebar.isExpanded(), toggleSidebar.tabsIn("A"));
-clickToggle("terminal");
-check("closing final terminal collapses workspace", !toggleSidebar.isExpanded(), null);
+// Multi-instance close semantics, now exercised through browser: the terminal
+// kind left the left rail when its entry moved into Dev Workspace.
+toggleSessions.set("A", [{ id: "guide-A", kind: "guide" }, { id: "browser-one", kind: "browser" }, { id: "browser-two", kind: "browser" }]);
+toggleExpanded.set("A", true); toggleActive.set("A", "browser-one");
+clickToggle("browser");
+check("multiple tool instances close the active matching instance only", toggleCalls.at(-1)?.close === "browser-one" && toggleSidebar.tabsIn("A").some((tab) => tab.id === "browser-two") && toggleSidebar.isExpanded(), toggleSidebar.tabsIn("A"));
+clickToggle("browser");
+check("closing final tool tab collapses workspace", !toggleSidebar.isExpanded(), null);
 
 // --- browser launch reuse, including existing multi-instance tabs ------------------------------
 const { makeBrowserOpener } = await import("./src/client/launcher.js");
