@@ -487,6 +487,12 @@ var zh = {
   "api.extractSrc.body": "完整正文",
   "api.extractSrc.regex": "正则捕获",
   "api.extractSrc.query": "请求查询参数",
+  "api.streamTab": "事件流",
+  "api.streamStop": "停止流",
+  "api.streamEmpty": "当前没有在监听的事件流",
+  "api.streamEmptyDone": "流已结束，未收到事件",
+  "api.streamEmptyWaiting": "等待服务端事件…",
+  "api.streamDropped": "早期事件已截断（仅保留尾部）",
   "watch.external": "「{path}」在磁盘上已被外部修改（可能来自终端或 Agent）",
   "watch.reloadDiscarding": "重新加载（放弃未保存）",
   "watch.keepEditing": "保持编辑",
@@ -1073,6 +1079,12 @@ var en = {
   "api.extractSrc.body": "Full body",
   "api.extractSrc.regex": "Regex capture",
   "api.extractSrc.query": "Request query",
+  "api.streamTab": "Events",
+  "api.streamStop": "Stop stream",
+  "api.streamEmpty": "No stream is being captured right now",
+  "api.streamEmptyDone": "Stream ended without events",
+  "api.streamEmptyWaiting": "Waiting for server events…",
+  "api.streamDropped": "early events dropped (tail retained)",
   "watch.external": "“{path}” changed on disk (a terminal or the Agent may have edited it)",
   "watch.reloadDiscarding": "Reload (discard draft)",
   "watch.keepEditing": "Keep editing",
@@ -7544,6 +7556,7 @@ var CSS2 = `
 .ce-task-panel{display:flex;flex-direction:column;max-height:min(72vh,640px)}
 .ce-task-body{flex:1;min-height:120px;overflow:auto;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;line-height:1.5;padding:6px 10px;background:var(--dsw-alias-bg-base,#0d1117)}
 .ce-task-line{white-space:pre-wrap;word-break:break-word}
+.cea-stream{display:flex;flex-direction:column;gap:2px;padding:4px 0}.cea-sse-row{display:flex;gap:8px;align-items:baseline;white-space:pre-wrap;word-break:break-word;font-size:11.5px}.cea-sse-kind{flex:none;color:var(--dsw-alias-button-info-fill,#58a6ff);font-weight:600}.cea-sse-id,.cea-sse-retry{flex:none;color:var(--dsw-alias-label-tertiary,#8b949e);font-size:10.5px}.cea-sse-data{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}.cea-sse-stop{flex:none;margin-right:6px}
 .ce-task-jump{border:0;background:none;color:var(--dsw-alias-button-info-fill,#58a6ff);font:inherit;padding:0;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
 .ce-commit:hover{background:var(--dsw-alias-interactive-bg-hover,#262a30)}
 .ce-chash{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;color:var(--dsw-alias-label-tertiary,#778);flex:none}
@@ -9497,6 +9510,68 @@ function detectCollectionImport(text) {
   return null;
 }
 
+// src/client/sse.js
+function parseSse(state, text) {
+  const buf = state.buf + text;
+  const events = [];
+  let rest = buf;
+  for (; ; ) {
+    const idx = rest.search(/\r?\n\r?\n/);
+    if (idx === -1) break;
+    const frame = rest.slice(0, idx);
+    const skip = rest.slice(idx).match(/^\r?\n\r?\n/)?.[0]?.length ?? 2;
+    rest = rest.slice(idx + skip);
+    let event = "message";
+    let id = state.lastId;
+    let retry;
+    const dataLines = [];
+    for (const rawLine of frame.split(/\r?\n/)) {
+      const line = rawLine;
+      if (line === "" || line.startsWith(":")) continue;
+      const colon = line.indexOf(":");
+      const field = colon === -1 ? line : line.slice(0, colon);
+      let value = colon === -1 ? "" : line.slice(colon + 1);
+      if (value.startsWith(" ")) value = value.slice(1);
+      if (field === "data") dataLines.push(value);
+      else if (field === "event") event = value;
+      else if (field === "id") id = value;
+      else if (field === "retry" && /^\d+$/.test(value)) retry = Number(value);
+    }
+    if (dataLines.length === 0 && event === "message" && retry === void 0) continue;
+    if (dataLines.length > 0) {
+      events.push({ event, data: dataLines.join("\n"), id, retry });
+    } else {
+      events.push({ event, data: "", id, retry });
+    }
+    state.lastId = id;
+  }
+  return { events, state: { buf: rest, lastId: state.lastId } };
+}
+function emptySseState() {
+  return { buf: "", lastId: "" };
+}
+function foldStream(state, snap) {
+  const raw = snap.reset ? "" : state.raw;
+  const texts = (snap.chunks ?? []).map((c) => c.text ?? "");
+  const nextRaw = (snap.reset ? "" : raw) + texts.join("");
+  const parsed = parseSse(snap.reset ? emptySseState() : state.sse ?? emptySseState(), texts.join(""));
+  const events = snap.reset ? parsed.events : [...state.events, ...parsed.events];
+  return {
+    raw: nextRaw,
+    sse: parsed.state,
+    events: events.slice(-2e3),
+    seq: snap.seq,
+    baseSeq: snap.baseSeq ?? 0,
+    done: snap.done === true,
+    error: snap.error ?? "",
+    dropped: snap.dropped === true
+  };
+}
+function sseEventLabel(ev) {
+  const first = String(ev.data ?? "").split("\n")[0];
+  return first.length > 120 ? `${first.slice(0, 119)}…` : first;
+}
+
 // src/client/codegen.js
 function resolvedToCurlRequest(resolved) {
   const req = {
@@ -10077,6 +10152,9 @@ function ApiView({ t, useTabInfo }) {
   const [timeoutMs, setTimeoutMs] = useState(3e4);
   const [extracts, setExtracts] = useState([]);
   const [extractNote, setExtractNote] = useState("");
+  const [stream, setStream] = useState(null);
+  const streamRef = useRef(null);
+  streamRef.current = stream;
   const [requestShare, setRequestShare] = useState(42);
   const workspaceRef = useRef(null);
   const splitDrag = useRef(null);
@@ -10166,8 +10244,26 @@ function ApiView({ t, useTabInfo }) {
     api("api.send", resolved).then((res) => {
       setSending(false);
       const value = res.ok ? res.value : { error: res.error };
-      setResponse({ ...value, sent: resolved });
-      if (value?.error) setRespTab("body");
+      if (value?.streaming) {
+        setResponse({ ...value, sent: resolved, text: "" });
+        setRespTab("stream");
+        streamEpoch.current += 1;
+        setStream({
+          id: value.id,
+          pollEpoch: streamEpoch.current,
+          status: value.status,
+          headers: value.headers ?? [],
+          state: foldStream({ raw: "", events: [], seq: 0, baseSeq: 0, done: false, error: "", dropped: false, sse: emptySseState() }, { chunks: value.chunks ?? [], seq: value.seq ?? 0, baseSeq: value.baseSeq ?? 0, done: value.done === true, error: value.error ?? "", dropped: false, reset: false })
+        });
+      } else {
+        if (streamRef.current) {
+          void api("api.streamStop", { id: streamRef.current.id });
+          streamEpoch.current += 1;
+          setStream(null);
+        }
+        setResponse({ ...value, sent: resolved });
+        if (value?.error) setRespTab("body");
+      }
       const entry = {
         id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         ts: Date.now(),
@@ -10192,6 +10288,28 @@ function ApiView({ t, useTabInfo }) {
       }
     });
   }, [url, sending, editorState, snapshot, envStore, extracts, t]);
+  const streamEpoch = useRef(0);
+  useEffect(() => {
+    if (!stream || stream.state.done) return void 0;
+    const id = stream.id;
+    const epoch = stream.pollEpoch;
+    let stop = false;
+    let cursor = stream.state.seq;
+    const pump = async () => {
+      while (!stop && cursor >= 0) {
+        const res = await api("api.streamPoll", { id, since: cursor, waitMs: 18e3 });
+        if (stop || epoch !== streamEpoch.current) break;
+        if (!res.ok || res.value?.error) break;
+        const snap = res.value;
+        cursor = snap.done ? -1 : snap.seq;
+        setStream((prev) => prev === null || prev.id !== id || prev.pollEpoch !== epoch ? prev : { ...prev, state: foldStream(prev.state, snap) });
+      }
+    };
+    void pump();
+    return () => {
+      stop = true;
+    };
+  }, [stream?.id, stream?.pollEpoch, stream?.state.done]);
   const flashCopied = useCallback(() => {
     setCopied(true);
     if (copiedTimer.current) clearTimeout(copiedTimer.current);
@@ -10796,12 +10914,26 @@ function ApiView({ t, useTabInfo }) {
           h(
             "div",
             { className: "cea-hist-tabs cea-resp-tabs", role: "tablist", "aria-label": t("api.resp") },
-            [["body", t("api.respBody")], ["headers", t("api.respHeaders")], ["timeline", t("api.timeline")]].map(([id, label]) => h("button", { type: "button", role: "tab", key: id, className: `cea-tab${respTab === id ? " cea-tab-on" : ""}`, "aria-selected": respTab === id, onClick: () => setRespTab(id) }, label))
+            [["body", t("api.respBody")], ["headers", t("api.respHeaders")], ["timeline", t("api.timeline")], ...stream ? [["stream", `${t("api.streamTab")} · ${stream.state.events.length}${stream.state.done ? "" : " ●"}`]] : []].map(([id, label]) => h("button", { type: "button", role: "tab", key: id, className: `cea-tab${respTab === id ? " cea-tab-on" : ""}`, "aria-selected": respTab === id, onClick: () => setRespTab(id) }, label))
           ),
           h(
             "div",
             { className: "cea-response-content ce-scroll" },
-            respTab === "headers" ? response.error ? h("div", { className: "ce-note" }, `${t("api.err")}: ${response.error}`) : h("div", { className: "cea-hlist" }, (response.headers ?? []).map((hd, i) => h("div", { key: i }, h("span", { className: "cea-hk" }, hd[0]), h("span", null, hd[1])))) : respTab === "timeline" ? sent ? h(
+            respTab === "headers" ? response.error ? h("div", { className: "ce-note" }, `${t("api.err")}: ${response.error}`) : h("div", { className: "cea-hlist" }, (response.headers ?? []).map((hd, i) => h("div", { key: i }, h("span", { className: "cea-hk" }, hd[0]), h("span", null, hd[1])))) : respTab === "stream" ? stream ? h(
+              "div",
+              { className: "cea-stream" },
+              stream.state.error !== "" ? h("div", { className: "cea-err" }, `${t("api.err")}: ${stream.state.error}`) : null,
+              stream.state.dropped ? h("div", { className: "cea-meta" }, t("api.streamDropped")) : null,
+              stream.state.events.length === 0 && !stream.state.error ? h("div", { className: "ce-note" }, stream.state.done ? t("api.streamEmptyDone") : t("api.streamEmptyWaiting")) : null,
+              stream.state.events.slice(-300).map((ev, i) => h(
+                "div",
+                { className: "cea-sse-row", key: `${stream.state.seq}-${i}` },
+                h("span", { className: "cea-sse-kind" }, ev.event),
+                typeof ev.retry === "number" ? h("span", { className: "cea-sse-retry" }, `${ev.retry}ms`) : null,
+                ev.id ? h("span", { className: "cea-sse-id" }, `#${ev.id}`) : null,
+                h("span", { className: "cea-sse-data" }, sseEventLabel(ev))
+              ))
+            ) : h("div", { className: "ce-note" }, t("api.streamEmpty")) : respTab === "timeline" ? sent ? h(
               "div",
               { className: "cea-timeline" },
               h(

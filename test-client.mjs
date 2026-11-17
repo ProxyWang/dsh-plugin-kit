@@ -2375,6 +2375,69 @@ check("docAction reloads clean drafts, flags dirty ones, ignores others", docAct
 	}
 }
 
+// --- M5 SSE: frame parsing + stream folding (pure) -------------------------------------
+{
+	const { parseSse, emptySseState, foldStream, sseEventLabel } = await import("./src/client/sse.js");
+	let s = emptySseState();
+	let r = parseSse(s, "data: hel");
+	s = r.state;
+	check("parseSse holds partial frames across deltas", r.events.length === 0, r);
+	r = parseSse(s, "lo\n\n");
+	check("parseSse completes the frame once the blank line lands", r.events.length === 1 && r.events[0].data === "hello", r);
+	r = parseSse(r.state, "event: ping\nid: 9\nretry: 2500\ndata: a\ndata: b\n\n");
+	check("parseSse joins multi-line data and carries event/id/retry", r.events[0].event === "ping" && r.events[0].data === "a\nb" && r.events[0].id === "9" && r.events[0].retry === 2500, r.events);
+	r = parseSse(r.state, ": keep-alive\n\ndata: x\r\n\r\n");
+	check("parseSse skips comment-only frames and tolerates CRLF", r.events.length === 1 && r.events[0].data === "x", r.events);
+	check("id persists across frames until replaced", (() => { const st0 = emptySseState(); const a = parseSse(st0, "id: 1\ndata: a\n\n"); const b = parseSse(a.state, "data: b\n\n"); return b.events[0].id === "1"; })(), null);
+	const init = { raw: "", events: [], seq: 0, baseSeq: 0, done: false, error: "", dropped: false, sse: emptySseState() };
+	const f1 = foldStream(init, { chunks: [{ text: "data: 1\n\ndata: 2\n" }], seq: 10, baseSeq: 0, done: false, dropped: false, reset: false });
+	check("foldStream keeps a partial tail event until it completes", f1.events.length === 1 && f1.seq === 10, f1);
+	const f2 = foldStream(f1, { chunks: [{ text: "\n" }], seq: 11, baseSeq: 0, done: false, dropped: false, reset: false });
+	check("foldStream emits the completed second event from the next beat", f2.events.length === 2, f2);
+	const f3 = foldStream(f2, { chunks: [{ text: "data: late\n\n" }], seq: 99, baseSeq: 40, done: true, dropped: true, reset: true });
+	check("foldStream reset replaces the window on evicted cursors", f3.events.length === 1 && f3.events[0].data === "late" && f3.done && f3.dropped, f3);
+	check("sseEventLabel truncates long payloads", sseEventLabel({ data: "x".repeat(200) }).length === 120, null);
+	// ApiView streaming branch: a streaming send swaps the response to the Events tab and pumps.
+	const stGlobals = { fetch: globalThis.fetch, requestAnimationFrame: globalThis.requestAnimationFrame, cancelAnimationFrame: globalThis.cancelAnimationFrame, setTimeout: globalThis.setTimeout, clearTimeout: globalThis.clearTimeout, window: globalThis.window, document: globalThis.document };
+	let stStage = 0;
+	globalThis.fetch = async (_url, options) => {
+		const wire = JSON.parse(options?.body ?? "{}");
+		if (wire.url === undefined && wire.id !== undefined) {
+			stStage++;
+			if (stStage === 1) return { json: async () => ({ ok: true, value: { id: wire.id, seq: 26, baseSeq: 0, done: false, error: "", dropped: false, reset: false, chunks: [{ text: 'event: msg\ndata: {"n":1}\n\ndata: two\n\n' }] } }) };
+			return { json: async () => ({ ok: true, value: { id: wire.id, seq: 26, baseSeq: 0, done: true, error: "", dropped: false, reset: false, chunks: [] } }) };
+		}
+		return { json: async () => ({ ok: true, value: { streaming: true, id: "9", status: 200, statusText: "OK", headers: [["content-type", "text/event-stream"]], seq: 0, baseSeq: 0, done: false, error: "", dropped: false, reset: false, chunks: [] } }) };
+	};
+	globalThis.requestAnimationFrame = (fn) => { fn(); return 0; };
+	globalThis.cancelAnimationFrame = () => {};
+	globalThis.setTimeout = () => 0;
+	globalThis.clearTimeout = () => {};
+	globalThis.window = { innerWidth: 1200, innerHeight: 900 };
+	globalThis.document = { addEventListener() {}, removeEventListener() {} };
+	try {
+		const renderSt = createHookRenderer(ApiView, { t: (k) => k }, { effects: true });
+		let stTree = renderSt();
+		renderSt.flushEffects();
+		const stNode = (p) => collect(stTree).find(p);
+		const paintSt = () => { stTree = renderSt(); renderSt.flushEffects(); };
+		stNode((n) => n.props.className === "ce-input cea-url").props.onChange({ target: { value: "https://e.test/stream" } }); paintSt();
+		stNode((n) => n.props.className === "ce-sk-btn cea-send").props.onClick();
+		await new Promise((r) => setImmediate(r)); paintSt();
+		const tabLabels = () => collect(stTree).filter((n) => n.props.className?.startsWith("cea-tab")).map((n) => JSON.stringify(n.children));
+		check("a streaming send switches the response to the Events tab", tabLabels().some((s) => s.includes("api.streamTab")), tabLabels());
+		await new Promise((r) => setImmediate(r)); paintSt();
+		await new Promise((r) => setImmediate(r)); paintSt();
+		const sseRows = () => collect(stTree).filter((n) => n.type === "div" && n.props.className === "cea-sse-row");
+		const rowTexts = (r) => JSON.stringify(r);
+		const data0 = collect(sseRows()[0]).find((n) => n.type === "span" && n.props.className === "cea-sse-data").children[0];
+		check("the pump renders one row per SSE event with kind and data", sseRows().length === 2 && JSON.stringify(collect(sseRows()[0])[1]).includes("msg") && data0 === '{"n":1}' && JSON.stringify(collect(sseRows()[1])[1]).includes("message"), data0);
+		renderSt.unmount();
+	} finally {
+		Object.assign(globalThis, stGlobals);
+	}
+}
+
 // --- the generated bundle: registration + factory --------------------------------------
 
 const bundle = await readFile(new URL("./client.js", import.meta.url), "utf8");

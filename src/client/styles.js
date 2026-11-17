@@ -166,6 +166,7 @@ export const CSS = `
 .ce-task-panel{display:flex;flex-direction:column;max-height:min(72vh,640px)}
 .ce-task-body{flex:1;min-height:120px;overflow:auto;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;line-height:1.5;padding:6px 10px;background:var(--dsw-alias-bg-base,#0d1117)}
 .ce-task-line{white-space:pre-wrap;word-break:break-word}
+.cea-stream{display:flex;flex-direction:column;gap:2px;padding:4px 0}.cea-sse-row{display:flex;gap:8px;align-items:baseline;white-space:pre-wrap;word-break:break-word;font-size:11.5px}.cea-sse-kind{flex:none;color:var(--dsw-alias-button-info-fill,#58a6ff);font-weight:600}.cea-sse-id,.cea-sse-retry{flex:none;color:var(--dsw-alias-label-tertiary,#8b949e);font-size:10.5px}.cea-sse-data{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}.cea-sse-stop{flex:none;margin-right:6px}
 .ce-task-jump{border:0;background:none;color:var(--dsw-alias-button-info-fill,#58a6ff);font:inherit;padding:0;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
 .ce-commit:hover{background:var(--dsw-alias-interactive-bg-hover,#262a30)}
 .ce-chash{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;color:var(--dsw-alias-label-tertiary,#778);flex:none}

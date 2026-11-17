@@ -763,6 +763,39 @@ if (hasNpm) {
 	console.log("  skip  task runner suite (npm unavailable)");
 }
 
+// ---- M5 SSE: event-stream responses switch to cursor-polled capture ----
+{
+	const { createServer } = await import("node:http");
+	const sseSrv = createServer((req, res) => {
+		res.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-cache" });
+		res.write("data: one\n\n");
+		setTimeout(() => {
+			res.write("event: update\nid: 7\ndata: {\"n\":2}\n\n");
+			res.end();
+		}, 250);
+	});
+	await new Promise((resolvePromise) => sseSrv.listen(0, "127.0.0.1", resolvePromise));
+	const sseUrl = `http://127.0.0.1:${sseSrv.address().port}/events`;
+	try {
+		const st = await call("api.send", { method: "GET", url: sseUrl });
+		check("api.send switches event-stream responses to live capture", st.ok && st.value.streaming === true && typeof st.value.id === "string" && st.value.status === 200, st.value);
+		const sid = st.value.id;
+		let last = st.value;
+		let collected = (last.chunks ?? []).map((c) => c.text).join("");
+		for (let i = 0; i < 12 && last.done !== true; i++) {
+			const env = await call("api.streamPoll", { id: sid, since: last.seq, waitMs: 4000 });
+			if (!env.ok) break;
+			last = env.value;
+			collected += (last.chunks ?? []).map((c) => c.text).join("");
+		}
+		check("api.streamPoll streams frames until the server closes", last.done === true && /data: one/.test(collected) && /\"n\":2/.test(collected), [last, collected]);
+		const gone = await call("api.streamPoll", { id: "nope", since: 0, waitMs: 100 });
+		check("api.streamPoll rejects unknown streams", gone.ok && gone.value.error !== undefined, gone.value);
+	} finally {
+		sseSrv.close();
+	}
+}
+
 for (const cleanup of cleanups) cleanup();
 console.log(`\n${pass} passed, ${fail} failed${skipped ? `, ${skipped} skipped` : ""}`);
 process.exit(fail ? 1 : 0);

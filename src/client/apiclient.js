@@ -16,6 +16,7 @@ import { api } from "./api.js";
 import { parseCurl, toCurl } from "./curl.js";
 import { looksLikeBru, parseBru } from "./brucol.js";
 import { detectCollectionImport } from "./openimp.js";
+import { foldStream, parseSse, emptySseState, sseEventLabel } from "./sse.js";
 import { SNIPPET_KINDS } from "./codegen.js";
 import {
 	activeEnvOf, addEnv, applyExtracts, applyParamsToUrl, envMapOf, guessRawSubType, normalizeAuth, normalizeEnvStore,
@@ -125,6 +126,9 @@ export function ApiView({ t, useTabInfo }) {
 	const [timeoutMs, setTimeoutMs] = useState(30000);
 	const [extracts, setExtracts] = useState([]); // [{name, source, expr, enabled}]
 	const [extractNote, setExtractNote] = useState("");
+	const [stream, setStream] = useState(null); // {id,status,headers,state:{raw,sse,events,seq,...}}
+	const streamRef = useRef(null);
+	streamRef.current = stream;
 	const [requestShare, setRequestShare] = useState(42);
 	const workspaceRef = useRef(null);
 	const splitDrag = useRef(null);
@@ -212,8 +216,24 @@ export function ApiView({ t, useTabInfo }) {
 		api("api.send", resolved).then((res) => {
 			setSending(false);
 			const value = res.ok ? res.value : { error: res.error };
-			setResponse({ ...value, sent: resolved });
-			if (value?.error) setRespTab("body");
+			if (value?.streaming) {
+				// SSE response: hand the panel a live stream view instead of
+				// a finished body; extracts/history still record what arrives.
+				setResponse({ ...value, sent: resolved, text: "" });
+				setRespTab("stream");
+				streamEpoch.current += 1;
+				setStream({
+					id: value.id,
+					pollEpoch: streamEpoch.current,
+					status: value.status,
+					headers: value.headers ?? [],
+					state: foldStream({ raw: "", events: [], seq: 0, baseSeq: 0, done: false, error: "", dropped: false, sse: emptySseState() }, { chunks: value.chunks ?? [], seq: value.seq ?? 0, baseSeq: value.baseSeq ?? 0, done: value.done === true, error: value.error ?? "", dropped: false, reset: false }),
+				});
+			} else {
+				if (streamRef.current) { void api("api.streamStop", { id: streamRef.current.id }); streamEpoch.current += 1; setStream(null); }
+				setResponse({ ...value, sent: resolved });
+				if (value?.error) setRespTab("body");
+			}
 			// Every settled send lands in the history (newest first, capped),
 			// carrying the full request so one click restores it.
 			const entry = {
@@ -244,6 +264,29 @@ export function ApiView({ t, useTabInfo }) {
 			}
 		});
 	}, [url, sending, editorState, snapshot, envStore, extracts, t]);
+
+	// Drain a live SSE capture with the same long-poll cursor protocol used
+	// by watch/tasks; a newer start (pollEpoch) makes older answers no-ops.
+	const streamEpoch = useRef(0);
+	useEffect(() => {
+		if (!stream || stream.state.done) return undefined;
+		const id = stream.id;
+		const epoch = stream.pollEpoch;
+		let stop = false;
+		let cursor = stream.state.seq;
+		const pump = async () => {
+			while (!stop && cursor >= 0) {
+				const res = await api("api.streamPoll", { id, since: cursor, waitMs: 18000 });
+				if (stop || epoch !== streamEpoch.current) break;
+				if (!res.ok || res.value?.error) break;
+				const snap = res.value;
+				cursor = snap.done ? -1 : snap.seq;
+				setStream((prev) => (prev === null || prev.id !== id || prev.pollEpoch !== epoch ? prev : { ...prev, state: foldStream(prev.state, snap) }));
+			}
+		};
+		void pump();
+		return () => { stop = true; };
+	}, [stream?.id, stream?.pollEpoch, stream?.state.done]);
 
 	const flashCopied = useCallback(() => {
 		setCopied(true);
@@ -734,7 +777,7 @@ export function ApiView({ t, useTabInfo }) {
 							),
 					),
 					h("div", { className: "cea-hist-tabs cea-resp-tabs", role: "tablist", "aria-label": t("api.resp") },
-						[["body", t("api.respBody")], ["headers", t("api.respHeaders")], ["timeline", t("api.timeline")]].map(([id, label]) =>
+						[["body", t("api.respBody")], ["headers", t("api.respHeaders")], ["timeline", t("api.timeline")], ...(stream ? [["stream", `${t("api.streamTab")} · ${stream.state.events.length}${stream.state.done ? "" : " ●"}`]] : [])].map(([id, label]) =>
 							h("button", { type: "button", role: "tab", key: id, className: `cea-tab${respTab === id ? " cea-tab-on" : ""}`, "aria-selected": respTab === id, onClick: () => setRespTab(id) }, label))),
 					h("div", { className: "cea-response-content ce-scroll" },
 						respTab === "headers"
@@ -742,7 +785,20 @@ export function ApiView({ t, useTabInfo }) {
 								? h("div", { className: "ce-note" }, `${t("api.err")}: ${response.error}`)
 								: h("div", { className: "cea-hlist" }, (response.headers ?? []).map((hd, i) =>
 									h("div", { key: i }, h("span", { className: "cea-hk" }, hd[0]), h("span", null, hd[1])))))
-							: respTab === "timeline"
+								: respTab === "stream" ? (stream
+								? h("div", { className: "cea-stream" },
+									stream.state.error !== "" ? h("div", { className: "cea-err" }, `${t("api.err")}: ${stream.state.error}`) : null,
+									stream.state.dropped ? h("div", { className: "cea-meta" }, t("api.streamDropped")) : null,
+									stream.state.events.length === 0 && !stream.state.error ? h("div", { className: "ce-note" }, stream.state.done ? t("api.streamEmptyDone") : t("api.streamEmptyWaiting")) : null,
+									stream.state.events.slice(-300).map((ev, i) => h("div", { className: "cea-sse-row", key: `${stream.state.seq}-${i}` },
+										h("span", { className: "cea-sse-kind" }, ev.event),
+										typeof ev.retry === "number" ? h("span", { className: "cea-sse-retry" }, `${ev.retry}ms`) : null,
+										ev.id ? h("span", { className: "cea-sse-id" }, `#${ev.id}`) : null,
+										h("span", { className: "cea-sse-data" }, sseEventLabel(ev)),
+									))
+								)
+								: h("div", { className: "ce-note" }, t("api.streamEmpty")))
+								: respTab === "timeline"
 								? (sent
 									? h("div", { className: "cea-timeline" },
 										h("div", { className: "cea-tl-req" },

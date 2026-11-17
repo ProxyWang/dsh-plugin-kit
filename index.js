@@ -28,6 +28,7 @@ import { routes } from "./lib/host/routes.js";
 import { setSkillsRegistry } from "./lib/host/skills.js";
 import { stopAllTasks } from "./lib/host/tasks.js";
 import { stopAllWatchers } from "./lib/host/watch.js";
+import { stopAllStreams } from "./lib/host/streams.js";
 import { createBrowserService, browserTool } from "./lib/host/browser.js";
 
 function apply(ctx) {
@@ -75,6 +76,7 @@ function apply(ctx) {
 		servers.clear();
 		stopAllWatchers();
 		stopAllTasks();
+		stopAllStreams();
 		textCache.clear();
 	}, "code-explorer: servers lifetime");
 }
