@@ -13,7 +13,8 @@ import { BranchPalette } from "./branchpick.js";
 import { RelPath, toAbs } from "./pathtools.js";
 import { TreePanel } from "./tree.js";
 import { ChangesPanel } from "./changes.js";
-import { LocationList, QuickOpen, CommandPalette, RefsPeek, SymbolPalette, WorkspaceSymbolPalette, CompareRefsPalette, GotoLinePalette, FileHistoryOverlay, ProblemsPanel } from "./overlays.js";
+import { LocationList, QuickOpen, CommandPalette, RefsPeek, SymbolPalette, WorkspaceSymbolPalette, CompareRefsPalette, TaskPalette, TaskOutputPanel, GotoLinePalette, FileHistoryOverlay, ProblemsPanel } from "./overlays.js";
+import { foldTaskOutput } from "./tasks.js";
 import { SearchPanel } from "./searchpanel.js";
 import { applyReplace, computeGutter, computeVisible, computeWrapRows, compileFindRe, findRangesInLine, WRAP_LINE_CAP } from "./codeview.js";
 import { closeOtherTabs, closeTabsToRight, excludePinned, pinTab, popClosedTab, pushClosedTab, removedPaths } from "./tabs.js";
@@ -110,6 +111,8 @@ export function CodeBody(props) {
 	const [compareOpen, setCompareOpen] = useState(false);
 	const [compareBranches, setCompareBranches] = useState([]);
 	const [compareBusy, setCompareBusy] = useState(false);
+	const [tasks, setTasks] = useState(null); // palette state {scripts, running, busy, error}
+	const [task, setTask] = useState(null); // output state {id, script, chunks, seq, lineCount, done, code, dropped}
 	const [seqBusy, setSeqBusy] = useState(false);
 	const [tabMenu, setTabMenu] = useState(null); // {path, x, y} — editor-tab context menu
 	const [pinned, setPinned] = useState([]); // sticky tabs: bulk closes skip them (VS Code)
@@ -824,6 +827,65 @@ export function CodeBody(props) {
 		const res = await api("git.branches", repo ? { cwd, repo } : { cwd });
 		if (res.ok && Array.isArray(res.value.branches)) setCompareBranches(res.value.branches);
 	}, [cwd, dismissPanels]);
+
+	/* Task runner: list scripts, start a job, stream its long-polled output. */
+	const taskSeq = useRef(0);
+	const openTasks = useCallback(async () => {
+		if (!cwd) return;
+		dismissPanels();
+		setTasks({ scripts: {}, running: {}, busy: true, error: "" });
+		const res = await api("task.scripts", { cwd });
+		setTasks((cur) => (cur === null ? cur : res.ok && !res.value.error
+			? { scripts: res.value.scripts ?? {}, running: res.value.running ?? {}, busy: false, error: "" }
+			: { scripts: {}, running: {}, busy: false, error: res.value?.error ?? res.error ?? t("error") }));
+	}, [cwd, dismissPanels, t]);
+	const startTask = useCallback(
+		async (script) => {
+			if (!cwd) return;
+			const res = await api("task.start", { cwd, script });
+			if (!res.ok || res.value.error) {
+				say(`${t("error")}: ${res.value?.error ?? res.error}`, "error");
+				return;
+			}
+			setTasks(null);
+			taskSeq.current += 1;
+			setTask({ id: res.value.id, script, chunks: [], seq: 0, baseSeq: 0, lineCount: 1, done: false, code: null, dropped: false, pollSeq: taskSeq.current });
+		},
+		[cwd, say, t],
+	);
+	const stopTask = useCallback(async () => {
+		if (!task) return;
+		const res = await api("task.kill", { id: task.id });
+		if (!res.ok || res.value.error) say(`${t("error")}: ${res.value?.error ?? res.error}`, "error");
+		else say(t("task.stopRequested"));
+	}, [task, say, t]);
+
+	// Long-poll loop for the active task. A fresh pollSeq restarts cleanly; a
+	// superseded response (older seq) is dropped so stopping/starting cannot
+	// write into the current job's output.
+	useEffect(() => {
+		if (!task || task.done || !cwd) return undefined;
+		const active = task.pollSeq;
+		let cancelled = false;
+		const { id } = task;
+		let cursor = task.seq;
+		const pump = async () => {
+			while (!cancelled && cursor >= 0) {
+				const res = await api("task.poll", { id, since: cursor, waitMs: 18000 });
+				if (cancelled || active !== taskSeq.current) { cursor = -1; break; }
+				if (!res.ok || res.value.error) { cursor = -1; break; }
+				const snap = res.value;
+				cursor = snap.seq;
+				if (snap.done) cursor = -1;
+				// Fold inside the updater: two answers can land before a
+				// repaint, and prev — not a render-time ref — is the truth.
+				// Identity fields (script/pollSeq) survive the fold shape.
+				setTask((prev) => (prev === null || prev.pollSeq !== active ? prev : { ...foldTaskOutput(prev, snap), id, script: prev.script, pollSeq: prev.pollSeq }));
+			}
+		};
+		void pump();
+		return () => { cancelled = true; };
+	}, [cwd, task?.id, task?.done, task?.pollSeq]);
 	const pickCommit = useCallback(
 		async (commit) => {
 			if (!cwd || dirtyRef.current) {
@@ -1553,6 +1615,7 @@ export function CodeBody(props) {
 		{ id: "changes", icon: "⑂", label: t("command.changes"), run: () => { setMode("changes"); dismissPanels(); setRailVisible(true); setMobileView("files"); refreshGit(); } },
 		{ id: "search", icon: "⌕", label: t("command.search"), hint: "⇧⌘F", run: () => openSearch() },
 		{ id: "compare", icon: "≷", label: t("command.compare"), run: () => void openCompare() },
+		{ id: "tasks", icon: "▶", label: t("command.tasks"), run: () => void openTasks() },
 		{ id: "quick-open", icon: "↗", label: t("command.quickOpen"), hint: "⌘P", run: () => openPalette() },
 		{ id: "outline", icon: "☷", label: t("command.outline"), hint: "⌘⇧O", run: () => { if (LSP_RE.test(docRef.current?.path ?? "")) setSymPalette({}); else say(t("command.outlineUnavailable"), "error"); } },
 		{ id: "wsym", icon: "#", label: t("command.wsym"), hint: "⌘⇧#", run: () => { if (!cwd) return; dismissPanels(); setWsym({ query: "", results: [], busy: false, error: "", seq: 0 }); } },
@@ -1576,7 +1639,7 @@ export function CodeBody(props) {
 			say(t(next ? "editor.formatOn" : "editor.formatOff"));
 		} },
 		...(terminalEntry.available() ? [{ id: "terminal", icon: "‣", label: t("command.terminal"), run: openTerminal }] : []),
-	], [t, refreshGit, openSearch, openPalette, toggleWrap, say, loadFile, dismissPanels, openTerminal, terminalEntry, editing, toggleProblems, reopenClosedTab, closeTabs, tabs, liveOn, cwd, formatOnSave, openCompare]);
+	], [t, refreshGit, openSearch, openPalette, toggleWrap, say, loadFile, dismissPanels, openTerminal, terminalEntry, editing, toggleProblems, reopenClosedTab, closeTabs, tabs, liveOn, cwd, formatOnSave, openCompare, openTasks]);
 
 	const startRailDrag = useCallback((event) => {
 		event.preventDefault();
@@ -2006,6 +2069,19 @@ export function CodeBody(props) {
 								branches: compareBranches,
 								onRun: (base, head) => void doCompare(base, head),
 								onClose: () => setCompareOpen(false),
+							}) : null,
+							tasks ? h(TaskPalette, {
+								t,
+								state: tasks,
+								onRun: (script) => void startTask(script),
+								onClose: () => setTasks(null),
+							}) : null,
+							task ? h(TaskOutputPanel, {
+								t,
+								state: task,
+								onStop: () => void stopTask(),
+								onClose: () => { taskSeq.current += 1; setTask(null); },
+								onOpenFile: (path, line, col) => void openFile(path, line, col, true, { line, col }),
 							}) : null,
 							delPreview
 								? h("div", { className: "ce-overlay", ref: delPreviewRef, role: "dialog", "aria-label": t("diff.deletedAt") },

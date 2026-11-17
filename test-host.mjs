@@ -719,6 +719,50 @@ try { rmSync(m3, { recursive: true, force: true }); } catch {}
 const { parseNameStatusZ } = await import("./lib/host/git.js");
 check("parseNameStatusZ threads renames through", JSON.stringify(parseNameStatusZ("M\0src/a.txt\0R100\0src/old.txt\0src/new.txt\0")) === JSON.stringify([{ status: "M", path: "src/a.txt" }, { status: "R", from: "src/old.txt", to: "src/new.txt", path: "src/new.txt" }]), parseNameStatusZ("M\0src/a.txt\0R100\0src/old.txt\0src/new.txt\0"));
 
+// ---- M4: task runner over real npm ----
+const hasNpm = (() => { try { return spawnSync("npm", ["--version"], { stdio: "ignore" }).status === 0; } catch { return false; } })();
+if (hasNpm) {
+	const tdir = "/tmp/ce-tasks";
+	rmSync(tdir, { recursive: true, force: true });
+	mkdirSync(tdir, { recursive: true });
+	writeFileSync(`${tdir}/package.json`, JSON.stringify({ name: "ce-tasks", scripts: { greet: "echo task-greet-line && echo oops >&2 && exit 3", silent: "exit 0" } }));
+	const tCwd = tdir;
+	const tScripts = await call("task.scripts", { cwd: tCwd });
+	check("task.scripts lists package.json scripts", tScripts.ok && Object.hasOwn(tScripts.value.scripts, "greet"), tScripts.value);
+	const tUnknown = await call("task.start", { cwd: tCwd, script: "rm-rf" });
+	check("task.start refuses scripts absent from package.json", tUnknown.ok && tUnknown.value.error !== undefined && !tUnknown.value.id, tUnknown.value);
+	const tBad = await call("task.start", { cwd: tCwd, script: "--flag=x" });
+	check("task.start shape-rejects flag-like names before any read", /invalid script name/.test(tBad.value?.error ?? ""), tBad);
+	const tNone = await call("task.scripts", { cwd });
+	check("task.scripts reports a workspace without package.json", tNone.ok === false || tNone.value.error !== undefined, tNone.value);
+	const tStart = await call("task.start", { cwd: tCwd, script: "greet" });
+	check("task.start launches a whitelisted script", tStart.ok && tStart.value.id !== undefined, tStart.value);
+	let tPoll = await call("task.poll", { id: tStart.value.id, since: 0, waitMs: 20000 });
+	const seenText = () => (tPoll.value.chunks ?? []).map((c) => c.text).join("");
+	check("task.poll streams stdout once present", tPoll.ok && /task-greet-line/.test(seenText()), seenText());
+	// keep polling until the job closes, accumulating everything it retained
+	const allChunks = [...(tPoll.value.chunks ?? [])];
+	let last = tPoll;
+	for (let i = 0; i < 10 && !last.value.done; i++) {
+		last = await call("task.poll", { id: tStart.value.id, since: last.value.seq, waitMs: 20000 });
+		allChunks.push(...(last.value.chunks ?? []));
+	}
+	check("task.poll separates stderr chunks", allChunks.some((c) => c.stream === "err") && allChunks.some((c) => c.stream === "out"), allChunks.map((c) => c.stream));
+	check("task.poll reports done with the script's exit code", last.value.done === true && last.value.code === 3, last.value);
+	tPoll = last;
+	const tKill = await call("task.kill", { id: tStart.value.id });
+	check("task.kill on a finished job reports already", tKill.ok && tKill.value.already === true, tKill.value);
+	const tGone = await call("task.poll", { id: "999", since: 0, waitMs: 200 });
+	check("task.poll rejects unknown jobs", tGone.ok && tGone.value.error !== undefined, tGone.value);
+	const tStop = await call("task.start", { cwd: tCwd, script: "silent" });
+	const tKill2 = await call("task.kill", { id: tStop.value.id });
+	check("task.kill requests SIGTERM on a running job", tKill2.ok && tKill2.value.ok === true && tKill2.value.already === void 0, tKill2.value);
+	rmSync(tdir, { recursive: true, force: true });
+} else {
+	skipped += 9;
+	console.log("  skip  task runner suite (npm unavailable)");
+}
+
 for (const cleanup of cleanups) cleanup();
 console.log(`\n${pass} passed, ${fail} failed${skipped ? `, ${skipped} skipped` : ""}`);
 process.exit(fail ? 1 : 0);

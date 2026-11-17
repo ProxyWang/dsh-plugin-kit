@@ -2152,6 +2152,106 @@ check("docAction reloads clean drafts, flags dirty ones, ignores others", docAct
 	}
 }
 
+// --- M4 task runner: output parsing, folding, panels ----------------------------------
+{
+	const { failureAt, foldTaskOutput, countLines } = await import("./src/client/tasks.js");
+	check("failureAt locates go test lines", failureAt("\tmain_test.go:42:7: want x")?.line === 42, null);
+	check("failureAt locates tsc columns", failureAt("src/app.ts(12,5): error TS2304: bad")?.path === "src/app.ts", null);
+	check("failureAt locates eslint-ish colon lines", failureAt("lib/x.js:3:1: Unexpected" )?.line === 3, null);
+	check("failureAt locates pytest frames", failureAt('  File "tests/x.py", line 12, in test_y')?.path === "tests/x.py", null);
+	check("failureAt locates rustc arrows", failureAt("  --> src/main.rs:12:5")?.line === 12, null);
+	check("failureAt ignores plain noise", failureAt("npm notice update available") === null, null);
+	const base = { chunks: [{ stream: "out", text: "a\nb\n" }], lineCount: 3, seq: 4, done: false, code: null, dropped: false, reset: false };
+	const appended = foldTaskOutput(base, { chunks: [{ stream: "err", text: "bad\n" }], seq: 8, done: false, code: null, dropped: false, reset: false });
+	check("fold appends new chunks and advances the cursor", appended.chunks.length === 2 && appended.seq === 8 && appended.lineCount === 4, appended);
+	const resetFold = foldTaskOutput(base, { chunks: [{ stream: "out", text: "tail\n" }], seq: 99, done: true, code: 3, dropped: true, reset: true });
+	check("fold on reset replaces the retained window", resetFold.chunks.length === 1 && resetFold.done && resetFold.code === 3 && resetFold.lineCount === 2, resetFold);
+	check("countLines counts a trailing open line", countLines([{ text: "x\ny\nz" }]) === 3, countLines([{ text: "x\ny\nz" }]));
+
+	const { TaskPalette, TaskOutputPanel } = await import("./src/client/overlays.js");
+	const ran = [];
+	const tpTree = TaskPalette({ t: (k) => k, state: { scripts: { test: "vitest run", build: "vite build" }, running: { build: 1 }, busy: false, error: "" }, onRun: (s) => ran.push(s), onClose: () => {} });
+	const tpSpans = () => collect(tpTree).filter((n) => n.type === "span").map((n) => n.children[0]).filter((x) => typeof x === "string");
+	check("the task palette lists scripts with commands and a running dot", tpSpans().includes("test") && tpSpans().includes("vitest run") && tpSpans().includes("●"), tpSpans());
+	collect(tpTree).find((n) => n.type === "button" && n.props.className === "ce-qitem").props.onClick();
+	check("clicking a task row runs that script", ran.join() === "test", ran);
+	const opened = [];
+	const outTree = TaskOutputPanel({
+		t: (k) => k,
+		state: { script: "test", chunks: [{ stream: "out", text: "ok line\n\tmain_test.go:7:2: boom\n" }], seq: 5, done: false, code: null, dropped: false },
+		onStop: () => {},
+		onClose: () => {},
+		onOpenFile: (path, line, col) => opened.push([path, line, col]),
+	});
+	const jump = collect(outTree).find((n) => n.type === "button" && n.props.className === "ce-task-jump");
+	check("failure lines render as jump buttons, plain lines stay text", Boolean(jump) && collect(outTree).filter((n) => n.props.className === "ce-task-line").length === 3, null);
+	jump.props.onClick();
+	check("a jump click resolves the failure position", opened.length === 1 && opened[0][0] === "main_test.go" && opened[0][1] === 7, opened);
+	check("a running task shows the stop control", collect(outTree).some((n) => n.type === "button" && /task.stop/.test(String(n.props.title ?? ""))), null);
+	const doneTree = TaskOutputPanel({ t: (k) => k, state: { script: "test", chunks: [], seq: 9, done: true, code: 0, dropped: true }, onStop: () => {}, onClose: () => {}, onOpenFile: () => {} });
+	check("a finished task hides stop and reports the dropped tail", !collect(doneTree).some((n) => n.type === "button" && /task.stop/.test(String(n.props.title ?? ""))) && collect(doneTree).some((n) => n.children?.[0] === "task.dropped"), null);
+}
+{
+	// CodeBody wiring: command → task.scripts, run → start → output state.
+	const taskGlobals = { fetch: globalThis.fetch, requestAnimationFrame: globalThis.requestAnimationFrame, cancelAnimationFrame: globalThis.cancelAnimationFrame, setTimeout: globalThis.setTimeout, clearTimeout: globalThis.clearTimeout, window: globalThis.window, document: globalThis.document };
+	const taskRequests = [];
+	let taskTimers = [];
+	let pollStage = 0;
+	globalThis.fetch = async (url, options) => {
+		const body = JSON.parse(options?.body ?? "{}");
+		taskRequests.push({ url: String(url), body });
+		if (url.endsWith("/watch.poll")) return { json: async () => ({ ok: true, value: body.since === -1 ? { seq: 1, baseline: true, supported: true } : { seq: 1, paths: [], git: false } }) };
+		if (url.endsWith("/fs.list")) return { json: async () => ({ ok: true, value: { entries: [], truncated: false } }) };
+		if (url.endsWith("/fs.read")) return { json: async () => ({ ok: true, value: { kind: "text", content: "x\n", mtimeMs: 1 } }) };
+		if (url.endsWith("/git.status")) return { json: async () => ({ ok: true, value: { repo: false } }) };
+		if (url.endsWith("/task.scripts")) return { json: async () => ({ ok: true, value: { scripts: { test: "node t.js" }, running: {} } }) };
+		if (url.endsWith("/task.start")) return { json: async () => ({ ok: true, value: { id: "7", script: "test" } }) };
+		if (url.endsWith("/task.poll")) {
+			pollStage++;
+			if (pollStage === 1) return { json: async () => ({ ok: true, value: { id: "7", script: "test", seq: 10, baseSeq: 0, done: false, code: null, dropped: false, reset: false, chunks: [{ stream: "out", text: "running…\n" }] } }) };
+			return { json: async () => ({ ok: true, value: { id: "7", script: "test", seq: 10, baseSeq: 0, done: true, code: 0, dropped: false, reset: false, chunks: [] } }) };
+		}
+		return { json: async () => ({ ok: true, value: {} }) };
+	};
+	globalThis.requestAnimationFrame = (fn) => { fn(); return 0; };
+	globalThis.cancelAnimationFrame = () => {};
+	globalThis.setTimeout = (fn, ms) => { taskTimers.push({ fn, ms, fired: false }); return taskTimers.length; };
+	globalThis.clearTimeout = (id) => { if (typeof id === "number" && taskTimers[id - 1]) taskTimers[id - 1].cancelled = true; };
+	globalThis.window = { innerWidth: 1200, innerHeight: 900 };
+	globalThis.document = { addEventListener() {}, removeEventListener() {} };
+	try {
+		const { TaskPalette: TaskPaletteCmp, TaskOutputPanel: TaskOutputPanelCmp } = await import("./src/client/overlays.js");
+		const renderTk = createHookRenderer(CodeBody, { sessionId: "tk", useSessions: (select) => select({ byId: { tk: { cwd: "/w" } } }), t: (k) => k }, { effects: true });
+		let tkTree = renderTk();
+		renderTk.flushEffects();
+		const fireTk = () => { const due = taskTimers.filter((t) => !t.fired && !t.cancelled); due.forEach((t) => { t.fired = true; }); taskTimers = taskTimers.filter((t) => !t.fired && !t.cancelled); for (const t of due) t.fn(); };
+		const paintTk = () => { tkTree = renderTk(); renderTk.flushEffects(); };
+		const tickTk = async () => { for (let i = 0; i < 8; i++) { await new Promise((r) => setImmediate(r)); fireTk(); } paintTk(); };
+		const getTk = (test) => collect(tkTree).find(test);
+		await tickTk();
+		// Tasks (like compare) live in the editor overlay container: open a file first.
+		getTk((n) => n.type === TreePanelCmp).props.onOpenFile("main.go", 1, 1);
+		await tickTk();
+		tkTree.props.onKeyDown({ code: "KeyP", metaKey: true, shiftKey: true, preventDefault() {} });
+		paintTk();
+		const cmds = getTk((n) => n.type.name === "CommandPalette").props.commands;
+		await cmds.find((c) => c.id === "tasks").run();
+		await tickTk();
+		check("the tasks command reads package.json scripts from the host", taskRequests.some((r) => r.url.endsWith("/task.scripts")) && Boolean(getTk((n) => n.type === TaskPaletteCmp)), null);
+		getTk((n) => n.type === TaskPaletteCmp).props.onRun("test");
+		await tickTk(); await tickTk();
+		check("running a task starts the job and opens its output panel", taskRequests.some((r) => r.url.endsWith("/task.start") && r.body.script === "test") && Boolean(getTk((n) => n.type === TaskOutputPanelCmp)), null);
+		const outNode = getTk((n) => n.type === TaskOutputPanelCmp);
+		check("the poll pump folds streamed chunks into the panel state", outNode.props.state.chunks.some((c) => c.text.includes("running…")), outNode.props.state);
+		await tickTk(); await tickTk();
+		const doneNode = getTk((n) => n.type === TaskOutputPanelCmp)?.props.state ?? {};
+		check("the pump stops folding after done and reports the exit", doneNode.done === true && doneNode.code === 0);
+		renderTk.unmount();
+	} finally {
+		Object.assign(globalThis, taskGlobals);
+	}
+}
+
 // --- the generated bundle: registration + factory --------------------------------------
 
 const bundle = await readFile(new URL("./client.js", import.meta.url), "utf8");

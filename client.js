@@ -511,6 +511,18 @@ var zh = {
   "changes.resolved": "{path} 已采用{side}并暂存",
   "changes.sequencerDone": "序列器已完成",
   "changes.sequencerAborted": "序列器已中止",
+  "command.tasks": "运行任务…",
+  "task.title": "任务",
+  "task.noScripts": "package.json 里没有 scripts",
+  "task.output": "任务输出",
+  "task.running": "运行中",
+  "task.exited": "退出码 {code}",
+  "task.failed": "失败 · 退出码 {code}",
+  "task.stop": "停止",
+  "task.stopRequested": "已请求停止（SIGTERM）",
+  "task.dropped": "早期输出已截断",
+  "task.droppedHint": "缓冲区只保留尾部，更早的输出已丢弃",
+  "task.jumpHint": "点击跳转到该文件位置",
   "editor.closeTab": "关闭标签（中键点击亦可）",
   "editor.dirtyGuard": "有未保存的修改 — 请先保存（⌘S）或取消（Esc）",
   "editor.dirty": "未保存",
@@ -1066,6 +1078,18 @@ var en = {
   "changes.resolved": "{path} resolved with {side} and staged",
   "changes.sequencerDone": "Sequencer finished",
   "changes.sequencerAborted": "Sequencer aborted",
+  "command.tasks": "Run Tasks…",
+  "task.title": "Tasks",
+  "task.noScripts": "No scripts in package.json",
+  "task.output": "Task output",
+  "task.running": "running",
+  "task.exited": "exit code {code}",
+  "task.failed": "failed · exit {code}",
+  "task.stop": "Stop",
+  "task.stopRequested": "Stop requested (SIGTERM)",
+  "task.dropped": "early output dropped",
+  "task.droppedHint": "only the tail is retained once the buffer fills",
+  "task.jumpHint": "jump to this file position",
   "editor.closeTab": "Close tab (middle-click also works)",
   "editor.dirtyGuard": "Unsaved changes — save (⌘S) or cancel (Esc) first",
   "editor.dirty": "unsaved",
@@ -3533,6 +3557,37 @@ function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commitsOpen, 
   );
 }
 
+// src/client/tasks.js
+var FAILURE_PATTERNS = [
+  // go test: "\tmain_test.go:42:7: message" / "\t./x_test.go:3:"
+  /^\t(?:\.\/)?([\w./@+\-[\]]+\.go):(\d+)(?::(\d+))?:/,
+  // tsc: "src/x.ts(12,5): error TS2304: ..."
+  /^(?:[\s>*-]*)([\w./@+\-[\]]+\.(?:ts|tsx|js|jsx|mjs|cjs))\((\d+),(\d+)\):/,
+  // jest/eslint-ish: "  3:7  error  ...  src/x.js" — too loose; skip.
+  // plain "file.ts:12:5: message" (eslint, some scripts)
+  /^(?:[\s>*-]*)([\w./@+\-[\]]+\.(?:ts|tsx|js|jsx|mjs|cjs)):(\d+):(\d+)?[:-]/,
+  // python: 'File "tests/x.py", line 12, in test_y'
+  /^\s*File "([\w./@+\-[\]\s]+\.py)", line (\d+),/,
+  // rustc: " --> src/x.rs:12:5"
+  /^\s*--> ([\w./@+\-[\]]+\.rs):(\d+)(?::(\d+))?/
+];
+function failureAt(text) {
+  for (const re of FAILURE_PATTERNS) {
+    const m = re.exec(text);
+    if (m) return { path: m[1].trim().replace(/^\.\//, ""), line: Number(m[2]) || 1, col: Number(m[3]) || 1 };
+  }
+  return null;
+}
+function foldTaskOutput(state, snap) {
+  const chunks = snap.reset ? snap.chunks : [...state.chunks, ...snap.chunks];
+  return { chunks, lineCount: countLines(chunks), seq: snap.seq, done: snap.done === true, code: snap.code, dropped: snap.dropped === true, reset: snap.reset === true };
+}
+function countLines(chunks) {
+  let n = 0;
+  for (const c of chunks) for (let i = 0; i < c.text.length; i++) if (c.text.charCodeAt(i) === 10) n++;
+  return n + 1;
+}
+
 // src/client/overlays.js
 function LocationList({ t, overlay, cwd, onPick, onClose }) {
   const panelRef = useDismissLayer({ onDismiss: onClose });
@@ -4004,6 +4059,91 @@ function CompareRefsPalette({ t, busy, branches, onRun, onClose }) {
           b.current ? h("span", { className: "ce-qdir" }, "•") : null
         )
       )
+    )
+  );
+}
+function TaskPalette({ t, state, onRun, onClose }) {
+  const panelRef = useDismissLayer({ onDismiss: onClose });
+  const names = useMemo(() => Object.keys(state.scripts ?? {}), [state.scripts]);
+  return h(
+    "div",
+    { className: "ce-palette", ref: panelRef, role: "dialog", "aria-label": t("task.title"), onKeyDown: (e) => {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        onClose();
+      }
+    } },
+    h(
+      "div",
+      { className: "ce-palette-head" },
+      h("span", { className: "ce-disclosure-summary" }, t("task.title")),
+      h("button", { className: "ce-tool ce-tiny", type: "button", title: `${t("close")} (Esc)`, onClick: onClose }, "✕")
+    ),
+    h(
+      "div",
+      { className: "ce-palette-list ce-scroll" },
+      state.busy ? h("div", { className: "ce-note" }, t("loading")) : null,
+      state.error ? h("div", { className: "ce-note" }, state.error) : null,
+      !state.busy && !state.error && names.length === 0 ? h("div", { className: "ce-note" }, t("task.noScripts")) : null,
+      names.map(
+        (name) => h(
+          "button",
+          { key: name, type: "button", className: "ce-qitem", onClick: () => onRun(name) },
+          h("span", { className: "ce-symglyph" }, (state.running ?? {})[name] ? "●" : "‣"),
+          h("span", { className: "ce-qbase" }, name),
+          h("span", { className: "ce-qdir" }, state.scripts[name])
+        )
+      )
+    )
+  );
+}
+function TaskOutputPanel({ t, state, onStop, onClose, onOpenFile, tail = 2e3 }) {
+  const panelRef = useDismissLayer({ onDismiss: onClose, ignoreSelector: '[data-ce-popup-trigger="task-stop"]' });
+  const bodyRef = useRef(null);
+  const lines2 = useMemo(() => {
+    const all = [];
+    for (const c of state.chunks) all.push(c);
+    const text = all.map((c) => c.text).join("");
+    const rows = text.split("\n");
+    if (rows.length > tail) return rows.slice(-tail).map((line, i) => ({ line, n: rows.length - tail + i + 1 }));
+    return rows.map((line, i) => ({ line, n: i + 1 }));
+  }, [state.chunks, tail]);
+  const scrolledTo = useRef(0);
+  useEffect(() => {
+    const el = bodyRef.current;
+    if (el && state.seq !== scrolledTo.current) {
+      scrolledTo.current = state.seq;
+      el.scrollTop = el.scrollHeight;
+    }
+  }, [state.seq]);
+  const status = state.done ? state.code === 0 ? t("task.exited", { code: String(state.code) }) : t("task.failed", { code: String(state.code ?? "?") }) : t("task.running");
+  return h(
+    "div",
+    { className: "ce-palette ce-task-panel", ref: panelRef, role: "dialog", "aria-label": `${t("task.output")}: ${state.script}`, onKeyDown: (e) => {
+      if (e.key === "Escape") onClose();
+    } },
+    h(
+      "div",
+      { className: "ce-palette-head" },
+      h("span", { className: "ce-symglyph" }, "‣"),
+      h("span", { className: "ce-disclosure-summary" }, state.script),
+      h("span", { className: `ce-peek-meta${state.done && state.code !== 0 ? " ce-danger" : ""}` }, status),
+      state.dropped ? h("span", { className: "ce-peek-meta", title: t("task.droppedHint") }, t("task.dropped")) : null,
+      h("span", { className: "ce-spacer" }),
+      !state.done ? h("button", { type: "button", className: "ce-tool ce-tiny", title: t("task.stop"), "data-ce-popup-trigger": "task-stop", onClick: onStop }, `■ ${t("task.stop")}`) : null,
+      h("button", { className: "ce-tool ce-tiny", type: "button", title: `${t("close")} (Esc)`, onClick: onClose }, "✕")
+    ),
+    h(
+      "div",
+      { className: "ce-task-body ce-scroll", ref: bodyRef },
+      lines2.map((r) => {
+        const loc = failureAt(r.line);
+        return h(
+          "div",
+          { key: `${r.n}`, className: "ce-task-line" },
+          loc ? h("button", { type: "button", className: "ce-task-jump", title: t("task.jumpHint"), onClick: () => onOpenFile(loc.path, loc.line, loc.col) }, r.line) : r.line
+        );
+      })
     )
   );
 }
@@ -5210,6 +5350,8 @@ function CodeBody(props) {
   const [compareOpen, setCompareOpen] = useState(false);
   const [compareBranches, setCompareBranches] = useState([]);
   const [compareBusy, setCompareBusy] = useState(false);
+  const [tasks, setTasks] = useState(null);
+  const [task, setTask] = useState(null);
   const [seqBusy, setSeqBusy] = useState(false);
   const [tabMenu, setTabMenu] = useState(null);
   const [pinned, setPinned] = useState([]);
@@ -5865,6 +6007,62 @@ function CodeBody(props) {
     const res = await api("git.branches", repo ? { cwd, repo } : { cwd });
     if (res.ok && Array.isArray(res.value.branches)) setCompareBranches(res.value.branches);
   }, [cwd, dismissPanels]);
+  const taskSeq = useRef(0);
+  const openTasks = useCallback(async () => {
+    if (!cwd) return;
+    dismissPanels();
+    setTasks({ scripts: {}, running: {}, busy: true, error: "" });
+    const res = await api("task.scripts", { cwd });
+    setTasks((cur) => cur === null ? cur : res.ok && !res.value.error ? { scripts: res.value.scripts ?? {}, running: res.value.running ?? {}, busy: false, error: "" } : { scripts: {}, running: {}, busy: false, error: res.value?.error ?? res.error ?? t("error") });
+  }, [cwd, dismissPanels, t]);
+  const startTask = useCallback(
+    async (script) => {
+      if (!cwd) return;
+      const res = await api("task.start", { cwd, script });
+      if (!res.ok || res.value.error) {
+        say(`${t("error")}: ${res.value?.error ?? res.error}`, "error");
+        return;
+      }
+      setTasks(null);
+      taskSeq.current += 1;
+      setTask({ id: res.value.id, script, chunks: [], seq: 0, baseSeq: 0, lineCount: 1, done: false, code: null, dropped: false, pollSeq: taskSeq.current });
+    },
+    [cwd, say, t]
+  );
+  const stopTask = useCallback(async () => {
+    if (!task) return;
+    const res = await api("task.kill", { id: task.id });
+    if (!res.ok || res.value.error) say(`${t("error")}: ${res.value?.error ?? res.error}`, "error");
+    else say(t("task.stopRequested"));
+  }, [task, say, t]);
+  useEffect(() => {
+    if (!task || task.done || !cwd) return void 0;
+    const active = task.pollSeq;
+    let cancelled = false;
+    const { id } = task;
+    let cursor2 = task.seq;
+    const pump = async () => {
+      while (!cancelled && cursor2 >= 0) {
+        const res = await api("task.poll", { id, since: cursor2, waitMs: 18e3 });
+        if (cancelled || active !== taskSeq.current) {
+          cursor2 = -1;
+          break;
+        }
+        if (!res.ok || res.value.error) {
+          cursor2 = -1;
+          break;
+        }
+        const snap = res.value;
+        cursor2 = snap.seq;
+        if (snap.done) cursor2 = -1;
+        setTask((prev) => prev === null || prev.pollSeq !== active ? prev : { ...foldTaskOutput(prev, snap), id, script: prev.script, pollSeq: prev.pollSeq });
+      }
+    };
+    void pump();
+    return () => {
+      cancelled = true;
+    };
+  }, [cwd, task?.id, task?.done, task?.pollSeq]);
   const pickCommit = useCallback(
     async (commit) => {
       if (!cwd || dirtyRef.current) {
@@ -6532,6 +6730,7 @@ function CodeBody(props) {
     } },
     { id: "search", icon: "⌕", label: t("command.search"), hint: "⇧⌘F", run: () => openSearch() },
     { id: "compare", icon: "≷", label: t("command.compare"), run: () => void openCompare() },
+    { id: "tasks", icon: "▶", label: t("command.tasks"), run: () => void openTasks() },
     { id: "quick-open", icon: "↗", label: t("command.quickOpen"), hint: "⌘P", run: () => openPalette() },
     { id: "outline", icon: "☷", label: t("command.outline"), hint: "⌘⇧O", run: () => {
       if (LSP_RE.test(docRef.current?.path ?? "")) setSymPalette({});
@@ -6577,7 +6776,7 @@ function CodeBody(props) {
       say(t(next ? "editor.formatOn" : "editor.formatOff"));
     } },
     ...terminalEntry.available() ? [{ id: "terminal", icon: "‣", label: t("command.terminal"), run: openTerminal }] : []
-  ], [t, refreshGit, openSearch, openPalette, toggleWrap, say, loadFile, dismissPanels, openTerminal, terminalEntry, editing, toggleProblems, reopenClosedTab, closeTabs, tabs, liveOn, cwd, formatOnSave, openCompare]);
+  ], [t, refreshGit, openSearch, openPalette, toggleWrap, say, loadFile, dismissPanels, openTerminal, terminalEntry, editing, toggleProblems, reopenClosedTab, closeTabs, tabs, liveOn, cwd, formatOnSave, openCompare, openTasks]);
   const startRailDrag = useCallback((event) => {
     event.preventDefault();
     const startX = event.clientX;
@@ -7045,6 +7244,22 @@ function CodeBody(props) {
               onRun: (base, head) => void doCompare(base, head),
               onClose: () => setCompareOpen(false)
             }) : null,
+            tasks ? h(TaskPalette, {
+              t,
+              state: tasks,
+              onRun: (script) => void startTask(script),
+              onClose: () => setTasks(null)
+            }) : null,
+            task ? h(TaskOutputPanel, {
+              t,
+              state: task,
+              onStop: () => void stopTask(),
+              onClose: () => {
+                taskSeq.current += 1;
+                setTask(null);
+              },
+              onOpenFile: (path, line, col) => void openFile(path, line, col, true, { line, col })
+            }) : null,
             delPreview ? h(
               "div",
               { className: "ce-overlay", ref: delPreviewRef, role: "dialog", "aria-label": t("diff.deletedAt") },
@@ -7288,6 +7503,10 @@ var CSS2 = `
 .ce-danger{color:var(--dsw-alias-state-error-primary,#f85149)}
 .ce-compare{border-left:2px solid color-mix(in srgb,var(--dsw-alias-button-info-fill,#58a6ff) 55%,transparent)}
 .ce-compare-box{width:min(560px,92vw)}.ce-compare-fields{display:flex;gap:6px;align-items:center;padding:8px 10px;flex-wrap:wrap}.ce-compare-fields .ce-input{flex:1;min-width:120px}
+.ce-task-panel{display:flex;flex-direction:column;max-height:min(72vh,640px)}
+.ce-task-body{flex:1;min-height:120px;overflow:auto;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;line-height:1.5;padding:6px 10px;background:var(--dsw-alias-bg-base,#0d1117)}
+.ce-task-line{white-space:pre-wrap;word-break:break-word}
+.ce-task-jump{border:0;background:none;color:var(--dsw-alias-button-info-fill,#58a6ff);font:inherit;padding:0;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
 .ce-commit:hover{background:var(--dsw-alias-interactive-bg-hover,#262a30)}
 .ce-chash{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;color:var(--dsw-alias-label-tertiary,#778);flex:none}
 .ce-histrow{display:flex;gap:8px;align-items:baseline;width:100%;text-align:left;border:0;background:transparent;color:inherit;font:inherit;padding:4px 10px;cursor:pointer;white-space:nowrap}

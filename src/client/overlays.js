@@ -3,6 +3,7 @@
 import { Fragment, h, useCallback, useEffect, useMemo, useRef, useState } from "./react.js";
 import { ROW } from "./constants.js";
 import { RelPath } from "./pathtools.js";
+import { failureAt } from "./tasks.js";
 import { useDismissLayer } from "./dismiss.js";
 
 export function LocationList({ t, overlay, cwd, onPick, onClose }) {
@@ -448,6 +449,90 @@ export function CompareRefsPalette({ t, busy, branches, onRun, onClose }) {
 					b.current ? h("span", { className: "ce-qdir" }, "•") : null,
 				),
 			),
+		),
+	);
+}
+
+/**
+ * Task list: package.json scripts with their commands; rows run on click and
+ * mark in-flight jobs. Runs are the workspace's own npm scripts — no shell
+ * field is ever editable here.
+ */
+export function TaskPalette({ t, state, onRun, onClose }) {
+	const panelRef = useDismissLayer({ onDismiss: onClose });
+	const names = useMemo(() => Object.keys(state.scripts ?? {}), [state.scripts]);
+	return h(
+		"div",
+		{ className: "ce-palette", ref: panelRef, role: "dialog", "aria-label": t("task.title"), onKeyDown: (e) => { if (e.key === "Escape") { e.stopPropagation(); onClose(); } } },
+		h("div", { className: "ce-palette-head" },
+			h("span", { className: "ce-disclosure-summary" }, t("task.title")),
+			h("button", { className: "ce-tool ce-tiny", type: "button", title: `${t("close")} (Esc)`, onClick: onClose }, "✕"),
+		),
+		h("div", { className: "ce-palette-list ce-scroll" },
+			state.busy ? h("div", { className: "ce-note" }, t("loading")) : null,
+			state.error ? h("div", { className: "ce-note" }, state.error) : null,
+			!state.busy && !state.error && names.length === 0 ? h("div", { className: "ce-note" }, t("task.noScripts")) : null,
+			names.map((name) =>
+				h(
+					"button",
+					{ key: name, type: "button", className: "ce-qitem", onClick: () => onRun(name) },
+					h("span", { className: "ce-symglyph" }, (state.running ?? {})[name] ? "●" : "‣"),
+					h("span", { className: "ce-qbase" }, name),
+					h("span", { className: "ce-qdir" }, state.scripts[name]),
+				),
+			),
+		),
+	);
+}
+
+/**
+ * Task output: retained-tail log with per-line failure locators turned into
+ * clickable jumps. The panel keeps polling while the job runs; Stop sends
+ * SIGTERM (then SIGKILL after a grace) through the host.
+ */
+export function TaskOutputPanel({ t, state, onStop, onClose, onOpenFile, tail = 2000 }) {
+	const panelRef = useDismissLayer({ onDismiss: onClose, ignoreSelector: '[data-ce-popup-trigger="task-stop"]' });
+	const bodyRef = useRef(null);
+	const lines = useMemo(() => {
+		const all = [];
+		for (const c of state.chunks) all.push(c);
+		const text = all.map((c) => c.text).join("");
+		const rows = text.split("\n");
+		if (rows.length > tail) return rows.slice(-tail).map((line, i) => ({ line, n: rows.length - tail + i + 1 }));
+		return rows.map((line, i) => ({ line, n: i + 1 }));
+	}, [state.chunks, tail]);
+	const scrolledTo = useRef(0);
+	useEffect(() => {
+		const el = bodyRef.current;
+		if (el && state.seq !== scrolledTo.current) {
+			scrolledTo.current = state.seq;
+			el.scrollTop = el.scrollHeight;
+		}
+	}, [state.seq]);
+	const status = state.done ? (state.code === 0 ? t("task.exited", { code: String(state.code) }) : t("task.failed", { code: String(state.code ?? "?") })) : t("task.running");
+	return h(
+		"div",
+		{ className: "ce-palette ce-task-panel", ref: panelRef, role: "dialog", "aria-label": `${t("task.output")}: ${state.script}`, onKeyDown: (e) => { if (e.key === "Escape") onClose(); } },
+		h("div", { className: "ce-palette-head" },
+			h("span", { className: "ce-symglyph" }, "‣"),
+			h("span", { className: "ce-disclosure-summary" }, state.script),
+			h("span", { className: `ce-peek-meta${state.done && state.code !== 0 ? " ce-danger" : ""}` }, status),
+			state.dropped ? h("span", { className: "ce-peek-meta", title: t("task.droppedHint") }, t("task.dropped")) : null,
+			h("span", { className: "ce-spacer" }),
+			!state.done ? h("button", { type: "button", className: "ce-tool ce-tiny", title: t("task.stop"), "data-ce-popup-trigger": "task-stop", onClick: onStop }, `■ ${t("task.stop")}`) : null,
+			h("button", { className: "ce-tool ce-tiny", type: "button", title: `${t("close")} (Esc)`, onClick: onClose }, "✕"),
+		),
+		h("div", { className: "ce-task-body ce-scroll", ref: bodyRef },
+			lines.map((r) => {
+				const loc = failureAt(r.line);
+				return h(
+					"div",
+					{ key: `${r.n}`, className: "ce-task-line" },
+					loc
+						? h("button", { type: "button", className: "ce-task-jump", title: t("task.jumpHint"), onClick: () => onOpenFile(loc.path, loc.line, loc.col) }, r.line)
+						: r.line,
+				);
+			}),
 		),
 	);
 }

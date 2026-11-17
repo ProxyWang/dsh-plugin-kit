@@ -26,6 +26,7 @@ import { textCache } from "./lib/host/fence.js";
 import { servers } from "./lib/host/lsp.js";
 import { routes } from "./lib/host/routes.js";
 import { setSkillsRegistry } from "./lib/host/skills.js";
+import { stopAllTasks } from "./lib/host/tasks.js";
 import { stopAllWatchers } from "./lib/host/watch.js";
 import { createBrowserService, browserTool } from "./lib/host/browser.js";
 
@@ -73,6 +74,7 @@ function apply(ctx) {
 		for (const server of servers.values()) server.stop("unload");
 		servers.clear();
 		stopAllWatchers();
+		stopAllTasks();
 		textCache.clear();
 	}, "code-explorer: servers lifetime");
 }

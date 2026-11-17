@@ -163,6 +163,10 @@ export const CSS = `
 .ce-danger{color:var(--dsw-alias-state-error-primary,#f85149)}
 .ce-compare{border-left:2px solid color-mix(in srgb,var(--dsw-alias-button-info-fill,#58a6ff) 55%,transparent)}
 .ce-compare-box{width:min(560px,92vw)}.ce-compare-fields{display:flex;gap:6px;align-items:center;padding:8px 10px;flex-wrap:wrap}.ce-compare-fields .ce-input{flex:1;min-width:120px}
+.ce-task-panel{display:flex;flex-direction:column;max-height:min(72vh,640px)}
+.ce-task-body{flex:1;min-height:120px;overflow:auto;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;line-height:1.5;padding:6px 10px;background:var(--dsw-alias-bg-base,#0d1117)}
+.ce-task-line{white-space:pre-wrap;word-break:break-word}
+.ce-task-jump{border:0;background:none;color:var(--dsw-alias-button-info-fill,#58a6ff);font:inherit;padding:0;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
 .ce-commit:hover{background:var(--dsw-alias-interactive-bg-hover,#262a30)}
 .ce-chash{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;color:var(--dsw-alias-label-tertiary,#778);flex:none}
 .ce-histrow{display:flex;gap:8px;align-items:baseline;width:100%;text-align:left;border:0;background:transparent;color:inherit;font:inherit;padding:4px 10px;cursor:pointer;white-space:nowrap}
