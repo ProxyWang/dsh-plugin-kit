@@ -326,8 +326,84 @@ export function SymbolPalette({ t, symbols, onPick, onClose }) {
 	);
 }
 
-/** Minimal "go to line" palette (⌘G / Ctrl+G): one numeric input, Enter jumps. */
-export function GotoLinePalette({ t, totalLines, initial, onGo, onClose }) {
+/**
+ * Workspace symbol search (VS Code ⌘T shape): the query lives in the parent
+ * because results come from the host's workspace/symbol with debounced
+ * fetching; rows show kind glyph, name, container and the file:line.
+ */
+export function WorkspaceSymbolPalette({ t, cwd, state, onQuery, onPick, onClose }) {
+	const panelRef = useDismissLayer({ onDismiss: onClose });
+	const [sel, setSel] = useState(0);
+	const inputRef = useRef(null);
+	const listRef = useRef(null);
+	useEffect(() => {
+		inputRef.current?.focus();
+	}, []);
+	const items = useMemo(() => (state.results ?? []).slice(0, 120), [state.results]);
+	useEffect(() => {
+		setSel(0);
+	}, [state.query, state.results]);
+	useEffect(() => {
+		listRef.current?.querySelector(`[data-wi="${sel}"]`)?.scrollIntoView({ block: "nearest" });
+	}, [sel]);
+	const onKeyDown = (event) => {
+		if (event.key === "ArrowDown") {
+			event.preventDefault();
+			setSel((s) => Math.min(items.length - 1, s + 1));
+		} else if (event.key === "ArrowUp") {
+			event.preventDefault();
+			setSel((s) => Math.max(0, s - 1));
+		} else if (event.key === "Enter") {
+			event.preventDefault();
+			if (items[sel]) onPick(items[sel]);
+		}
+	};
+	return h(
+		"div",
+		{ className: "ce-palette", ref: panelRef, role: "dialog", "aria-label": t("wsym.placeholder"), onKeyDown, onMouseDown: (event) => event.stopPropagation() },
+		h(
+			"div",
+			{ className: "ce-palette-head" },
+			h("input", {
+				ref: inputRef,
+				className: "ce-input",
+				type: "text",
+				placeholder: t("wsym.placeholder"),
+				value: state.query,
+				onChange: (event) => onQuery(event.target.value),
+				onKeyDown: (event) => { event.stopPropagation(); onKeyDown(event); },
+				spellcheck: false,
+			}),
+			h("button", { className: "ce-tool ce-tiny", type: "button", title: `${t("close")} (Esc)`, onClick: onClose }, "✕"),
+		),
+		h(
+			"div",
+			{ className: "ce-palette-list ce-scroll", ref: listRef },
+			state.busy && items.length === 0 ? h("div", { className: "ce-note" }, t("loading")) : null,
+			!state.busy && state.error ? h("div", { className: "ce-note" }, state.error) : null,
+			!state.busy && !state.error && items.length === 0 ? h("div", { className: "ce-note" }, state.query.trim() === "" ? t("wsym.needQuery") : t("wsym.none")) : null,
+			items.map((s, i) =>
+				h(
+					"button",
+					{
+						key: `${s.name}-${s.path}-${s.line}-${i}`,
+						type: "button",
+						"data-wi": i,
+						className: `ce-qitem${i === sel ? " ce-qitem-sel" : ""}`,
+						onMouseEnter: () => setSel(i),
+						onClick: () => onPick(s),
+					},
+					h("span", { className: "ce-symglyph" }, SYMBOL_GLYPHS[s.kind] ?? "•"),
+					h("span", { className: "ce-qbase" }, s.container ? `${s.name} · ${s.container}` : s.name),
+					h("span", { className: "ce-qdir" }, RelPath(cwd, s.path)),
+					h("span", { className: "ce-qdir" }, `:${s.line}`),
+				),
+			),
+		),
+	);
+}
+
+/** Minimal "go to line" palette (⌘G / Ctrl+G): one numeric input, Enter jumps. */export function GotoLinePalette({ t, totalLines, initial, onGo, onClose }) {
 	const panelRef = useDismissLayer({ onDismiss: onClose });
 	const [value, setValue] = useState(String(initial ?? ""));
 	const inputRef = useRef(null);

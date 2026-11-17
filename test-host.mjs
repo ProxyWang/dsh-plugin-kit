@@ -636,6 +636,36 @@ const fakeDead = { supported: false, seq: 2, lostBelow: 0, gitSeq: 0, paths: new
 check("watch: unsupported hubs answer supported:false", snapshotFor(fakeDead, 0).value.supported === false, snapshotFor(fakeDead));
 check("watch: a hub was materialized for the fixture root", hubs.size >= 1, hubs.size);
 
+// ---- M2: workspace symbols + format-on-save ----
+const { applyTextEdits } = await import("./lib/host/lsp.js");
+check("applyTextEdits replaces a single range", applyTextEdits("hello world", [{ range: { start: { line: 0, character: 6 }, end: { line: 0, character: 11 } }, newText: "there" }]) === "hello there", null);
+check("applyTextEdits spans lines by absolute offset", applyTextEdits("a\nb\nc", [{ range: { start: { line: 0, character: 1 }, end: { line: 2, character: 1 } }, newText: "x" }]) === "ax", null);
+check("applyTextEdits applies right-to-left for multiple edits", applyTextEdits("one two three", [
+	{ range: { start: { line: 0, character: 0 }, end: { line: 0, character: 3 } }, newText: "1" },
+	{ range: { start: { line: 0, character: 8 }, end: { line: 0, character: 13 } }, newText: "3" },
+]) === "1 two 3", null);
+check("applyTextEdits skips an edit overlapping one already applied", applyTextEdits("abcdef", [
+	{ range: { start: { line: 0, character: 4 }, end: { line: 0, character: 6 } }, newText: "Z" },
+	{ range: { start: { line: 0, character: 3 }, end: { line: 0, character: 5 } }, newText: "Y" },
+]) === "abcdZ", null);
+check("applyTextEdits clamps end past EOF", applyTextEdits("ab\ncd", [{ range: { start: { line: 0, character: 0 }, end: { line: 9, character: 0 } }, newText: "x" }]) === "x", null);
+if (goplsOn) {
+	const ws = await call("lsp.workspaceSymbol", { cwd, query: "helper" });
+	check("lsp.workspaceSymbol finds gopls symbols by fuzzy query", ws.ok && ws.value.symbols.some((s) => s.name === "helper" && typeof s.line === "number" && s.path !== ""), ws.value?.symbols?.slice(0, 3));
+	const wsProbe = await call("lsp.workspaceSymbol", { cwd, query: "Greeter" });
+	check("lsp.workspaceSymbol probes the workspace language without a document hint", wsProbe.ok && wsProbe.value.symbols.some((s) => s.name === "Greeter"), wsProbe.value?.symbols?.slice(0, 3));
+	writeFileSync(`${cwd}/fmt-target.go`, "package main\n\nfunc  unformatted( a int ) int {\nreturn a\n}\n");
+	const fmt = await call("fs.formatDraft", { cwd, path: "fmt-target.go", content: "package main\n\nfunc  unformatted( a int ) int {\nreturn a\n}\n" });
+	check("fs.formatDraft writes the draft then gofmts it through the server", fmt.ok && fmt.value.formatted === true && fmt.value.content.includes("func unformatted(a int) int {") && fmt.value.content.includes("\treturn a"), fmt.value?.content);
+	check("fs.formatDraft advances mtime to the formatted write", typeof fmt.value.mtimeMs === "number" && readFileSync(`${cwd}/fmt-target.go`, "utf8") === fmt.value.content, null);
+	const fmtConflict = await call("fs.formatDraft", { cwd, path: "fmt-target.go", content: "package main\n\nfunc later(a int) int { return a }\n", baseMtime: 1 });
+	check("fs.formatDraft refuses blind overwrite via baseMtime", fmtConflict.ok === false && /modified on disk/i.test(fmtConflict.error ?? ""), fmtConflict);
+	check("the refused formatDraft left the formatted file intact", readFileSync(`${cwd}/fmt-target.go`, "utf8") === fmt.value.content, null);
+	rmSync(`${cwd}/fmt-target.go`, { force: true });
+} else {
+	skipped += 5;
+}
+
 for (const cleanup of cleanups) cleanup();
 console.log(`\n${pass} passed, ${fail} failed${skipped ? `, ${skipped} skipped` : ""}`);
 process.exit(fail ? 1 : 0);

@@ -478,6 +478,15 @@ var zh = {
   "command.live": "切换实时刷新",
   "watch.state.on": "开启",
   "watch.state.off": "关闭",
+  "command.wsym": "工作区符号搜索",
+  "wsym.placeholder": "输入符号名称（如函数、类型）…",
+  "wsym.none": "没有匹配的符号",
+  "wsym.needQuery": "输入名称以搜索工作区符号",
+  "command.formatOnSave": "保存时格式化",
+  "editor.formatOn": "保存时格式化已开启：写入前用语言服务器格式化",
+  "editor.formatOff": "保存时格式化已关闭",
+  "editor.savedFormatted": "已保存并格式化",
+  "editor.formatSkipped": "已保存（语言服务器未格式化该文件）",
   "editor.closeTab": "关闭标签（中键点击亦可）",
   "editor.dirtyGuard": "有未保存的修改 — 请先保存（⌘S）或取消（Esc）",
   "editor.dirty": "未保存",
@@ -1000,6 +1009,15 @@ var en = {
   "command.live": "Toggle Live Refresh",
   "watch.state.on": "On",
   "watch.state.off": "Off",
+  "command.wsym": "Search Symbols in Workspace",
+  "wsym.placeholder": "Type a symbol name (function, type…)",
+  "wsym.none": "No matching symbols",
+  "wsym.needQuery": "Type a name to search workspace symbols",
+  "command.formatOnSave": "Format On Save",
+  "editor.formatOn": "Format on save on: the language server formats before writing",
+  "editor.formatOff": "Format on save off",
+  "editor.savedFormatted": "Saved and formatted",
+  "editor.formatSkipped": "Saved (the language server did not format this file)",
   "editor.closeTab": "Close tab (middle-click also works)",
   "editor.dirtyGuard": "Unsaved changes — save (⌘S) or cancel (Esc) first",
   "editor.dirty": "unsaved",
@@ -3740,6 +3758,80 @@ function SymbolPalette({ t, symbols, onPick, onClose }) {
     )
   );
 }
+function WorkspaceSymbolPalette({ t, cwd, state, onQuery, onPick, onClose }) {
+  const panelRef = useDismissLayer({ onDismiss: onClose });
+  const [sel, setSel] = useState(0);
+  const inputRef = useRef(null);
+  const listRef = useRef(null);
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
+  const items = useMemo(() => (state.results ?? []).slice(0, 120), [state.results]);
+  useEffect(() => {
+    setSel(0);
+  }, [state.query, state.results]);
+  useEffect(() => {
+    listRef.current?.querySelector(`[data-wi="${sel}"]`)?.scrollIntoView({ block: "nearest" });
+  }, [sel]);
+  const onKeyDown = (event) => {
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setSel((s) => Math.min(items.length - 1, s + 1));
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setSel((s) => Math.max(0, s - 1));
+    } else if (event.key === "Enter") {
+      event.preventDefault();
+      if (items[sel]) onPick(items[sel]);
+    }
+  };
+  return h(
+    "div",
+    { className: "ce-palette", ref: panelRef, role: "dialog", "aria-label": t("wsym.placeholder"), onKeyDown, onMouseDown: (event) => event.stopPropagation() },
+    h(
+      "div",
+      { className: "ce-palette-head" },
+      h("input", {
+        ref: inputRef,
+        className: "ce-input",
+        type: "text",
+        placeholder: t("wsym.placeholder"),
+        value: state.query,
+        onChange: (event) => onQuery(event.target.value),
+        onKeyDown: (event) => {
+          event.stopPropagation();
+          onKeyDown(event);
+        },
+        spellcheck: false
+      }),
+      h("button", { className: "ce-tool ce-tiny", type: "button", title: `${t("close")} (Esc)`, onClick: onClose }, "✕")
+    ),
+    h(
+      "div",
+      { className: "ce-palette-list ce-scroll", ref: listRef },
+      state.busy && items.length === 0 ? h("div", { className: "ce-note" }, t("loading")) : null,
+      !state.busy && state.error ? h("div", { className: "ce-note" }, state.error) : null,
+      !state.busy && !state.error && items.length === 0 ? h("div", { className: "ce-note" }, state.query.trim() === "" ? t("wsym.needQuery") : t("wsym.none")) : null,
+      items.map(
+        (s, i) => h(
+          "button",
+          {
+            key: `${s.name}-${s.path}-${s.line}-${i}`,
+            type: "button",
+            "data-wi": i,
+            className: `ce-qitem${i === sel ? " ce-qitem-sel" : ""}`,
+            onMouseEnter: () => setSel(i),
+            onClick: () => onPick(s)
+          },
+          h("span", { className: "ce-symglyph" }, SYMBOL_GLYPHS[s.kind] ?? "•"),
+          h("span", { className: "ce-qbase" }, s.container ? `${s.name} · ${s.container}` : s.name),
+          h("span", { className: "ce-qdir" }, RelPath(cwd, s.path)),
+          h("span", { className: "ce-qdir" }, `:${s.line}`)
+        )
+      )
+    )
+  );
+}
 function GotoLinePalette({ t, totalLines, initial, onGo, onClose }) {
   const panelRef = useDismissLayer({ onDismiss: onClose });
   const [value, setValue] = useState(String(initial ?? ""));
@@ -4927,6 +5019,14 @@ function CodeBody(props) {
   const [mobileView, setMobileView] = useState("files");
   const [symbols, setSymbols] = useState([]);
   const [symPalette, setSymPalette] = useState(null);
+  const [wsym, setWsym] = useState(null);
+  const [formatOnSave, setFormatOnSave] = useState(() => {
+    try {
+      return localStorage.getItem("dsh.plugin-kit.format") !== "off";
+    } catch {
+      return true;
+    }
+  });
   const [commandOpen, setCommandOpen] = useState(false);
   const [fileDropOver, setFileDropOver] = useState(false);
   const [tabDropOver, setTabDropOver] = useState(null);
@@ -5052,6 +5152,7 @@ function CodeBody(props) {
     setFileHist(null);
     setGotoOpen(false);
     setSymPalette(null);
+    setWsym(null);
     setDelPreview(null);
     setTabMenu(null);
     setProblemsOpen(false);
@@ -5486,6 +5587,24 @@ function CodeBody(props) {
     return () => loop.stop();
   }, [cwd, liveOn, tab?.visible]);
   useEffect(() => {
+    if (!wsym || !cwd) return void 0;
+    const q = wsym.query.trim();
+    if (q === "") return void 0;
+    const { seq } = wsym;
+    const timer = setTimeout(() => {
+      api("lsp.workspaceSymbol", { cwd, query: q, path: docRef.current?.path ?? "" }).then((r) => {
+        if (r.ok && r.value.status) setStatus((s) => ({ ...s, ...r.value.status }));
+        setWsym((cur) => cur === null || cur.seq !== seq ? cur : {
+          ...cur,
+          busy: false,
+          results: r.ok ? r.value.symbols ?? [] : [],
+          error: r.ok ? String(r.value.error ?? r.value.note ?? "") : String(r.error ?? "")
+        });
+      });
+    }, 220);
+    return () => clearTimeout(timer);
+  }, [cwd, wsym?.query, wsym?.seq]);
+  useEffect(() => {
     if (!blameOn || !doc || !cwd) return void 0;
     let alive = true;
     const repo = repoSelRef.current;
@@ -5734,20 +5853,24 @@ function CodeBody(props) {
   }, [doc, say, t]);
   const saveEdit = useCallback(() => {
     if (!doc || !editing) return;
+    const useFormat = formatOnSave && LSP_RE.test(doc.path);
     const payload = { cwd, path: doc.path, content: editText };
     if (typeof doc.mtimeMs === "number") payload.baseMtime = doc.mtimeMs;
-    api("fs.write", payload).then((res) => {
+    api(useFormat ? "fs.formatDraft" : "fs.write", payload).then((res) => {
       if (!res.ok) {
         say(/modified on disk/i.test(res.error ?? "") ? t("editor.conflict") : `${t("error")}: ${res.error}`, "error");
         return;
       }
-      const lines2 = editText.split("\n");
+      const finalText = useFormat && typeof res.value.content === "string" ? res.value.content : editText;
+      const lines2 = finalText.split("\n");
       if (lines2.length > 1 && lines2[lines2.length - 1] === "") lines2.pop();
-      setDoc({ ...doc, lines: lines2, states: buildLineStates(lines2, langFor(doc.path)), raw: editText, mtimeMs: res.value.mtimeMs ?? doc.mtimeMs });
+      setDoc({ ...doc, lines: lines2, states: buildLineStates(lines2, langFor(doc.path)), raw: finalText, mtimeMs: res.value.mtimeMs ?? doc.mtimeMs });
       setEditing(false);
-      say(t("editor.saved"));
+      if (res.value.formatted) say(t("editor.savedFormatted"));
+      else if (useFormat) say(t("editor.formatSkipped"), "error");
+      else say(t("editor.saved"));
     });
-  }, [doc, editing, editText, cwd, say, t]);
+  }, [doc, editing, editText, cwd, say, t, formatOnSave]);
   const cancelEdit = useCallback(() => setEditing(false), []);
   const openDiffSource = useCallback((line) => {
     if (!diff || typeof diff.path !== "string" || diff.path === "") return;
@@ -5868,6 +5991,12 @@ function CodeBody(props) {
         openSearch();
         return;
       }
+      if ((event.metaKey || event.ctrlKey) && event.altKey && event.code === "KeyO") {
+        event.preventDefault();
+        dismissPanels();
+        if (cwd) setWsym({ query: "", results: [], busy: false, error: "", seq: 0 });
+        return;
+      }
       if ((event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey && event.code === "KeyG") {
         if (modeRef.current === "code" && docRef.current && !editing) {
           event.preventDefault();
@@ -5885,7 +6014,7 @@ function CodeBody(props) {
         return;
       }
       if (event.key === "Escape") {
-        if (searchOpen || palette || commandOpen || branchPickOpen || fileHist || gotoOpen || symPalette || peek || overlay || problemsOpen || tabMenu) {
+        if (searchOpen || palette || commandOpen || branchPickOpen || fileHist || gotoOpen || symPalette || wsym || peek || overlay || problemsOpen || tabMenu) {
           event.preventDefault();
           event.stopPropagation();
           dismissPanels();
@@ -5922,7 +6051,7 @@ function CodeBody(props) {
         if (searchOpen) setSearchOpen(false);
       }
     },
-    [palette, closePalette, openPalette, openSearch, searchOpen, peek, closePeek, goBack, goForward, symPalette, editing, saveEdit, cancelEdit, findOpen, delPreview, gotoOpen, toggleWrap, fileHist, toggleCommand, toggleProblems, reopenClosedTab, dismissPanels, commandOpen, branchPickOpen, overlay, problemsOpen, tabMenu]
+    [palette, closePalette, openPalette, openSearch, searchOpen, peek, closePeek, goBack, goForward, symPalette, wsym, editing, saveEdit, cancelEdit, findOpen, delPreview, gotoOpen, toggleWrap, fileHist, toggleCommand, toggleProblems, reopenClosedTab, dismissPanels, commandOpen, branchPickOpen, overlay, problemsOpen, tabMenu]
   );
   const doJump = useCallback(
     async (kind, pos) => {
@@ -6137,6 +6266,11 @@ function CodeBody(props) {
       if (LSP_RE.test(docRef.current?.path ?? "")) setSymPalette({});
       else say(t("command.outlineUnavailable"), "error");
     } },
+    { id: "wsym", icon: "#", label: t("command.wsym"), hint: "⌘⇧#", run: () => {
+      if (!cwd) return;
+      dismissPanels();
+      setWsym({ query: "", results: [], busy: false, error: "", seq: 0 });
+    } },
     { id: "replace", icon: "⇄", label: t("command.replace"), hint: "⌘⌥F", run: () => {
       if (modeRef.current === "code" && docRef.current && !editing && !docRef.current.image) {
         setFindOpen(true);
@@ -6162,8 +6296,17 @@ function CodeBody(props) {
       }
       say(t(next ? "watch.on" : "watch.off"));
     } },
+    { id: "format", icon: "⌘.", label: `${t("command.formatOnSave")} — ${t(formatOnSave ? "watch.state.on" : "watch.state.off")}`, hint: "⌥⇧F", run: () => {
+      const next = !formatOnSave;
+      setFormatOnSave(next);
+      try {
+        localStorage.setItem("dsh.plugin-kit.format", next ? "on" : "off");
+      } catch {
+      }
+      say(t(next ? "editor.formatOn" : "editor.formatOff"));
+    } },
     ...terminalEntry.available() ? [{ id: "terminal", icon: "‣", label: t("command.terminal"), run: openTerminal }] : []
-  ], [t, refreshGit, openSearch, openPalette, toggleWrap, say, loadFile, dismissPanels, openTerminal, terminalEntry, editing, toggleProblems, reopenClosedTab, closeTabs, tabs, liveOn]);
+  ], [t, refreshGit, openSearch, openPalette, toggleWrap, say, loadFile, dismissPanels, openTerminal, terminalEntry, editing, toggleProblems, reopenClosedTab, closeTabs, tabs, liveOn, cwd, formatOnSave]);
   const startRailDrag = useCallback((event) => {
     event.preventDefault();
     const startX = event.clientX;
@@ -6607,6 +6750,17 @@ function CodeBody(props) {
               setSymPalette(null);
               revealPosition(s.line, s.col, s.name);
             }, onClose: () => setSymPalette(null) }) : null,
+            wsym ? h(WorkspaceSymbolPalette, {
+              t,
+              cwd,
+              state: wsym,
+              onQuery: (query) => setWsym((cur) => cur === null ? cur : { ...cur, query, busy: query.trim() !== "", seq: cur.seq + 1 }),
+              onPick: (s) => {
+                setWsym(null);
+                if (typeof s.path === "string" && s.path !== "") void openFile(s.path, s.line, s.col, true, { line: s.line, col: s.col, word: s.name });
+              },
+              onClose: () => setWsym(null)
+            }) : null,
             delPreview ? h(
               "div",
               { className: "ce-overlay", ref: delPreviewRef, role: "dialog", "aria-label": t("diff.deletedAt") },

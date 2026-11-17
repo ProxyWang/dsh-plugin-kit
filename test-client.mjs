@@ -1946,6 +1946,86 @@ check("docAction reloads clean drafts, flags dirty ones, ignores others", docAct
 	}
 }
 
+// --- M2 editor productivity: workspace symbol palette + format-on-save flow -----------
+{
+	const { WorkspaceSymbolPalette } = await import("./src/client/overlays.js");
+	const prodGlobals = { fetch: globalThis.fetch, requestAnimationFrame: globalThis.requestAnimationFrame, cancelAnimationFrame: globalThis.cancelAnimationFrame, setTimeout: globalThis.setTimeout, clearTimeout: globalThis.clearTimeout, window: globalThis.window, document: globalThis.document };
+	const prodRequests = [];
+	let prodTimers = [];
+	globalThis.fetch = async (url, options) => {
+		const body = JSON.parse(options?.body ?? "{}");
+		prodRequests.push({ url: String(url), body });
+		if (url.endsWith("/watch.poll")) return { json: async () => ({ ok: true, value: body.since === -1 ? { seq: 1, baseline: true, supported: true } : { seq: 1, paths: [], git: false } }) };
+		if (url.endsWith("/fs.read")) return { json: async () => ({ ok: true, value: { kind: "text", content: "package main\n\nfunc helper() {}\n", mtimeMs: 1 } }) };
+		if (url.endsWith("/fs.list")) return { json: async () => ({ ok: true, value: { entries: [{ name: "main.go", type: "file", size: 24 }], truncated: false } }) };
+		if (url.endsWith("/git.status")) return { json: async () => ({ ok: true, value: { repo: false } }) };
+		if (url.endsWith("/git.diff")) return { json: async () => ({ ok: true, value: {} }) };
+		if (url.endsWith("/lsp.workspaceSymbol")) return { json: async () => ({ ok: true, value: { symbols: [{ name: "helper", kind: 12, container: "main", path: "/w/main.go", line: 3, col: 6 }], status: { state: "ready", label: "gopls" } } }) };
+		if (url.endsWith("/fs.formatDraft")) return { json: async () => ({ ok: true, value: { formatted: true, content: "package main\n\nfunc formatted() {}\n", mtimeMs: 9 } }) };
+		if (url.endsWith("/lsp.diagnostics")) return { json: async () => ({ ok: true, value: { items: [] } }) };
+		if (url.endsWith("/lsp.request")) return { json: async () => ({ ok: true, value: { symbols: [], targets: [] } }) };
+		if (url.endsWith("/lsp.status")) return { json: async () => ({ ok: true, value: { state: "ready", label: "gopls" } }) };
+		return { json: async () => ({ ok: true, value: {} }) };
+	};
+	globalThis.requestAnimationFrame = (fn) => { fn(); return 0; };
+	globalThis.cancelAnimationFrame = () => {};
+	globalThis.setTimeout = (fn, ms) => { prodTimers.push({ fn, ms, fired: false }); return prodTimers.length; };
+	globalThis.clearTimeout = (id) => { if (typeof id === "number" && prodTimers[id - 1]) prodTimers[id - 1].cancelled = true; };
+	globalThis.window = { innerWidth: 1200, innerHeight: 900 };
+	globalThis.document = { addEventListener() {}, removeEventListener() {} };
+	try {
+		// Pure component: rows show glyph, name·container and relative file:line.
+		const rows = [];
+		const wtree = WorkspaceSymbolPalette({
+			t: (k) => k,
+			cwd: "/w",
+			state: { query: "hel", results: [{ name: "helper", kind: 12, container: "main", path: "/w/main.go", line: 3, col: 6 }], busy: false, error: "" },
+			onQuery: () => {},
+			onPick: (s) => rows.push(s),
+			onClose: () => {},
+		});
+		const wtexts = () => collect(wtree).filter((n) => n.type === "span").map((n) => n.children[0]).filter((x) => typeof x === "string");
+		check("workspace symbol rows show name·container and relative file:line", wtexts().includes("helper · main") && wtexts().includes("main.go") && wtexts().includes(":3"), wtexts());
+		const wempty = collect(WorkspaceSymbolPalette({ t: (k) => k, cwd: "/w", state: { query: "zz", results: [], busy: false, error: "" }, onQuery: () => {}, onPick: () => {}, onClose: () => {} }));
+		check("workspace symbol palette distinguishes empty from loading", wempty.some((n) => n.children?.[0] === "wsym.none"), null);
+
+		const renderProd = createHookRenderer(CodeBody, { sessionId: "prod", useSessions: (select) => select({ byId: { prod: { cwd: "/w" } } }), t: (k) => k }, { effects: true });
+		let prodTree = renderProd();
+		renderProd.flushEffects();
+		const fireProd = () => { const due = prodTimers.filter((t) => !t.fired && !t.cancelled); due.forEach((t) => { t.fired = true; }); prodTimers = prodTimers.filter((t) => !t.fired && !t.cancelled); for (const t of due) t.fn(); };
+		const paintProd = () => { prodTree = renderProd(); renderProd.flushEffects(); };
+		const tickProd = async () => { for (let i = 0; i < 8; i++) { await new Promise((r) => setImmediate(r)); fireProd(); paintProd(); } };
+		const getProd = (test) => collect(prodTree).find(test);
+		await tickProd();
+		getProd((n) => n.type === TreePanelCmp).props.onOpenFile("main.go", 1, 1);
+		await tickProd();
+		// ⌥⌘O opens the workspace symbol palette.
+		prodTree.props.onKeyDown({ code: "KeyO", metaKey: true, altKey: true, shiftKey: false, preventDefault() {} });
+		paintProd();
+		check("⌥⌘O opens the workspace symbol palette", Boolean(getProd((n) => n.type === WorkspaceSymbolPalette)), null);
+		getProd((n) => n.type === WorkspaceSymbolPalette).props.onQuery("hel");
+		await tickProd();
+		check("typing debounces a workspace/symbol query to the host", prodRequests.some((r) => r.url.endsWith("/lsp.workspaceSymbol") && r.body.query === "hel"), prodRequests.map((r) => r.url));
+		const pal = () => getProd((n) => n.type === WorkspaceSymbolPalette).props.state;
+		check("fetched symbols land in the palette state (busy cleared, one row)", pal().results.length === 1 && pal().busy === false && pal().results[0].name === "helper", pal());
+		getProd((n) => n.type === WorkspaceSymbolPalette).props.onPick({ name: "helper", kind: 12, container: "main", path: "/w/main.go", line: 3, col: 6 });
+		await tickProd();
+		check("picking a symbol opens its file at the definition", prodRequests.some((r) => r.url.endsWith("/fs.read") && r.body.path === "/w/main.go") && !getProd((n) => n.type === WorkspaceSymbolPalette), null);
+		// Format-on-save: ⌘S routes the draft through fs.formatDraft and adopts the result.
+		const editBtn = getProd((n) => n.type === "button" && n.props.title === "editor.edit");
+		editBtn.props.onClick(); paintProd();
+		getProd((n) => n.type === "textarea" && typeof n.props.className === "string" && n.props.className.startsWith("ce-edit-ta")).props.onChange({ target: { value: "package main\n\nfunc helper() { }\n" } });
+		paintProd();
+		getProd((n) => n.type === "button" && n.children?.[0] === "editor.save").props.onClick();
+		await tickProd();
+		check("saving a Go draft goes through fs.formatDraft with the mtime guard", prodRequests.some((r) => r.url.endsWith("/fs.formatDraft") && r.body.baseMtime === 1) && !prodRequests.some((r) => r.url.endsWith("/fs.write")), prodRequests.map((r) => r.url));
+		check("the formatted server text is adopted, not the raw draft", getProd((n) => n.props.className === "ce-head-path")?.children[0] === "main.go" && !getProd((n) => n.type === "textarea"), null);
+		renderProd.unmount();
+	} finally {
+		Object.assign(globalThis, prodGlobals);
+	}
+}
+
 // --- the generated bundle: registration + factory --------------------------------------
 
 const bundle = await readFile(new URL("./client.js", import.meta.url), "utf8");
