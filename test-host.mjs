@@ -796,6 +796,31 @@ if (hasNpm) {
 	}
 }
 
+// ---- M5 collection-on-disk ----
+{
+	const cdir = "/tmp/ce-coll";
+	rmSync(cdir, { recursive: true, force: true });
+	mkdirSync(`${cdir}/collection/ops`, { recursive: true });
+	writeFileSync(`${cdir}/collection/a.bru`, "meta {\n  name: Alpha\n  type: http\n  seq: 1\n}\n\nget {\n  url: https://e.test/a\n}\n");
+	writeFileSync(`${cdir}/collection/ops/b.bru`, "meta {\n  name: Bravo\n  type: http\n}\n\npost {\n  url: https://e.test/b\n}\n");
+	writeFileSync(`${cdir}/collection/notes.txt`, "not a collection file");
+	writeFileSync(`${cdir}/collection/.hidden.bru`, "skipped");
+	const cl = await call("collection.load", { cwd: cdir, dir: "collection" });
+	check("collection.load walks .bru files recursively with paths", cl.ok && cl.value.files.length === 2 && cl.value.files.some((f) => f.path === "ops/b.bru") && cl.value.files.some((f) => f.text.includes("Alpha")), cl.value?.files?.map((f) => f.path));
+	check("collection.load hides dotfiles and non-bru entries", !(cl.value?.files ?? []).some((f) => f.path.includes(".hidden") || f.path.endsWith(".txt")), cl.value?.files?.map((f) => f.path));
+	const clOut = await call("collection.load", { cwd: cdir, dir: "../escape" });
+	check("collection.load refuses escaping the workspace", clOut.ok === false || clOut.value?.error !== undefined, clOut.value ?? clOut);
+	const cs = await call("collection.save", { cwd: cdir, dir: "collection", name: "Gamma", text: "meta {\n  name: Gamma\n  type: http\n}\n\nget {\n  url: https://e.test/g\n}\n" });
+	check("collection.save writes <name>.bru inside the directory", cs.ok && cs.value.created === true && cs.value.path === "collection/Gamma.bru" && existsSync(`${cdir}/collection/Gamma.bru`), cs.value);
+	const csBad = await call("collection.save", { cwd: cdir, dir: "collection", name: "../evil", text: "x" });
+	check("collection.save refuses path-shaped names", (csBad.value?.error ?? csBad.error ?? "").includes("invalid"), csBad);
+	const csNoDir = await call("collection.save", { cwd: cdir, dir: "missing", name: "N", text: "x" });
+	check("collection.save refuses a missing directory instead of creating it", csNoDir.value?.error !== undefined && !existsSync(`${cdir}/missing`), csNoDir.value);
+	const again = await call("collection.load", { cwd: cdir, dir: "collection" });
+	check("saved entry round-trips into the next load", again.ok && again.value.files.some((f) => f.path === "Gamma.bru" && f.text.includes("Gamma")), again.value?.files?.map((f) => f.path));
+	rmSync(cdir, { recursive: true, force: true });
+}
+
 for (const cleanup of cleanups) cleanup();
 console.log(`\n${pass} passed, ${fail} failed${skipped ? `, ${skipped} skipped` : ""}`);
 process.exit(fail ? 1 : 0);

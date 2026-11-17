@@ -2438,6 +2438,69 @@ check("docAction reloads clean drafts, flags dirty ones, ignores others", docAct
 	}
 }
 
+// --- M5 collection-on-disk: load to favorites + save-through checkbox -------------------
+{
+	const coGlobals = { fetch: globalThis.fetch, requestAnimationFrame: globalThis.requestAnimationFrame, cancelAnimationFrame: globalThis.cancelAnimationFrame, setTimeout: globalThis.setTimeout, clearTimeout: globalThis.clearTimeout, window: globalThis.window, document: globalThis.document };
+	const coRequests = [];
+	let coSavedSeen = null;
+	globalThis.fetch = async (url, options) => {
+		const body = JSON.parse(options?.body ?? "{}");
+		coRequests.push({ url: String(url), body });
+		if (url.endsWith("/collection.load")) return { json: async () => ({ ok: true, value: { dir: "collection", files: [{ path: "a.bru", text: "meta {\n  name: Alpha\n  type: http\n}\n\nget {\n  url: https://e.test/a\n}\n" }, { path: "ops/b.bru", text: "meta {\n  name: Bravo\n  type: http\n}\n\npost {\n  url: https://e.test/b\n}\n" }] } }) };
+		if (url.endsWith("/collection.save")) return { json: async () => ({ ok: true, value: { path: `collection/${body.name}.bru`, mtimeMs: 5, created: true } }) };
+		return { json: async () => ({ ok: true, value: {} }) };
+	};
+	globalThis.requestAnimationFrame = (fn) => { fn(); return 0; };
+	globalThis.cancelAnimationFrame = () => {};
+	globalThis.setTimeout = () => 0;
+	globalThis.window = { innerWidth: 1200, innerHeight: 900 };
+	globalThis.document = { addEventListener() {}, removeEventListener() {} };
+	try {
+		const renderCo = createHookRenderer(ApiView, { t: (k) => k, sessionId: "co", useSessions: (select) => select({ byId: { co: { cwd: "/w" } } }) }, { effects: true });
+		let coTree = renderCo();
+		renderCo.flushEffects();
+		const coNode = (p) => collect(coTree).find(p);
+		const paintCo = () => { coTree = renderCo(); renderCo.flushEffects(); };
+		// settings tab: configure the collection folder, then load.
+		coNode((n) => n.props.className?.startsWith("cea-config-tab") && n.children[0] === "api.settings").props.onClick(); paintCo();
+		coNode((n) => n.props.placeholder === "api.collectionDirPlaceholder").props.onChange({ target: { value: "collection" } }); paintCo();
+		coNode((n) => n.props.title === "api.collectionLoad").props.onClick();
+		await new Promise((r) => setImmediate(r)); paintCo();
+		check("collection.load lands .bru files into favorites", coRequests.some((r) => r.url.endsWith("/collection.load") && r.body.cwd === "/w" && r.body.dir === "collection"), coRequests.map((r) => r.url));
+		await new Promise((r) => setImmediate(r)); paintCo();
+		const favNames = () => {
+			coNode((n) => n.props["data-ce-popup-trigger"] === "api-history").props.onClick(); paintCo();
+			if (coNode((n) => n.props.className === "cea-tab" && JSON.stringify(n.children).includes("api.saved"))) { coNode((n) => n.props.className === "cea-tab" && JSON.stringify(n.children).includes("api.saved")).props.onClick(); paintCo(); }
+			const rows = collect(coTree).filter((n) => n.type === "span" && n.props.className === "cea-hname").map((n) => n.children[0]);
+			coNode((n) => n.props["data-ce-popup-trigger"] === "api-history").props.onClick(); paintCo();
+			return rows;
+		};
+		check("loaded entries keep their .bru meta names", favNames().includes("★ Alpha") && favNames().includes("★ Bravo"), favNames());
+		// favorite save with the collection checkbox on hits collection.save first.
+		const urlIn = () => coNode((n) => n.props["aria-label"] === "api.urlPlaceholder" && n.props.className === "ce-input cea-url");
+		urlIn().props.onChange({ target: { value: "https://e.test/new" } }); paintCo();
+		check("url input holds the new value", urlIn().props.value === "https://e.test/new", urlIn()?.props?.value);
+		coNode((n) => n.props["data-ce-popup-trigger"] === "api-save").props.onClick(); paintCo();
+		const nameIn = () => coNode((n) => n.props["aria-label"] === "api.savePlaceholder");
+		check("save dialog is open", Boolean(nameIn()), null);
+		nameIn().props.onChange({ target: { value: "Delta" } }); paintCo();
+		check("save name input holds Delta", nameIn().props.value === "Delta", nameIn()?.props?.value);
+		const collCheck = collect(coTree).find((n) => n.type === "input" && n.props.type === "checkbox" && n.props.disabled === false);
+		check("collection checkbox is enabled once a folder and session exist", Boolean(collCheck), null);
+		const confirm = () => collect(coTree).find((n) => n.type === "button" && n.children?.[0] === "api.saveConfirm");
+		check("confirm button is enabled with a name", confirm()?.props.disabled === false, confirm()?.props);
+		// Enter in the (freshly rendered) name input runs the current doSaveFavorite closure.
+		nameIn().props.onKeyDown({ key: "Enter", stopPropagation() {} });
+		for (let i = 0; i < 4; i++) { await new Promise((r) => setImmediate(r)); paintCo(); }
+		check("save-to-collection writes the .bru file through the host", coRequests.some((r) => r.url.endsWith("/collection.save") && r.body.name === "Delta" && r.body.dir === "collection" && r.body.cwd === "/w" && r.body.text.includes("https://e.test/new")));
+		await new Promise((r) => setImmediate(r)); await new Promise((r) => setImmediate(r)); paintCo();
+		check("the favorite row is added alongside the file write", collect(coTree).some((n) => n.type === "span" && String(n.children?.[0] ?? "").includes("Delta")), favNames());
+		renderCo.unmount();
+	} finally {
+		Object.assign(globalThis, coGlobals);
+	}
+}
+
 // --- the generated bundle: registration + factory --------------------------------------
 
 const bundle = await readFile(new URL("./client.js", import.meta.url), "utf8");

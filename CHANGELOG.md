@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased — API: collections live on disk (a folder of .bru files)
+
+- The request workbench gains a **collection folder** (workspace-relative, remembered per profile): two host routes make it real. `collection.load` walks the directory recursively (≤200 entries), keeps only `*.bru` outside hidden path segments, caps reads at 256 KiB, and refuses escaping the workspace; `collection.save` writes `<name>.bru` — names with `/`, `..` or leading dots refused, existing directory required (no silent mkdir), fence-checked, optional `baseMtime` for reload-before-overwrite honesty.
+- Loading parses every file with the same brucol reader the import dialog uses and lands the entries **into favorites** (deduped by name); saving a favorite can mirror it to the folder with one checkbox (serialized BEFORE the write, so a serializer failure cannot leave favorite and disk out of sync; the write error blocks the favorite row rather than diverging the two stores). The settings tab holds the folder field + ⇪ load action; without a session workspace the affordances disable with an explanation.
+- Bugs the regression earned its keep for: `readFile` was never imported in routes.js (a swallowed ReferenceError made the walk return an empty list), and the favorite dialog left an unreachable second dismiss-layer guard (save panel now closes the history overlay first, exactly like the favorites button already did).
+- Regressions: host — recursive walk with nested paths, hidden/non-bru skipping, escape refusal, save creates/round-trips through load, path-shaped names refused, missing directory refused; client — settings-folder → load → favorites rows with their .bru meta names, checkbox-gated write carrying cwd/dir/name/text, favorite row added alongside.
+
 ## Unreleased — API: live SSE/EventStream responses
 
 - `api.send` no longer buffers forever on `text/event-stream`: when the response announces an event stream, the live body is handed to a new host capture (`lib/host/streams.js`) and the send answers immediately with `{streaming:true, id, status, headers, ...}`. The capture keeps a bounded 1 MiB retained tail with a byte cursor and the same long-poll protocol as watch/tasks (`api.streamPoll`, `api.streamStop`); a dead client's closed response releases its waiter, finished captures expire after ten minutes, the job cap evicts finished streams before ever clobbering a live one, and everything aborts on plugin unload.

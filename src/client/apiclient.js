@@ -14,7 +14,7 @@
 import { Fragment, h, useCallback, useEffect, useMemo, useRef, useState } from "./react.js";
 import { api } from "./api.js";
 import { parseCurl, toCurl } from "./curl.js";
-import { looksLikeBru, parseBru } from "./brucol.js";
+import { looksLikeBru, parseBru, requestToBru } from "./brucol.js";
 import { detectCollectionImport } from "./openimp.js";
 import { foldStream, parseSse, emptySseState, sseEventLabel } from "./sse.js";
 import { SNIPPET_KINDS } from "./codegen.js";
@@ -30,6 +30,7 @@ const DRAFT_KEY = "dsh.ce.api.draft.v1";
 const HIST_KEY = "dsh.ce.api.history.v1";
 const SAVED_KEY = "dsh.ce.api.saved.v1";
 const ENV_KEY = "dsh.ce.api.env.v1";
+const COLLDIR_KEY = "dsh.ce.api.colldir.v1";
 const HIST_CAP = 30;
 const SAVED_CAP = 50;
 /** Draft/snapshot format: 2 = URL and params are synced; absent = legacy (merge at load). */
@@ -84,7 +85,8 @@ function restoredUrlParams(req) {
 	return normalizeUrlParams(req?.url ?? "", req?.paramPairs);
 }
 
-export function ApiView({ t, useTabInfo }) {
+export function ApiView({ t, useTabInfo, sessionId, useSessions }) {
+	const cwd = useSessions ? useSessions((sessions) => (sessionId ? sessions.byId[sessionId]?.cwd : void 0)) : void 0;
 	const hostTab = useTabInfo ? useTabInfo()?.tab : null;
 	const [method, setMethod] = useState("GET");
 	const [url, setUrl] = useState("");
@@ -101,12 +103,17 @@ export function ApiView({ t, useTabInfo }) {
 	const [importOpen, setImportOpen] = useState(false);
 	const [importText, setImportText] = useState("");
 	const [importError, setImportError] = useState("");
+	const [importNote, setImportNote] = useState("");
 	const [histOpen, setHistOpen] = useState(false);
 	const [histTab, setHistTab] = useState("history"); // history | saved
 	const [history, setHistory] = useState([]);
 	const [saved, setSaved] = useState([]);
 	const [saveOpen, setSaveOpen] = useState(false);
 	const [saveName, setSaveName] = useState("");
+	const [collectionDir, setCollectionDir] = useState(() => {
+		try { return localStorage.getItem(COLLDIR_KEY) ?? ""; } catch { return ""; }
+	});
+	const [saveToCollection, setSaveToCollection] = useState(true);
 	const [codeMenuOpen, setCodeMenuOpen] = useState(false);
 	const [copiedCode, setCopiedCode] = useState("");
 	const [envStore, setEnvStore] = useState(() => normalizeEnvStore(loadJson(ENV_KEY)));
@@ -407,10 +414,69 @@ export function ApiView({ t, useTabInfo }) {
 		setImportOpen(false);
 	}, [importText, t]);
 
-	const doSaveFavorite = useCallback(() => {
+	// Read the on-disk .bru collection folder: parse each file with the same
+	// brucol reader the import dialog uses; results land as favorites (dedup
+	// by name) and the first is applied to the editor when nothing is dirty.
+	const loadCollection = useCallback(async () => {
+		if (collectionDir.trim() === "") return;
+		try { localStorage.setItem(COLLDIR_KEY, collectionDir); } catch { /* storage may be denied */ }
+		const res = await api("collection.load", { cwd: cwd ?? "", dir: collectionDir.trim() });
+		if (!res.ok || res.value.error) {
+			setImportError(`${t("api.collectionLoadFailed")}: ${res.value?.error ?? res.error ?? ""}`);
+			return;
+		}
+		const parsed = [];
+		for (const f of res.value.files ?? []) {
+			try {
+				const bru = parseBru(f.text);
+				parsed.push({ file: f.path, bru });
+			} catch { /* not a parseable .bru: skip */ }
+		}
+		if (parsed.length === 0) {
+			setImportError(t("api.collectionEmpty"));
+			return;
+		}
+		const entries = parsed.map(({ file, bru }, i) => ({
+			id: `${Date.now()}-${i}-${Math.random().toString(36).slice(2, 8)}`,
+			name: bru.name || file.replace(/\.bru$/, ""),
+			ts: Date.now(),
+			request: requestSnapshot({ method: bru.method, url: applyParamsToUrl(bru.url, bru.paramPairs), headers: bru.headers, bodyType: bru.bodyType, rawSub: bru.rawSub, formPairs: bru.formPairs ?? [], body: bru.bodyType === "raw" ? bru.body : "", paramPairs: syncParamsFromUrl(applyParamsToUrl(bru.url, bru.paramPairs), bru.paramPairs), timeoutMs: 30000, auth: normalizeAuth(bru.auth), extracts: [] }),
+		}));
+		setSaved((prev) => {
+			const names = new Set(entries.map((e) => e.name));
+			const next = [...entries, ...prev.filter((e) => e && !names.has(e.name))].slice(0, SAVED_CAP);
+			storeJson(SAVED_KEY, next);
+			return next;
+		});
+		// The import row's error line is the quiet confirmation; keep the
+		// saved panel closed so the dialog's buttons stay reachable.
+		setImportNote(`${(res.value.files ?? []).length} · ${t("api.collectionLoaded")}`);
+	}, [collectionDir, cwd, t]);
+
+	const doSaveFavorite = useCallback(async () => {
 		const name = saveName.trim();
 		if (name === "") return;
-		const entry = { id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, name, ts: Date.now(), request: snapshot() };
+		const snap = snapshot();
+		// Optional mirror into the on-disk .bru collection: serialize first so
+		// a serializer failure cannot leave favorite and disk half-written.
+		let bruText = "";
+		if (saveToCollection && collectionDir.trim() !== "" && cwd) {
+			try {
+				bruText = requestToBru({ ...snap, name });
+			} catch (error) {
+				bruText = "";
+			}
+			if (bruText === "") {
+				setImportError(t("api.collectionSerializeFailed"));
+				return;
+			}
+			const res = await api("collection.save", { cwd: cwd ?? "", dir: collectionDir, name, text: bruText });
+			if (!res.ok || res.value.error) {
+				setImportError(`${t("api.collectionSaveFailed")}: ${res.value?.error ?? res.error ?? ""}`);
+				return;
+			}
+		}
+		const entry = { id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, name, ts: Date.now(), request: snap };
 		setSaved((prev) => {
 			// Same name replaces the old favorite (differing ids).
 			const next = [entry, ...prev.filter((e) => e && e.name !== name)].slice(0, SAVED_CAP);
@@ -421,7 +487,7 @@ export function ApiView({ t, useTabInfo }) {
 		setSaveOpen(false);
 		setHistTab("saved");
 		setHistOpen(true);
-	}, [saveName, snapshot]);
+	}, [saveName, snapshot, saveToCollection, collectionDir, cwd]);
 
 	const removeHistory = useCallback((id) => {
 		setHistory((prev) => {
@@ -608,7 +674,21 @@ export function ApiView({ t, useTabInfo }) {
 						value: timeoutMs,
 						onChange: (e) => setTimeoutMs(Math.max(1000, Math.min(120000, Number(e.target.value) || 30000))),
 					}),
-				)) : null,
+				),
+				h("label", { className: "cea-tmo" }, t("api.collectionDir"),
+					h("input", {
+						className: "ce-input",
+						type: "text",
+						spellcheck: false,
+						autoComplete: "off",
+						placeholder: t("api.collectionDirPlaceholder"),
+						value: collectionDir,
+						onChange: (e) => setCollectionDir(e.target.value),
+					}),
+					h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost", disabled: collectionDir.trim() === "" || cwd === void 0, title: t("api.collectionLoad"), onClick: () => void loadCollection() }, `⇪ ${t("api.collectionLoad")}`),
+				),
+				cwd === void 0 ? h("div", { className: "cea-meta" }, t("api.collectionNoSession")) : null,
+			) : null,
 			requestTab === "params" ? h(Fragment, null,
 				h(RequestFields, { t, label: t("api.params"), rows: paramPairs.filter((p) => p?.kind !== "path"), onChange: onQueryPairsChange, hint: t("api.paramsHint") }),
 				pathPairs.length > 0
@@ -830,6 +910,7 @@ export function ApiView({ t, useTabInfo }) {
 				),
 				h("textarea", { className: "cea-body cea-import", autoFocus: true, "aria-label": t("api.importTitle"), value: importText, spellcheck: false, placeholder: t("api.importPlaceholder"), onChange: (e) => { setImportText(e.target.value); if (importError !== "") setImportError(""); } }),
 				importError !== "" ? h("div", { className: "cea-bar" }, h("span", { className: "cea-warn", role: "status" }, importError)) : null,
+				importNote !== "" ? h("div", { className: "cea-bar" }, h("span", { role: "status" }, importNote)) : null,
 				h("div", { className: "cea-bar" },
 					h("span", { className: "ce-spacer" }),
 					h("button", { type: "button", className: "ce-sk-btn", disabled: importText.trim() === "", onClick: doImport }, t("api.importBtn")),
@@ -856,6 +937,15 @@ export function ApiView({ t, useTabInfo }) {
 							else if (e.key === "Escape") setSaveOpen(false);
 						},
 					}),
+					h("label", { className: "cea-save-coll" },
+						h("input", {
+							type: "checkbox",
+							checked: saveToCollection && collectionDir.trim() !== "" && cwd !== void 0,
+							disabled: collectionDir.trim() === "" || cwd === void 0,
+							onChange: (e) => setSaveToCollection(e.target.checked),
+						}),
+						h("span", null, t("api.saveToCollection")),
+					),
 					h("button", { type: "button", className: "ce-sk-btn", disabled: saveName.trim() === "", onClick: doSaveFavorite }, t("api.saveConfirm")),
 				),
 			)
