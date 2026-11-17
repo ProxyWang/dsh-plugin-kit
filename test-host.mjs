@@ -608,6 +608,34 @@ rmSync(`${cwd}/.agents/skills/evil-link`, { force: true });
 rmSync("/tmp/ce-skill-outside", { recursive: true, force: true });
 rmSync(`${cwd}-home`, { recursive: true, force: true });
 
+// ---- live watch: baseline, debounced batches, .git ticks, cursor math ----
+const { snapshotFor, hubs } = await import("./lib/host/watch.js");
+const wBase = await call("watch.poll", { cwd });
+check("watch.poll answers a baseline cursor on first contact", wBase.ok && typeof wBase.value.seq === "number" && wBase.value.baseline === true && wBase.value.supported !== false, wBase);
+check("watch.poll requires cwd", (await call("watch.poll", {})).ok === false, null);
+check("watch.poll reports a missing workspace as an error", (await call("watch.poll", { cwd: "/no-such-dir-ce-xyz" })).ok === false, null);
+writeFileSync(`${cwd}/watch-live.txt`, "one\n");
+const wOne = await call("watch.poll", { cwd, since: wBase.value.seq, waitMs: 6000 });
+check("watch.poll delivers a created file path", wOne.ok && wOne.value.paths?.includes("watch-live.txt"), wOne);
+appendFileSync(`${cwd}/watch-live.txt`, "two\nthree\n");
+const wTwo = await call("watch.poll", { cwd, since: wOne.value.seq, waitMs: 6000 });
+check("coalesced batches list a path at most once", wTwo.ok && wTwo.value.paths?.filter((p) => p === "watch-live.txt").length <= 1 && (wTwo.value.paths ?? []).includes("watch-live.txt"), wTwo);
+git(["add", "watch-live.txt"]);
+const wGit = await call("watch.poll", { cwd, since: wTwo.value.seq, waitMs: 6000 });
+check("git-dir changes surface as a git tick, not file paths", wGit.ok && wGit.value.git === true && !(wGit.value.paths ?? []).some((p) => p.startsWith(".git")), wGit);
+const wIdle = await call("watch.poll", { cwd, since: wGit.value.seq, waitMs: 300 });
+check("a settled cursor beats back empty", wIdle.ok && Array.isArray(wIdle.value.paths) && wIdle.value.paths.length === 0 && wIdle.value.git === false, wIdle);
+git(["reset", "-q"]);
+rmSync(`${cwd}/watch-live.txt`, { force: true });
+const fakeHub = { supported: true, seq: 5, lostBelow: 4, gitSeq: 5, paths: new Map([["a.go", 5], ["b.go", 3]]) };
+check("watch: cursor older than retention forces a reset", snapshotFor(fakeHub, 2).value.reset === true, snapshotFor(fakeHub, 2));
+check("watch: retained cursor receives only paths past it", snapshotFor(fakeHub, 3).value.paths.join() === "a.go", snapshotFor(fakeHub, 3));
+check("watch: gitSeq drives the git flag", snapshotFor(fakeHub, 4).value.git === true, snapshotFor(fakeHub, 4));
+check("watch: settled cursor is not ready", snapshotFor(fakeHub, 5).ready === false, snapshotFor(fakeHub, 5));
+const fakeDead = { supported: false, seq: 2, lostBelow: 0, gitSeq: 0, paths: new Map() };
+check("watch: unsupported hubs answer supported:false", snapshotFor(fakeDead, 0).value.supported === false, snapshotFor(fakeDead));
+check("watch: a hub was materialized for the fixture root", hubs.size >= 1, hubs.size);
+
 for (const cleanup of cleanups) cleanup();
 console.log(`\n${pass} passed, ${fail} failed${skipped ? `, ${skipped} skipped` : ""}`);
 process.exit(fail ? 1 : 0);

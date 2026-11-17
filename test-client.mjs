@@ -1828,6 +1828,124 @@ try {
  if (closeCustomEvent === undefined) delete globalThis.CustomEvent; else globalThis.CustomEvent = closeCustomEvent;
 }
 
+// --- live refresh: watch helpers, poll-loop state machine, and CodeBody folding ---------
+const { parentDirs, docAction, createWatchLoop } = await import("./src/client/watch.js");
+check("parentDirs folds changed paths to their direct parent listings", parentDirs(["a/b.go", "c.go", "d/e/f.txt"]).join() === "a,,d/e", parentDirs(["a/b.go", "c.go", "d/e/f.txt"]));
+check("docAction reloads clean drafts, flags dirty ones, ignores others", docAction(["a.go"], "a.go", false) === "reload" && docAction(["a.go"], "a.go", true) === "conflict" && docAction(["a.go"], "b.go", false) === "ignore" && docAction(["a.go"], "", false) === "ignore", null);
+{
+	const seen = [];
+	const delays = [];
+	let pendingTimer = null;
+	const script = [
+		{ ok: true, value: { seq: 7, baseline: true } },
+		{ ok: true, value: { seq: 8, paths: ["x.go"], git: true } },
+		{ ok: false, error: "host down" },
+		{ ok: true, value: { seq: 8, supported: false } },
+	];
+	let step = 0;
+	const loop = createWatchLoop({
+		poll: async (body) => { seen.push(body.since); return script[step++] ?? { ok: true, value: { seq: 9 } }; },
+		onChanges: (v) => seen.push(`changes:${v.paths.join()}:${v.git}`),
+		onUnsupported: () => seen.push("unsupported"),
+		schedule: (fn, ms) => { delays.push(ms); const t = { fn }; pendingTimer = t; return t; },
+		unschedule: (t) => { if (pendingTimer === t) pendingTimer = null; },
+	});
+	const drain = async () => { for (let i = 0; i < 12; i++) { await new Promise((r) => setImmediate(r)); if (!pendingTimer) continue; const t = pendingTimer; pendingTimer = null; t.fn(); } };
+	await drain();
+	check("watch loop starts from the baseline cursor and streams from it", seen[0] === -1 && seen[1] === 7 && seen.includes("changes:x.go:true"), seen);
+	check("watch loop backs off on transport errors", delays.includes(1000), delays);
+	check("watch loop retries slow when the platform cannot watch", seen.includes("unsupported") && delays.includes(30_000), [seen, delays]);
+	const beforeStop = seen.length;
+	loop.stop();
+	await drain();
+	check("watch loop stop silences the cycle", seen.length === beforeStop, [seen.length, beforeStop]);
+}
+{
+	const liveGlobals = { fetch: globalThis.fetch, requestAnimationFrame: globalThis.requestAnimationFrame, cancelAnimationFrame: globalThis.cancelAnimationFrame, setTimeout: globalThis.setTimeout, clearTimeout: globalThis.clearTimeout, window: globalThis.window, document: globalThis.document };
+	let liveContent = "alpha beta\nbeta gamma\n";
+	let liveMtime = 1;
+	const liveRequests = [];
+	let liveSeq = 100;
+	let baselineDone = false;
+	let expectBatchA = false, gotBatchA = false;
+	let expectBatchB = false, gotBatchB = false;
+	let expectBatchC = false, gotBatchC = false;
+	let liveTimers = [];
+	globalThis.fetch = async (url, options) => {
+		const body = JSON.parse(options?.body ?? "{}");
+		liveRequests.push({ url: String(url), body });
+		if (url.endsWith("/watch.poll")) {
+			liveSeq++;
+			if (!baselineDone) { baselineDone = true; return { json: async () => ({ ok: true, value: { seq: liveSeq, baseline: true, supported: true } }) }; }
+			if (expectBatchA && !gotBatchA) { gotBatchA = true; return { json: async () => ({ ok: true, value: { seq: liveSeq, paths: ["main.go"], git: true } }) }; }
+			if (expectBatchB && !gotBatchB) { gotBatchB = true; return { json: async () => ({ ok: true, value: { seq: liveSeq, paths: ["main.go"], git: false } }) }; }
+			if (expectBatchC && !gotBatchC) { gotBatchC = true; return { json: async () => ({ ok: true, value: { seq: liveSeq, paths: ["main.go"], git: false } }) }; }
+			return { json: async () => ({ ok: true, value: { seq: liveSeq, paths: [], git: false } }) };
+		}
+		if (url.endsWith("/fs.read")) return { json: async () => ({ ok: true, value: { kind: "text", content: liveContent, mtimeMs: liveMtime } }) };
+		if (url.endsWith("/fs.list")) return { json: async () => ({ ok: true, value: { entries: [{ name: "main.go", type: "file", size: 20 }], truncated: false } }) };
+		if (url.endsWith("/git.status")) return { json: async () => ({ ok: true, value: { repo: false } }) };
+		if (url.endsWith("/git.diff")) return { json: async () => ({ ok: true, value: {} }) };
+		if (url.endsWith("/lsp.diagnostics")) return { json: async () => ({ ok: true, value: { items: [] } }) };
+		if (url.endsWith("/lsp.request")) return { json: async () => ({ ok: true, value: { symbols: [], targets: [] } }) };
+		if (url.endsWith("/lsp.status")) return { json: async () => ({ ok: true, value: { state: "ready", label: "gopls" } }) };
+		return { json: async () => ({ ok: true, value: {} }) };
+	};
+	globalThis.requestAnimationFrame = (fn) => { fn(); return 0; };
+	globalThis.cancelAnimationFrame = () => {};
+	globalThis.setTimeout = (fn, ms) => { liveTimers.push({ fn, ms, fired: false }); return liveTimers.length; };
+	globalThis.clearTimeout = (id) => { if (typeof id === "number" && liveTimers[id - 1]) liveTimers[id - 1].cancelled = true; };
+	globalThis.window = { innerWidth: 1200, innerHeight: 900 };
+	globalThis.document = { addEventListener() {}, removeEventListener() {} };
+	try {
+		const renderLive = createHookRenderer(CodeBody, { sessionId: "live", useSessions: (select) => select({ byId: { live: { cwd: "/w" } } }), t: (k) => k }, { effects: true });
+		let liveTree = renderLive();
+		renderLive.flushEffects();
+		const fireLive = () => { const due = liveTimers.filter((t) => !t.fired && !t.cancelled); due.forEach((t) => { t.fired = true; }); liveTimers = liveTimers.filter((t) => !t.fired && !t.cancelled); for (const t of due) t.fn(); };
+		const paintLive = () => { liveTree = renderLive(); renderLive.flushEffects(); };
+		const tickLive = async () => { for (let i = 0; i < 8; i++) { await new Promise((r) => setImmediate(r)); fireLive(); } paintLive(); };
+		const getLive = (test) => collect(liveTree).find(test);
+		const readCount = () => liveRequests.filter((r) => r.url.endsWith("/fs.read")).length;
+		const statusCount = () => liveRequests.filter((r) => r.url.endsWith("/git.status")).length;
+		await tickLive();
+		check("live mode asks exactly one baseline cursor when the workspace opens", liveRequests.filter((r) => r.url.endsWith("/watch.poll") && r.body.since === -1).length === 1, liveRequests.filter((r) => r.url.endsWith("/watch.poll")).length);
+		getLive((n) => n.type === TreePanelCmp).props.onOpenFile("main.go", 1, 1);
+		await tickLive();
+		liveContent = "alpha beta\nbeta gamma v2\n"; liveMtime = 2;
+		const readsAtOpen = readCount();
+		const statusesAtOpen = statusCount();
+		expectBatchA = true;
+		await tickLive();
+		check("clean documents reload in place on watch batches", readCount() === readsAtOpen + 1, [readCount(), readsAtOpen]);
+		check("watch batches invalidate the shown tree directories", getLive((n) => n.type === TreePanelCmp).props.staleTick === 1 && getLive((n) => n.type === TreePanelCmp).props.staleDirs.join() === "", getLive((n) => n.type === TreePanelCmp).props.staleTick);
+		check("watch batches refresh git status through the debounce timer", statusCount() > statusesAtOpen, [statusCount(), statusesAtOpen]);
+		check("a clean reload shows no conflict banner", !collect(liveTree).some((n) => n.type === "button" && n.children?.[0] === "watch.reloadDiscarding"), null);
+		// Now make the draft dirty; the next batch must NOT touch the buffer.
+		const startEditBtn = getLive((n) => n.type === "button" && n.props.title === "editor.edit");
+		startEditBtn.props.onClick(); paintLive();
+		const ta = () => getLive((n) => n.type === "textarea" && typeof n.props.className === "string" && n.props.className.startsWith("ce-edit-ta"));
+		ta().props.onChange({ target: { value: "alpha beta\nbeta MY-EDIT\n" } }); paintLive();
+		liveContent = "alpha beta\ngamma delta\n"; liveMtime = 3;
+		const readsBeforeConflict = readCount();
+		expectBatchB = true;
+		await tickLive();
+		check("a dirty draft is never auto-discarded: the banner offers the choice", collect(liveTree).some((n) => n.type === "button" && n.children?.[0] === "watch.reloadDiscarding") && ta()?.props.value === "alpha beta\nbeta MY-EDIT\n", null);
+		check("the conflict path marks the banner without any reload read", readCount() === readsBeforeConflict, [readCount(), readsBeforeConflict]);
+		collect(liveTree).find((n) => n.type === "button" && n.children?.[0] === "watch.keepEditing").props.onClick(); paintLive();
+		check("keep editing dismisses the banner and preserves the draft", !collect(liveTree).some((n) => n.type === "button" && n.children?.[0] === "watch.reloadDiscarding") && ta()?.props.value === "alpha beta\nbeta MY-EDIT\n", null);
+		expectBatchC = true;
+		await tickLive();
+		check("later batches re-raise the banner for a still-dirty draft", collect(liveTree).some((n) => n.type === "button" && n.children?.[0] === "watch.reloadDiscarding"), null);
+		collect(liveTree).find((n) => n.type === "button" && n.children?.[0] === "watch.reloadDiscarding").props.onClick();
+		paintLive(); await tickLive();
+		check("reload-discarding swaps in the disk file and closes the editor draft", !ta() && !collect(liveTree).some((n) => n.type === "button" && n.children?.[0] === "watch.reloadDiscarding"), null);
+		check("live refresh never issues host writes on its own", !liveRequests.some((r) => r.url.endsWith("/fs.write")), null);
+		renderLive.unmount();
+	} finally {
+		Object.assign(globalThis, liveGlobals);
+	}
+}
+
 // --- the generated bundle: registration + factory --------------------------------------
 
 const bundle = await readFile(new URL("./client.js", import.meta.url), "utf8");

@@ -145,6 +145,7 @@ export const CSS = `
 .ce-peek-snippet{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;color:var(--dsw-alias-label-primary,#d5dbe3);overflow:hidden;text-overflow:ellipsis;white-space:pre;min-width:0}
 .ce-mark{background:color-mix(in srgb,var(--dsw-alias-brand-primary,#59b7ff) 34%,transparent);border-radius:3px;box-shadow:0 0 0 1px color-mix(in srgb,var(--dsw-alias-brand-primary,#59b7ff) 45%,transparent);text-decoration:none}
 .ce-banner{flex:none;display:flex;align-items:center;gap:8px;margin:6px 10px 0;padding:6px 8px 6px 10px;border-radius:8px;background:color-mix(in srgb,var(--dsw-alias-state-error-primary,#f85149) 14%,transparent);border:.5px solid color-mix(in srgb,var(--dsw-alias-state-error-primary,#f85149) 40%,transparent);color:var(--dsw-alias-label-primary,#eee);font-size:12px}
+.ce-banner-warn{background:color-mix(in srgb,var(--dsw-alias-button-info-fill,#58a6ff) 14%,transparent);border-color:color-mix(in srgb,var(--dsw-alias-button-info-fill,#58a6ff) 45%,transparent)}
 .ce-banner-text{min-width:0;flex:1;white-space:pre-wrap;word-break:break-word}
 .ce-splitter{flex:none;width:5px;cursor:col-resize;background:transparent;border-right:.5px solid var(--dsw-alias-border-l1,#333)}
 .ce-splitter:hover{background:color-mix(in srgb,var(--dsw-alias-brand-primary,#59b7ff) 45%,transparent)}

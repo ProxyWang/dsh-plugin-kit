@@ -468,6 +468,16 @@ var zh = {
   "editor.cancel": "取消",
   "editor.saved": "已保存",
   "editor.conflict": "磁盘上的文件已被外部修改，保存被拒绝 — 请刷新（⟳）后重试",
+  "watch.external": "「{path}」在磁盘上已被外部修改（可能来自终端或 Agent）",
+  "watch.reloadDiscarding": "重新加载（放弃未保存）",
+  "watch.keepEditing": "保持编辑",
+  "watch.fileGone": "文件已从磁盘消失，编辑器保留当前内容",
+  "watch.on": "实时刷新已开启：编辑器、文件树与 Git 状态会跟随磁盘变化",
+  "watch.off": "实时刷新已关闭",
+  "watch.unsupported": "当前平台不支持文件实时监听，已退回手动刷新（⟳）",
+  "command.live": "切换实时刷新",
+  "watch.state.on": "开启",
+  "watch.state.off": "关闭",
   "editor.closeTab": "关闭标签（中键点击亦可）",
   "editor.dirtyGuard": "有未保存的修改 — 请先保存（⌘S）或取消（Esc）",
   "editor.dirty": "未保存",
@@ -980,6 +990,16 @@ var en = {
   "editor.cancel": "Cancel",
   "editor.saved": "Saved",
   "editor.conflict": "The file changed on disk; the save was refused — refresh (⟳) and retry",
+  "watch.external": "“{path}” changed on disk (a terminal or the Agent may have edited it)",
+  "watch.reloadDiscarding": "Reload (discard draft)",
+  "watch.keepEditing": "Keep editing",
+  "watch.fileGone": "The file disappeared from disk; the editor keeps its current content",
+  "watch.on": "Live refresh on: editor, file tree and Git status follow disk changes",
+  "watch.off": "Live refresh off",
+  "watch.unsupported": "File watching is unsupported on this platform; falling back to manual refresh (⟳)",
+  "command.live": "Toggle Live Refresh",
+  "watch.state.on": "On",
+  "watch.state.off": "Off",
   "editor.closeTab": "Close tab (middle-click also works)",
   "editor.dirtyGuard": "Unsaved changes — save (⌘S) or cancel (Esc) first",
   "editor.dirty": "unsaved",
@@ -2561,7 +2581,7 @@ function uniqueDirectoryEntries(entries) {
 }
 
 // src/client/tree.js
-function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshKey, onNotify, onDeleted, onSearchDirectory, sessionId }) {
+function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshKey, staleTick, staleDirs, onNotify, onDeleted, onSearchDirectory, sessionId }) {
   const [listing, setListing] = useState({});
   const [expanded, setExpanded] = useState([]);
   const [action, setAction] = useState(null);
@@ -2607,6 +2627,16 @@ function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshKey, onN
     setContextMenu(null);
     loadDir("");
   }, [cwd, refreshKey, loadDir]);
+  const listingRef = useRef(listing);
+  listingRef.current = listing;
+  const lastStaleTick = useRef(0);
+  useEffect(() => {
+    if (!staleTick || staleTick === lastStaleTick.current) return;
+    lastStaleTick.current = staleTick;
+    const dirs = new Set(Array.isArray(staleDirs) ? staleDirs : []);
+    dirs.add("");
+    for (const d of dirs) if (listingRef.current[d]?.entries) loadDir(d);
+  }, [staleTick, staleDirs, loadDir]);
   useEffect(() => {
     const p = typeof revealPath === "string" && revealPath !== "" ? revealPath : null;
     if (!p) return;
@@ -4776,6 +4806,55 @@ function useNavPersistence(params) {
   }, []);
 }
 
+// src/client/watch.js
+function parentDirs(paths2) {
+  const dirs = /* @__PURE__ */ new Set();
+  for (const p of paths2) dirs.add(p.includes("/") ? p.slice(0, p.lastIndexOf("/")) : "");
+  return [...dirs];
+}
+function docAction(paths2, docPath, dirty) {
+  if (!docPath || !paths2.includes(docPath)) return "ignore";
+  return dirty ? "conflict" : "reload";
+}
+function createWatchLoop({ poll, onChanges, onReset, onUnsupported, schedule = (fn) => setTimeout(fn, 0), unschedule = clearTimeout, maxBackoffMs = 6e4, supportedRetryMs = 3e4 }) {
+  let stopped = false;
+  let since = -1;
+  let timer = null;
+  let backoff = 1e3;
+  const tick = async () => {
+    if (stopped) return;
+    const res = await poll({ since, waitMs: 2e4 });
+    if (stopped) return;
+    const v = res && res.ok ? res.value : null;
+    if (!v || typeof v.seq !== "number") {
+      timer = schedule(tick, backoff);
+      backoff = Math.min(backoff * 2, maxBackoffMs);
+      return;
+    }
+    backoff = 1e3;
+    since = v.seq;
+    if (v.supported === false) {
+      onUnsupported?.();
+      timer = schedule(tick, supportedRetryMs);
+      return;
+    }
+    if (v.baseline) {
+      timer = schedule(tick, 0);
+      return;
+    }
+    if (v.reset) onReset?.();
+    else if (v.paths && v.paths.length || v.git) onChanges?.(v);
+    timer = schedule(tick, 0);
+  };
+  void tick();
+  return {
+    stop() {
+      stopped = true;
+      if (timer !== null) unschedule(timer);
+    }
+  };
+}
+
 // src/client/code.js
 var PREVIEW_RE = /\.(md|markdown|html?|svg)$/i;
 var MD_RE = /\.(md|markdown)$/i;
@@ -4805,6 +4884,15 @@ function CodeBody(props) {
   const [status, setStatus] = useState({ state: "off", message: "", progress: "" });
   const [notice, setNotice] = useState({ text: "", kind: "info" });
   const [treeKey, setTreeKey] = useState(0);
+  const [stale, setStale] = useState({ tick: 0, dirs: [] });
+  const [externalConflict, setExternalConflict] = useState(null);
+  const [liveOn, setLiveOn] = useState(() => {
+    try {
+      return localStorage.getItem("dsh.plugin-kit.live") !== "off";
+    } catch {
+      return true;
+    }
+  });
   const [flash, setFlash] = useState(null);
   const [scroll, setScroll] = useState(0);
   const [viewport, setViewport] = useState(600);
@@ -4871,6 +4959,8 @@ function CodeBody(props) {
   dirtyRef.current = editing && editText !== (doc?.raw ?? "");
   docRef.current = doc;
   cursorRef.current = cursor;
+  const diffRef = useRef(null);
+  diffRef.current = diff;
   peekRef.current = peek;
   wrapOnRef.current = wrapOn;
   const say = useCallback((text, kind = "info") => {
@@ -4976,12 +5066,23 @@ function CodeBody(props) {
   }, [say, t]);
   const loadFile = useCallback(
     async (path, line, col, mark, opts) => {
-      if (!cwd || !canNavigate()) return null;
-      dismissPanels();
+      if (!cwd || !opts?.background && !canNavigate()) return null;
+      if (!opts?.background) dismissPanels();
       const res = await api("fs.read", { cwd, path });
       if (!res.ok) {
-        say(`${t("error")}: ${res.error}`, "error");
+        if (opts?.checkExternal) say(t("watch.fileGone"), "error");
+        else say(`${t("error")}: ${res.error}`, "error");
         return null;
+      }
+      if (opts?.checkExternal && !opts.force) {
+        const cur = docRef.current;
+        if (cur && cur.path === path && !cur.image) {
+          if (res.value.kind === "text" && res.value.mtimeMs === cur.mtimeMs) return null;
+          if (dirtyRef.current) {
+            setExternalConflict({ path });
+            return null;
+          }
+        }
       }
       if (res.value.kind === "image") {
         openSeqRef.current++;
@@ -5009,7 +5110,8 @@ function CodeBody(props) {
         setSymPalette(null);
         setPreviewOn(true);
         setDoc(entry2);
-        setMobileView("editor");
+        if (!opts?.background) setMobileView("editor");
+        setExternalConflict(null);
         modeRef.current = "code";
         setDiff(null);
         setCursor(null);
@@ -5041,8 +5143,10 @@ function CodeBody(props) {
       setGotoOpen(false);
       setSymPalette(null);
       setPreviewOn(PREVIEW_RE.test(path));
+      const keepScroll = opts?.background ? codeRef.current?.scrollTop ?? 0 : 0;
       setDoc(entry);
-      setMobileView("editor");
+      if (!opts?.background) setMobileView("editor");
+      setExternalConflict(null);
       modeRef.current = "code";
       setDiff(null);
       const clampLine = Math.min(Math.max(1, line), Math.max(1, lines2.length));
@@ -5051,8 +5155,8 @@ function CodeBody(props) {
       setOverlay(null);
       setHover(null);
       setSymbols([]);
-      setScroll(0);
-      if (codeRef.current) codeRef.current.scrollTop = 0;
+      setScroll(opts?.background ? keepScroll : 0);
+      if (codeRef.current) codeRef.current.scrollTop = opts?.background ? keepScroll : 0;
       if (LSP_RE.test(path)) {
         fetchDiagnostics(path, seq);
         api("lsp.request", { cwd, path, kind: "hover", line: 1, col: 1 }).then((warm) => {
@@ -5066,7 +5170,7 @@ function CodeBody(props) {
       } else {
         symbolNonce.current++;
       }
-      if (!opts?.noAutoMarks) {
+      if (!opts?.noAutoMarks && !opts?.background) {
         const markSeq = seq;
         if (autoMarksTimer.current) clearTimeout(autoMarksTimer.current);
         autoMarksTimer.current = setTimeout(() => {
@@ -5087,7 +5191,7 @@ function CodeBody(props) {
         }, 220);
       }
       const markLine = mark?.line ?? clampLine;
-      requestAnimationFrame(() => {
+      if (!opts?.background) requestAnimationFrame(() => {
         scrollAreaToLine(Math.max(1, markLine));
         setFlash({ line: markLine, col: mark?.col, word: mark?.word });
         setTimeout(() => setFlash((f) => f && f.line === markLine ? null : f), 1800);
@@ -5327,6 +5431,60 @@ function CodeBody(props) {
     setDiffMarks(marks);
     setDelGroups(deletedGroups(text));
   }, [cwd, loadFile, canNavigate, dismissPanels]);
+  const gitDebounce = useRef(null);
+  const scheduleGitRefresh = useCallback(() => {
+    if (gitDebounce.current !== null) return;
+    gitDebounce.current = setTimeout(() => {
+      gitDebounce.current = null;
+      refreshGit();
+    }, 350);
+  }, [refreshGit]);
+  useEffect(() => () => {
+    if (gitDebounce.current !== null) clearTimeout(gitDebounce.current);
+  }, []);
+  const backgroundReload = useCallback(async (force) => {
+    const d = docRef.current;
+    if (!d || d.image) return;
+    const cur = cursorRef.current;
+    await loadFile(d.path, cur?.line ?? 1, cur?.col ?? 1, null, { background: true, noAutoMarks: true, checkExternal: true, force });
+  }, [loadFile]);
+  const refreshOpenDiff = useCallback(async () => {
+    const d = diffRef.current;
+    if (!d || typeof d.path !== "string" || d.path === "" || d.scope !== "working" && d.scope !== "index") return;
+    const repo = repoSelRef.current;
+    const res = await api("git.diff", repo ? { cwd, path: d.path, scope: d.scope, repo } : { cwd, path: d.path, scope: d.scope });
+    const value = res.ok ? res.value ?? {} : {};
+    setDiff((cur) => cur && cur.path === d.path && cur.scope === d.scope ? { ...cur, text: value.diff ?? "", error: value.error, untracked: value.untracked, note: value.note, base: value.base ?? cur.base } : cur);
+  }, [cwd]);
+  const applyWatchBatch = useCallback((v, reset) => {
+    const paths2 = reset ? [] : v.paths ?? [];
+    if (reset || paths2.length > 0) {
+      if (!reset) setStale((cur) => ({ tick: cur.tick + 1, dirs: parentDirs(paths2) }));
+      const act = reset ? docRef.current ? dirtyRef.current ? "conflict" : "reload" : "ignore" : docAction(paths2, docRef.current?.path ?? "", dirtyRef.current);
+      if (act === "reload") void backgroundReload(false);
+      else if (act === "conflict") setExternalConflict({ path: docRef.current.path });
+      if (modeRef.current === "diff") void refreshOpenDiff();
+    }
+    if (reset || paths2.length > 0 || v.git) scheduleGitRefresh();
+  }, [backgroundReload, refreshOpenDiff, scheduleGitRefresh]);
+  const unsupportedWarned = useRef(false);
+  const watchHandlersRef = useRef(null);
+  watchHandlersRef.current = { applyWatchBatch, say, t };
+  useEffect(() => {
+    if (!cwd || !liveOn || tab?.visible === false) return void 0;
+    unsupportedWarned.current = false;
+    const loop = createWatchLoop({
+      poll: (body) => api("watch.poll", { cwd, ...body }),
+      onChanges: (v) => watchHandlersRef.current?.applyWatchBatch(v, false),
+      onReset: () => watchHandlersRef.current?.applyWatchBatch({ paths: [] }, true),
+      onUnsupported: () => {
+        if (unsupportedWarned.current) return;
+        unsupportedWarned.current = true;
+        say(t("watch.unsupported"), "error");
+      }
+    });
+    return () => loop.stop();
+  }, [cwd, liveOn, tab?.visible]);
   useEffect(() => {
     if (!blameOn || !doc || !cwd) return void 0;
     let alive = true;
@@ -5995,8 +6153,17 @@ function CodeBody(props) {
       setTreeKey((key) => key + 1);
       if (docRef.current) void loadFile(docRef.current.path, cursorRef.current?.line ?? 1, cursorRef.current?.col ?? 1);
     } },
+    { id: "live", icon: liveOn ? "◉" : "○", label: `${t("command.live")} — ${t(liveOn ? "watch.state.on" : "watch.state.off")}`, run: () => {
+      const next = !liveOn;
+      setLiveOn(next);
+      try {
+        localStorage.setItem("dsh.plugin-kit.live", next ? "on" : "off");
+      } catch {
+      }
+      say(t(next ? "watch.on" : "watch.off"));
+    } },
     ...terminalEntry.available() ? [{ id: "terminal", icon: "‣", label: t("command.terminal"), run: openTerminal }] : []
-  ], [t, refreshGit, openSearch, openPalette, toggleWrap, say, loadFile, dismissPanels, openTerminal, terminalEntry, editing, toggleProblems, reopenClosedTab, closeTabs, tabs]);
+  ], [t, refreshGit, openSearch, openPalette, toggleWrap, say, loadFile, dismissPanels, openTerminal, terminalEntry, editing, toggleProblems, reopenClosedTab, closeTabs, tabs, liveOn]);
   const startRailDrag = useCallback((event) => {
     event.preventDefault();
     const startX = event.clientX;
@@ -6142,6 +6309,16 @@ function CodeBody(props) {
       h("span", { className: "ce-banner-text" }, notice.text),
       h("button", { type: "button", className: "ce-tool ce-tiny", title: t("close"), onClick: () => say("") }, "✕")
     ) : null,
+    externalConflict ? h(
+      "div",
+      { className: "ce-banner ce-banner-warn" },
+      h("span", { className: "ce-banner-text" }, t("watch.external", { path: externalConflict.path })),
+      h("button", { type: "button", className: "ce-tool ce-tiny", onClick: () => {
+        setExternalConflict(null);
+        void backgroundReload(true);
+      } }, t("watch.reloadDiscarding")),
+      h("button", { type: "button", className: "ce-tool ce-tiny", onClick: () => setExternalConflict(null) }, t("watch.keepEditing"))
+    ) : null,
     h(
       "div",
       { className: "ce-main", ref: mainRef },
@@ -6163,6 +6340,8 @@ function CodeBody(props) {
           activePath: doc?.path ?? diff?.path,
           revealPath: doc?.path ?? null,
           refreshKey: treeKey,
+          staleTick: stale.tick,
+          staleDirs: stale.dirs,
           onNotify: (text, kind) => say(text, kind),
           onDeleted: (path) => {
             setTabs((prev) => prev.filter((p) => p !== path && !p.startsWith(`${path}/`)));
@@ -6653,6 +6832,7 @@ var CSS2 = `
 .ce-peek-snippet{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;color:var(--dsw-alias-label-primary,#d5dbe3);overflow:hidden;text-overflow:ellipsis;white-space:pre;min-width:0}
 .ce-mark{background:color-mix(in srgb,var(--dsw-alias-brand-primary,#59b7ff) 34%,transparent);border-radius:3px;box-shadow:0 0 0 1px color-mix(in srgb,var(--dsw-alias-brand-primary,#59b7ff) 45%,transparent);text-decoration:none}
 .ce-banner{flex:none;display:flex;align-items:center;gap:8px;margin:6px 10px 0;padding:6px 8px 6px 10px;border-radius:8px;background:color-mix(in srgb,var(--dsw-alias-state-error-primary,#f85149) 14%,transparent);border:.5px solid color-mix(in srgb,var(--dsw-alias-state-error-primary,#f85149) 40%,transparent);color:var(--dsw-alias-label-primary,#eee);font-size:12px}
+.ce-banner-warn{background:color-mix(in srgb,var(--dsw-alias-button-info-fill,#58a6ff) 14%,transparent);border-color:color-mix(in srgb,var(--dsw-alias-button-info-fill,#58a6ff) 45%,transparent)}
 .ce-banner-text{min-width:0;flex:1;white-space:pre-wrap;word-break:break-word}
 .ce-splitter{flex:none;width:5px;cursor:col-resize;background:transparent;border-right:.5px solid var(--dsw-alias-border-l1,#333)}
 .ce-splitter:hover{background:color-mix(in srgb,var(--dsw-alias-brand-primary,#59b7ff) 45%,transparent)}

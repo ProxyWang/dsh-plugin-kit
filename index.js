@@ -26,6 +26,7 @@ import { textCache } from "./lib/host/fence.js";
 import { servers } from "./lib/host/lsp.js";
 import { routes } from "./lib/host/routes.js";
 import { setSkillsRegistry } from "./lib/host/skills.js";
+import { stopAllWatchers } from "./lib/host/watch.js";
 import { createBrowserService, browserTool } from "./lib/host/browser.js";
 
 function apply(ctx) {
@@ -58,7 +59,7 @@ function apply(ctx) {
 					try {
 						const body = await readJsonBody(req);
 						if (route === "browser.data" && !browser) throw new Error("Browser storage is unavailable in this profile");
-						const value = route === "browser.data" ? await browser.execute(body) : await routes[route](body);
+						const value = route === "browser.data" ? await browser.execute(body) : await routes[route](body, { req, res });
 						respondJson(res, 200, { ok: true, value });
 					} catch (error) {
 						respondJson(res, 200, { ok: false, error: String(error?.message ?? error) });
@@ -71,6 +72,7 @@ function apply(ctx) {
 	ctx.effect(() => () => {
 		for (const server of servers.values()) server.stop("unload");
 		servers.clear();
+		stopAllWatchers();
 		textCache.clear();
 	}, "code-explorer: servers lifetime");
 }

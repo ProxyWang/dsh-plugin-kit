@@ -10,7 +10,7 @@ import { FileGlyph, fileTint } from "./changetree.js";
 import { ancestorDirs, canDropInto, parentDir, toAbs } from "./pathtools.js";
 import { createDirectoryRequests, uniqueDirectoryEntries } from "./treemodel.js";
 
-export function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshKey, onNotify, onDeleted, onSearchDirectory, sessionId }) {
+export function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshKey, staleTick, staleDirs, onNotify, onDeleted, onSearchDirectory, sessionId }) {
 	const [listing, setListing] = useState({});
 	const [expanded, setExpanded] = useState([]);
 	const [action, setAction] = useState(null);
@@ -52,6 +52,20 @@ export function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshK
 		setContextMenu(null);
 		loadDir("");
 	}, [cwd, refreshKey, loadDir]);
+
+	// Live refresh: refetch only directories whose listing is actually shown
+	// (plus the root), keeping expansion state — a full remount would collapse
+	// everything the user opened just because a file changed on disk.
+	const listingRef = useRef(listing);
+	listingRef.current = listing;
+	const lastStaleTick = useRef(0);
+	useEffect(() => {
+		if (!staleTick || staleTick === lastStaleTick.current) return;
+		lastStaleTick.current = staleTick;
+		const dirs = new Set(Array.isArray(staleDirs) ? staleDirs : []);
+		dirs.add("");
+		for (const d of dirs) if (listingRef.current[d]?.entries) loadDir(d);
+	}, [staleTick, staleDirs, loadDir]);
 
 	// VSCode-style auto reveal: opening a file (from search, quick-open, an LSP
 	// jump…) expands its ancestor chain and scrolls the row into view. Runs

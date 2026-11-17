@@ -20,6 +20,7 @@ import { closeOtherTabs, closeTabsToRight, excludePinned, pinTab, popClosedTab, 
 import { useGitActions } from "./usegit.js";
 import { useNavPersistence } from "./usepersistence.js";
 import { fileDragProps, hasFileDrag, readFileDrag, dragFilePath, reorderFileTabs } from "./filedrag.js";
+import { createWatchLoop, docAction, parentDirs } from "./watch.js";
 import { useDismissLayer } from "./dismiss.js";
 
 /** Files that open in rendered preview by default: markdown, html and svg. */
@@ -58,6 +59,11 @@ export function CodeBody(props) {
 	const [status, setStatus] = useState({ state: "off", message: "", progress: "" });
 	const [notice, setNotice] = useState({ text: "", kind: "info" });
 	const [treeKey, setTreeKey] = useState(0);
+	const [stale, setStale] = useState({ tick: 0, dirs: [] }); // live-refresh tree invalidation
+	const [externalConflict, setExternalConflict] = useState(null); // {path} while a draft is open
+	const [liveOn, setLiveOn] = useState(() => {
+		try { return localStorage.getItem("dsh.plugin-kit.live") !== "off"; } catch { return true; }
+	});
 	const [flash, setFlash] = useState(null); // {line, col, word}
 	const [scroll, setScroll] = useState(0);
 	const [viewport, setViewport] = useState(600);
@@ -126,6 +132,8 @@ export function CodeBody(props) {
 
 	docRef.current = doc;
 	cursorRef.current = cursor;
+	const diffRef = useRef(null);
+	diffRef.current = diff;
 	peekRef.current = peek;
 	wrapOnRef.current = wrapOn;
 
@@ -249,12 +257,24 @@ export function CodeBody(props) {
 
 	const loadFile = useCallback(
 		async (path, line, col, mark, opts) => {
-			if (!cwd || !canNavigate()) return null;
-			dismissPanels();
+			if (!cwd || (!opts?.background && !canNavigate())) return null;
+			if (!opts?.background) dismissPanels();
 			const res = await api("fs.read", { cwd, path });
 			if (!res.ok) {
-				say(`${t("error")}: ${res.error}`, "error");
+				// Watch-triggered check: deleted/unreadable keeps the buffer.
+				if (opts?.checkExternal) say(t("watch.fileGone"), "error");
+				else say(`${t("error")}: ${res.error}`, "error");
 				return null;
+			}
+			if (opts?.checkExternal && !opts.force) {
+				const cur = docRef.current;
+				if (cur && cur.path === path && !cur.image) {
+					if (res.value.kind === "text" && res.value.mtimeMs === cur.mtimeMs) return null; // touched, not changed
+					if (dirtyRef.current) {
+						setExternalConflict({ path });
+						return null; // never auto-discard a draft
+					}
+				}
 			}
 			if (res.value.kind === "image") {
 				// Raster image: no text lines, rendered as <img> from base64.
@@ -284,7 +304,8 @@ export function CodeBody(props) {
 				setSymPalette(null);
 				setPreviewOn(true);
 				setDoc(entry);
-				setMobileView("editor");
+				if (!opts?.background) setMobileView("editor");
+				setExternalConflict(null);
 				modeRef.current = "code";
 				setDiff(null);
 				setCursor(null);
@@ -316,8 +337,10 @@ export function CodeBody(props) {
 			setGotoOpen(false);
 			setSymPalette(null);
 			setPreviewOn(PREVIEW_RE.test(path));
+			const keepScroll = opts?.background ? codeRef.current?.scrollTop ?? 0 : 0;
 			setDoc(entry);
-			setMobileView("editor");
+			if (!opts?.background) setMobileView("editor");
+			setExternalConflict(null);
 			modeRef.current = "code";
 			setDiff(null);
 			const clampLine = Math.min(Math.max(1, line), Math.max(1, lines.length));
@@ -326,8 +349,8 @@ export function CodeBody(props) {
 			setOverlay(null);
 			setHover(null);
 			setSymbols([]);
-			setScroll((0));
-			if (codeRef.current) codeRef.current.scrollTop = 0;
+			setScroll(opts?.background ? keepScroll : 0);
+			if (codeRef.current) codeRef.current.scrollTop = opts?.background ? keepScroll : 0;
 			if (LSP_RE.test(path)) {
 				fetchDiagnostics(path, seq);
 				api("lsp.request", { cwd, path, kind: "hover", line: 1, col: 1 })
@@ -347,7 +370,7 @@ export function CodeBody(props) {
 			// list. Untracked files are skipped (whole-file green is noise).
 			// Debounced so rapid tab switching doesn't spawn git processes for
 			// files that are only passed through.
-			if (!opts?.noAutoMarks) {
+			if (!opts?.noAutoMarks && !opts?.background) {
 				const markSeq = seq;
 				if (autoMarksTimer.current) clearTimeout(autoMarksTimer.current);
 				autoMarksTimer.current = setTimeout(() => {
@@ -368,9 +391,10 @@ export function CodeBody(props) {
 						.catch(() => {});
 				}, 220);
 			}
-			// reveal after layout; mark drives the exact-token highlight
+			// reveal after layout; mark drives the exact-token highlight.
+			// Background reloads keep the reader exactly where they were.
 			const markLine = mark?.line ?? clampLine;
-			requestAnimationFrame(() => {
+			if (!opts?.background) requestAnimationFrame(() => {
 				scrollAreaToLine(Math.max(1, markLine));
 				setFlash({ line: markLine, col: mark?.col, word: mark?.word });
 				setTimeout(() => setFlash((f) => (f && f.line === markLine ? null : f)), 1800);
@@ -617,6 +641,73 @@ export function CodeBody(props) {
 		setDiffMarks(marks);
 		setDelGroups(deletedGroups(text));
 	}, [cwd, loadFile, canNavigate, dismissPanels]);
+
+	/* Live refresh: fold the host watch.poll batches into the open surfaces.
+	 * Clean documents reload in place (cursor & scroll kept), a dirty draft
+	 * NEVER auto-discards — it raises the external-change banner instead,
+	 * consistent with the ⌘S mtime conflict guard. */
+	const gitDebounce = useRef(null);
+	const scheduleGitRefresh = useCallback(() => {
+		if (gitDebounce.current !== null) return;
+		gitDebounce.current = setTimeout(() => {
+			gitDebounce.current = null;
+			refreshGit();
+		}, 350);
+	}, [refreshGit]);
+	useEffect(() => () => { if (gitDebounce.current !== null) clearTimeout(gitDebounce.current); }, []);
+
+	const backgroundReload = useCallback(async (force) => {
+		const d = docRef.current;
+		if (!d || d.image) return;
+		const cur = cursorRef.current;
+		// One merged read inside loadFile: mtime equal → touch nothing; dirty
+		// without force → the banner; otherwise swap in the disk file.
+		await loadFile(d.path, cur?.line ?? 1, cur?.col ?? 1, null, { background: true, noAutoMarks: true, checkExternal: true, force });
+	}, [loadFile]);
+
+	const refreshOpenDiff = useCallback(async () => {
+		const d = diffRef.current;
+		if (!d || typeof d.path !== "string" || d.path === "" || (d.scope !== "working" && d.scope !== "index")) return;
+		const repo = repoSelRef.current;
+		const res = await api("git.diff", repo ? { cwd, path: d.path, scope: d.scope, repo } : { cwd, path: d.path, scope: d.scope });
+		const value = res.ok ? res.value ?? {} : {};
+		setDiff((cur) => (cur && cur.path === d.path && cur.scope === d.scope
+			? { ...cur, text: value.diff ?? "", error: value.error, untracked: value.untracked, note: value.note, base: value.base ?? cur.base }
+			: cur));
+	}, [cwd]);
+
+	const applyWatchBatch = useCallback((v, reset) => {
+		const paths = reset ? [] : v.paths ?? [];
+		if (reset || paths.length > 0) {
+			if (!reset) setStale((cur) => ({ tick: cur.tick + 1, dirs: parentDirs(paths) }));
+			const act = reset ? (docRef.current ? (dirtyRef.current ? "conflict" : "reload") : "ignore") : docAction(paths, docRef.current?.path ?? "", dirtyRef.current);
+			if (act === "reload") void backgroundReload(false);
+			else if (act === "conflict") setExternalConflict({ path: docRef.current.path });
+			if (modeRef.current === "diff") void refreshOpenDiff();
+		}
+		if (reset || paths.length > 0 || v.git) scheduleGitRefresh();
+	}, [backgroundReload, refreshOpenDiff, scheduleGitRefresh]);
+
+	const unsupportedWarned = useRef(false);
+	// Handlers travel through a ref so the poll loop keys off cwd/live/visibility
+	// only: per-render callback identity churn must never restart the cycle.
+	const watchHandlersRef = useRef(null);
+	watchHandlersRef.current = { applyWatchBatch, say, t };
+	useEffect(() => {
+		if (!cwd || !liveOn || tab?.visible === false) return undefined;
+		unsupportedWarned.current = false;
+		const loop = createWatchLoop({
+			poll: (body) => api("watch.poll", { cwd, ...body }),
+			onChanges: (v) => watchHandlersRef.current?.applyWatchBatch(v, false),
+			onReset: () => watchHandlersRef.current?.applyWatchBatch({ paths: [] }, true),
+			onUnsupported: () => {
+				if (unsupportedWarned.current) return;
+				unsupportedWarned.current = true;
+				say(t("watch.unsupported"), "error");
+			},
+		});
+		return () => loop.stop();
+	}, [cwd, liveOn, tab?.visible]);
 	// Blame column data: refetched per open file while the toggle is on.
 	useEffect(() => {
 		if (!blameOn || !doc || !cwd) return void 0;
@@ -1335,8 +1426,14 @@ export function CodeBody(props) {
 		{ id: "wrap", icon: "↩", label: t("command.wrap"), hint: "⌥Z", run: () => toggleWrap() },
 		{ id: "toggle-rail", icon: "◧", label: t("command.toggleRail"), hint: "⌘B", run: () => setRailVisible((value) => !value) },
 		{ id: "refresh", icon: "⟳", label: t("command.refresh"), run: () => { refreshGit(); setTreeKey((key) => key + 1); if (docRef.current) void loadFile(docRef.current.path, cursorRef.current?.line ?? 1, cursorRef.current?.col ?? 1); } },
+		{ id: "live", icon: liveOn ? "◉" : "○", label: `${t("command.live")} — ${t(liveOn ? "watch.state.on" : "watch.state.off")}`, run: () => {
+			const next = !liveOn;
+			setLiveOn(next);
+			try { localStorage.setItem("dsh.plugin-kit.live", next ? "on" : "off"); } catch { /* storage may be denied */ }
+			say(t(next ? "watch.on" : "watch.off"));
+		} },
 		...(terminalEntry.available() ? [{ id: "terminal", icon: "‣", label: t("command.terminal"), run: openTerminal }] : []),
-	], [t, refreshGit, openSearch, openPalette, toggleWrap, say, loadFile, dismissPanels, openTerminal, terminalEntry, editing, toggleProblems, reopenClosedTab, closeTabs, tabs]);
+	], [t, refreshGit, openSearch, openPalette, toggleWrap, say, loadFile, dismissPanels, openTerminal, terminalEntry, editing, toggleProblems, reopenClosedTab, closeTabs, tabs, liveOn]);
 
 	const startRailDrag = useCallback((event) => {
 		event.preventDefault();
@@ -1460,6 +1557,15 @@ export function CodeBody(props) {
 				h("button", { type: "button", className: "ce-tool ce-tiny", title: t("close"), onClick: () => say("") }, "✕"),
 			)
 			: null,
+		externalConflict
+			? h(
+				"div",
+				{ className: "ce-banner ce-banner-warn" },
+				h("span", { className: "ce-banner-text" }, t("watch.external", { path: externalConflict.path })),
+				h("button", { type: "button", className: "ce-tool ce-tiny", onClick: () => { setExternalConflict(null); void backgroundReload(true); } }, t("watch.reloadDiscarding")),
+				h("button", { type: "button", className: "ce-tool ce-tiny", onClick: () => setExternalConflict(null) }, t("watch.keepEditing")),
+			)
+			: null,
 		h(
 			"div",
 			{ className: "ce-main", ref: mainRef },
@@ -1478,6 +1584,8 @@ export function CodeBody(props) {
 						activePath: doc?.path ?? diff?.path,
 						revealPath: doc?.path ?? null,
 						refreshKey: treeKey,
+						staleTick: stale.tick,
+						staleDirs: stale.dirs,
 						onNotify: (text, kind) => say(text, kind),
 						onDeleted: (path) => {
 							setTabs((prev) => prev.filter((p) => p !== path && !p.startsWith(`${path}/`)));
