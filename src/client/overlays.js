@@ -403,6 +403,55 @@ export function WorkspaceSymbolPalette({ t, cwd, state, onQuery, onPick, onClose
 	);
 }
 
+/**
+ * Compare-refs dialog: two ref fields plus the branch list (local then
+ * remote). Clicking a ref fills the base first, then the head — the cheap
+ * autocomplete VS Code's palette gets from its pickers.
+ */
+export function CompareRefsPalette({ t, busy, branches, onRun, onClose }) {
+	const panelRef = useDismissLayer({ onDismiss: onClose });
+	const [base, setBase] = useState("");
+	const [head, setHead] = useState("HEAD");
+	const inputRef = useRef(null);
+	useEffect(() => {
+		inputRef.current?.focus();
+	}, []);
+	const fill = (name) => {
+		if (base === "") setBase(name);
+		else setHead(name);
+	};
+	return h(
+		"div",
+		{ className: "ce-palette ce-compare-box", ref: panelRef, role: "dialog", "aria-label": t("compare.title"), onKeyDown: (e) => { if (e.key === "Escape") onClose(); } },
+		h("div", { className: "ce-palette-head" },
+			h("span", { className: "ce-disclosure-summary" }, t("compare.title")),
+			h("button", { className: "ce-tool ce-tiny", type: "button", title: `${t("close")} (Esc)`, onClick: onClose }, "✕"),
+		),
+		h("div", { className: "ce-compare-fields" },
+			h("input", { ref: inputRef, className: "ce-input", type: "text", placeholder: t("compare.base"), value: base, onChange: (e) => setBase(e.target.value), spellcheck: false, autoComplete: "off" }),
+			h("input", { className: "ce-input", type: "text", placeholder: t("compare.head"), value: head, onChange: (e) => setHead(e.target.value), spellcheck: false, autoComplete: "off" }),
+			h("button", {
+				type: "button",
+				className: "ce-commitbox-btn",
+				disabled: busy || base.trim() === "",
+				onClick: () => onRun(base.trim(), head.trim() || "HEAD"),
+			}, busy ? t("compare.busy") : t("compare.run")),
+		),
+		h("div", { className: "ce-palette-list ce-scroll" },
+			branches.length === 0 ? h("div", { className: "ce-note" }, t("compare.noRefs")) : null,
+			branches.map((b) =>
+				h(
+					"button",
+					{ key: b.name, type: "button", className: "ce-qitem", title: b.remote ? "remote" : "local", onClick: () => fill(b.name) },
+					h("span", { className: "ce-symglyph" }, b.remote ? "☁" : "⌂"),
+					h("span", { className: "ce-qbase" }, b.name),
+					b.current ? h("span", { className: "ce-qdir" }, "•") : null,
+				),
+			),
+		),
+	);
+}
+
 /** Minimal "go to line" palette (⌘G / Ctrl+G): one numeric input, Enter jumps. */export function GotoLinePalette({ t, totalLines, initial, onGo, onClose }) {
 	const panelRef = useDismissLayer({ onDismiss: onClose });
 	const [value, setValue] = useState(String(initial ?? ""));

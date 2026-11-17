@@ -487,6 +487,30 @@ var zh = {
   "editor.formatOff": "保存时格式化已关闭",
   "editor.savedFormatted": "已保存并格式化",
   "editor.formatSkipped": "已保存（语言服务器未格式化该文件）",
+  "command.compare": "对比两个引用…",
+  "compare.title": "引用对比",
+  "compare.base": "基线引用（如 main）",
+  "compare.head": "目标引用（默认 HEAD）",
+  "compare.run": "对比",
+  "compare.busy": "对比中…",
+  "compare.noRefs": "没有可见分支引用",
+  "compare.none": "两个引用之间没有差异",
+  "changes.conflictTitle": "冲突解决",
+  "changes.continue": "继续",
+  "changes.continueTitle": "所有冲突解决后完成序列器",
+  "changes.abort": "中止",
+  "changes.abortTitle": "放弃进行中的 cherry-pick / merge / revert",
+  "changes.ours": "当前侧",
+  "changes.oursTitle": "保留本分支版本并标记已解决",
+  "changes.theirs": "传入侧",
+  "changes.theirsTitle": "采用被合入版本并标记已解决",
+  "changes.pickTitle": "Cherry-pick 到当前分支（需干净工作区）",
+  "changes.pickConfirm": "再次点击确认 cherry-pick",
+  "changes.picked": "已挑选 {hash}",
+  "changes.pickConflicted": "冲突文件已列出，选侧后可继续",
+  "changes.resolved": "{path} 已采用{side}并暂存",
+  "changes.sequencerDone": "序列器已完成",
+  "changes.sequencerAborted": "序列器已中止",
   "editor.closeTab": "关闭标签（中键点击亦可）",
   "editor.dirtyGuard": "有未保存的修改 — 请先保存（⌘S）或取消（Esc）",
   "editor.dirty": "未保存",
@@ -1018,6 +1042,30 @@ var en = {
   "editor.formatOff": "Format on save off",
   "editor.savedFormatted": "Saved and formatted",
   "editor.formatSkipped": "Saved (the language server did not format this file)",
+  "command.compare": "Compare References…",
+  "compare.title": "Compare references",
+  "compare.base": "Base ref (e.g. main)",
+  "compare.head": "Head ref (default HEAD)",
+  "compare.run": "Compare",
+  "compare.busy": "comparing…",
+  "compare.noRefs": "No visible branch refs",
+  "compare.none": "No differences between the two refs",
+  "changes.conflictTitle": "Resolve conflicts",
+  "changes.continue": "Continue",
+  "changes.continueTitle": "Finish the sequencer once every conflict is resolved",
+  "changes.abort": "Abort",
+  "changes.abortTitle": "Abandon the in-flight cherry-pick / merge / revert",
+  "changes.ours": "ours",
+  "changes.oursTitle": "Keep this branch's version and mark resolved",
+  "changes.theirs": "theirs",
+  "changes.theirsTitle": "Take the incoming version and mark resolved",
+  "changes.pickTitle": "Cherry-pick onto the current branch (clean tree required)",
+  "changes.pickConfirm": "Click again to confirm the cherry-pick",
+  "changes.picked": "Cherry-picked {hash}",
+  "changes.pickConflicted": "conflicted files listed below — pick a side, then continue",
+  "changes.resolved": "{path} resolved with {side} and staged",
+  "changes.sequencerDone": "Sequencer finished",
+  "changes.sequencerAborted": "Sequencer aborted",
   "editor.closeTab": "Close tab (middle-click also works)",
   "editor.dirtyGuard": "Unsaved changes — save (⌘S) or cancel (Esc) first",
   "editor.dirty": "unsaved",
@@ -3088,7 +3136,7 @@ function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshKey, sta
 function isStagedXy(xy) {
   return typeof xy === "string" && xy.length > 0 && xy[0] !== " " && xy[0] !== "?";
 }
-function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commitsOpen, setCommitsOpen, onOpenCommit, onOpenDiff, onDiscard, onDiscardDir, onStage, onStageDir, onUnstage, onUnstageDir, onCommit, committing, onNotify, refresh, sessionId }) {
+function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commitsOpen, setCommitsOpen, onOpenCommit, onOpenDiff, onDiscard, onDiscardDir, onStage, onStageDir, onUnstage, onUnstageDir, onCommit, committing, onNotify, refresh, sessionId, onCherryPick, onResolve, onSequencer, compare, setCompare, seqDisabled }) {
   const [treeView, setTreeView] = useState(true);
   const [message, setMessage] = useState("");
   const [amend, setAmend] = useState(false);
@@ -3100,6 +3148,7 @@ function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commitsOpen, 
   const [stashUntracked, setStashUntracked] = useState(false);
   const [stashBusy, setStashBusy] = useState(false);
   const [stashConfirm, setStashConfirm] = useState(null);
+  const [pickConfirm, setPickConfirm] = useState(null);
   const stashSaveRef = useDismissLayer({ open: stashSaving, onDismiss: () => setStashSaving(false), ignoreSelector: '[data-ce-popup-trigger="stash-save"]' });
   const stashConfirmRef = useDismissLayer({ open: stashConfirm !== null, onDismiss: () => setStashConfirm(null) });
   const repoArgs = repoSel ? { cwd, repo: repoSel } : { cwd };
@@ -3195,6 +3244,59 @@ function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commitsOpen, 
     "div",
     { className: "ce-rail ce-scroll ce-changes" },
     selector,
+    // Sequencer banner: cherry-pick / merge / revert conflicts get their
+    // own list — per-file ours/theirs plus Continue/Abort. Working rows
+    // stay untouched so a conflicted file keeps its usual affordances.
+    git.inProgress ? h(
+      "section",
+      { className: "ce-change-group ce-conflict" },
+      h(
+        "div",
+        { className: "ce-section" },
+        h("span", null, `${t("changes.conflictTitle")} · ${git.inProgress}`),
+        h("button", { className: "ce-link", type: "button", disabled: seqDisabled, title: t("changes.continueTitle"), onClick: () => onSequencer("continue") }, t("changes.continue")),
+        h("button", { className: "ce-link", type: "button", disabled: seqDisabled, title: t("changes.abortTitle"), onClick: () => onSequencer("abort") }, t("changes.abort"))
+      ),
+      (git.working ?? []).filter((f) => f.xy.includes("U")).map(
+        (f) => h(
+          "div",
+          { key: `u:${f.path}`, className: "ce-row ce-conflict-row", title: f.path },
+          h("span", { className: "ce-badge ce-badge-u" }, "U"),
+          h("span", { className: "ce-name" }, f.path),
+          h("button", { type: "button", className: "ce-tool ce-tiny", disabled: seqDisabled, title: t("changes.oursTitle"), onClick: () => onResolve(f.path, "ours") }, t("changes.ours")),
+          h("button", { type: "button", className: "ce-tool ce-tiny", disabled: seqDisabled, title: t("changes.theirsTitle"), onClick: () => onResolve(f.path, "theirs") }, t("changes.theirs"))
+        )
+      )
+    ) : null,
+    compare && compare !== null ? h(
+      "section",
+      { className: "ce-change-group ce-compare" },
+      h(
+        "div",
+        { className: "ce-section" },
+        h("span", { title: `${compare.baseName ?? compare.base} → ${compare.headName ?? compare.head}` }, `${compare.baseName} → ${compare.headName} · ${compare.files?.length ?? 0}${compare.truncated ? `/${compare.total}` : ""}`),
+        compare.shortstat ? h("span", { className: "ce-disclosure-meta" }, compare.shortstat) : null,
+        h("button", { type: "button", className: "ce-tool ce-tiny", title: t("close"), onClick: () => setCompare(null) }, "✕")
+      ),
+      compare.error ? h("div", { className: "ce-note" }, compare.error) : null,
+      !compare.error && (compare.files ?? []).length === 0 ? h("div", { className: "ce-note" }, t("compare.none")) : null,
+      (compare.files ?? []).slice(0, 500).map(
+        (f) => h(
+          "div",
+          {
+            key: `cp:${f.path}`,
+            className: "ce-row cet-row",
+            title: f.from ? `${f.from} → ${f.path}` : f.path
+          },
+          h(
+            "button",
+            { className: "ctp-entry-open", type: "button", onClick: () => onOpenDiff(f.path, "compare", null, { base: compare.baseName, head: compare.headName }) },
+            h("span", { className: `ce-badge ce-badge-${f.status.toLowerCase()}` }, f.status),
+            h("span", { className: "ce-name" }, f.from ? `${f.from} → ${f.path}` : f.path)
+          )
+        )
+      )
+    ) : null,
     h("div", { className: "ce-note" }, git.upstream ? `${t("changes.vs")} ${git.upstream} · ↑${git.ahead ?? 0} ↓${git.behind ?? 0}${git.upstreamInferred ? " · auto" : ""}` : t("sync.noUpstream")),
     h(
       "div",
@@ -3321,10 +3423,32 @@ function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commitsOpen, 
           )
         ),
         commitsOpen ? git.commits.slice(0, 80).map((commit) => h(
-          "button",
-          { key: `c:${commit.hash}`, className: "ce-commit", type: "button", onClick: () => onOpenCommit(commit) },
-          h("span", { className: "ce-chash" }, commit.hash),
-          h("span", { className: "ce-csubject" }, commit.subject)
+          "div",
+          { key: `c:${commit.hash}`, className: "ce-commit-row" },
+          h(
+            "button",
+            { className: "ce-commit", type: "button", onClick: () => onOpenCommit(commit) },
+            h("span", { className: "ce-chash" }, commit.hash),
+            h("span", { className: "ce-csubject" }, commit.subject)
+          ),
+          onCherryPick ? h(
+            "button",
+            {
+              type: "button",
+              className: `ce-tool ce-tiny${pickConfirm === commit.hash ? " ce-danger" : ""}`,
+              disabled: seqDisabled,
+              title: pickConfirm === commit.hash ? t("changes.pickConfirm") : t("changes.pickTitle"),
+              onClick: () => {
+                if (pickConfirm === commit.hash) {
+                  setPickConfirm(null);
+                  void onCherryPick(commit);
+                } else {
+                  setPickConfirm(commit.hash);
+                }
+              }
+            },
+            pickConfirm === commit.hash ? "✓" : "⤵"
+          ) : null
         )) : null,
         treeView ? h(ChangeTree, {
           items: visibleBranchFiles.map((p) => ({ path: p, ch: "C" })),
@@ -3827,6 +3951,57 @@ function WorkspaceSymbolPalette({ t, cwd, state, onQuery, onPick, onClose }) {
           h("span", { className: "ce-qbase" }, s.container ? `${s.name} · ${s.container}` : s.name),
           h("span", { className: "ce-qdir" }, RelPath(cwd, s.path)),
           h("span", { className: "ce-qdir" }, `:${s.line}`)
+        )
+      )
+    )
+  );
+}
+function CompareRefsPalette({ t, busy, branches, onRun, onClose }) {
+  const panelRef = useDismissLayer({ onDismiss: onClose });
+  const [base, setBase] = useState("");
+  const [head, setHead] = useState("HEAD");
+  const inputRef = useRef(null);
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
+  const fill = (name) => {
+    if (base === "") setBase(name);
+    else setHead(name);
+  };
+  return h(
+    "div",
+    { className: "ce-palette ce-compare-box", ref: panelRef, role: "dialog", "aria-label": t("compare.title"), onKeyDown: (e) => {
+      if (e.key === "Escape") onClose();
+    } },
+    h(
+      "div",
+      { className: "ce-palette-head" },
+      h("span", { className: "ce-disclosure-summary" }, t("compare.title")),
+      h("button", { className: "ce-tool ce-tiny", type: "button", title: `${t("close")} (Esc)`, onClick: onClose }, "✕")
+    ),
+    h(
+      "div",
+      { className: "ce-compare-fields" },
+      h("input", { ref: inputRef, className: "ce-input", type: "text", placeholder: t("compare.base"), value: base, onChange: (e) => setBase(e.target.value), spellcheck: false, autoComplete: "off" }),
+      h("input", { className: "ce-input", type: "text", placeholder: t("compare.head"), value: head, onChange: (e) => setHead(e.target.value), spellcheck: false, autoComplete: "off" }),
+      h("button", {
+        type: "button",
+        className: "ce-commitbox-btn",
+        disabled: busy || base.trim() === "",
+        onClick: () => onRun(base.trim(), head.trim() || "HEAD")
+      }, busy ? t("compare.busy") : t("compare.run"))
+    ),
+    h(
+      "div",
+      { className: "ce-palette-list ce-scroll" },
+      branches.length === 0 ? h("div", { className: "ce-note" }, t("compare.noRefs")) : null,
+      branches.map(
+        (b) => h(
+          "button",
+          { key: b.name, type: "button", className: "ce-qitem", title: b.remote ? "remote" : "local", onClick: () => fill(b.name) },
+          h("span", { className: "ce-symglyph" }, b.remote ? "☁" : "⌂"),
+          h("span", { className: "ce-qbase" }, b.name),
+          b.current ? h("span", { className: "ce-qdir" }, "•") : null
         )
       )
     )
@@ -5031,6 +5206,11 @@ function CodeBody(props) {
   const [fileDropOver, setFileDropOver] = useState(false);
   const [tabDropOver, setTabDropOver] = useState(null);
   const [commitsOpen, setCommitsOpen] = useState(false);
+  const [compare, setCompare] = useState(null);
+  const [compareOpen, setCompareOpen] = useState(false);
+  const [compareBranches, setCompareBranches] = useState([]);
+  const [compareBusy, setCompareBusy] = useState(false);
+  const [seqBusy, setSeqBusy] = useState(false);
   const [tabMenu, setTabMenu] = useState(null);
   const [pinned, setPinned] = useState([]);
   const [problemsOpen, setProblemsOpen] = useState(false);
@@ -5156,6 +5336,7 @@ function CodeBody(props) {
     setDelPreview(null);
     setTabMenu(null);
     setProblemsOpen(false);
+    setCompareOpen(false);
   }, []);
   useEffect(() => {
     if (tab?.visible === false) dismissPanels();
@@ -5499,16 +5680,21 @@ function CodeBody(props) {
     codeRef.current?.focus({ preventScroll: true });
   }, [scrollAreaToLine]);
   const openDiff = useCallback(
-    async (path, scope, repoOverride) => {
+    async (path, scope, repoOverride, refs) => {
       if (!cwd || !canNavigate()) return;
-      dismissPanels();
+      if (scope !== "compare") dismissPanels();
       const repo = repoOverride ?? repoSelRef.current;
-      const res = await api("git.diff", repo ? { cwd, path, scope, repo } : { cwd, path, scope });
+      const body = repo ? { cwd, path, scope, repo } : { cwd, path, scope };
+      if (scope === "compare") {
+        body.base = refs?.base ?? "";
+        body.head = refs?.head ?? "HEAD";
+      }
+      const res = await api("git.diff", body);
       const value = res.ok ? res.value : { error: res.error };
       modeRef.current = "diff";
       setMobileView("editor");
       setShowDiffView(true);
-      setDiff({ path, scope, text: value.diff ?? "", error: value.error, base: value.base, untracked: value.untracked, note: value.note });
+      setDiff({ path, scope, text: value.diff ?? "", error: value.error, base: value.base, head: value.head, untracked: value.untracked, note: value.note });
       setOverlay(null);
       setHover(null);
     },
@@ -5551,11 +5737,16 @@ function CodeBody(props) {
   }, [loadFile]);
   const refreshOpenDiff = useCallback(async () => {
     const d = diffRef.current;
-    if (!d || typeof d.path !== "string" || d.path === "" || d.scope !== "working" && d.scope !== "index") return;
+    if (!d || typeof d.path !== "string" || d.path === "" || d.scope !== "working" && d.scope !== "index" && d.scope !== "compare") return;
     const repo = repoSelRef.current;
-    const res = await api("git.diff", repo ? { cwd, path: d.path, scope: d.scope, repo } : { cwd, path: d.path, scope: d.scope });
+    const body = repo ? { cwd, path: d.path, scope: d.scope, repo } : { cwd, path: d.path, scope: d.scope };
+    if (d.scope === "compare") {
+      body.base = d.base ?? "";
+      body.head = d.head ?? "HEAD";
+    }
+    const res = await api("git.diff", body);
     const value = res.ok ? res.value ?? {} : {};
-    setDiff((cur) => cur && cur.path === d.path && cur.scope === d.scope ? { ...cur, text: value.diff ?? "", error: value.error, untracked: value.untracked, note: value.note, base: value.base ?? cur.base } : cur);
+    setDiff((cur) => cur && cur.path === d.path && cur.scope === d.scope ? { ...cur, text: value.diff ?? "", error: value.error, untracked: value.untracked, note: value.note, base: value.base ?? cur.base, head: value.head ?? cur.head } : cur);
   }, [cwd]);
   const applyWatchBatch = useCallback((v, reset) => {
     const paths2 = reset ? [] : v.paths ?? [];
@@ -5642,6 +5833,85 @@ function CodeBody(props) {
       setPeek(null);
     },
     [cwd, say, t, canNavigate, dismissPanels]
+  );
+  const doCompare = useCallback(
+    async (base, head) => {
+      if (!cwd) return;
+      setCompareBusy(true);
+      const repo = repoSelRef.current;
+      const res = await api("git.compare", repo ? { cwd, base, head, repo } : { cwd, base, head });
+      setCompareBusy(false);
+      if (!res.ok) {
+        say(`${t("error")}: ${res.error}`, "error");
+        return;
+      }
+      if (res.value.error) {
+        setCompare({ ...res.value, files: [] });
+        say(`${t("error")}: ${res.value.error}`, "error");
+        return;
+      }
+      setCompare(res.value);
+      setCompareOpen(false);
+      setMode("changes");
+      setRailVisible(true);
+    },
+    [cwd, say, t]
+  );
+  const openCompare = useCallback(async () => {
+    if (!cwd) return;
+    dismissPanels();
+    setCompareOpen(true);
+    const repo = repoSelRef.current;
+    const res = await api("git.branches", repo ? { cwd, repo } : { cwd });
+    if (res.ok && Array.isArray(res.value.branches)) setCompareBranches(res.value.branches);
+  }, [cwd, dismissPanels]);
+  const pickCommit = useCallback(
+    async (commit) => {
+      if (!cwd || dirtyRef.current) {
+        say(t("editor.dirtyGuard"), "error");
+        return;
+      }
+      setSeqBusy(true);
+      const repo = repoSelRef.current;
+      const res = await api("git.cherryPick", repo ? { cwd, sha: commit.hash, repo } : { cwd, sha: commit.hash });
+      setSeqBusy(false);
+      const value = res.ok ? res.value ?? {} : { error: res.error };
+      if (value.status) setGit(value.status);
+      if (value.error) say(value.conflicted ? `${value.error} — ${t("changes.pickConflicted")}` : `${t("error")}: ${value.error}`, "error");
+      else say(t("changes.picked", { hash: commit.hash }));
+      if (!value.conflicted) refreshGit();
+    },
+    [cwd, say, t, refreshGit]
+  );
+  const resolveConflict = useCallback(
+    async (path, side) => {
+      if (!cwd) return;
+      setSeqBusy(true);
+      const repo = repoSelRef.current;
+      const res = await api("git.resolve", repo ? { cwd, path, side, repo } : { cwd, path, side });
+      setSeqBusy(false);
+      const value = res.ok ? res.value ?? {} : { error: res.error };
+      if (value.status) setGit(value.status);
+      if (value.error) say(`${t("error")}: ${value.error}`, "error");
+      else say(t("changes.resolved", { path, side: t(side === "ours" ? "changes.ours" : "changes.theirs") }));
+    },
+    [cwd, say, t]
+  );
+  const sequencerAction = useCallback(
+    async (action) => {
+      if (!cwd) return;
+      const kind = git?.inProgress ?? "cherry-pick";
+      setSeqBusy(true);
+      const repo = repoSelRef.current;
+      const res = await api(action === "continue" ? "git.sequencerContinue" : "git.sequencerAbort", repo ? { cwd, kind, repo } : { cwd, kind });
+      setSeqBusy(false);
+      const value = res.ok ? res.value ?? {} : { error: res.error };
+      if (value.status) setGit(value.status);
+      if (value.error) say(`${t("error")}: ${value.error}`, "error");
+      else say(action === "continue" ? t("changes.sequencerDone") : t("changes.sequencerAborted"));
+      refreshGit();
+    },
+    [cwd, git, say, t, refreshGit]
   );
   const openFileHistory = useCallback(() => {
     const d = docRef.current;
@@ -6014,7 +6284,7 @@ function CodeBody(props) {
         return;
       }
       if (event.key === "Escape") {
-        if (searchOpen || palette || commandOpen || branchPickOpen || fileHist || gotoOpen || symPalette || wsym || peek || overlay || problemsOpen || tabMenu) {
+        if (searchOpen || palette || commandOpen || branchPickOpen || fileHist || gotoOpen || symPalette || wsym || compareOpen || peek || overlay || problemsOpen || tabMenu) {
           event.preventDefault();
           event.stopPropagation();
           dismissPanels();
@@ -6051,7 +6321,7 @@ function CodeBody(props) {
         if (searchOpen) setSearchOpen(false);
       }
     },
-    [palette, closePalette, openPalette, openSearch, searchOpen, peek, closePeek, goBack, goForward, symPalette, wsym, editing, saveEdit, cancelEdit, findOpen, delPreview, gotoOpen, toggleWrap, fileHist, toggleCommand, toggleProblems, reopenClosedTab, dismissPanels, commandOpen, branchPickOpen, overlay, problemsOpen, tabMenu]
+    [palette, closePalette, openPalette, openSearch, searchOpen, peek, closePeek, goBack, goForward, symPalette, wsym, compareOpen, editing, saveEdit, cancelEdit, findOpen, delPreview, gotoOpen, toggleWrap, fileHist, toggleCommand, toggleProblems, reopenClosedTab, dismissPanels, commandOpen, branchPickOpen, overlay, problemsOpen, tabMenu]
   );
   const doJump = useCallback(
     async (kind, pos) => {
@@ -6261,6 +6531,7 @@ function CodeBody(props) {
       refreshGit();
     } },
     { id: "search", icon: "⌕", label: t("command.search"), hint: "⇧⌘F", run: () => openSearch() },
+    { id: "compare", icon: "≷", label: t("command.compare"), run: () => void openCompare() },
     { id: "quick-open", icon: "↗", label: t("command.quickOpen"), hint: "⌘P", run: () => openPalette() },
     { id: "outline", icon: "☷", label: t("command.outline"), hint: "⌘⇧O", run: () => {
       if (LSP_RE.test(docRef.current?.path ?? "")) setSymPalette({});
@@ -6306,7 +6577,7 @@ function CodeBody(props) {
       say(t(next ? "editor.formatOn" : "editor.formatOff"));
     } },
     ...terminalEntry.available() ? [{ id: "terminal", icon: "‣", label: t("command.terminal"), run: openTerminal }] : []
-  ], [t, refreshGit, openSearch, openPalette, toggleWrap, say, loadFile, dismissPanels, openTerminal, terminalEntry, editing, toggleProblems, reopenClosedTab, closeTabs, tabs, liveOn, cwd, formatOnSave]);
+  ], [t, refreshGit, openSearch, openPalette, toggleWrap, say, loadFile, dismissPanels, openTerminal, terminalEntry, editing, toggleProblems, reopenClosedTab, closeTabs, tabs, liveOn, cwd, formatOnSave, openCompare]);
   const startRailDrag = useCallback((event) => {
     event.preventDefault();
     const startX = event.clientX;
@@ -6510,7 +6781,7 @@ function CodeBody(props) {
           commitsOpen,
           setCommitsOpen,
           onOpenCommit: (commit) => void openCommit(commit),
-          onOpenDiff: (path, scope) => void (scope === "commit" ? openDiff(path, scope) : openChangeSource(path, scope)),
+          onOpenDiff: (path, scope, repoOverride, refs) => void (scope === "commit" || scope === "compare" ? openDiff(path, scope, repoOverride, refs) : openChangeSource(path, scope)),
           onDiscard: (item) => void discardChange(item),
           onDiscardDir: (dirItems) => void discardMany(dirItems),
           onStage: (item) => void stageChange(item.path),
@@ -6520,7 +6791,13 @@ function CodeBody(props) {
           onCommit: (msg, stageAll, amend) => commitChanges(msg, stageAll, amend),
           committing,
           onNotify: (text, kind) => say(text, kind),
-          refresh: refreshGit
+          refresh: refreshGit,
+          onCherryPick: (commit) => void pickCommit(commit),
+          onResolve: (path, side) => void resolveConflict(path, side),
+          onSequencer: (action) => void sequencerAction(action),
+          compare,
+          setCompare,
+          seqDisabled: seqBusy
         })
       ) : null,
       railVisible ? h("div", { className: "ce-splitter", onMouseDown: startRailDrag, onDoubleClick: () => setRailVisible(false), title: "⇔ 拖动调宽 · 双击收起" }) : h("button", { type: "button", className: "ce-rail-tab", title: "展开侧栏 (⌘B / Ctrl+B)", onClick: () => setRailVisible(true) }, "▸"),
@@ -6761,6 +7038,13 @@ function CodeBody(props) {
               },
               onClose: () => setWsym(null)
             }) : null,
+            compareOpen ? h(CompareRefsPalette, {
+              t,
+              busy: compareBusy,
+              branches: compareBranches,
+              onRun: (base, head) => void doCompare(base, head),
+              onClose: () => setCompareOpen(false)
+            }) : null,
             delPreview ? h(
               "div",
               { className: "ce-overlay", ref: delPreviewRef, role: "dialog", "aria-label": t("diff.deletedAt") },
@@ -6998,6 +7282,12 @@ var CSS2 = `
 .ce-link{border:0;background:transparent;color:var(--dsw-alias-brand-primary,#6cb2ff);font:inherit;font-size:11px;cursor:pointer;padding:0 2px;flex:none}
 .ce-link:hover{text-decoration:underline}
 .ce-commit{display:flex;gap:8px;align-items:baseline;width:100%;text-align:left;border:0;background:transparent;color:inherit;font:inherit;padding:3px 10px 3px 14px;cursor:pointer;border-radius:4px;white-space:nowrap}
+.ce-commit-row{display:flex;align-items:center;gap:4px}.ce-commit-row .ce-commit{flex:1;min-width:0}.ce-commit-row .ce-tool{opacity:0;flex:none}
+.ce-commit-row:hover .ce-tool,.ce-commit-row:focus-within .ce-tool{opacity:1}
+.ce-conflict-row{display:flex;align-items:center;gap:6px}.ce-conflict-row .ce-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ce-conflict-row .ce-tiny{flex:none}
+.ce-danger{color:var(--dsw-alias-state-error-primary,#f85149)}
+.ce-compare{border-left:2px solid color-mix(in srgb,var(--dsw-alias-button-info-fill,#58a6ff) 55%,transparent)}
+.ce-compare-box{width:min(560px,92vw)}.ce-compare-fields{display:flex;gap:6px;align-items:center;padding:8px 10px;flex-wrap:wrap}.ce-compare-fields .ce-input{flex:1;min-width:120px}
 .ce-commit:hover{background:var(--dsw-alias-interactive-bg-hover,#262a30)}
 .ce-chash{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;color:var(--dsw-alias-label-tertiary,#778);flex:none}
 .ce-histrow{display:flex;gap:8px;align-items:baseline;width:100%;text-align:left;border:0;background:transparent;color:inherit;font:inherit;padding:4px 10px;cursor:pointer;white-space:nowrap}

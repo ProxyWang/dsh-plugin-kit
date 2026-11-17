@@ -666,6 +666,59 @@ if (goplsOn) {
 	skipped += 5;
 }
 
+// ---- M3: compare refs, cherry-pick, conflict resolve + continue ----
+const m3 = "/tmp/ce-m3";
+try { rmSync(m3, { recursive: true, force: true }); } catch {}
+mkdirSync(`${m3}/src`, { recursive: true });
+writeFileSync(`${m3}/src/a.txt`, "line one\n");
+execFileSync("git", ["init", "-q", "-b", "main", m3], { stdio: "ignore" });
+const git3 = (args) => execFileSync("git", args, { cwd: m3, stdio: "ignore" });
+git3(["config", "user.email", "t@t"]);
+git3(["config", "user.name", "t"]);
+git3(["add", "-A"]);
+git3(["commit", "-qm", "base"]);
+git3(["checkout", "-qb", "feat"]);
+writeFileSync(`${m3}/src/a.txt`, "feat version\n");
+writeFileSync(`${m3}/src/only-feat.txt`, "x\n");
+git3(["add", "-A"]);
+git3(["commit", "-qm", "feat work"]);
+const featSha = execFileSync("git", ["rev-parse", "HEAD"], { cwd: m3 }).toString().trim();
+git3(["checkout", "-q", "main"]);
+writeFileSync(`${m3}/src/a.txt`, "main version\n");
+git3(["commit", "-qam", "main work"]);
+const cmp = await call("git.compare", { cwd: m3, base: "main", head: "feat" });
+check("git.compare lists files changed on head side of the merge-base", cmp.ok && cmp.value.files.some((f) => f.path === "src/only-feat.txt" && f.status === "A") && cmp.value.files.some((f) => f.path === "src/a.txt" && f.status === "M"), cmp.value?.files);
+check("git.compare reports commit count and shortstat", cmp.ok && cmp.value.commits >= 1 && typeof cmp.value.mergeBase === "string" && cmp.value.mergeBase !== "", cmp.value);
+check("git.compare rejects unknown refs", (await call("git.compare", { cwd: m3, base: "nope-xyz", head: "HEAD" })).value?.error !== undefined, null);
+check("git.compare rejects flag-shaped refs", /invalid reference/.test((await call("git.compare", { cwd: m3, base: "-Dmain", head: "HEAD" })).value?.error ?? ""), null);
+const cmpDiff = await call("git.diff", { cwd: m3, path: "src/a.txt", scope: "compare", base: "main", head: "feat" });
+check("git.diff compare scope renders the between-refs file diff", cmpDiff.ok && cmpDiff.value.scope === "compare" && /\+feat version/.test(cmpDiff.value.diff) && /-main version/.test(cmpDiff.value.diff), cmpDiff.value?.diff);
+// Cherry-pick the conflicting feat commit onto main: the sequencer opens.
+const cp = await call("git.cherryPick", { cwd: m3, sha: featSha });
+check("conflicting cherry-pick opens the sequencer with conflicted files", cp.ok && cp.value.conflicted === true && cp.value.status.working.some((f) => f.xy.includes("U")), cp.value);
+const cpBad = await call("git.cherryPick", { cwd: m3, sha: "main~2" });
+check("cherry-pick rejects non-hex shas without running git", /invalid commit id/.test(cpBad.value?.error ?? ""), cpBad);
+// Resolve the conflict taking one side, then continue the sequencer.
+const rs = await call("git.resolve", { cwd: m3, path: "src/a.txt", side: "theirs" });
+check("resolve-theirs takes the side and stages the file", rs.ok && rs.value.status.working.every((f) => !f.xy.includes("U")) && readFileSync(`${m3}/src/a.txt`, "utf8") === "feat version\n", rs.value);
+check("resolve rejects unknown sides", (await call("git.resolve", { cwd: m3, path: "src/a.txt", side: "yours" })).value?.error !== undefined, null);
+const cont = await call("git.sequencerContinue", { cwd: m3, kind: "cherry-pick" });
+check("sequencerContinue finishes the resolved cherry-pick as a commit", cont.ok && cont.value.error === void 0 && cont.value.status.working.length === 0, cont.value);
+const headLog = execFileSync("git", ["log", "--format=%s", "-1"], { cwd: m3 }).toString().trim();
+check("the continued commit carries the original subject", headLog === "feat work", headLog);
+// And the escape hatch: pick main's own diverging commit again (base blob
+// differs from HEAD's) to reopen a conflict, then abort it.
+const mainWorkSha = execFileSync("git", ["rev-parse", "HEAD~1"], { cwd: m3 }).toString().trim();
+const cp2 = await call("git.cherryPick", { cwd: m3, sha: mainWorkSha });
+check("second conflicting pick surfaces conflicts again", cp2.ok && cp2.value.conflicted === true, cp2.value);
+const ab = await call("git.sequencerAbort", { cwd: m3, kind: "cherry-pick" });
+check("sequencerAbort cleans the sequencer and the tree", ab.ok && ab.value.error === "" && ab.value.status.working.every((f) => !f.xy.includes("U")), ab.value);
+const badKind = await call("git.sequencerAbort", { cwd: m3, kind: "rebase -i" });
+check("sequencer helpers whitelist the kind", (badKind.value?.error ?? badKind.error) !== undefined, badKind);
+try { rmSync(m3, { recursive: true, force: true }); } catch {}
+const { parseNameStatusZ } = await import("./lib/host/git.js");
+check("parseNameStatusZ threads renames through", JSON.stringify(parseNameStatusZ("M\0src/a.txt\0R100\0src/old.txt\0src/new.txt\0")) === JSON.stringify([{ status: "M", path: "src/a.txt" }, { status: "R", from: "src/old.txt", to: "src/new.txt", path: "src/new.txt" }]), parseNameStatusZ("M\0src/a.txt\0R100\0src/old.txt\0src/new.txt\0"));
+
 for (const cleanup of cleanups) cleanup();
 console.log(`\n${pass} passed, ${fail} failed${skipped ? `, ${skipped} skipped` : ""}`);
 process.exit(fail ? 1 : 0);

@@ -157,6 +157,12 @@ export const CSS = `
 .ce-link{border:0;background:transparent;color:var(--dsw-alias-brand-primary,#6cb2ff);font:inherit;font-size:11px;cursor:pointer;padding:0 2px;flex:none}
 .ce-link:hover{text-decoration:underline}
 .ce-commit{display:flex;gap:8px;align-items:baseline;width:100%;text-align:left;border:0;background:transparent;color:inherit;font:inherit;padding:3px 10px 3px 14px;cursor:pointer;border-radius:4px;white-space:nowrap}
+.ce-commit-row{display:flex;align-items:center;gap:4px}.ce-commit-row .ce-commit{flex:1;min-width:0}.ce-commit-row .ce-tool{opacity:0;flex:none}
+.ce-commit-row:hover .ce-tool,.ce-commit-row:focus-within .ce-tool{opacity:1}
+.ce-conflict-row{display:flex;align-items:center;gap:6px}.ce-conflict-row .ce-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ce-conflict-row .ce-tiny{flex:none}
+.ce-danger{color:var(--dsw-alias-state-error-primary,#f85149)}
+.ce-compare{border-left:2px solid color-mix(in srgb,var(--dsw-alias-button-info-fill,#58a6ff) 55%,transparent)}
+.ce-compare-box{width:min(560px,92vw)}.ce-compare-fields{display:flex;gap:6px;align-items:center;padding:8px 10px;flex-wrap:wrap}.ce-compare-fields .ce-input{flex:1;min-width:120px}
 .ce-commit:hover{background:var(--dsw-alias-interactive-bg-hover,#262a30)}
 .ce-chash{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;color:var(--dsw-alias-label-tertiary,#778);flex:none}
 .ce-histrow{display:flex;gap:8px;align-items:baseline;width:100%;text-align:left;border:0;background:transparent;color:inherit;font:inherit;padding:4px 10px;cursor:pointer;white-space:nowrap}

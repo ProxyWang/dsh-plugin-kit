@@ -13,7 +13,7 @@ export function isStagedXy(xy) {
 	return typeof xy === "string" && xy.length > 0 && xy[0] !== " " && xy[0] !== "?";
 }
 
-export function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commitsOpen, setCommitsOpen, onOpenCommit, onOpenDiff, onDiscard, onDiscardDir, onStage, onStageDir, onUnstage, onUnstageDir, onCommit, committing, onNotify, refresh, sessionId }) {
+export function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commitsOpen, setCommitsOpen, onOpenCommit, onOpenDiff, onDiscard, onDiscardDir, onStage, onStageDir, onUnstage, onUnstageDir, onCommit, committing, onNotify, refresh, sessionId, onCherryPick, onResolve, onSequencer, compare, setCompare, seqDisabled }) {
 	const [treeView, setTreeView] = useState(true);
 	const [message, setMessage] = useState("");
 	const [amend, setAmend] = useState(false);
@@ -26,6 +26,8 @@ export function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commit
 	const [stashUntracked, setStashUntracked] = useState(false);
 	const [stashBusy, setStashBusy] = useState(false);
 	const [stashConfirm, setStashConfirm] = useState(null);
+	// Two-step commit for cherry-pick: first click arms, second picks.
+	const [pickConfirm, setPickConfirm] = useState(null);
 	const stashSaveRef = useDismissLayer({ open: stashSaving, onDismiss: () => setStashSaving(false), ignoreSelector: '[data-ce-popup-trigger="stash-save"]' });
 	const stashConfirmRef = useDismissLayer({ open: stashConfirm !== null, onDismiss: () => setStashConfirm(null) });
 	const repoArgs = repoSel ? { cwd, repo: repoSel } : { cwd };
@@ -129,6 +131,59 @@ export function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commit
 		"div",
 		{ className: "ce-rail ce-scroll ce-changes" },
 		selector,
+		// Sequencer banner: cherry-pick / merge / revert conflicts get their
+		// own list — per-file ours/theirs plus Continue/Abort. Working rows
+		// stay untouched so a conflicted file keeps its usual affordances.
+		git.inProgress
+			? h(
+				"section",
+				{ className: "ce-change-group ce-conflict" },
+				h("div", { className: "ce-section" },
+					h("span", null, `${t("changes.conflictTitle")} · ${git.inProgress}`),
+					h("button", { className: "ce-link", type: "button", disabled: seqDisabled, title: t("changes.continueTitle"), onClick: () => onSequencer("continue") }, t("changes.continue")),
+					h("button", { className: "ce-link", type: "button", disabled: seqDisabled, title: t("changes.abortTitle"), onClick: () => onSequencer("abort") }, t("changes.abort")),
+				),
+				(git.working ?? []).filter((f) => f.xy.includes("U")).map((f) =>
+					h(
+						"div",
+						{ key: `u:${f.path}`, className: "ce-row ce-conflict-row", title: f.path },
+						h("span", { className: "ce-badge ce-badge-u" }, "U"),
+						h("span", { className: "ce-name" }, f.path),
+						h("button", { type: "button", className: "ce-tool ce-tiny", disabled: seqDisabled, title: t("changes.oursTitle"), onClick: () => onResolve(f.path, "ours") }, t("changes.ours")),
+						h("button", { type: "button", className: "ce-tool ce-tiny", disabled: seqDisabled, title: t("changes.theirsTitle"), onClick: () => onResolve(f.path, "theirs") }, t("changes.theirs")),
+					),
+				),
+			)
+			: null,
+		compare && compare !== null
+			? h(
+				"section",
+				{ className: "ce-change-group ce-compare" },
+				h("div", { className: "ce-section" },
+					h("span", { title: `${compare.baseName ?? compare.base} → ${compare.headName ?? compare.head}` }, `${compare.baseName} → ${compare.headName} · ${compare.files?.length ?? 0}${compare.truncated ? `/${compare.total}` : ""}`),
+					compare.shortstat ? h("span", { className: "ce-disclosure-meta" }, compare.shortstat) : null,
+					h("button", { type: "button", className: "ce-tool ce-tiny", title: t("close"), onClick: () => setCompare(null) }, "✕"),
+				),
+				compare.error ? h("div", { className: "ce-note" }, compare.error) : null,
+				!compare.error && (compare.files ?? []).length === 0 ? h("div", { className: "ce-note" }, t("compare.none")) : null,
+				(compare.files ?? []).slice(0, 500).map((f) =>
+					h(
+						"div",
+						{
+							key: `cp:${f.path}`,
+							className: "ce-row cet-row",
+							title: f.from ? `${f.from} → ${f.path}` : f.path,
+						},
+						h(
+							"button",
+							{ className: "ctp-entry-open", type: "button", onClick: () => onOpenDiff(f.path, "compare", null, { base: compare.baseName, head: compare.headName }) },
+							h("span", { className: `ce-badge ce-badge-${f.status.toLowerCase()}` }, f.status),
+							h("span", { className: "ce-name" }, f.from ? `${f.from} → ${f.path}` : f.path),
+						),
+					),
+				),
+			)
+			: null,
 		h("div", { className: "ce-note" }, git.upstream
 			? `${t("changes.vs")} ${git.upstream} · ↑${git.ahead ?? 0} ↓${git.behind ?? 0}${git.upstreamInferred ? " · auto" : ""}`
 			: t("sync.noUpstream")),
@@ -246,10 +301,34 @@ export function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commit
 				commitsOpen
 					? git.commits.slice(0, 80).map((commit) =>
 						h(
-							"button",
-							{ key: `c:${commit.hash}`, className: "ce-commit", type: "button", onClick: () => onOpenCommit(commit) },
-							h("span", { className: "ce-chash" }, commit.hash),
-							h("span", { className: "ce-csubject" }, commit.subject),
+							"div",
+							{ key: `c:${commit.hash}`, className: "ce-commit-row" },
+							h(
+								"button",
+								{ className: "ce-commit", type: "button", onClick: () => onOpenCommit(commit) },
+								h("span", { className: "ce-chash" }, commit.hash),
+								h("span", { className: "ce-csubject" }, commit.subject),
+							),
+							onCherryPick
+								? h(
+									"button",
+									{
+										type: "button",
+										className: `ce-tool ce-tiny${pickConfirm === commit.hash ? " ce-danger" : ""}`,
+										disabled: seqDisabled,
+										title: pickConfirm === commit.hash ? t("changes.pickConfirm") : t("changes.pickTitle"),
+										onClick: () => {
+											if (pickConfirm === commit.hash) {
+												setPickConfirm(null);
+												void onCherryPick(commit);
+											} else {
+												setPickConfirm(commit.hash);
+											}
+										},
+									},
+									pickConfirm === commit.hash ? "✓" : "⤵",
+								)
+								: null,
 						))
 					: null,
 				treeView

@@ -2026,6 +2026,132 @@ check("docAction reloads clean drafts, flags dirty ones, ignores others", docAct
 	}
 }
 
+// --- M3 git deepening: conflict banner, cherry-pick two-step, compare group -----------
+{
+	const { ChangesPanel } = await import("./src/client/changes.js");
+	const picks = [];
+	const resolves = [];
+	const seqs = [];
+	const opened = [];
+	const closedCompare = [];
+	const cpGit = {
+		repo: true,
+		branch: "main",
+		root: "/w",
+		working: [{ path: "src/a.txt", xy: "UU", from: null }],
+		branchFiles: [],
+		commits: [{ hash: "dead111", subject: "feat work" }],
+		base: { name: "origin/main", mergeBase: "0000" },
+		upstream: null,
+		ahead: 0,
+		behind: 0,
+		inProgress: "cherry-pick",
+	};
+	const renderCp = createHookRenderer(() => ChangesPanel({
+		cwd: "/w",
+		t: (k) => k,
+		git: cpGit,
+		repos: null,
+		repoSel: null,
+		commitsOpen: true,
+		setCommitsOpen: () => {},
+		onOpenCommit: () => {},
+		onOpenDiff: (path, scope, repo, refs) => opened.push([path, scope, refs?.base, refs?.head]),
+		onDiscard: () => {},
+		onStage: () => {},
+		onUnstage: () => {},
+		onCommit: () => {},
+		committing: false,
+		onNotify: () => {},
+		refresh: () => {},
+		onCherryPick: (commit) => picks.push(commit.hash),
+		onResolve: (path, side) => resolves.push([path, side]),
+		onSequencer: (action) => seqs.push(action),
+		compare: { baseName: "main", headName: "feat", files: [{ status: "A", path: "src/n.txt" }], shortstat: "1 file changed", commits: 1 },
+		setCompare: (v) => closedCompare.push(v),
+		seqDisabled: false,
+		sessionId: "x",
+	}), {});
+	const cpTree = renderCp();
+	const cpGet = (test) => collect(cpTree).find(test);
+	check("the sequencer banner lists conflicted files with both side buttons", cpGet((n) => n.type === "button" && n.children?.[0] === "changes.ours") && cpGet((n) => n.children?.[0] === "changes.theirs") !== undefined, null);
+	cpGet((n) => n.children?.[0] === "changes.ours").props.onClick();
+	check("ours resolves the file through the host callback", resolves.length === 1 && resolves[0][0] === "src/a.txt" && resolves[0][1] === "ours", resolves);
+	cpGet((n) => n.children?.[0] === "changes.abort").props.onClick();
+	check("the banner exposes abort for the sequencer", seqs.join() === "abort", seqs);
+	const pickBtn = cpGet((n) => n.type === "button" && n.props.title === "changes.pickTitle");
+	check("commit rows carry a cherry-pick control", Boolean(pickBtn), null);
+	pickBtn.props.onClick();
+	check("the first pick click only arms the confirmation", picks.length === 0 && collect(renderCp()).some((n) => n.props.title === "changes.pickConfirm"), picks);
+	collect(renderCp()).find((n) => n.props.title === "changes.pickConfirm").props.onClick();
+	check("the second pick click runs the cherry-pick", picks.join() === "dead111", picks);
+	check("the compare group lists name-status rows", collect(cpTree).some((n) => n.type === "span" && n.children[0] === "A") && collect(cpTree).some((n) => n.type === "span" && n.children[0] === "src/n.txt"), null);
+	collect(cpTree).find((n) => n.type === "button" && n.props.className === "ctp-entry-open" && collect(n).some((c) => c.type === "span" && c.children[0] === "src/n.txt")).props.onClick();
+	check("a compare row opens the compare-scope diff with both refs", opened.length === 1 && opened[0][1] === "compare" && opened[0][2] === "main" && opened[0][3] === "feat", opened);
+	collect(cpTree).find((n) => n.type === "button" && n.props.title === "close").props.onClick();
+	check("the compare group can be dismissed", closedCompare.length === 1 && closedCompare[0] === null, closedCompare);
+}
+{
+	// CodeBody flow: command center → compare dialog → refs → group → diff request.
+	const { ChangesPanel: ChangesPanelCmp } = await import("./src/client/changes.js");
+	const { CompareRefsPalette: CompareRefsPaletteCmp } = await import("./src/client/overlays.js");
+	const { DiffView: DiffViewCmp } = await import("./src/client/diff.js");
+	const cmpGlobals = { fetch: globalThis.fetch, requestAnimationFrame: globalThis.requestAnimationFrame, cancelAnimationFrame: globalThis.cancelAnimationFrame, setTimeout: globalThis.setTimeout, clearTimeout: globalThis.clearTimeout, window: globalThis.window, document: globalThis.document };
+	const cmpRequests = [];
+	let cmpTimers = [];
+	globalThis.fetch = async (url, options) => {
+		const body = JSON.parse(options?.body ?? "{}");
+		cmpRequests.push({ url: String(url), body });
+		if (url.endsWith("/watch.poll")) return { json: async () => ({ ok: true, value: body.since === -1 ? { seq: 1, baseline: true, supported: true } : { seq: 1, paths: [], git: false } }) };
+		if (url.endsWith("/fs.list")) return { json: async () => ({ ok: true, value: { entries: [], truncated: false } }) };
+		if (url.endsWith("/fs.read")) return { json: async () => ({ ok: true, value: { kind: "text", content: "package main\n", mtimeMs: 1 } }) };
+		if (url.endsWith("/git.status")) return { json: async () => ({ ok: true, value: { repo: true, branch: "main", root: "/w", working: [], branchFiles: [], commits: [], base: null, upstream: "origin/main", ahead: 0, behind: 0 } }) };
+		if (url.endsWith("/git.branches")) return { json: async () => ({ ok: true, value: { branches: [{ name: "main", current: true, remote: false, sha: "1111" }, { name: "feat", current: false, remote: false, sha: "2222" }, { name: "origin/main", current: false, remote: true, sha: "1111" }] } }) };
+		if (url.endsWith("/git.compare")) return { json: async () => ({ ok: true, value: { base: "1111", head: "2222", baseName: "main", headName: "feat", mergeBase: "0000", files: [{ status: "M", path: "src/a.txt" }, { status: "A", path: "src/n.txt" }], total: 2, truncated: false, shortstat: "2 files changed", commits: 1 } }) };
+		if (url.endsWith("/git.diff")) return { json: async () => ({ ok: true, value: { scope: body.scope, diff: "@@ -1 +1 @@\n-line\n+feat\n", base: body.base, head: body.head } }) };
+		if (url.endsWith("/lsp.diagnostics") || url.endsWith("/lsp.request") || url.endsWith("/lsp.status")) return { json: async () => ({ ok: true, value: { items: [], symbols: [], targets: [], state: "off" } }) };
+		return { json: async () => ({ ok: true, value: {} }) };
+	};
+	globalThis.requestAnimationFrame = (fn) => { fn(); return 0; };
+	globalThis.cancelAnimationFrame = () => {};
+	globalThis.setTimeout = (fn, ms) => { cmpTimers.push({ fn, ms, fired: false }); return cmpTimers.length; };
+	globalThis.clearTimeout = (id) => { if (typeof id === "number" && cmpTimers[id - 1]) cmpTimers[id - 1].cancelled = true; };
+	globalThis.window = { innerWidth: 1200, innerHeight: 900 };
+	globalThis.document = { addEventListener() {}, removeEventListener() {} };
+	try {
+		const renderCmp = createHookRenderer(CodeBody, { sessionId: "cmp", useSessions: (select) => select({ byId: { cmp: { cwd: "/w" } } }), t: (k) => k }, { effects: true });
+		let cmpTree = renderCmp();
+		renderCmp.flushEffects();
+		const fireCmp = () => { const due = cmpTimers.filter((t) => !t.fired && !t.cancelled); due.forEach((t) => { t.fired = true; }); cmpTimers = cmpTimers.filter((t) => !t.fired && !t.cancelled); for (const t of due) t.fn(); };
+		const paintCmp = () => { cmpTree = renderCmp(); renderCmp.flushEffects(); };
+		const tickCmp = async () => { for (let i = 0; i < 8; i++) { await new Promise((r) => setImmediate(r)); fireCmp(); } paintCmp(); };
+		const getCmp = (test) => collect(cmpTree).find(test);
+		await tickCmp();
+		getCmp((n) => n.type === TreePanelCmp).props.onOpenFile("main.go", 1, 1);
+		await tickCmp();
+		cmpTree.props.onKeyDown({ code: "KeyP", metaKey: true, shiftKey: true, preventDefault() {} });
+		paintCmp();
+		const cmds = getCmp((n) => n.type.name === "CommandPalette").props.commands;
+		const compareCmd = cmds.find((c) => c.id === "compare");
+		check("the command center lists Compare References", Boolean(compareCmd), cmds.map((c) => c.id));
+		await compareCmd.run();
+		await tickCmp();
+		check("opening compare fetches the ref list", cmpRequests.some((r) => r.url.endsWith("/git.branches")) && Boolean(getCmp((n) => n.type === CompareRefsPaletteCmp)), null);
+		getCmp((n) => n.type === CompareRefsPaletteCmp).props.onRun("main", "feat");
+		await tickCmp();
+		check("running the compare asks the host for the range", cmpRequests.some((r) => r.url.endsWith("/git.compare") && r.body.base === "main" && r.body.head === "feat"), null);
+		const panel = getCmp((n) => n.type === ChangesPanelCmp);
+		check("the compare result lands on the Changes panel", panel.props.compare.files.length === 2 && panel.props.compare.headName === "feat", panel.props.compare);
+		panel.props.onOpenDiff("src/a.txt", "compare", null, { base: "main", head: "feat" });
+		await tickCmp();
+		check("opening a compared file requests the compare-scope diff", cmpRequests.some((r) => r.url.endsWith("/git.diff") && r.body.scope === "compare" && r.body.base === "main"), null);
+		check("the compared diff renders in the diff view", getCmp((n) => n.type === DiffViewCmp) !== undefined || collect(cmpTree).some((n) => typeof n.props.className === "string" && n.props.className.includes("ce-diff")), null);
+		renderCmp.unmount();
+	} finally {
+		Object.assign(globalThis, cmpGlobals);
+	}
+}
+
 // --- the generated bundle: registration + factory --------------------------------------
 
 const bundle = await readFile(new URL("./client.js", import.meta.url), "utf8");
