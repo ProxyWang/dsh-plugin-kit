@@ -821,6 +821,28 @@ if (hasNpm) {
 	rmSync(cdir, { recursive: true, force: true });
 }
 
+// ---- Changes delete: untracked has no revert path ----
+{
+	const ddir = "/tmp/ce-delcheck";
+	rmSync(ddir, { recursive: true, force: true });
+	mkdirSync(ddir, { recursive: true });
+	writeFileSync(`${ddir}/tracked.txt`, "v1\n");
+	execFileSync("git", ["init", "-q", ddir], { stdio: "ignore" });
+	const gitD = (args) => execFileSync("git", args, { cwd: ddir, stdio: "ignore" });
+	gitD(["config", "user.email", "t@t"]); gitD(["config", "user.name", "t"]);
+	gitD(["add", "-A"]); gitD(["commit", "-qm", "init"]);
+	writeFileSync(`${ddir}/untracked.txt`, "new\n");
+	writeFileSync(`${ddir}/tracked.txt`, "v2\n");
+	const discUntracked = await call("git.discard", { cwd: ddir, path: "untracked.txt", ch: "U" });
+	check("git.discard refuses untracked with an explicit reason", discUntracked.ok && discUntracked.value.untracked === true && /no committed version/.test(discUntracked.value.error), discUntracked.value);
+	check("the refused discard left the untracked file on disk", existsSync(`${ddir}/untracked.txt`), null);
+	const discTracked = await call("git.discard", { cwd: ddir, path: "tracked.txt", ch: "M" });
+	check("git.discard still reverts tracked modifications", discTracked.ok && discTracked.value.error === void 0 && readFileSync(`${ddir}/tracked.txt`, "utf8") === "v1\n", discTracked.value);
+	const delUntracked = await call("fs.delete", { cwd: ddir, path: "untracked.txt" });
+	check("fs.delete removes the untracked file through the fence", delUntracked.ok && !existsSync(`${ddir}/untracked.txt`), delUntracked.value);
+	rmSync(ddir, { recursive: true, force: true });
+}
+
 for (const cleanup of cleanups) cleanup();
 console.log(`\n${pass} passed, ${fail} failed${skipped ? `, ${skipped} skipped` : ""}`);
 process.exit(fail ? 1 : 0);

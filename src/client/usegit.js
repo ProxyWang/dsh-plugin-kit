@@ -107,17 +107,68 @@ export function useGitActions({ cwd, t, say, git, setGit, repoSelRef, refreshGit
 		const repo = repoSelRef.current;
 		let okCount = 0;
 		const errors = [];
-		for (const item of dirItems) {
+		// Untracked files cannot be reverted (no HEAD blob). Skipping them here
+		// keeps a folder revert from failing with git's pathspec error, and the
+		// count is reported so the user knows real deletions are still pending.
+		const revertable = dirItems.filter((item) => item?.ch !== "U");
+		const skipped = dirItems.length - revertable.length;
+		for (const item of revertable) {
 			const res = await api("git.discard", repo ? { cwd, path: item.path, repo, ch: item.ch } : { cwd, path: item.path, ch: item.ch });
 			if (res.ok && !res.value?.error) okCount += 1;
 			else errors.push(`${item.path}: ${res.value?.error ?? res.error}`);
 		}
 		if (okCount > 0) say(t("changes.discardedN", { n: okCount }));
 		if (errors.length > 0) say(`${t("error")}: ${errors[0]}${errors.length > 1 ? ` (+${errors.length - 1})` : ""}`, "error");
+		else if (skipped > 0 && okCount === 0) say(t("changes.untrackedSkip", { n: skipped }), "error");
 		refreshGit();
 		const openPath = docRef.current?.path;
 		if (openPath && dirItems.some((i) => i.path === openPath)) void loadFile(openPath, cursorRef.current?.line ?? 1, cursorRef.current?.col ?? 1);
 	}, [cwd, say, t, refreshGit, loadFile]);
+	/* Untracked files have nothing to revert TO — the honest operation is
+	 * deleting them from disk. It goes through the fenced fs.delete route (the
+	 * same one the Explorer uses) rather than a git command, and the caller
+	 * has already asked for confirmation. Paths in git status are repo-relative,
+	 * so they are re-anchored on the repo root before the fence sees them. */
+	const toRepoSafePath = (path) => {
+		const clean = String(path ?? "");
+		if (clean.startsWith("/")) return clean;
+		const root = String(git?.root ?? "");
+		return root === "" ? clean : `${root}/${clean}`;
+	};
+	const deleteUntracked = useCallback(async (item) => {
+		if (!cwd || !item?.path) return false;
+		const res = await api("fs.delete", { cwd, path: toRepoSafePath(item.path) });
+		if (!res.ok || res.value?.error) {
+			say(`${t("error")}: ${res.value?.error ?? res.error}`, "error");
+			return false;
+		}
+		say(t("changes.deleted", { path: item.path }));
+		refreshGit();
+		// The document may be the file just deleted: drop the buffer instead of
+		// leaving a phantom tab that would fail on the next save.
+		if (docRef.current?.path === item.path) loadFile(item.path, 1, 1).catch(() => {});
+		return true;
+	}, [cwd, git, say, t, refreshGit, loadFile, docRef]);
+	const deleteUntrackedMany = useCallback(async (dirPath, dirItems) => {
+		if (!cwd) return 0;
+		const targets = Array.isArray(dirItems) && dirItems.length > 0 ? dirItems : [{ path: dirPath }];
+		let done = 0;
+		for (const item of targets) {
+			const res = await api("fs.delete", { cwd, path: toRepoSafePath(item.path) });
+			if (!res.ok || res.value?.error) {
+				say(`${t("error")}: ${res.value?.error ?? res.error}`, "error");
+				continue;
+			}
+			done += 1;
+			if (docRef.current?.path === item.path) loadFile(item.path, 1, 1).catch(() => {});
+		}
+		if (done > 0) {
+			say(t("changes.deletedN", { n: done }));
+			refreshGit();
+		}
+		return done;
+	}, [cwd, git, say, t, refreshGit, loadFile, docRef]);
+
 	// Stage / unstage one path or a whole directory ("" = whole repo). Rows
 	// moving between the Staged/Changes sections is the feedback; only errors
 	// raise a notice.

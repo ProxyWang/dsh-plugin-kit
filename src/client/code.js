@@ -269,6 +269,21 @@ export function CodeBody(props) {
 		return false;
 	}, [say, t]);
 
+	// A path that left the disk (Explorer delete, Changes untracked delete) must
+	// not linger as a tab or an open buffer: saving it would only fail.
+	const forgetPath = useCallback((path) => {
+		const clean = String(path ?? "");
+		if (clean === "") return;
+		setTabs((prev) => prev.filter((p) => p !== clean && !p.startsWith(`${clean}/`)));
+		const open = docRef.current?.path;
+		if (open && (open === clean || open.startsWith(`${clean}/`))) {
+			setDoc(null);
+			setEditing(false);
+			setDiffMarks(null);
+			setDelGroups(null);
+		}
+	}, []);
+
 	const loadFile = useCallback(
 		async (path, line, col, mark, opts) => {
 			if (!cwd || (!opts?.background && !canNavigate())) return null;
@@ -437,7 +452,7 @@ export function CodeBody(props) {
 
 	// All mutating git operations (fetch/pull/push, discard, stage/commit)
 	// live in the useGitActions hook; results fold back through setGit/say.
-	const { sync, committing, doFetch, doPull, doPush, discardChange, discardMany, stageChange, unstageChange, commitChanges } = useGitActions({
+	const { sync, committing, doFetch, doPull, doPush, discardChange, discardMany, deleteUntracked, deleteUntrackedMany, stageChange, unstageChange, commitChanges } = useGitActions({
 		cwd, t, say, git, setGit, repoSelRef, refreshGit, loadFile, docRef, cursorRef, modeRef,
 	});
 
@@ -1793,18 +1808,12 @@ export function CodeBody(props) {
 						staleTick: stale.tick,
 						staleDirs: stale.dirs,
 						onNotify: (text, kind) => say(text, kind),
-						onDeleted: (path) => {
-							setTabs((prev) => prev.filter((p) => p !== path && !p.startsWith(`${path}/`)));
-							const open = docRef.current?.path;
-							if (open && (open === path || open.startsWith(`${path}/`))) {
-								setDoc(null);
-								setEditing(false);
-								setDiffMarks(null);
-							}
-						},
+						onDeleted: forgetPath,
 					})
 					: h(ChangesPanel, {
 						cwd, sessionId,
+						onDelete: (item) => void deleteUntracked(item).then((ok) => { if (ok) forgetPath(item.path); }),
+						onDeleteDir: (dirPath, dirItems) => void deleteUntrackedMany(dirPath, dirItems).then((n) => { if (n > 0) forgetPath(dirPath); }),
 						t,
 						git,
 						repos,

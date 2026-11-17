@@ -260,6 +260,12 @@ var zh = {
   "changes.discarded": "已回退变更",
   "changes.discardDir": "回退该目录下全部变更",
   "changes.discardedN": "已回退 {n} 个文件",
+  "changes.deleteUntracked": "删除未跟踪文件（从磁盘移除，不可通过本插件撤销）",
+  "changes.deleteDir": "删除该目录及其中全部未跟踪文件",
+  "changes.confirmDelete": "再次点击确认删除",
+  "changes.deleted": "已从磁盘删除 {path}",
+  "changes.deletedN": "已从磁盘删除 {n} 个文件",
+  "changes.untrackedSkip": "{n} 个未跟踪文件无法回退——请用删除按钮（🗑）",
   "changes.toList": "平铺",
   "changes.toTree": "树状",
   "changes.staged": "暂存的变更",
@@ -862,6 +868,12 @@ var en = {
   "changes.discarded": "Changes reverted",
   "changes.discardDir": "Discard all changes in this folder",
   "changes.discardedN": "Reverted {n} files",
+  "changes.deleteUntracked": "Delete untracked file (removed from disk; not undoable here)",
+  "changes.deleteDir": "Delete this folder and all its untracked files",
+  "changes.confirmDelete": "Click again to confirm deletion",
+  "changes.deleted": "Deleted {path} from disk",
+  "changes.deletedN": "Deleted {n} files from disk",
+  "changes.untrackedSkip": "{n} untracked file(s) cannot be reverted — use the delete button (🗑)",
   "changes.toList": "List",
   "changes.toTree": "Tree",
   "changes.staged": "Staged Changes",
@@ -2526,13 +2538,19 @@ function guideStyle(depth) {
     backgroundPosition: images.map((_, i) => `${7 + i * 14}px 0`).join(",")
   };
 }
-function ChangeTree({ items, onOpen, onDiscard, onDiscardDir, onStage, onStageDir, onUnstage, onUnstageDir, keyPrefix, t, cwd, repo, scope = "working", sessionId, onCopyPath }) {
+function ChangeTree({ items, onOpen, onDiscard, onDiscardDir, onDelete, onDeleteDir, onStage, onStageDir, onUnstage, onUnstageDir, keyPrefix, t, cwd, repo, scope = "working", sessionId, onCopyPath }) {
   const [collapsed, setCollapsed] = useState(() => /* @__PURE__ */ new Set());
   const [confirmPath, setConfirmPath] = useState(null);
   const [confirmDir, setConfirmDir] = useState(null);
   const confirmRef = useDismissLayer({ open: confirmPath !== null || confirmDir !== null, onDismiss: () => {
     setConfirmPath(null);
     setConfirmDir(null);
+  } });
+  const [deletePath, setDeletePath] = useState(null);
+  const [deleteDir, setDeleteDir] = useState(null);
+  const deleteRef = useDismissLayer({ open: deletePath !== null || deleteDir !== null, onDismiss: () => {
+    setDeletePath(null);
+    setDeleteDir(null);
   } });
   const tree = useMemo(() => buildTree(items ?? []), [items]);
   const dupNames = useMemo(() => {
@@ -2623,6 +2641,38 @@ function ChangeTree({ items, onOpen, onDiscard, onDiscardDir, onStage, onStageDi
               setConfirmDir(id);
             }
           }, "⟲") : null,
+          onDeleteDir && filesUnder(dir).every((f) => String(f.ch) === "U") ? deleteDir === id ? h(
+            "span",
+            { ref: deleteRef },
+            h("button", {
+              type: "button",
+              className: "cet-act cet-act-show cet-act-danger",
+              title: t ? t("changes.confirmDelete") : "confirm delete",
+              onClick: (e) => {
+                e.stopPropagation();
+                setDeleteDir(null);
+                onDeleteDir(id, filesUnder(dir));
+              }
+            }, t ? t("changes.confirm") : "?"),
+            h("button", {
+              type: "button",
+              className: "cet-act cet-act-show",
+              onClick: (e) => {
+                e.stopPropagation();
+                setDeleteDir(null);
+              }
+            }, t ? t("changes.cancel") : "x")
+          ) : h("button", {
+            type: "button",
+            className: "cet-act cet-act-delete",
+            title: t ? t("changes.deleteDir") : "delete folder",
+            onClick: (e) => {
+              e.stopPropagation();
+              setConfirmPath(null);
+              setConfirmDir(null);
+              setDeleteDir(id);
+            }
+          }, "🗑") : null,
           h("span", { className: "cet-count" }, String(dir.count))
         )
       ));
@@ -2705,6 +2755,38 @@ function ChangeTree({ items, onOpen, onDiscard, onDiscardDir, onStage, onStageDi
               setConfirmPath(file.path);
             }
           }, "⟲") : null,
+          onDelete && String(file.ch) === "U" ? deletePath === file.path ? h(
+            "span",
+            { ref: deleteRef },
+            h("button", {
+              type: "button",
+              className: "cet-act cet-act-show cet-act-danger",
+              title: t ? t("changes.confirmDelete") : "confirm delete",
+              onClick: (e) => {
+                e.stopPropagation();
+                setDeletePath(null);
+                onDelete(file);
+              }
+            }, t ? t("changes.confirm") : "?"),
+            h("button", {
+              type: "button",
+              className: "cet-act cet-act-show",
+              onClick: (e) => {
+                e.stopPropagation();
+                setDeletePath(null);
+              }
+            }, t ? t("changes.cancel") : "x")
+          ) : h("button", {
+            type: "button",
+            className: "cet-act cet-act-delete",
+            title: t ? t("changes.deleteUntracked") : "delete file",
+            onClick: (e) => {
+              e.stopPropagation();
+              setConfirmPath(null);
+              setConfirmDir(null);
+              setDeletePath(file.path);
+            }
+          }, "🗑") : null,
           h("span", { className: `cet-status cet-st-${String(file.ch).toLowerCase()}` }, file.ch)
         )
       ));
@@ -3230,7 +3312,7 @@ function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshKey, sta
 function isStagedXy(xy) {
   return typeof xy === "string" && xy.length > 0 && xy[0] !== " " && xy[0] !== "?";
 }
-function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commitsOpen, setCommitsOpen, onOpenCommit, onOpenDiff, onDiscard, onDiscardDir, onStage, onStageDir, onUnstage, onUnstageDir, onCommit, committing, onNotify, refresh, sessionId, onCherryPick, onResolve, onSequencer, compare, setCompare, seqDisabled }) {
+function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commitsOpen, setCommitsOpen, onOpenCommit, onOpenDiff, onDiscard, onDiscardDir, onDelete, onDeleteDir, onStage, onStageDir, onUnstage, onUnstageDir, onCommit, committing, onNotify, refresh, sessionId, onCherryPick, onResolve, onSequencer, compare, setCompare, seqDisabled }) {
   const [treeView, setTreeView] = useState(true);
   const [message, setMessage] = useState("");
   const [amend, setAmend] = useState(false);
@@ -3243,6 +3325,7 @@ function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commitsOpen, 
   const [stashBusy, setStashBusy] = useState(false);
   const [stashConfirm, setStashConfirm] = useState(null);
   const [pickConfirm, setPickConfirm] = useState(null);
+  const [flatDelete, setFlatDelete] = useState(null);
   const stashSaveRef = useDismissLayer({ open: stashSaving, onDismiss: () => setStashSaving(false), ignoreSelector: '[data-ce-popup-trigger="stash-save"]' });
   const stashConfirmRef = useDismissLayer({ open: stashConfirm !== null, onDismiss: () => setStashConfirm(null) });
   const repoArgs = repoSel ? { cwd, repo: repoSel } : { cwd };
@@ -3321,7 +3404,20 @@ function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commitsOpen, 
         h("span", { className: `ce-badge ce-badge-${badge(file.xy).toLowerCase()}` }, badge(file.xy)),
         h("span", { className: "ce-name" }, file.path)
       ),
-      h("span", { className: "cet-right" }, h(CopyChangePathButton, { path: file.path, onCopyPath, t }))
+      h(
+        "span",
+        { className: "cet-right" },
+        onDelete && badge(file.xy) === "U" ? flatDelete === file.path ? h(
+          Fragment,
+          null,
+          h("button", { type: "button", className: "cet-act cet-act-show cet-act-danger", title: t("changes.confirmDelete"), onClick: () => {
+            setFlatDelete(null);
+            onDelete({ path: file.path, ch: "U" });
+          } }, t("changes.confirm")),
+          h("button", { type: "button", className: "cet-act cet-act-show", onClick: () => setFlatDelete(null) }, t("changes.cancel"))
+        ) : h("button", { type: "button", className: "cet-act cet-act-delete", title: t("changes.deleteUntracked"), onClick: () => setFlatDelete(file.path) }, "🗑") : null,
+        h(CopyChangePathButton, { path: file.path, onCopyPath, t })
+      )
     )
   );
   const submit = () => {
@@ -3437,6 +3533,8 @@ function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commitsOpen, 
         onOpen: (item) => onOpenDiff(item.path, "working"),
         onDiscard: (item) => onDiscard && onDiscard(item),
         onDiscardDir: (dirItems) => onDiscardDir && onDiscardDir(dirItems),
+        onDelete: onDelete ? (item) => onDelete(item) : null,
+        onDeleteDir: onDeleteDir ? (dirPath, dirItems) => onDeleteDir(dirPath, dirItems) : null,
         onStage: (item) => onStage && onStage(item),
         onStageDir: (dirPath) => onStageDir && onStageDir(dirPath),
         keyPrefix: "w",
@@ -5123,17 +5221,59 @@ function useGitActions({ cwd, t, say, git, setGit, repoSelRef, refreshGit, loadF
     const repo = repoSelRef.current;
     let okCount = 0;
     const errors = [];
-    for (const item of dirItems) {
+    const revertable = dirItems.filter((item) => item?.ch !== "U");
+    const skipped = dirItems.length - revertable.length;
+    for (const item of revertable) {
       const res = await api("git.discard", repo ? { cwd, path: item.path, repo, ch: item.ch } : { cwd, path: item.path, ch: item.ch });
       if (res.ok && !res.value?.error) okCount += 1;
       else errors.push(`${item.path}: ${res.value?.error ?? res.error}`);
     }
     if (okCount > 0) say(t("changes.discardedN", { n: okCount }));
     if (errors.length > 0) say(`${t("error")}: ${errors[0]}${errors.length > 1 ? ` (+${errors.length - 1})` : ""}`, "error");
+    else if (skipped > 0 && okCount === 0) say(t("changes.untrackedSkip", { n: skipped }), "error");
     refreshGit();
     const openPath = docRef.current?.path;
     if (openPath && dirItems.some((i) => i.path === openPath)) void loadFile(openPath, cursorRef.current?.line ?? 1, cursorRef.current?.col ?? 1);
   }, [cwd, say, t, refreshGit, loadFile]);
+  const toRepoSafePath = (path) => {
+    const clean = String(path ?? "");
+    if (clean.startsWith("/")) return clean;
+    const root = String(git?.root ?? "");
+    return root === "" ? clean : `${root}/${clean}`;
+  };
+  const deleteUntracked = useCallback(async (item) => {
+    if (!cwd || !item?.path) return false;
+    const res = await api("fs.delete", { cwd, path: toRepoSafePath(item.path) });
+    if (!res.ok || res.value?.error) {
+      say(`${t("error")}: ${res.value?.error ?? res.error}`, "error");
+      return false;
+    }
+    say(t("changes.deleted", { path: item.path }));
+    refreshGit();
+    if (docRef.current?.path === item.path) loadFile(item.path, 1, 1).catch(() => {
+    });
+    return true;
+  }, [cwd, git, say, t, refreshGit, loadFile, docRef]);
+  const deleteUntrackedMany = useCallback(async (dirPath, dirItems) => {
+    if (!cwd) return 0;
+    const targets = Array.isArray(dirItems) && dirItems.length > 0 ? dirItems : [{ path: dirPath }];
+    let done = 0;
+    for (const item of targets) {
+      const res = await api("fs.delete", { cwd, path: toRepoSafePath(item.path) });
+      if (!res.ok || res.value?.error) {
+        say(`${t("error")}: ${res.value?.error ?? res.error}`, "error");
+        continue;
+      }
+      done += 1;
+      if (docRef.current?.path === item.path) loadFile(item.path, 1, 1).catch(() => {
+      });
+    }
+    if (done > 0) {
+      say(t("changes.deletedN", { n: done }));
+      refreshGit();
+    }
+    return done;
+  }, [cwd, git, say, t, refreshGit, loadFile, docRef]);
   const stageChange = useCallback(async (path) => {
     if (!cwd) return false;
     const repo = repoSelRef.current;
@@ -5558,6 +5698,18 @@ function CodeBody(props) {
     say(t("editor.dirtyGuard"), "error");
     return false;
   }, [say, t]);
+  const forgetPath = useCallback((path) => {
+    const clean = String(path ?? "");
+    if (clean === "") return;
+    setTabs((prev) => prev.filter((p) => p !== clean && !p.startsWith(`${clean}/`)));
+    const open = docRef.current?.path;
+    if (open && (open === clean || open.startsWith(`${clean}/`))) {
+      setDoc(null);
+      setEditing(false);
+      setDiffMarks(null);
+      setDelGroups(null);
+    }
+  }, []);
   const loadFile = useCallback(
     async (path, line, col, mark, opts) => {
       if (!cwd || !opts?.background && !canNavigate()) return null;
@@ -5709,7 +5861,7 @@ function CodeBody(props) {
     },
     [loadFile, canNavigate]
   );
-  const { sync, committing, doFetch, doPull, doPush, discardChange, discardMany, stageChange, unstageChange, commitChanges } = useGitActions({
+  const { sync, committing, doFetch, doPull, doPush, discardChange, discardMany, deleteUntracked, deleteUntrackedMany, stageChange, unstageChange, commitChanges } = useGitActions({
     cwd,
     t,
     say,
@@ -7026,18 +7178,16 @@ function CodeBody(props) {
           staleTick: stale.tick,
           staleDirs: stale.dirs,
           onNotify: (text, kind) => say(text, kind),
-          onDeleted: (path) => {
-            setTabs((prev) => prev.filter((p) => p !== path && !p.startsWith(`${path}/`)));
-            const open = docRef.current?.path;
-            if (open && (open === path || open.startsWith(`${path}/`))) {
-              setDoc(null);
-              setEditing(false);
-              setDiffMarks(null);
-            }
-          }
+          onDeleted: forgetPath
         }) : h(ChangesPanel, {
           cwd,
           sessionId,
+          onDelete: (item) => void deleteUntracked(item).then((ok) => {
+            if (ok) forgetPath(item.path);
+          }),
+          onDeleteDir: (dirPath, dirItems) => void deleteUntrackedMany(dirPath, dirItems).then((n) => {
+            if (n > 0) forgetPath(dirPath);
+          }),
           t,
           git,
           repos,
@@ -7836,6 +7986,7 @@ var CSS2 = `
 .cet-act{border:0;background:transparent;color:var(--dsw-alias-label-tertiary,#889);cursor:pointer;font:inherit;font-size:12px;line-height:1;padding:2px 5px;border-radius:4px;opacity:0;transition:opacity .1s}
 .cet-row:hover .cet-act{opacity:1}
 .cet-act-show{opacity:1}
+.cet-act-delete:hover,.cet-act-danger{color:var(--dsw-alias-state-error-primary,#f85149)}
 .cet-act:hover{color:var(--dsw-alias-label-primary,#ddd);background:var(--dsw-alias-interactive-bg-hover,#2b2b2b)}
 .cet-act-danger{color:var(--dsw-alias-state-error-primary,#f85149);font-size:11px}.cet-context{position:fixed;z-index:100001;min-width:190px;max-width:260px;padding:4px;background:var(--dsw-alias-bg-layer-2,#24272c);border:.5px solid var(--dsw-alias-border-l2,#444);border-radius:7px;box-shadow:0 8px 24px rgba(0,0,0,.28);color:var(--dsw-alias-label-primary,#ddd)}
 .cet-context-path{padding:6px 9px;color:var(--dsw-alias-label-tertiary,#889);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}

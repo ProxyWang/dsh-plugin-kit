@@ -259,6 +259,54 @@ check("changes panel renders the stash section", sections.some((s) => JSON.strin
 const changesSearch = panelNodes.find((n) => n.props?.className === "ce-changes-search");
 check("changes panel keeps path filtering separate from shared toolbar search", Boolean(changesSearch) && collect(changesSearch).some((n) => n.type === "input" && n.props.type === "search") && !collect(changesSearch).some((n) => n.type === "button"), null);
 
+// --- Changes: untracked files get a DELETE action (revert cannot apply) ----------------------
+{
+	const { createHookRenderer } = await import("./test-support/react-stub.mjs");
+	const deletions = [];
+	const dirDeletions = [];
+	const reverts = [];
+	const baseProps = {
+		cwd: "/w", repo: "/w", scope: "working", t: (key) => key,
+		onOpen() {},
+		onDelete: (item) => deletions.push(item.path),
+		onDeleteDir: (dirPath, list) => dirDeletions.push([dirPath, list.length]),
+		onDiscard: (item) => reverts.push(item.path),
+		onDiscardDir: () => {},
+	};
+	const items = [
+		{ path: "notes/untracked-a.txt", ch: "U" },
+		{ path: "notes/untracked-b.zip", ch: "U" },
+		{ path: "src/tracked.go", ch: "M" },
+	];
+	const renderDT = createHookRenderer(ChangeTreeCmp, { ...baseProps, items, keyPrefix: "dt" }, { effects: true });
+	let dtTree = renderDT();
+	renderDT.flushEffects();
+	const dtFind = (test) => collect(dtTree).find(test);
+	const delButtons = () => collect(dtTree).filter((n) => n.type === "button" && n.props.title === "changes.deleteUntracked");
+	check("untracked rows expose a delete action, tracked rows do not", delButtons().length === 2, delButtons().length);
+	check("tracked rows keep the revert action instead", collect(dtTree).some((n) => n.type === "button" && n.props.title === "changes.discard"), null);
+	check("an all-untracked folder offers folder deletion", collect(dtTree).some((n) => n.type === "button" && n.props.title === "changes.deleteDir"), null);
+	// Two-step: the first click only arms, the second deletes exactly that file.
+	delButtons()[0].props.onClick({ stopPropagation() {} });
+	dtTree = renderDT();
+	renderDT.flushEffects();
+	check("arming a delete removes nothing", deletions.length === 0, deletions);
+	const confirmDelete = dtFind((n) => n.type === "button" && n.props.title === "changes.confirmDelete");
+	check("the confirm control appears after arming", Boolean(confirmDelete), null);
+	confirmDelete.props.onClick({ stopPropagation() {} });
+	check("confirming deletes exactly the armed file", deletions.join() === "notes/untracked-a.txt", deletions);
+	const mixed = createHookRenderer(ChangeTreeCmp, {
+		...baseProps,
+		items: [{ path: "mixed/one.txt", ch: "U" }, { path: "mixed/two.go", ch: "M" }],
+		keyPrefix: "dt2",
+	}, { effects: true });
+	let mixedTree = mixed();
+	mixed.flushEffects();
+	check("a mixed folder offers no folder-level delete", !collect(mixedTree).some((n) => n.type === "button" && n.props.title === "changes.deleteDir"), null);
+	check("a mixed folder still offers folder revert", collect(mixedTree).some((n) => n.type === "button" && n.props.title === "changes.discardDir"), null);
+	check("the untracked file inside a mixed folder is still individually deletable", collect(mixedTree).filter((n) => n.type === "button" && n.props.title === "changes.deleteUntracked").length === 1, null);
+}
+
 // --- Changes path copying in tree/list and staged/working/branch sections -------------------
 const { copyChangePath, CopyChangePathButton } = await import("./src/client/copypath.js");
 const navigatorDescriptor = Object.getOwnPropertyDescriptor(globalThis, "navigator");

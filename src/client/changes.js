@@ -13,7 +13,7 @@ export function isStagedXy(xy) {
 	return typeof xy === "string" && xy.length > 0 && xy[0] !== " " && xy[0] !== "?";
 }
 
-export function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commitsOpen, setCommitsOpen, onOpenCommit, onOpenDiff, onDiscard, onDiscardDir, onStage, onStageDir, onUnstage, onUnstageDir, onCommit, committing, onNotify, refresh, sessionId, onCherryPick, onResolve, onSequencer, compare, setCompare, seqDisabled }) {
+export function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commitsOpen, setCommitsOpen, onOpenCommit, onOpenDiff, onDiscard, onDiscardDir, onDelete, onDeleteDir, onStage, onStageDir, onUnstage, onUnstageDir, onCommit, committing, onNotify, refresh, sessionId, onCherryPick, onResolve, onSequencer, compare, setCompare, seqDisabled }) {
 	const [treeView, setTreeView] = useState(true);
 	const [message, setMessage] = useState("");
 	const [amend, setAmend] = useState(false);
@@ -28,6 +28,8 @@ export function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commit
 	const [stashConfirm, setStashConfirm] = useState(null);
 	// Two-step commit for cherry-pick: first click arms, second picks.
 	const [pickConfirm, setPickConfirm] = useState(null);
+	// Flat view renders rows in a plain map, so its delete confirmation lives here.
+	const [flatDelete, setFlatDelete] = useState(null);
 	const stashSaveRef = useDismissLayer({ open: stashSaving, onDismiss: () => setStashSaving(false), ignoreSelector: '[data-ce-popup-trigger="stash-save"]' });
 	const stashConfirmRef = useDismissLayer({ open: stashConfirm !== null, onDismiss: () => setStashConfirm(null) });
 	const repoArgs = repoSel ? { cwd, repo: repoSel } : { cwd };
@@ -110,7 +112,15 @@ export function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commit
 			h("button", { type: "button", className: "ctp-entry-open", onClick: () => onOpenDiff(file.path, scope) },
 				h("span", { className: `ce-badge ce-badge-${badge(file.xy).toLowerCase()}` }, badge(file.xy)),
 				h("span", { className: "ce-name" }, file.path)),
-			h("span", { className: "cet-right" }, h(CopyChangePathButton, { path: file.path, onCopyPath, t })),
+			h("span", { className: "cet-right" },
+				onDelete && badge(file.xy) === "U"
+					? (flatDelete === file.path
+						? h(Fragment, null,
+							h("button", { type: "button", className: "cet-act cet-act-show cet-act-danger", title: t("changes.confirmDelete"), onClick: () => { setFlatDelete(null); onDelete({ path: file.path, ch: "U" }); } }, t("changes.confirm")),
+							h("button", { type: "button", className: "cet-act cet-act-show", onClick: () => setFlatDelete(null) }, t("changes.cancel")))
+						: h("button", { type: "button", className: "cet-act cet-act-delete", title: t("changes.deleteUntracked"), onClick: () => setFlatDelete(file.path) }, "🗑"))
+					: null,
+				h(CopyChangePathButton, { path: file.path, onCopyPath, t })),
 		),
 	);
 
@@ -231,6 +241,8 @@ export function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commit
 				onOpen: (item) => onOpenDiff(item.path, "working"),
 				onDiscard: (item) => onDiscard && onDiscard(item),
 				onDiscardDir: (dirItems) => onDiscardDir && onDiscardDir(dirItems),
+				onDelete: onDelete ? (item) => onDelete(item) : null,
+				onDeleteDir: onDeleteDir ? (dirPath, dirItems) => onDeleteDir(dirPath, dirItems) : null,
 				onStage: (item) => onStage && onStage(item),
 				onStageDir: (dirPath) => onStageDir && onStageDir(dirPath),
 				keyPrefix: "w",

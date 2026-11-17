@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased — Changes: delete untracked files (and stop the misleading revert error)
+
+Reverting an untracked file was impossible, but the UI offered no alternative and a folder-level revert sent `U` entries into `git checkout HEAD --`, which answers with git's pathspec error — the banner users saw was `pathspec ':(literal)…' did not match any file(s) known to git`. Two separate problems: a missing destructive action, and a folder action silently mixing it in.
+
+- **Per-row delete for untracked files** (`🗑` in Changes, tree and flat views) with its own two-step confirmation — a delete must never be one stray click, and its confirmation state is deliberately separate from revert's so the two cannot arm each other. Tracked rows keep `⟲` revert and still never show a delete control. An all-untracked folder gets a folder-level delete; a mixed folder does not (it keeps folder revert, while its untracked files stay individually deletable).
+- Deletion goes through the existing fenced `fs.delete` route (the same one the Explorer uses), with git-status paths re-anchored on the repo root first; a deleted file's tab and buffer are dropped through one shared `forgetPath`, so no phantom editor survives to fail on the next save.
+- `git.discard` now refuses `ch:"U"` up front with `untracked: true` and a reason that says why, instead of leaking a git pathspec error that reads like a plugin bug. Folder revert skips untracked entries and reports the skipped count (`{n} 个未跟踪文件无法回退——请用删除按钮`).
+- Regressions: host — untracked discard refused with its explicit reason and the file left intact, tracked revert still works, `fs.delete` removes the untracked file through the fence; client — delete only on untracked rows, revert kept on tracked rows, all-untracked folder offers folder delete while a mixed folder does not, arming deletes nothing, the confirm control appears after arming, and confirming deletes exactly the armed file.
+
 ## Unreleased — API: collections live on disk (a folder of .bru files)
 
 - The request workbench gains a **collection folder** (workspace-relative, remembered per profile): two host routes make it real. `collection.load` walks the directory recursively (≤200 entries), keeps only `*.bru` outside hidden path segments, caps reads at 256 KiB, and refuses escaping the workspace; `collection.save` writes `<name>.bru` — names with `/`, `..` or leading dots refused, existing directory required (no silent mkdir), fence-checked, optional `baseMtime` for reload-before-overwrite honesty.

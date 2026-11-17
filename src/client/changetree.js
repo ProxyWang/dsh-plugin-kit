@@ -110,11 +110,17 @@ function guideStyle(depth) {
  * Optional row actions: onStage/onUnstage per file, onStageDir/onUnstageDir per
  * folder (called with the folder's repo-relative path), and the two-step-confirm
  * onDiscard/onDiscardDir pair. */
-export function ChangeTree({ items, onOpen, onDiscard, onDiscardDir, onStage, onStageDir, onUnstage, onUnstageDir, keyPrefix, t, cwd, repo, scope = "working", sessionId, onCopyPath }) {
+export function ChangeTree({ items, onOpen, onDiscard, onDiscardDir, onDelete, onDeleteDir, onStage, onStageDir, onUnstage, onUnstageDir, keyPrefix, t, cwd, repo, scope = "working", sessionId, onCopyPath }) {
 	const [collapsed, setCollapsed] = useState(() => new Set());
 	const [confirmPath, setConfirmPath] = useState(null);
 	const [confirmDir, setConfirmDir] = useState(null);
 	const confirmRef = useDismissLayer({ open: confirmPath !== null || confirmDir !== null, onDismiss: () => { setConfirmPath(null); setConfirmDir(null); } });
+	// Deletion is a different, irreversible operation than reverting, so it
+	// carries its own confirmation state: a stray click must never remove a
+	// file, and the two confirmations cannot arm each other.
+	const [deletePath, setDeletePath] = useState(null);
+	const [deleteDir, setDeleteDir] = useState(null);
+	const deleteRef = useDismissLayer({ open: deletePath !== null || deleteDir !== null, onDismiss: () => { setDeletePath(null); setDeleteDir(null); } });
 	const tree = useMemo(() => buildTree(items ?? []), [items]);
 	const dupNames = useMemo(() => {
 		const counts = new Map();
@@ -204,6 +210,40 @@ export function ChangeTree({ items, onOpen, onDiscard, onDiscardDir, onStage, on
 							},
 						}, "⟲"))
 					: null,
+				onDeleteDir && filesUnder(dir).every((f) => String(f.ch) === "U")
+					? (deleteDir === id
+						? h("span", { ref: deleteRef },
+							h("button", {
+								type: "button",
+								className: "cet-act cet-act-show cet-act-danger",
+								title: t ? t("changes.confirmDelete") : "confirm delete",
+								onClick: (e) => {
+									e.stopPropagation();
+									setDeleteDir(null);
+									onDeleteDir(id, filesUnder(dir));
+								},
+							}, t ? t("changes.confirm") : "?"),
+							h("button", {
+								type: "button",
+								className: "cet-act cet-act-show",
+								onClick: (e) => {
+									e.stopPropagation();
+									setDeleteDir(null);
+								},
+							}, t ? t("changes.cancel") : "x"),
+						)
+						: h("button", {
+							type: "button",
+							className: "cet-act cet-act-delete",
+							title: t ? t("changes.deleteDir") : "delete folder",
+							onClick: (e) => {
+								e.stopPropagation();
+								setConfirmPath(null);
+								setConfirmDir(null);
+								setDeleteDir(id);
+							},
+						}, "🗑"))
+					: null,
 				h("span", { className: "cet-count" }, String(dir.count)),
 			),
 			));
@@ -280,6 +320,40 @@ export function ChangeTree({ items, onOpen, onDiscard, onDiscardDir, onStage, on
 								setConfirmPath(file.path);
 							},
 						}, "⟲"))
+					: null,
+				onDelete && String(file.ch) === "U"
+					? (deletePath === file.path
+						? h("span", { ref: deleteRef },
+							h("button", {
+								type: "button",
+								className: "cet-act cet-act-show cet-act-danger",
+								title: t ? t("changes.confirmDelete") : "confirm delete",
+								onClick: (e) => {
+									e.stopPropagation();
+									setDeletePath(null);
+									onDelete(file);
+								},
+							}, t ? t("changes.confirm") : "?"),
+							h("button", {
+								type: "button",
+								className: "cet-act cet-act-show",
+								onClick: (e) => {
+									e.stopPropagation();
+									setDeletePath(null);
+								},
+							}, t ? t("changes.cancel") : "x"),
+						)
+						: h("button", {
+							type: "button",
+							className: "cet-act cet-act-delete",
+							title: t ? t("changes.deleteUntracked") : "delete file",
+							onClick: (e) => {
+								e.stopPropagation();
+								setConfirmPath(null);
+								setConfirmDir(null);
+								setDeletePath(file.path);
+							},
+						}, "🗑"))
 					: null,
 				h("span", { className: `cet-status cet-st-${String(file.ch).toLowerCase()}` }, file.ch),
 			),
