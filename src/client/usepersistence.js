@@ -11,9 +11,9 @@ import { useEffect, useRef } from "./react.js";
  */
 export function useNavPersistence(params) {
 	const {
-		persistKey, cwd, doc, cursor, scroll, mode, railW, railVisible, wrapOn, findOpts, tabs, histTick,
+		persistKey, cwd, doc, cursor, scroll, mode, railW, railVisible, wrapOn, findOpts, tabs, pinned, histTick,
 		histRef, docRef, codeRef, loadFile,
-		setRailW, setRailVisible, setWrapOn, setFindOpts, setTabs, setMode, setHistTick, setScroll,
+		setRailW, setRailVisible, setWrapOn, setFindOpts, setTabs, setPinned, setMode, setHistTick, setScroll,
 	} = params;
 	const restoredFor = useRef(null);
 	const latestPersistRef = useRef(null);
@@ -33,6 +33,7 @@ export function useNavPersistence(params) {
 		if (typeof blob.wrapOn === "boolean") setWrapOn(blob.wrapOn);
 		if (blob.findOpts && typeof blob.findOpts === "object") setFindOpts({ regex: blob.findOpts.regex === true, caseSensitive: blob.findOpts.caseSensitive === true, words: blob.findOpts.words === true });
 		if (Array.isArray(blob.tabs)) setTabs(blob.tabs.filter((p) => typeof p === "string" && p !== "").slice(0, 15));
+		if (Array.isArray(blob.pinned) && setPinned) setPinned(blob.pinned.filter((p) => typeof p === "string" && p !== "").slice(0, 15));
 		if (typeof blob.mode === "string") setMode(blob.mode === "skills" ? "files" : blob.mode);
 		if (blob.path && !docRef.current) {
 			histRef.current = { back: Array.isArray(blob.back) ? blob.back : [], forward: Array.isArray(blob.forward) ? blob.forward : [] };
@@ -59,6 +60,7 @@ export function useNavPersistence(params) {
 			wrapOn,
 			findOpts,
 			tabs,
+			pinned,
 			back: histRef.current.back.slice(-40),
 			forward: histRef.current.forward.slice(-40),
 		};
@@ -69,7 +71,7 @@ export function useNavPersistence(params) {
 				localStorage.setItem(persistKey, JSON.stringify(payload));
 			} catch {}
 		}, 700);
-	}, [persistKey, doc, cursor, scroll, mode, railW, railVisible, wrapOn, findOpts, tabs, histTick]);
+	}, [persistKey, doc, cursor, scroll, mode, railW, railVisible, wrapOn, findOpts, tabs, pinned, histTick]);
 
 	useEffect(() => () => {
 		if (saveTimer.current) clearTimeout(saveTimer.current);

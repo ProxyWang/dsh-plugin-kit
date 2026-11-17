@@ -12,6 +12,8 @@ Left entry clicks are toggles: with the workspace visible, an existing matching 
 
 Behavior tests cover these contracts with simulated synchronous host stores. A live authenticated DSH end-to-end click check has not been performed.
 
+The right column opens at the widest the frame allows. The host seeds its width preference at 45% of the frame on the first opening and keeps a drag afterwards, so `rightbarwidth.js` writes the preference once before any opening: the request is above the host's own ceiling, which is what "maximum" means there (`[300 px, 70 %]` plus the frame's 400 px centre reservation), so the host keeps ownership of its ratios. Because that ceiling is a fraction of the frame, a widened window re-pins the pending request while nothing has been chosen and no panel is on screen. A settled drag is then measured from the rendered track and remembered, so the user's own width — not the maximum — is what a later opening restores, including after a reload. The width action is the layout service's internal store delegation, not the published `ILayout` face: the feature probes for it and installs nothing when a host has no such seam.
+
 ## Hierarchy
 
 - The toolbar identifies the current view and exposes navigation; the content rail carries search and file/change lists.
@@ -59,6 +61,8 @@ Navigation stays in the rail: workspace search and quick-open sit together. A na
 
 The Code surface is a compact IDE workbench rather than a file viewer. The command center is available from the toolbar and `⌘/Ctrl+Shift+P`; it exposes the same actions as the visible controls so keyboard and pointer workflows stay equivalent. Commands are filtered locally, support Up/Down/Enter/Escape, and close before running the action to preserve focus and avoid duplicate state transitions.
 
+VS Code's editor ergonomics are part of the same surface: the tab strip carries a Pin / Close / Close Others / Close to the Right / Close All context menu (pinned tabs move to the front and survive bulk closes, mirroring VS Code's excludeSticky), `⌘/Ctrl+Shift+T` reopens the most recently closed editor, the find widget grows a replace row (`⌘/Ctrl+Alt+F`) whose results always land in the reviewable edit buffer instead of writing to disk — with the `AB` preserve-case toggle ported from VS Code's search utilities — the active find match keeps a solid highlight with a distinct gutter color, and the diagnostics chip toggles a Problems panel (`⇧⌘M` / `Ctrl+Shift+M`) whose header carries error/warning/info count filters and whose rows jump to their line. Each of these also appears in the command center.
+
 The workbench keeps the file rail, editor tabs, symbol navigation, search and source control in one task context. This follows the navigation model described in [VS Code’s interface documentation](https://code.visualstudio.com/docs/editing/getting-started/userinterface) and [code navigation guide](https://code.visualstudio.com/docs/editing/editingevolved). The API and Skills tabs remain focused task surfaces: API keeps request, environment, history and response together; Skills keeps scope, preview, source and edit state together.
 
 
@@ -68,7 +72,11 @@ Changes are reviewed before committing: filtered staged/working files precede th
 
 Request configuration and response are independent scroll regions within a bounded workspace. A horizontal separator adjusts the request share from 24% to 72%; drag, Up/Down, Home/End and double-click reset are supported. The toolbar stays visible while long response bodies scroll.
 
-The API request builder uses a method/URL/Send row followed directly by configuration tabs. Query parameters, headers, form bodies and environment variables share a Name/Value/Description table with enable checkboxes, deletion and a trailing insert row. Variables live in a configuration tab. Disabled rows preserve their values in drafts, history and favorites and are excluded from sending and curl export. Below 560px, the table prioritizes names and values and hides the description column. Colors follow host theme tokens.
+The API request builder follows Bruno's task model: a method/URL/Send row followed by configuration tabs (Params, Headers, Body, Auth, Vars, Settings). The tool row carries import/export, code generation, favorites, history and — at its right end, like Bruno — the active-environment selector with a "No Environment" state. The URL bar and the Params table are two projections of one query string: each direction of the sync runs in its own input handler, never in an effect, so the two cannot ping-pong. `:name` path segments get a second Path Params table; they stay literal in the URL and substitute only into the wire request, following Bruno's `interpolateUrlPathParams`. Disabled rows survive URL edits so re-enabling them is one click, matching Bruno's collections reducer. Query parameters, headers, form bodies and environment variables share a Name/Value/Description table with enable checkboxes, deletion and a trailing insert row; the Vars tab edits the active environment and hosts rename/create/delete. Disabled rows preserve their values in drafts, history and favorites and are excluded from sending, the URL and curl export. Below 560px, the table prioritizes names and values and hides the description column. Colors follow host theme tokens.
+
+The import dialog accepts curl commands and Bruno `.bru` collection documents (auto-detected); the Code menu exports curl / fetch / Python snippets from the resolved request plus a `.bru` document that keeps `{{var}}` templates verbatim — the plain-text, Git-friendly property that defines Bruno collections.
+
+The response pane mirrors Bruno's Body / Headers / Timeline tabs. The timeline renders the resolved request actually put on the wire (post-substitution URL, final headers including the auth-generated one, body or multipart fields, timeout) plus response metadata, so variable resolution and auth folding are inspectable rather than implied.
 
 The new layout was checked with fixture component previews in light and dark at 1100px and 390px container widths; it has not been verified as an authenticated live DSH interaction.
 

@@ -12,6 +12,7 @@ import { installLeftTools, WorkspaceGuide } from "./lefttools.js";
 import { registerToolCloseGuard } from "./closeguard.js";
 import { installBrowser } from "./browserregister.js";
 import { createTerminalEntry } from "./terminal.js";
+import { installRightbarWidth } from "./rightbarwidth.js";
 
 export default {
 	inject: ["slots", "locale", "sidebarRightTabs", "sidebarRight", "layout"],
@@ -25,6 +26,10 @@ export default {
 			}
 		};
 		safe("styles", insertStyles);
+		// The host opens the right column at 45% of the frame; this workspace is
+		// an editor, so the first opening takes the widest the frame allows and a
+		// manual drag stays the user's own width afterwards.
+		safe("right sidebar width", () => installRightbarWidth({ layout: ctx.layout }));
 		const bound = ctx.locale.bind(NS);
 		safe("dictionaries", () => ctx.locale.register(NS, { zh, en }));
 		// The host owns interactive terminals; the workspace only opens one

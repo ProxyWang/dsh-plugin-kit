@@ -407,3 +407,67 @@ export function FileHistoryOverlay({ t, hist, onPick, onClose }) {
 		),
 	);
 }
+
+/** LSP severity → Problems-row glyph and class (1 error, 2 warning, 3 info, 4 hint). */
+export function problemSeverity(severity) {
+	if (severity === 1) return { glyph: "✕", cls: " ce-problem-err" };
+	if (severity === 2) return { glyph: "⚠", cls: " ce-problem-warn" };
+	if (severity === 3) return { glyph: "ℹ", cls: "" };
+	return { glyph: "·", cls: "" };
+}
+
+/**
+ * Problems panel (VS Code ⇧⌘M): the open file's LSP diagnostics sorted by
+ * position; clicking a row closes the panel and reveals the line. The header
+ * carries VS Code's severity filters (errors / warnings / infos) with counts.
+ */
+export function ProblemsPanel({ t, diagnostics, onPick, onClose }) {
+	const panelRef = useDismissLayer({ onDismiss: onClose });
+	const [filters, setFilters] = useState({ err: true, warn: true, info: true });
+	const all = useMemo(
+		() => [...(diagnostics ?? [])].sort((a, b) => (a.line ?? 0) - (b.line ?? 0) || (a.col ?? 0) - (b.col ?? 0)),
+		[diagnostics],
+	);
+	const bucketOf = (item) => (item?.severity === 1 ? "err" : item?.severity === 2 ? "warn" : "info");
+	const counts = useMemo(() => {
+		const c = { err: 0, warn: 0, info: 0 };
+		for (const item of all) c[bucketOf(item)]++;
+		return c;
+	}, [all]);
+	const items = all.filter((item) => filters[bucketOf(item)]);
+	return h(
+		"div",
+		{ className: "ce-overlay ce-problems", ref: panelRef, role: "dialog", "aria-label": t("problems.title"), onMouseDown: (event) => event.stopPropagation() },
+		h(
+			"div",
+			{ className: "ce-overlay-head" },
+			h("span", null, `${t("problems.title")} · ${items.length}${items.length !== all.length ? `/${all.length}` : ""}`),
+			h("span", { className: "ce-spacer" }),
+			[["err", "✕", "problems.showErr"], ["warn", "⚠", "problems.showWarn"], ["info", "ℹ", "problems.showInfo"]].map(([key, glyph, label]) =>
+				h("button", {
+					type: "button",
+					key,
+					className: `ce-tool ce-tiny ce-problem-filter${filters[key] ? "" : " ce-problem-off"}`,
+					"aria-pressed": filters[key],
+					title: t(label),
+					onClick: () => setFilters((f) => ({ ...f, [key]: !f[key] })),
+				}, `${glyph} ${counts[key]}`)),
+			h("button", { className: "ce-tool ce-tiny", type: "button", title: `${t("close")} (Esc)`, onClick: onClose }, "✕"),
+		),
+		h(
+			"div",
+			{ className: "ce-overlay-list ce-scroll" },
+			items.length === 0 ? h("div", { className: "ce-note" }, all.length === 0 ? t("problems.empty") : t("problems.filtered")) : null,
+			items.map((item, i) => {
+				const sev = problemSeverity(item.severity);
+				return h(
+					"button",
+					{ key: i, type: "button", className: "ce-loc", title: `${item.line}:${item.col}`, onClick: () => onPick(item) },
+					h("span", { className: `ce-problem-sev${sev.cls}` }, sev.glyph),
+					h("span", { className: "ce-loc-path" }, `${item.line}:${item.col}`),
+					h("span", { className: "ce-loc-snippet" }, `${item.source ? `${item.source}: ` : ""}${item.message ?? ""}`),
+				);
+			}),
+		),
+	);
+}

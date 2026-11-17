@@ -20,6 +20,9 @@ export function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshK
 	const [dragPath, setDragPath] = useState(null); // path being dragged (move source)
 	const [dropDir, setDropDir] = useState(null); // dir currently highlighted as drop target
 	const [contextMenu, setContextMenu] = useState(null); // {path, isDir, x, y}
+	const [copiedPath, setCopiedPath] = useState(null); // row showing the ✓ copy feedback
+	const copiedTimer = useRef(null);
+	useEffect(() => () => { if (copiedTimer.current) clearTimeout(copiedTimer.current); }, []);
 	const railRef = useRef(null);
 	const contextMenuRef = useDismissLayer({ open: Boolean(contextMenu), onDismiss: () => setContextMenu(null) });
 	const deleteRef = useDismissLayer({ open: action?.kind === "delete", onDismiss: () => { if (!deletePending.current) { setAction(null); setDeleteError(""); } }, ignoreSelector: '[data-ce-popup-trigger="tree-delete"]' });
@@ -222,9 +225,16 @@ export function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshK
 	};
 	const depthOf = (path) => (path === "" ? 0 : path.split("/").length);
 	// Clipboard copy: plain click → absolute path, ⌥/Alt-click → workspace-relative.
+	// Success flips the row's 📋 glyph to ✓ for ~1.4 s: the status-bar notice
+	// alone was easy to miss next to the tree rows.
 	const copyPath = (path, event) => {
 		const text = event?.altKey ? path : toAbs(cwd, path);
-		const ok = () => onNotify?.(t("tree.copied"));
+		const ok = () => {
+			setCopiedPath(path);
+			if (copiedTimer.current) clearTimeout(copiedTimer.current);
+			copiedTimer.current = setTimeout(() => setCopiedPath(null), 1400);
+			onNotify?.(t("tree.copied"));
+		};
 		const bad = () => onNotify?.(`${t("error")}: clipboard`, "error");
 		try {
 			const p = navigator.clipboard?.writeText(text);
@@ -299,13 +309,13 @@ export function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshK
 		}, "+") : null,
 		h(HintButton, {
 			type: "button",
-			className: "cet-act",
-			hint: t("tree.copyPath"),
+			className: copiedPath === path ? "cet-act cet-act-done" : "cet-act",
+			hint: copiedPath === path ? t("tree.copied") : t("tree.copyPath"),
 			onClick: (e) => {
 				e.stopPropagation();
 				copyPath(path, e);
 			},
-		}, "📋"),
+		}, copiedPath === path ? "✓" : "📋"),
 		h(HintButton, {
 			type: "button",
 			className: "cet-act",

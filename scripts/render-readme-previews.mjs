@@ -83,13 +83,28 @@ const pick = (tree, predicate) => { const node = collect(tree).find(predicate); 
 async function apiPreview() {
  const draw = createHookRenderer(ApiView, { t });
  let tree = draw();
- pick(tree, (node) => node.props.className === "ce-input cea-url").props.onChange({ target: { value: "https://api.example.test/v1/projects" } });
+ // Bruno-style environment: create one, name it, and use its variable in the URL.
+ pick(tree, (node) => node.props.className?.startsWith("cea-config-tab") && node.children[0] === t("api.environment")).props.onClick();
+ tree = draw();
+ pick(tree, (node) => node.props.title === t("api.envNewTitle")).props.onClick();
+ tree = draw();
+ pick(tree, (node) => node.props["aria-label"] === t("api.envName")).props.onChange({ target: { value: "演示环境" } });
+ tree = draw();
+ pick(tree, (node) => node.props["aria-label"] === t("api.envName")).props.onBlur();
+ tree = draw();
+ pick(tree, (node) => node.type === RequestFields).props.onChange([{ name: "base", value: "https://api.example.test", description: "示例服务地址" }]);
+ tree = draw();
+ pick(tree, (node) => node.props.className?.startsWith("cea-config-tab") && node.children[0] === t("api.params")).props.onClick();
+ tree = draw();
+ pick(tree, (node) => node.props.className === "ce-input cea-url").props.onChange({ target: { value: "{{base}}/v1/projects?limit=20&status=active" } });
  tree = draw();
  pick(tree, (node) => node.type === RequestFields).props.onChange([{ name: "limit", value: "20", description: "每页项目数量" }, { name: "status", value: "active", description: "筛选项目状态" }]);
  tree = draw();
  pick(tree, (node) => node.props.className?.startsWith("cea-config-tab") && node.children[0] === t("api.headers")).props.onClick();
  tree = draw();
  pick(tree, (node) => node.type === RequestFields).props.onChange([{ name: "Accept", value: "application/json", description: "响应数据格式" }, { name: "X-Demo-Mode", value: "true", description: "虚构示例标记" }, { name: "X-Debug", value: "verbose", description: "已停用的示例请求头", enabled: false }]);
+ tree = draw();
+ pick(tree, (node) => node.props.className?.startsWith("cea-config-tab") && node.children[0] === t("api.params")).props.onClick();
  tree = draw();
  pick(tree, (node) => node.props.className === "ce-sk-btn cea-send").props.onClick();
  await tick();
@@ -124,12 +139,25 @@ async function codePreview() {
 
 const escape = (value) => String(value).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
 const voids = new Set(["input", "col", "br", "hr", "img"]);
+// Static HTML has no controlled <select value>: mark the matching option so
+// Chrome screenshots show the component's real selection (env picker, method).
+function withSelectedOption(node) {
+ if (node?.type !== "select" || node.props?.value === undefined) return node;
+ const mark = (child) => {
+  if (Array.isArray(child)) return child.map(mark);
+  if (!child || typeof child !== "object") return child;
+  if (child.type === "option" && child.props?.value === node.props.value) return { ...child, props: { ...child.props, selected: true } };
+  return child;
+ };
+ return { ...node, children: mark(node.children) };
+}
 function serialize(node) {
  if (node == null || typeof node === "boolean") return "";
  if (Array.isArray(node)) return node.map(serialize).join("");
  if (typeof node !== "object") return escape(node);
  if (typeof node.type === "function") return serialize(createHookRenderer(node.type, node.props)());
  if (typeof node.type === "symbol") return serialize(node.children);
+ node = withSelectedOption(node);
  // File rows contain nested action buttons in React. Static HTML uses an inert
  // wrapper so the HTML parser cannot split those rows; this is a layout preview.
  const type = node.type === "button" && node.props.className?.split(" ").includes("ce-row") ? "div" : node.type;

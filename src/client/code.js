@@ -13,9 +13,10 @@ import { BranchPalette } from "./branchpick.js";
 import { RelPath, toAbs } from "./pathtools.js";
 import { TreePanel } from "./tree.js";
 import { ChangesPanel } from "./changes.js";
-import { LocationList, QuickOpen, CommandPalette, RefsPeek, SymbolPalette, GotoLinePalette, FileHistoryOverlay } from "./overlays.js";
+import { LocationList, QuickOpen, CommandPalette, RefsPeek, SymbolPalette, GotoLinePalette, FileHistoryOverlay, ProblemsPanel } from "./overlays.js";
 import { SearchPanel } from "./searchpanel.js";
-import { computeGutter, computeVisible, computeWrapRows, compileFindRe, findRangesInLine, WRAP_LINE_CAP } from "./codeview.js";
+import { applyReplace, computeGutter, computeVisible, computeWrapRows, compileFindRe, findRangesInLine, WRAP_LINE_CAP } from "./codeview.js";
+import { closeOtherTabs, closeTabsToRight, excludePinned, pinTab, popClosedTab, pushClosedTab, removedPaths } from "./tabs.js";
 import { useGitActions } from "./usegit.js";
 import { useNavPersistence } from "./usepersistence.js";
 import { fileDragProps, hasFileDrag, readFileDrag, dragFilePath, reorderFileTabs } from "./filedrag.js";
@@ -70,6 +71,9 @@ export function CodeBody(props) {
 	const [findQuery, setFindQuery] = useState("");
 	const [findIdx, setFindIdx] = useState(0);
 	const [findOpts, setFindOpts] = useState({ regex: false, caseSensitive: false, words: false });
+	const [replaceOpen, setReplaceOpen] = useState(false);
+	const [replaceText, setReplaceText] = useState("");
+	const [preserveCase, setPreserveCase] = useState(false);
 	const [diffMarks, setDiffMarks] = useState(null);
 	const [branchPickOpen, setBranchPickOpen] = useState(false);
 	const [blameOn, setBlameOn] = useState(false);
@@ -92,6 +96,10 @@ export function CodeBody(props) {
 	const [fileDropOver, setFileDropOver] = useState(false);
 	const [tabDropOver, setTabDropOver] = useState(null);
 	const [commitsOpen, setCommitsOpen] = useState(false);
+	const [tabMenu, setTabMenu] = useState(null); // {path, x, y} — editor-tab context menu
+	const [pinned, setPinned] = useState([]); // sticky tabs: bulk closes skip them (VS Code)
+	const [problemsOpen, setProblemsOpen] = useState(false);
+	const tabMenuRef = useDismissLayer({ open: Boolean(tabMenu), onDismiss: () => setTabMenu(null) });
 	const peekNonce = useRef(0);
 	const paletteTimer = useRef(null);
 	const searchTimer = useRef(null);
@@ -112,6 +120,7 @@ export function CodeBody(props) {
 	const tabViewRef = useRef({}); // path → {line, col, scroll} restored when switching tabs
 	const autoMarksTimer = useRef(null);
 	const tabsRef = useRef(null);
+	const closedTabsRef = useRef([]); // most-recently-closed editor stack for ⌘⇧T (VS Code "Reopen Closed Editor")
 	const dirtyRef = useRef(false);
 	dirtyRef.current = editing && editText !== (doc?.raw ?? "");
 
@@ -226,6 +235,8 @@ export function CodeBody(props) {
 		setGotoOpen(false);
 		setSymPalette(null);
 		setDelPreview(null);
+		setTabMenu(null);
+		setProblemsOpen(false);
 	}, []);
 	useEffect(() => {
 		if (tab?.visible === false) dismissPanels();
@@ -467,19 +478,40 @@ export function CodeBody(props) {
 		void openFile(path, saved?.line ?? 1, saved?.col ?? 1, false);
 	}, [editing, editText, openFile, say, t, diff, showDiffView, dismissPanels]);
 
-	const closeTab = useCallback((path) => {
+	/**
+	 * Close a set of editor tabs (VS Code tab model: Close / Close Others /
+	 * Close to the Right / Close All all funnel through here). Refuses when the
+	 * dirty document would be closed; closed paths join the most-recently-
+	 * closed stack so ⌘⇧T can bring them back with their view position.
+	 * Bulk operations pass respectPins: sticky tabs survive them, exactly like
+	 * VS Code's excludeSticky, while an explicit single Close still closes.
+	 */
+	const closeTabs = useCallback((paths, { respectPins = false } = {}) => {
+		const candidates = respectPins ? excludePinned(paths, pinned) : paths;
+		const remove = new Set((Array.isArray(candidates) ? candidates : []).filter((p) => typeof p === "string" && p !== ""));
+		if (remove.size === 0) return;
 		const current = docRef.current;
-		if (editing && current?.path === path && editText !== (current?.raw ?? "")) {
+		if (editing && current && remove.has(current.path) && editText !== (current.raw ?? "")) {
 			say(t("editor.dirtyGuard"), "error");
 			return;
 		}
-		const idx = tabs.indexOf(path);
-		if (idx < 0) return;
-		const next = tabs.filter((p) => p !== path);
+		const firstIdx = tabs.findIndex((p) => remove.has(p));
+		if (firstIdx < 0) return;
+		let stack = closedTabsRef.current;
+		for (const p of tabs) {
+			if (!remove.has(p)) continue;
+			const view = tabViewRef.current[p];
+			stack = pushClosedTab(stack, { path: p, line: view?.line ?? 1, col: view?.col ?? 1 });
+			delete tabViewRef.current[p];
+		}
+		closedTabsRef.current = stack;
+		const next = tabs.filter((p) => !remove.has(p));
 		setTabs(next);
-		delete tabViewRef.current[path];
-		if (current?.path === path) {
-			const neighbor = next[Math.min(idx, next.length - 1)];
+		setPinned((prev) => prev.filter((p) => !remove.has(p)));
+		setTabMenu(null);
+		if (current && remove.has(current.path)) {
+			// VS Code activates the nearest remaining neighbour tab.
+			const neighbor = next[Math.min(firstIdx, next.length - 1)];
 			if (neighbor) {
 				const saved = tabViewRef.current[neighbor];
 				void openFile(neighbor, saved?.line ?? 1, saved?.col ?? 1, false);
@@ -491,14 +523,47 @@ export function CodeBody(props) {
 				setDelPreview(null);
 			}
 		}
-	}, [tabs, editing, editText, openFile, say, t]);
+	}, [tabs, pinned, editing, editText, openFile, say, t]);
+
+	const closeTab = useCallback((path) => closeTabs([path]), [closeTabs]);
+
+	/** Pin/unpin (VS Code sticky): pinned tabs move to the front of the strip. */
+	const togglePin = useCallback((path) => {
+		const has = pinned.includes(path);
+		setPinned(has ? pinned.filter((p) => p !== path) : [...pinned, path]);
+		if (!has) setTabs((current) => pinTab(current, path));
+		setTabMenu(null);
+	}, [pinned]);
+
+	/** ⌘⇧T — reopen the most recently closed editor (VS Code parity). */
+	const reopenClosedTab = useCallback(() => {
+		if (!canNavigate()) return;
+		const [entry, rest] = popClosedTab(closedTabsRef.current);
+		if (!entry) {
+			say(t("editor.noClosedTabs"));
+			return;
+		}
+		closedTabsRef.current = rest;
+		void openFile(entry.path, entry.line, entry.col, false);
+	}, [canNavigate, openFile, say, t]);
+
+	// Editor-tab context menu (VS Code): fixed-position menu near the click.
+	const openTabMenu = useCallback((event, path) => {
+		event.preventDefault();
+		event.stopPropagation();
+		setTabMenu({
+			path,
+			x: Math.max(8, Math.min(event.clientX, (window.innerWidth || 1000) - 218)),
+			y: Math.max(8, Math.min(event.clientY, (window.innerHeight || 800) - 200)),
+		});
+	}, []);
 
 
 	/* P0-1: per-session navigation state survives tab churn (usepersistence.js) */
 	useNavPersistence({
-		persistKey, cwd, doc, cursor, scroll, mode, railW, railVisible, wrapOn, findOpts, tabs, histTick,
+		persistKey, cwd, doc, cursor, scroll, mode, railW, railVisible, wrapOn, findOpts, tabs, pinned, histTick,
 		histRef, docRef, codeRef, loadFile,
-		setRailW, setRailVisible, setWrapOn, setFindOpts, setTabs, setMode, setHistTick, setScroll,
+		setRailW, setRailVisible, setWrapOn, setFindOpts, setTabs, setPinned, setMode, setHistTick, setScroll,
 	});
 
 	const revealPosition = useCallback((line, col, word) => {
@@ -790,6 +855,9 @@ export function CodeBody(props) {
 		return out;
 	}, [doc, findRe]);
 	const findLines = useMemo(() => new Set(findMatches.map((m) => m.line)), [findMatches]);
+	// VS Code keeps a solid highlight on the active find match while the
+	// widget is open; the other matches stay in the lighter gutter color.
+	const currentFind = findOpen && !editing && findRe && findMatches.length > 0 ? findMatches[Math.min(findIdx, findMatches.length - 1)] : null;
 	const jumpFind = useCallback((delta) => {
 		if (findMatches.length === 0) return;
 		const next = (findIdx + delta + findMatches.length) % findMatches.length;
@@ -800,6 +868,28 @@ export function CodeBody(props) {
 		setFlash({ line: m.line, col: m.col, word: m.text ?? findQuery });
 		setTimeout(() => setFlash((f) => (f && f.line === m.line ? null : f)), 1200);
 	}, [findMatches, findIdx, findQuery, scrollAreaToLine]);
+	// Find-widget replace (VS Code ⌘⌥F replace row). The result lands in the
+	// edit buffer, so replacements are always reviewed and saved with ⌘S
+	// under the existing mtime conflict guard — never written blindly.
+	const doReplace = useCallback((all) => {
+		const d = docRef.current;
+		if (!d || !findQuery || findRe === false) return;
+		const res = applyReplace(d.lines, findMatches, replaceText, {
+			all,
+			index: findIdx,
+			regexRe: findRe && typeof findRe === "object" ? findRe : null,
+			preserveCase,
+		});
+		if (!res) {
+			say(t("replace.noMatch"), "error");
+			return;
+		}
+		let text = res.lines.join("\n");
+		if (String(d.raw ?? "").endsWith("\n")) text += "\n";
+		setEditText(text);
+		setEditing(true);
+		say(t(all ? "replace.replacedAll" : "replace.replacedOne", { n: res.count }));
+	}, [findQuery, findRe, findMatches, findIdx, replaceText, preserveCase, say, t]);
 	const startEdit = useCallback(() => {
 		if (!doc || doc.truncated || doc.image) return;
 		if (doc.raw.length > 2 * 1024 * 1024 || doc.lines.length > 50000) {
@@ -877,12 +967,28 @@ export function CodeBody(props) {
 		setCommandOpen(next);
 	}, [commandOpen, dismissPanels]);
 
+	// Problems panel (VS Code ⇧⌘M): the open file's diagnostics as a list.
+	const toggleProblems = useCallback(() => {
+		const next = !problemsOpen;
+		dismissPanels();
+		setProblemsOpen(next);
+	}, [problemsOpen, dismissPanels]);
+
 	const onRootKeyDown = useCallback(
 		(event) => {
 			if ((event.metaKey || event.ctrlKey) && !event.altKey && event.code === "KeyF" && !event.shiftKey) {
 				if (modeRef.current === "code" && docRef.current && !editing) {
 					event.preventDefault();
 					setFindOpen((v) => !v);
+				}
+				return;
+			}
+			// ⌘⌥F / Ctrl+Alt+F opens the find widget with its replace row (VS Code).
+			if ((event.metaKey || event.ctrlKey) && event.altKey && !event.shiftKey && event.code === "KeyF") {
+				if (modeRef.current === "code" && docRef.current && !editing) {
+					event.preventDefault();
+					setFindOpen(true);
+					setReplaceOpen(true);
 				}
 				return;
 			}
@@ -922,6 +1028,16 @@ export function CodeBody(props) {
 				toggleCommand();
 				return;
 			}
+			if ((event.metaKey || event.ctrlKey) && event.shiftKey && !event.altKey && event.code === "KeyM") {
+				event.preventDefault();
+				toggleProblems();
+				return;
+			}
+			if ((event.metaKey || event.ctrlKey) && event.shiftKey && !event.altKey && event.code === "KeyT") {
+				event.preventDefault();
+				reopenClosedTab();
+				return;
+			}
 			if ((event.metaKey || event.ctrlKey) && !event.altKey && event.code === "KeyP") {
 				event.preventDefault();
 				if (palette) closePalette();
@@ -950,7 +1066,7 @@ export function CodeBody(props) {
 				return;
 			}
 			if (event.key === "Escape") {
-				if (searchOpen || palette || commandOpen || branchPickOpen || fileHist || gotoOpen || symPalette || peek || overlay) {
+				if (searchOpen || palette || commandOpen || branchPickOpen || fileHist || gotoOpen || symPalette || peek || overlay || problemsOpen || tabMenu) {
 					event.preventDefault();
 					event.stopPropagation();
 					dismissPanels();
@@ -987,7 +1103,7 @@ export function CodeBody(props) {
 				if (searchOpen) setSearchOpen(false);
 			}
 		},
-		[palette, closePalette, openPalette, openSearch, searchOpen, peek, closePeek, goBack, goForward, symPalette, editing, saveEdit, cancelEdit, findOpen, delPreview, gotoOpen, toggleWrap, fileHist, toggleCommand, dismissPanels, commandOpen, branchPickOpen, overlay],
+		[palette, closePalette, openPalette, openSearch, searchOpen, peek, closePeek, goBack, goForward, symPalette, editing, saveEdit, cancelEdit, findOpen, delPreview, gotoOpen, toggleWrap, fileHist, toggleCommand, toggleProblems, reopenClosedTab, dismissPanels, commandOpen, branchPickOpen, overlay, problemsOpen, tabMenu],
 	);
 
 	const doJump = useCallback(
@@ -1162,18 +1278,18 @@ export function CodeBody(props) {
 	// state. Word-wrap mode swaps the virtual-scroll builders for the flow
 	// builder and skips them entirely.
 	const visible = useMemo(
-		() => (wrapOn ? null : computeVisible({ doc, scroll, viewport, diagByLine, flash, diffMarks, delAnchors, delGroups, t, blameOn, blame, openCommit, onDelPreview: setDelPreview })),
-		[wrapOn, doc, scroll, viewport, diagByLine, flash, diffMarks, delAnchors, delGroups, t, blameOn, blame, openCommit],
+		() => (wrapOn ? null : computeVisible({ doc, scroll, viewport, diagByLine, flash, current: currentFind, diffMarks, delAnchors, delGroups, t, blameOn, blame, openCommit, onDelPreview: setDelPreview })),
+		[wrapOn, doc, scroll, viewport, diagByLine, flash, currentFind, diffMarks, delAnchors, delGroups, t, blameOn, blame, openCommit],
 	);
 
 	const gutter = useMemo(
-		() => (wrapOn ? null : computeGutter({ doc, scroll, viewport, cursor, findLines, diffMarks, delAnchors })),
-		[wrapOn, doc, scroll, viewport, cursor, findLines, diffMarks, delAnchors],
+		() => (wrapOn ? null : computeGutter({ doc, scroll, viewport, cursor, findLines, current: currentFind, diffMarks, delAnchors })),
+		[wrapOn, doc, scroll, viewport, cursor, findLines, currentFind, diffMarks, delAnchors],
 	);
 
 	const wrapDoc = useMemo(
-		() => (wrapOn ? computeWrapRows({ doc, flash, diffMarks, delAnchors, delGroups, cursor, findLines, t, onDelPreview: setDelPreview }) : null),
-		[wrapOn, doc, flash, diffMarks, delAnchors, delGroups, cursor, findLines, t],
+		() => (wrapOn ? computeWrapRows({ doc, flash, current: currentFind, diffMarks, delAnchors, delGroups, cursor, findLines, t, onDelPreview: setDelPreview }) : null),
+		[wrapOn, doc, flash, currentFind, diffMarks, delAnchors, delGroups, cursor, findLines, t],
 	);
 
 	const statusTitle = (status.state === "error" ? `${t("status.error")}: ${status.message}` : status.state === "starting" ? t("status.starting") : status.state === "ready" ? t("status.ready") : t("status.off")) + (status.progress ? ` · ${status.progress}` : "");
@@ -1212,11 +1328,15 @@ export function CodeBody(props) {
 		{ id: "search", icon: "⌕", label: t("command.search"), hint: "⇧⌘F", run: () => openSearch() },
 		{ id: "quick-open", icon: "↗", label: t("command.quickOpen"), hint: "⌘P", run: () => openPalette() },
 		{ id: "outline", icon: "☷", label: t("command.outline"), hint: "⌘⇧O", run: () => { if (LSP_RE.test(docRef.current?.path ?? "")) setSymPalette({}); else say(t("command.outlineUnavailable"), "error"); } },
+		{ id: "replace", icon: "⇄", label: t("command.replace"), hint: "⌘⌥F", run: () => { if (modeRef.current === "code" && docRef.current && !editing && !docRef.current.image) { setFindOpen(true); setReplaceOpen(true); } else say(t("command.replaceUnavailable"), "error"); } },
+		{ id: "problems", icon: "⚠", label: t("command.problems"), hint: "⇧⌘M", run: toggleProblems },
+		{ id: "reopen-tab", icon: "↺", label: t("command.reopenTab"), hint: "⌘⇧T", run: reopenClosedTab },
+		{ id: "close-all-tabs", icon: "✕", label: t("command.closeAllTabs"), run: () => closeTabs(tabs, { respectPins: true }) },
 		{ id: "wrap", icon: "↩", label: t("command.wrap"), hint: "⌥Z", run: () => toggleWrap() },
 		{ id: "toggle-rail", icon: "◧", label: t("command.toggleRail"), hint: "⌘B", run: () => setRailVisible((value) => !value) },
 		{ id: "refresh", icon: "⟳", label: t("command.refresh"), run: () => { refreshGit(); setTreeKey((key) => key + 1); if (docRef.current) void loadFile(docRef.current.path, cursorRef.current?.line ?? 1, cursorRef.current?.col ?? 1); } },
 		...(terminalEntry.available() ? [{ id: "terminal", icon: "‣", label: t("command.terminal"), run: openTerminal }] : []),
-	], [t, refreshGit, openSearch, openPalette, toggleWrap, say, loadFile, dismissPanels, openTerminal, terminalEntry]);
+	], [t, refreshGit, openSearch, openPalette, toggleWrap, say, loadFile, dismissPanels, openTerminal, terminalEntry, editing, toggleProblems, reopenClosedTab, closeTabs, tabs]);
 
 	const startRailDrag = useCallback((event) => {
 		event.preventDefault();
@@ -1419,6 +1539,7 @@ export function CodeBody(props) {
 									onDragEnd: () => { setFileDropOver(false); setTabDropOver(null); },
 									title: RelPath(cwd, p) || p,
 									onClick: () => switchTab(p),
+									onContextMenu: (e) => openTabMenu(e, p),
 									onAuxClick: (e) => {
 										if (e.button === 1) {
 											e.preventDefault();
@@ -1427,6 +1548,7 @@ export function CodeBody(props) {
 									},
 								},
 								h("span", { className: `ce-tab-dot${dirty ? " ce-tab-dirty" : ""}` }, dirty ? "●" : ""),
+								pinned.includes(p) ? h("span", { className: "ce-tab-pin", title: t("tabs.pinned"), "aria-label": t("tabs.pinned") }, "◉") : null,
 								h("span", { className: "ce-tab-name" }, p.split("/").pop()),
 								h("button", {
 									type: "button",
@@ -1439,6 +1561,20 @@ export function CodeBody(props) {
 								}, "✕"),
 							);
 						}),
+					)
+					: null,
+				// VS Code-style editor tab context menu: Close / Close Others /
+				// Close to the Right / Close All, all through closeTabs().
+				tabMenu
+					? h("div", { className: "cet-context ce-tabmenu", ref: tabMenuRef, style: { left: tabMenu.x, top: tabMenu.y }, role: "menu", onMouseDown: (e) => e.stopPropagation() },
+						h("div", { className: "cet-context-path" }, tabMenu.path.split("/").pop()),
+						h("button", { type: "button", role: "menuitem", onClick: () => togglePin(tabMenu.path) }, pinned.includes(tabMenu.path) ? t("tabs.unpin") : t("tabs.pin")),
+						h("div", { className: "cet-context-rule" }),
+						h("button", { type: "button", role: "menuitem", onClick: () => closeTabs([tabMenu.path]) }, t("tabs.close")),
+						h("button", { type: "button", role: "menuitem", disabled: tabs.length <= 1, onClick: () => closeTabs(removedPaths(tabs, closeOtherTabs(tabs, tabMenu.path)), { respectPins: true }) }, t("tabs.closeOthers")),
+						h("button", { type: "button", role: "menuitem", disabled: closeTabsToRight(tabs, tabMenu.path).length >= tabs.length, onClick: () => closeTabs(removedPaths(tabs, closeTabsToRight(tabs, tabMenu.path)), { respectPins: true }) }, t("tabs.closeRight")),
+						h("div", { className: "cet-context-rule" }),
+						h("button", { type: "button", role: "menuitem", className: "cet-context-danger", onClick: () => closeTabs(tabs, { respectPins: true }) }, t("tabs.closeAll")),
 					)
 					: null,
 				diff && showDiffView
@@ -1493,14 +1629,16 @@ export function CodeBody(props) {
 							doc && !diff && !doc.image ? h("button", { type: "button", className: `ce-tool ce-tiny${fileHist ? " ce-tool-on" : ""}`, title: t("history.title"), onClick: openFileHistory }, "🕘") : null,
 							h("span", { className: "ce-spacer" }),
 							cursor ? h("button", { type: "button", className: "ce-pos ce-pos-btn", title: t("goto.title"), onClick: () => setGotoOpen(true) }, `Ln ${cursor.line}, Col ${cursor.col}${cursor.word ? ` · ${cursor.word}` : ""}`) : null,
-							diagnostics.length ? h("span", { className: "ce-diag" }, `${diagnostics.length} ${t("diag.count")}`) : null,
+							diagnostics.length ? h("button", { type: "button", className: `ce-diag ce-diag-btn${problemsOpen ? " ce-tool-on" : ""}`, title: `${t("problems.title")} (⇧⌘M / Ctrl+Shift+M)`, "aria-expanded": problemsOpen, onClick: toggleProblems }, `${diagnostics.length} ${t("diag.count")}`) : null,
 						),
-						findOpen && !editing ? h("div", { className: "ce-find" },
+						findOpen && !editing ? h(Fragment, null,
+						h("div", { className: "ce-find" },
 							h("input", {
 								className: "ce-input ce-find-input",
 								placeholder: t("editor.findPlaceholder"),
 								value: findQuery,
 								autoFocus: true,
+								"aria-label": t("editor.findPlaceholder"),
 								onChange: (e) => { setFindQuery(e.target.value); setFindIdx(0); },
 								onKeyDown: (e) => {
 									e.stopPropagation();
@@ -1511,12 +1649,31 @@ export function CodeBody(props) {
 							h("button", { type: "button", className: `ce-tool ce-tiny${findOpts.caseSensitive ? " ce-tool-on" : ""}`, title: t("find.case"), onClick: () => { setFindOpts((o) => ({ ...o, caseSensitive: !o.caseSensitive })); setFindIdx(0); } }, "Aa"),
 							h("button", { type: "button", className: `ce-tool ce-tiny${findOpts.words ? " ce-tool-on" : ""}`, title: t("find.words"), onClick: () => { setFindOpts((o) => ({ ...o, words: !o.words })); setFindIdx(0); } }, "ab|"),
 							h("button", { type: "button", className: `ce-tool ce-tiny${findOpts.regex ? " ce-tool-on" : ""}`, title: t("find.regex"), onClick: () => { setFindOpts((o) => ({ ...o, regex: !o.regex })); setFindIdx(0); } }, ".*"),
+							h("button", { type: "button", className: `ce-tool ce-tiny${replaceOpen ? " ce-tool-on" : ""}`, title: `${t("editor.replaceToggle")} (⌘⌥F / Ctrl+Alt+F)`, "aria-expanded": replaceOpen, onClick: () => setReplaceOpen((v) => !v) }, "⇄"),
 							findRe === false
 								? h("span", { className: "ce-find-count cea-err" }, t("find.badRegex"))
 								: h("span", { className: "ce-find-count" }, findQuery ? `${findMatches.length === 0 ? 0 : Math.min(findIdx + 1, findMatches.length)}/${findMatches.length}` : ""),
-							h("button", { type: "button", className: "ce-tool ce-tiny", onClick: () => jumpFind(-1) }, "↑"),
-							h("button", { type: "button", className: "ce-tool ce-tiny", onClick: () => jumpFind(1) }, "↓"),
-							h("button", { type: "button", className: "ce-tool ce-tiny", onClick: () => setFindOpen(false) }, "✕"),
+							h("button", { type: "button", className: "ce-tool ce-tiny", title: t("find.prev"), onClick: () => jumpFind(-1) }, "↑"),
+							h("button", { type: "button", className: "ce-tool ce-tiny", title: t("find.next"), onClick: () => jumpFind(1) }, "↓"),
+							h("button", { type: "button", className: "ce-tool ce-tiny", title: t("close"), onClick: () => setFindOpen(false) }, "✕"),
+						),
+						replaceOpen ? h("div", { className: "ce-find ce-find-replace" },
+							h("input", {
+								className: "ce-input ce-find-input",
+								placeholder: t("editor.replacePlaceholder"),
+								"aria-label": t("editor.replace"),
+								value: replaceText,
+								onChange: (e) => setReplaceText(e.target.value),
+								onKeyDown: (e) => {
+									e.stopPropagation();
+									if (e.key === "Enter") { e.preventDefault(); doReplace(false); }
+									else if (e.key === "Escape") setReplaceOpen(false);
+								},
+							}),
+							h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost", title: t("editor.replaceOneTitle"), disabled: findMatches.length === 0 || findRe === false, onClick: () => doReplace(false) }, t("editor.replace")),
+							h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost", title: t("editor.replaceAllTitle"), disabled: findMatches.length === 0 || findRe === false, onClick: () => doReplace(true) }, t("editor.replaceAll")),
+							h("button", { type: "button", className: `ce-tool ce-tiny${preserveCase ? " ce-tool-on" : ""}`, title: t("find.preserveCase"), "aria-pressed": preserveCase, onClick: () => setPreserveCase((v) => !v) }, "AB"),
+						) : null,
 						) : null,
 						h(
 							"div",
@@ -1595,6 +1752,14 @@ export function CodeBody(props) {
 					: null,
 				fileHist
 					? h(FileHistoryOverlay, { t, hist: fileHist, onPick: (c) => void openHistCommit(c), onClose: () => setFileHist(null) })
+					: null,
+				problemsOpen
+					? h(ProblemsPanel, {
+						t,
+						diagnostics,
+						onPick: (item) => { setProblemsOpen(false); revealPosition(item.line, item.col, ""); },
+						onClose: () => setProblemsOpen(false),
+					})
 					: null,
 				searchOpen && search ? h(SearchPanel, {
 					t,

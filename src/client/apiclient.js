@@ -1,19 +1,37 @@
-/* ---------------- API tester: curl import, request editor, response view ---------------- */
+/* ---------------- API tester: request editor, environments, auth, response view ----------------
+ *
+ * UI wiring only: every request-data transformation (URL ↔ params sync,
+ * environments, auth folding, send resolution) lives in reqmodel.js, the curl
+ * wire format in curl.js and the snippet generators in codegen.js, so each
+ * half stays testable on its own. Interaction model references:
+ * - Bruno: named environments with an active selector and "No Environment",
+ *   a dedicated Auth section, URL/Params two-way sync, response Timeline and
+ *   "Generate Code" snippets.
+ * - Postman: params merged into the URL, {{var}} placeholders resolved at
+ *   send time while editors and history keep the template.
+ */
 
 import { Fragment, h, useCallback, useEffect, useMemo, useRef, useState } from "./react.js";
 import { api } from "./api.js";
-import { SUB_CT, parseCurl, toCurl } from "./curl.js";
+import { parseCurl, toCurl } from "./curl.js";
+import { looksLikeBru, parseBru } from "./brucol.js";
+import { SNIPPET_KINDS } from "./codegen.js";
+import {
+	activeEnvOf, addEnv, applyParamsToUrl, envMapOf, guessRawSubType, normalizeAuth, normalizeEnvStore,
+	normalizeUrlParams, pushEntry, relTimeAgo, removeEnv, renameEnv, resolveRequest, selectEnv,
+	setEnvVars, syncParamsFromUrl,
+} from "./reqmodel.js";
 import { RequestFields } from "./requestfields.js";
 import { useDismissLayer } from "./dismiss.js";
 
 const DRAFT_KEY = "dsh.ce.api.draft.v1";
-
-
-function upsertHeader(list, name, value) {
-	const found = list.find((hd) => hd.name.toLowerCase() === name.toLowerCase());
-	if (found) found.value = value;
-	else list.push({ name, value });
-}
+const HIST_KEY = "dsh.ce.api.history.v1";
+const SAVED_KEY = "dsh.ce.api.saved.v1";
+const ENV_KEY = "dsh.ce.api.env.v1";
+const HIST_CAP = 30;
+const SAVED_CAP = 50;
+/** Draft/snapshot format: 2 = URL and params are synced; absent = legacy (merge at load). */
+const SNAPSHOT_V = 2;
 
 function statusClass(status) {
 	if (status < 300) return "cea-ok";
@@ -22,86 +40,46 @@ function statusClass(status) {
 	return "cea-err";
 }
 
-/** Replace {{name}} from envMap; unknown names stay literal (Postman semantics). */
-export function substituteVars(text, envMap) {
-	if (typeof text !== "string" || !text.includes("{{")) return text;
-	return text.replace(/\{\{\s*([A-Za-z0-9_.\-]+)\s*\}\}/g, (whole, name) =>
-		Object.prototype.hasOwnProperty.call(envMap, name) ? String(envMap[name]) : whole);
-}
-
-/** [{name,value}] pairs → plain map, skipping empty names (last wins). */
-export function buildEnvMap(pairs) {
-	const map = {};
-	for (const p of pairs ?? []) {
-		const name = String(p?.name ?? "").trim();
-		if (name && p.enabled !== false) map[name] = p?.value ?? "";
-	}
-	return map;
-}
-
-/**
- * Merge query-param pairs into a URL (Postman Params-tab semantics): table
- * entries override same-named params already in the URL, other existing
- * params survive, empty values send `name=`, and a #fragment is preserved.
- * Exported for tests.
- */
-export function mergeParams(url, pairs) {
-	const raw = String(url ?? "");
-	const active = (pairs ?? []).filter((p) => p?.enabled !== false && String(p?.name ?? "").trim() !== "");
-	if (active.length === 0) return raw;
-	const hAt = raw.indexOf("#");
-	const frag = hAt >= 0 ? raw.slice(hAt) : "";
-	const work = hAt >= 0 ? raw.slice(0, hAt) : raw;
-	const qAt = work.indexOf("?");
-	const base = qAt >= 0 ? work.slice(0, qAt) : work;
-	const params = new URLSearchParams(qAt >= 0 ? work.slice(qAt + 1) : "");
-	for (const p of active) params.set(String(p.name).trim(), String(p.value ?? ""));
-	const qs = params.toString();
-	return `${base}${qs ? `?${qs}` : ""}${frag}`;
-}
-
 function prettySize(n) {
 	if (n < 1024) return `${n}B`;
 	if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)}KB`;
 	return `${(n / 1024 / 1024).toFixed(1)}MB`;
 }
 
-const HIST_KEY = "dsh.ce.api.history.v1";
-const SAVED_KEY = "dsh.ce.api.saved.v1";
-const ENV_KEY = "dsh.ce.api.env.v1";
-const HIST_CAP = 30;
-const SAVED_CAP = 50;
-
-/** Newest-first insert, deduped by id, capped. Pure for testability. */
-export function pushEntry(list, entry, cap) {
-	const base = Array.isArray(list) ? list.filter((e) => e && e.id !== entry.id) : [];
-	return [entry, ...base].slice(0, cap);
-}
-
-/** Compact relative age for history rows: 5s / 4m / 3h / 2d. */
-export function relTimeAgo(ts) {
-	const s = Math.max(0, Math.floor((Date.now() - (ts || 0)) / 1000));
-	if (s < 60) return `${s}s`;
-	const m = Math.floor(s / 60);
-	if (m < 60) return `${m}m`;
-	const hh = Math.floor(m / 60);
-	if (hh < 24) return `${hh}h`;
-	return `${Math.floor(hh / 24)}d`;
-}
-
-function loadList(key) {
+function loadJson(key) {
 	try {
-		const list = JSON.parse(localStorage.getItem(key) ?? "[]");
-		return Array.isArray(list) ? list : [];
+		return JSON.parse(localStorage.getItem(key) ?? "null");
 	} catch {
-		return [];
+		return null;
 	}
 }
 
-function storeList(key, list) {
+function loadList(key) {
+	const value = loadJson(key);
+	return Array.isArray(value) ? value : [];
+}
+
+function storeJson(key, value) {
 	try {
-		localStorage.setItem(key, JSON.stringify(list));
+		localStorage.setItem(key, JSON.stringify(value));
 	} catch { /* storage unavailable */ }
+}
+
+/** Editor state → the snapshot stored in drafts, history rows and favorites. */
+function requestSnapshot(state) {
+	return { v: SNAPSHOT_V, ...state };
+}
+
+/**
+ * Apply a persisted snapshot to the editor. v2 snapshots keep URL and params
+ * as saved (the sync invariant already holds); legacy snapshots get the old
+ * send-time merge and the table is re-projected from the result.
+ */
+function restoredUrlParams(req) {
+	if (req?.v === SNAPSHOT_V) {
+		return { url: typeof req.url === "string" ? req.url : "", pairs: Array.isArray(req.paramPairs) ? req.paramPairs : [] };
+	}
+	return normalizeUrlParams(req?.url ?? "", req?.paramPairs);
 }
 
 export function ApiView({ t, useTabInfo }) {
@@ -114,9 +92,10 @@ export function ApiView({ t, useTabInfo }) {
 	const [formPairs, setFormPairs] = useState([]);
 	const [beautifyErr, setBeautifyErr] = useState("");
 	const [body, setBody] = useState("");
+	const [auth, setAuth] = useState(() => normalizeAuth(null));
 	const [sending, setSending] = useState(false);
 	const [response, setResponse] = useState(null);
-	const [showRespHeaders, setShowRespHeaders] = useState(false);
+	const [respTab, setRespTab] = useState("body"); // body | headers | timeline
 	const [importOpen, setImportOpen] = useState(false);
 	const [importText, setImportText] = useState("");
 	const [histOpen, setHistOpen] = useState(false);
@@ -125,13 +104,18 @@ export function ApiView({ t, useTabInfo }) {
 	const [saved, setSaved] = useState([]);
 	const [saveOpen, setSaveOpen] = useState(false);
 	const [saveName, setSaveName] = useState("");
+	const [codeMenuOpen, setCodeMenuOpen] = useState(false);
+	const [copiedCode, setCopiedCode] = useState("");
+	const [envStore, setEnvStore] = useState(() => normalizeEnvStore(loadJson(ENV_KEY)));
+	const [envNameDraft, setEnvNameDraft] = useState(null); // {id, name} while renaming
+	const [envDeleteArmed, setEnvDeleteArmed] = useState(false);
 	const importRef = useDismissLayer({ open: importOpen, onDismiss: () => setImportOpen(false), ignoreSelector: '[data-ce-popup-trigger="api-import"]' });
 	const saveRef = useDismissLayer({ open: saveOpen, onDismiss: () => setSaveOpen(false), ignoreSelector: '[data-ce-popup-trigger="api-save"]' });
 	const historyRef = useDismissLayer({ open: histOpen, onDismiss: () => setHistOpen(false), ignoreSelector: '[data-ce-popup-trigger="api-history"]' });
+	const codeMenuRef = useDismissLayer({ open: codeMenuOpen, onDismiss: () => setCodeMenuOpen(false), ignoreSelector: '[data-ce-popup-trigger="api-code"]' });
 	useEffect(() => {
-		if (hostTab?.visible === false) { setImportOpen(false); setSaveOpen(false); setHistOpen(false); }
+		if (hostTab?.visible === false) { setImportOpen(false); setSaveOpen(false); setHistOpen(false); setCodeMenuOpen(false); }
 	}, [hostTab?.visible]);
-	const [envPairs, setEnvPairs] = useState(() => loadList(ENV_KEY));
 	const [copied, setCopied] = useState(false);
 	const [paramPairs, setParamPairs] = useState([]);
 	const [requestTab, setRequestTab] = useState("params");
@@ -140,6 +124,7 @@ export function ApiView({ t, useTabInfo }) {
 	const [requestShare, setRequestShare] = useState(42);
 	const workspaceRef = useRef(null);
 	const splitDrag = useRef(null);
+	const copiedTimer = useRef(null);
 	const setSplit = (value) => setRequestShare(Math.max(24, Math.min(72, value)));
 	const splitPointer = (event) => {
 		const rect = workspaceRef.current?.getBoundingClientRect();
@@ -148,8 +133,8 @@ export function ApiView({ t, useTabInfo }) {
 	};
 
 	useEffect(() => {
-		storeList(ENV_KEY, envPairs);
-	}, [envPairs]);
+		storeJson(ENV_KEY, envStore);
+	}, [envStore]);
 	useEffect(() => {
 		setHistory(loadList(HIST_KEY));
 		setSaved(loadList(SAVED_KEY));
@@ -160,21 +145,22 @@ export function ApiView({ t, useTabInfo }) {
 			if (raw === null) return;
 			const d = JSON.parse(raw);
 			if (typeof d.method === "string") setMethod(d.method);
-			if (typeof d.url === "string") setUrl(d.url);
+			const restored = restoredUrlParams(d);
+			setUrl(restored.url);
+			setParamPairs(restored.pairs);
 			if (Array.isArray(d.headers)) setHeaders(d.headers);
 			if (typeof d.bodyType === "string") { setBodyType(d.bodyType); if (d.bodyType !== "none") setRequestTab("body"); }
 			if (typeof d.rawSub === "string") setRawSub(d.rawSub);
 			if (Array.isArray(d.formPairs)) setFormPairs(d.formPairs);
 			if (typeof d.body === "string") setBody(d.body);
-			if (Array.isArray(d.paramPairs)) setParamPairs(d.paramPairs);
+			if (d.auth) setAuth(normalizeAuth(d.auth));
 			if (Number.isFinite(d.timeoutMs) && d.timeoutMs >= 1000) setTimeoutMs(Math.min(120000, d.timeoutMs));
 		} catch { /* corrupt draft: start clean */ }
 	}, []);
 	useEffect(() => {
-		try {
-			localStorage.setItem(DRAFT_KEY, JSON.stringify({ method, url, headers, bodyType, rawSub, formPairs, body, paramPairs, timeoutMs }));
-		} catch { /* storage unavailable */ }
-	}, [method, url, headers, bodyType, rawSub, formPairs, body, paramPairs, timeoutMs]);
+		storeJson(DRAFT_KEY, requestSnapshot({ method, url, headers, bodyType, rawSub, formPairs, body, paramPairs, timeoutMs, auth }));
+	}, [method, url, headers, bodyType, rawSub, formPairs, body, paramPairs, timeoutMs, auth]);
+	useEffect(() => () => { if (copiedTimer.current) clearTimeout(copiedTimer.current); }, []);
 
 	const beautify = useCallback(() => {
 		try {
@@ -185,22 +171,25 @@ export function ApiView({ t, useTabInfo }) {
 		}
 	}, [body, t]);
 
-	/** Full editor snapshot — what history rows and favorites restore. */
-	const snapshot = useCallback(
-		() => ({ method, url, headers, bodyType, rawSub, formPairs, body, paramPairs, timeoutMs }),
-		[method, url, headers, bodyType, rawSub, formPairs, body, paramPairs, timeoutMs],
+	/** The full editor state — one shape feeds snapshots and resolveRequest. */
+	const editorState = useCallback(
+		() => ({ method, url, headers, bodyType, rawSub, formPairs, body, paramPairs, timeoutMs, auth }),
+		[method, url, headers, bodyType, rawSub, formPairs, body, paramPairs, timeoutMs, auth],
 	);
+	const snapshot = useCallback(() => requestSnapshot(editorState()), [editorState]);
 
 	const restoreRequest = useCallback((req) => {
 		if (!req || typeof req !== "object") return;
 		if (typeof req.method === "string") setMethod(req.method);
-		if (typeof req.url === "string") setUrl(req.url);
+		const restored = restoredUrlParams(req);
+		setUrl(restored.url);
+		setParamPairs(restored.pairs);
 		if (Array.isArray(req.headers)) setHeaders(req.headers);
 		if (typeof req.bodyType === "string") { setBodyType(req.bodyType); setRequestTab(req.bodyType === "none" ? "params" : "body"); }
 		if (typeof req.rawSub === "string") setRawSub(req.rawSub);
 		if (Array.isArray(req.formPairs)) setFormPairs(req.formPairs);
 		if (typeof req.body === "string") setBody(req.body);
-		if (Array.isArray(req.paramPairs)) setParamPairs(req.paramPairs);
+		setAuth(normalizeAuth(req.auth));
 		if (Number.isFinite(req.timeoutMs) && req.timeoutMs >= 1000) setTimeoutMs(Math.min(120000, req.timeoutMs));
 		setResponse(null);
 		setHistOpen(false);
@@ -208,50 +197,24 @@ export function ApiView({ t, useTabInfo }) {
 
 	const send = useCallback(() => {
 		if (url.trim() === "" || sending) return;
-		// {{var}} placeholders resolve from the env table at send time; the
-		// editor and history keep the unsubstituted template.
-		const envMap = buildEnvMap(envPairs);
-		const sendHeaders = headers
-			.filter((hd) => hd.enabled !== false && String(hd.name ?? "").trim() !== "")
-			.map((hd) => ({ name: String(hd.name).trim(), value: substituteVars(String(hd.value ?? ""), envMap) }));
-		let sendBody;
-		let multipart;
-		if (bodyType === "raw") {
-			sendBody = substituteVars(body, envMap);
-			upsertHeader(sendHeaders, "Content-Type", SUB_CT[rawSub] ?? "text/plain");
-		} else if (bodyType === "form") {
-			sendBody = new URLSearchParams(formPairs
-				.filter((p) => p.enabled !== false && String(p.name ?? "").trim() !== "")
-				.map((p) => [p.name.trim(), substituteVars(String(p.value ?? ""), envMap)])).toString();
-			upsertHeader(sendHeaders, "Content-Type", "application/x-www-form-urlencoded");
-		} else if (bodyType === "multipart") {
-			multipart = formPairs
-				.filter((p) => p.enabled !== false && String(p.name ?? "").trim() !== "")
-				.map((p) => ({ name: p.name.trim(), value: substituteVars(String(p.value ?? ""), envMap) }));
-		}
-		const sentMethod = method;
-		const sentUrl = substituteVars(mergeParams(url.trim(), paramPairs), envMap);
+		// One resolution for wire, timeline and history: {{var}} placeholders
+		// resolve from the active environment here; editors keep the template.
+		const resolved = resolveRequest(editorState(), envMapOf(envStore));
 		const sentSnapshot = snapshot();
 		setSending(true);
 		setResponseCopied(false);
-		api("api.send", {
-			method,
-			url: sentUrl,
-			headers: sendHeaders,
-			body: sendBody,
-			timeoutMs: Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : void 0,
-			...(multipart ? { multipart } : {}),
-		}).then((res) => {
+		api("api.send", resolved).then((res) => {
 			setSending(false);
 			const value = res.ok ? res.value : { error: res.error };
-			setResponse(value);
+			setResponse({ ...value, sent: resolved });
+			if (value?.error) setRespTab("body");
 			// Every settled send lands in the history (newest first, capped),
 			// carrying the full request so one click restores it.
 			const entry = {
 				id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
 				ts: Date.now(),
-				method: sentMethod,
-				url: sentUrl,
+				method: resolved.method,
+				url: resolved.url,
 				status: value?.status,
 				ms: value?.ms,
 				error: value?.error ?? void 0,
@@ -259,42 +222,87 @@ export function ApiView({ t, useTabInfo }) {
 			};
 			setHistory((prev) => {
 				const next = pushEntry(prev, entry, HIST_CAP);
-				storeList(HIST_KEY, next);
+				storeJson(HIST_KEY, next);
 				return next;
 			});
 		});
-	}, [method, url, headers, bodyType, rawSub, formPairs, body, sending, snapshot, envPairs, paramPairs, timeoutMs]);
+	}, [url, sending, editorState, snapshot, envStore]);
 
-	const copyCurl = useCallback(() => {
-		const text = toCurl({ method, url: mergeParams(url.trim(), paramPairs), headers, bodyType, rawSub, formPairs, body });
-		const done = () => {
-			setCopied(true);
-			setTimeout(() => setCopied(false), 1500);
-		};
+	const flashCopied = useCallback(() => {
+		setCopied(true);
+		if (copiedTimer.current) clearTimeout(copiedTimer.current);
+		copiedTimer.current = setTimeout(() => setCopied(false), 1500);
+	}, []);
+
+	const copyText = useCallback((text) => {
 		try {
 			const p = navigator.clipboard?.writeText(text);
-			if (p && typeof p.then === "function") p.then(done, () => {});
-			else done();
-		} catch { /* clipboard unavailable */ }
-	}, [method, url, headers, bodyType, rawSub, formPairs, body, paramPairs]);
+			return p && typeof p.then === "function" ? p : Promise.resolve();
+		} catch {
+			return Promise.resolve();
+		}
+	}, []);
+
+	const copyCurl = useCallback(() => {
+		// The toolbar button exports the editor template ({{var}} unresolved),
+		// matching what the request editor shows.
+		copyText(toCurl(editorState())).then(flashCopied);
+	}, [copyText, editorState, flashCopied]);
+
+	const copySnippet = useCallback((kind) => {
+		// Snippets are generated from the *resolved* request, so the copied
+		// code runs as-is — the same record the Timeline shows (Bruno codegen).
+		const text = kind.build(resolveRequest(editorState(), envMapOf(envStore)), editorState());
+		copyText(text).then(() => {
+			setCopiedCode(kind.id);
+			if (copiedTimer.current) clearTimeout(copiedTimer.current);
+			copiedTimer.current = setTimeout(() => setCopiedCode(""), 1500);
+		});
+	}, [copyText, editorState, envStore]);
 
 	const doImport = useCallback(() => {
-		const p = parseCurl(importText);
+		// The import dialog accepts curl commands and Bruno .bru documents;
+		// .bru carries its own param rows (disabled + path included), curl
+		// projects the URL query into the table.
+		const isBru = looksLikeBru(importText);
+		const bru = isBru ? parseBru(importText) : null;
+		const p = isBru
+			? {
+				method: bru.method,
+				url: bru.url,
+				headers: bru.headers,
+				auth: bru.auth,
+				body: bru.bodyType === "raw" ? bru.body : "",
+				multipart: bru.bodyType === "multipart" ? bru.formPairs : null,
+				form: bru.bodyType === "form" ? bru.formPairs : null,
+			}
+			: parseCurl(importText);
+		const seedPairs = isBru ? bru.paramPairs : [];
+		const syncedUrl = isBru ? applyParamsToUrl(p.url, seedPairs) : p.url;
 		setMethod(p.method);
-		setUrl(p.url);
+		setUrl(syncedUrl);
+		setParamPairs(syncParamsFromUrl(syncedUrl, seedPairs));
 		setHeaders(p.headers);
-		setParamPairs([]);
-		setBody(p.body ?? "");
-		setFormPairs(p.multipart ?? []);
-		setBodyType("none");
+		setAuth(normalizeAuth(p.auth));
 		setResponse(null);
-		setRequestTab(p.multipart || p.body !== "" ? "body" : "params");
 		if (p.multipart) {
 			setFormPairs(p.multipart);
 			setBodyType("multipart");
+			setRequestTab("body");
+		} else if (p.form) {
+			setFormPairs(p.form);
+			setBodyType("form");
+			setRequestTab("body");
 		} else if (p.body !== "") {
 			setBody(p.body);
+			setRawSub(isBru ? bru.rawSub : guessRawSubType(p.headers, p.body));
 			setBodyType("raw");
+			setRequestTab("body");
+		} else {
+			setFormPairs([]);
+			setBody(p.body ?? "");
+			setBodyType("none");
+			setRequestTab("params");
 		}
 		setImportText("");
 		setImportOpen(false);
@@ -307,7 +315,7 @@ export function ApiView({ t, useTabInfo }) {
 		setSaved((prev) => {
 			// Same name replaces the old favorite (differing ids).
 			const next = [entry, ...prev.filter((e) => e && e.name !== name)].slice(0, SAVED_CAP);
-			storeList(SAVED_KEY, next);
+			storeJson(SAVED_KEY, next);
 			return next;
 		});
 		setSaveName("");
@@ -319,21 +327,63 @@ export function ApiView({ t, useTabInfo }) {
 	const removeHistory = useCallback((id) => {
 		setHistory((prev) => {
 			const next = prev.filter((e) => e && e.id !== id);
-			storeList(HIST_KEY, next);
+			storeJson(HIST_KEY, next);
 			return next;
 		});
 	}, []);
 	const removeSaved = useCallback((id) => {
 		setSaved((prev) => {
 			const next = prev.filter((e) => e && e.id !== id);
-			storeList(SAVED_KEY, next);
+			storeJson(SAVED_KEY, next);
 			return next;
 		});
 	}, []);
 	const clearHistory = useCallback(() => {
 		setHistory([]);
-		storeList(HIST_KEY, []);
+		storeJson(HIST_KEY, []);
 	}, []);
+
+	/* environments (Bruno-style named variable sets with an active selector) */
+	const activeEnv = activeEnvOf(envStore);
+	const envDraftName = envNameDraft && activeEnv && envNameDraft.id === activeEnv.id ? envNameDraft.name : activeEnv?.name ?? "";
+	const createEnv = useCallback(() => {
+		setEnvStore((store) => addEnv(store));
+		setEnvNameDraft(null);
+		setEnvDeleteArmed(false);
+	}, []);
+	const commitEnvName = useCallback(() => {
+		const draft = envNameDraft;
+		setEnvNameDraft(null);
+		if (draft) setEnvStore((store) => renameEnv(store, draft.id, draft.name));
+	}, [envNameDraft]);
+	const deleteActiveEnv = useCallback(() => {
+		if (!envDeleteArmed) {
+			setEnvDeleteArmed(true);
+			return;
+		}
+		if (activeEnv) setEnvStore((store) => removeEnv(store, activeEnv.id));
+		setEnvDeleteArmed(false);
+		setEnvNameDraft(null);
+	}, [envDeleteArmed, activeEnv]);
+
+	/* URL ↔ params two-way sync: each direction runs only in its own input
+	 * handler (never in an effect), so the URL bar and the params table are two
+	 * projections of one query string without ping-ponging. Path rows (`:name`)
+	 * never touch the editor URL — they substitute at send time only. */
+	const onUrlChange = useCallback((value) => {
+		setUrl(value);
+		setParamPairs((prev) => syncParamsFromUrl(value, prev));
+	}, []);
+	const onQueryPairsChange = useCallback((rows) => {
+		const paths = paramPairs.filter((p) => p.kind === "path");
+		const next = [...rows.map((r) => (r.kind === "path" ? r : { ...r, kind: "query" })), ...paths];
+		setParamPairs(next);
+		setUrl((prev) => applyParamsToUrl(prev, next));
+	}, [paramPairs]);
+	const onPathPairsChange = useCallback((rows) => {
+		const queries = paramPairs.filter((p) => p.kind !== "path");
+		setParamPairs([...queries, ...rows.map((r) => ({ ...r, kind: "path" }))]);
+	}, [paramPairs]);
 
 	const respJson = useMemo(() => {
 		if (!response || response.error || typeof response.text !== "string") return null;
@@ -346,18 +396,32 @@ export function ApiView({ t, useTabInfo }) {
 		}
 	}, [response]);
 
-	const activeParamCount = paramPairs.filter((p) => p?.enabled !== false && String(p?.name ?? "").trim() !== "").length;
+	const activeParamCount = paramPairs.filter((p) => p?.kind !== "path" && p?.enabled !== false && String(p?.name ?? "").trim() !== "").length;
+	const pathPairs = paramPairs.filter((p) => p?.kind === "path");
+	const activeEnvVarCount = (activeEnv?.vars ?? []).filter((p) => p?.enabled !== false && String(p?.name ?? "").trim() !== "").length;
+	const sent = response?.sent;
 
 	return h("div", { className: "ce-root cea-root", onKeyDown: (e) => {
-		if ((e.metaKey || e.ctrlKey) && e.key === "Enter" && !importOpen && !saveOpen) {
+		if ((e.metaKey || e.ctrlKey) && e.key === "Enter" && !importOpen && !saveOpen && !codeMenuOpen) {
 			e.preventDefault(); e.stopPropagation(); send();
 		}
 	} },
 		h("div", { className: "cea-tools" },
-			h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost", title: t("api.importTitle"), "data-ce-popup-trigger": "api-import", "aria-expanded": importOpen, onClick: () => { setImportOpen((value) => !value); setHistOpen(false); setSaveOpen(false); } }, t("api.import")),
+			h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost", title: t("api.importTitle"), "data-ce-popup-trigger": "api-import", "aria-expanded": importOpen, onClick: () => { setImportOpen((value) => !value); setHistOpen(false); setSaveOpen(false); setCodeMenuOpen(false); } }, t("api.import")),
 			h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost", title: t("api.copyCurl"), disabled: url.trim() === "", onClick: copyCurl }, copied ? t("api.copied") : "⧉ curl"),
-			h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost", title: t("api.saveTitle"), "data-ce-popup-trigger": "api-save", "aria-expanded": saveOpen, onClick: () => { setSaveOpen((value) => !value); setHistOpen(false); setImportOpen(false); } }, t("api.saveBtn")),
-			h("button", { type: "button", className: `ce-sk-btn ce-sk-btn-ghost${histOpen ? " cea-btn-on" : ""}`, title: t("api.history"), "data-ce-popup-trigger": "api-history", "aria-expanded": histOpen, onClick: () => { setHistOpen((v) => !v); setSaveOpen(false); setImportOpen(false); } }, `${t("api.history")}${history.length ? ` ${history.length}` : ""}`),
+			h("button", { type: "button", className: `ce-sk-btn ce-sk-btn-ghost${codeMenuOpen ? " cea-btn-on" : ""}`, title: t("api.codeTitle"), disabled: url.trim() === "", "data-ce-popup-trigger": "api-code", "aria-expanded": codeMenuOpen, onClick: () => { setCodeMenuOpen((value) => !value); setHistOpen(false); setSaveOpen(false); setImportOpen(false); } }, copiedCode ? t("api.copied") : `</> ${t("api.code")}`),
+			h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost", title: t("api.saveTitle"), "data-ce-popup-trigger": "api-save", "aria-expanded": saveOpen, onClick: () => { setSaveOpen((value) => !value); setHistOpen(false); setImportOpen(false); setCodeMenuOpen(false); } }, t("api.saveBtn")),
+			h("button", { type: "button", className: `ce-sk-btn ce-sk-btn-ghost${histOpen ? " cea-btn-on" : ""}`, title: t("api.history"), "data-ce-popup-trigger": "api-history", "aria-expanded": histOpen, onClick: () => { setHistOpen((v) => !v); setSaveOpen(false); setImportOpen(false); setCodeMenuOpen(false); } }, `${t("api.history")}${history.length ? ` ${history.length}` : ""}`),
+			h("span", { className: "ce-spacer" }),
+			h("select", {
+				className: "cea-method cea-env",
+				"aria-label": t("api.envSelect"),
+				title: t("api.envSelect"),
+				value: envStore.activeId ?? "",
+				onChange: (e) => { setEnvStore((store) => selectEnv(store, e.target.value || null)); setEnvDeleteArmed(false); },
+			},
+				h("option", { value: "" }, t("api.envNone")),
+				envStore.envs.map((env) => h("option", { key: env.id, value: env.id }, env.name))),
 		),
 		h("div", { className: "cea-bar" },
 			h("select", { className: `cea-method cea-request-method cea-m-${method.toLowerCase()}`, "aria-label": t("api.method"), value: method, onChange: (e) => setMethod(e.target.value) },
@@ -367,7 +431,7 @@ export function ApiView({ t, useTabInfo }) {
 				placeholder: t("api.urlPlaceholder"),
 				"aria-label": t("api.urlPlaceholder"),
 				value: url,
-				onChange: (e) => setUrl(e.target.value),
+				onChange: (e) => onUrlChange(e.target.value),
 				onKeyDown: (e) => {
 					if (e.key === "Enter") { e.preventDefault(); e.stopPropagation(); send(); }
 				},
@@ -375,6 +439,20 @@ export function ApiView({ t, useTabInfo }) {
 			h("button", { type: "button", className: "ce-sk-btn cea-send", title: t("api.sendShortcut"), disabled: sending || url.trim() === "", onClick: send }, sending ? t("api.sending") : t("api.send")),
 		),
 
+		codeMenuOpen
+			? h("div", { className: "cea-hist cea-codemenu", ref: codeMenuRef, role: "dialog", "aria-label": t("api.codeTitle") },
+				h("div", { className: "cea-hist-tabs" },
+					h("span", null, t("api.codeTitle")),
+					h("span", { className: "ce-spacer" }),
+					h("button", { type: "button", className: "ce-tool ce-tiny", title: t("close"), onClick: () => setCodeMenuOpen(false) }, "✕"),
+				),
+				h("div", { className: "cea-hist-list ce-scroll" },
+					SNIPPET_KINDS.map((kind) => h("button", { key: kind.id, type: "button", className: "cea-hmain cea-code-item", title: t("api.codeItemTitle"), onClick: () => copySnippet(kind) },
+						h("span", { className: "cea-code-label" }, kind.label),
+						copiedCode === kind.id ? h("span", { className: "cea-ok cea-code-copied" }, "✓") : null,
+					))),
+			)
+			: null,
 		histOpen
 			? h("div", { className: "cea-hist", ref: historyRef, role: "dialog", "aria-label": t("api.history") },
 				h("div", { className: "cea-hist-tabs" },
@@ -417,8 +495,8 @@ export function ApiView({ t, useTabInfo }) {
 		h("div", { className: "cea-scroll cea-workspace", ref: workspaceRef, style: { gridTemplateRows: `minmax(0, ${requestShare}fr) 10px minmax(0, ${100 - requestShare}fr)` } },
 			h("section", { className: "cea-request", "aria-label": t("api.requestConfig") },
 			h("div", { className: "cea-request-tabs", role: "group", "aria-label": t("api.requestConfig") },
-				[ ["params", t("api.params"), activeParamCount], ["headers", t("api.headers"), headers.filter((p) => p.enabled !== false && p.name?.trim()).length], ["body", t("api.body"), bodyType === "none" ? 0 : 1], ["variables", t("api.environment"), envPairs.filter((p) => p.enabled !== false && p.name?.trim()).length], ["settings", t("api.settings"), 0] ].map(([id, label, count]) =>
-					h("button", { type: "button", key: id, className: `cea-config-tab${requestTab === id ? " cea-config-tab-on" : ""}`, "aria-pressed": requestTab === id, onClick: () => setRequestTab(id) }, label, count ? h("span", { className: "cea-tab-count" }, count) : null)),
+				[ ["params", t("api.params"), activeParamCount], ["headers", t("api.headers"), headers.filter((p) => p.enabled !== false && p.name?.trim()).length], ["body", t("api.body"), bodyType === "none" ? 0 : 1], ["auth", t("api.auth"), auth.mode === "none" ? 0 : 1], ["variables", t("api.environment"), activeEnvVarCount], ["settings", t("api.settings"), 0] ].map(([id, label, count]) =>
+					h("button", { type: "button", key: id, className: `cea-config-tab${requestTab === id ? " cea-config-tab-on" : ""}`, "aria-pressed": requestTab === id, onClick: () => { setRequestTab(id); setEnvDeleteArmed(false); } }, label, count ? h("span", { className: "cea-tab-count" }, count) : null)),
 			),
 			h("div", { className: "cea-request-panel" },
 			requestTab === "settings" ? h("div", { className: "cea-settings" }, h("label", { className: "cea-tmo" }, t("api.timeout"),
@@ -432,9 +510,63 @@ export function ApiView({ t, useTabInfo }) {
 						onChange: (e) => setTimeoutMs(Math.max(1000, Math.min(120000, Number(e.target.value) || 30000))),
 					}),
 				)) : null,
-			requestTab === "params" ? h(RequestFields, { t, label: t("api.params"), rows: paramPairs, onChange: setParamPairs, hint: t("api.paramsHint") }) : null,
+			requestTab === "params" ? h(Fragment, null,
+				h(RequestFields, { t, label: t("api.params"), rows: paramPairs.filter((p) => p?.kind !== "path"), onChange: onQueryPairsChange, hint: t("api.paramsHint") }),
+				pathPairs.length > 0
+					? h(RequestFields, { t, label: t("api.pathParams"), rows: pathPairs, onChange: onPathPairsChange, hint: t("api.pathParamsHint") })
+					: null,
+			) : null,
 			requestTab === "headers" ? h(RequestFields, { t, label: t("api.headers"), rows: headers, onChange: setHeaders }) : null,
-			requestTab === "variables" ? h(RequestFields, { t, label: t("api.environment"), rows: envPairs, onChange: setEnvPairs, hint: t("api.envTitle") }) : null,
+			requestTab === "variables" ? h(Fragment, null,
+				h("div", { className: "cea-envbar" },
+					h("input", {
+						className: "ce-input cea-env-name",
+						"aria-label": t("api.envName"),
+						placeholder: t("api.envName"),
+						value: envDraftName,
+						disabled: !activeEnv,
+						spellCheck: false,
+						onChange: (e) => activeEnv && setEnvNameDraft({ id: activeEnv.id, name: e.target.value }),
+						onBlur: commitEnvName,
+						onKeyDown: (e) => {
+							e.stopPropagation();
+							if (e.key === "Enter") { commitEnvName(); e.currentTarget?.blur?.(); }
+						},
+					}),
+					h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost", title: t("api.envNewTitle"), onClick: createEnv }, `＋ ${t("api.envNew")}`),
+					activeEnv
+						? h("button", { type: "button", className: `ce-sk-btn ce-sk-btn-ghost${envDeleteArmed ? " cea-danger" : ""}`, title: t("api.envDelete"), onClick: deleteActiveEnv }, envDeleteArmed ? t("api.envDeleteConfirm") : t("api.envDelete"))
+						: null,
+				),
+				activeEnv
+					? h(RequestFields, { t, label: t("api.environment"), rows: activeEnv.vars, onChange: (rows) => setEnvStore((store) => setEnvVars(store, activeEnv.id, rows)), hint: t("api.envTitle") })
+					: h("div", { className: "cea-empty" }, h("span", null, t("api.envNoActive"))),
+			) : null,
+			requestTab === "auth" ? h("div", { className: "cea-auth" },
+				h("div", { className: "cea-sec" },
+					h("span", null, t("api.auth")),
+					h("select", { className: "cea-method", "aria-label": t("api.auth"), value: auth.mode, onChange: (e) => setAuth({ ...auth, mode: e.target.value }) },
+						h("option", { value: "none" }, t("api.authNone")),
+						h("option", { value: "bearer" }, t("api.authBearer")),
+						h("option", { value: "basic" }, t("api.authBasic")),
+					),
+				),
+				auth.mode === "bearer"
+					? h("label", { className: "cea-auth-row" },
+						h("span", null, t("api.authToken")),
+						h("input", { className: "ce-input", "aria-label": t("api.authToken"), placeholder: t("api.authTokenPlaceholder"), value: auth.token, spellCheck: false, autoComplete: "off", onChange: (e) => setAuth({ ...auth, token: e.target.value }) }))
+					: null,
+				auth.mode === "basic"
+					? h(Fragment, null,
+						h("label", { className: "cea-auth-row" },
+							h("span", null, t("api.authUser")),
+							h("input", { className: "ce-input", "aria-label": t("api.authUser"), value: auth.user, spellCheck: false, autoComplete: "off", onChange: (e) => setAuth({ ...auth, user: e.target.value }) })),
+						h("label", { className: "cea-auth-row" },
+							h("span", null, t("api.authPass")),
+							h("input", { className: "ce-input", "aria-label": t("api.authPass"), placeholder: t("api.authPassPlaceholder"), value: auth.pass, spellCheck: false, autoComplete: "off", onChange: (e) => setAuth({ ...auth, pass: e.target.value }) })))
+					: null,
+				h("div", { className: "cea-fields-footer" }, h("span", null, t("api.authHint"))),
+			) : null,
 			requestTab === "body" ? h(Fragment, null,
 			h("div", { className: "cea-sec" },
 				h("span", null, t("api.body")),
@@ -504,16 +636,36 @@ export function ApiView({ t, useTabInfo }) {
 							: h(Fragment, null,
 								h("span", { className: statusClass(response.status) }, `${response.status} ${response.statusText ?? ""}`),
 								h("span", { className: "cea-meta" }, `${response.ms ?? 0}ms · ${prettySize(response.size ?? 0)}${response.truncated ? " · truncated" : ""}`),
-								h("span", { className: "ce-spacer" }),
-								h("button", { type: "button", className: "ce-link", onClick: () => setShowRespHeaders((v) => !v) }, `${t("api.respHeaders")} ${showRespHeaders ? "▾" : "▸"}`),
 							),
 					),
+					h("div", { className: "cea-hist-tabs cea-resp-tabs", role: "tablist", "aria-label": t("api.resp") },
+						[["body", t("api.respBody")], ["headers", t("api.respHeaders")], ["timeline", t("api.timeline")]].map(([id, label]) =>
+							h("button", { type: "button", role: "tab", key: id, className: `cea-tab${respTab === id ? " cea-tab-on" : ""}`, "aria-selected": respTab === id, onClick: () => setRespTab(id) }, label))),
 					h("div", { className: "cea-response-content ce-scroll" },
-						showRespHeaders && !response.error
-							? h("div", { className: "cea-hlist" }, (response.headers ?? []).map((hd, i) =>
-								h("div", { key: i }, h("span", { className: "cea-hk" }, hd[0]), h("span", null, hd[1]))))
-							: null,
-						!response.error ? h("pre", { className: "cea-resp" }, respJson ?? response.text ?? "") : null,
+						respTab === "headers"
+							? (response.error
+								? h("div", { className: "ce-note" }, `${t("api.err")}: ${response.error}`)
+								: h("div", { className: "cea-hlist" }, (response.headers ?? []).map((hd, i) =>
+									h("div", { key: i }, h("span", { className: "cea-hk" }, hd[0]), h("span", null, hd[1])))))
+							: respTab === "timeline"
+								? (sent
+									? h("div", { className: "cea-timeline" },
+										h("div", { className: "cea-tl-req" },
+											h("span", { className: `cea-mbadge cea-m-${String(sent.method).toLowerCase()}` }, sent.method),
+											h("span", { className: "cea-hurl" }, sent.url)),
+										h("div", { className: "cea-hlist" }, (sent.headers ?? []).map((hd, i) =>
+											h("div", { key: i }, h("span", { className: "cea-hk" }, hd.name), h("span", null, hd.value)))),
+										Array.isArray(sent.multipart)
+											? h("div", { className: "cea-hlist" }, sent.multipart.map((f, i) =>
+												h("div", { key: i }, h("span", { className: "cea-hk" }, `[form] ${f.name}`), h("span", null, f.value))))
+											: null,
+										typeof sent.body === "string" && sent.body !== ""
+											? h("pre", { className: "cea-resp cea-tl-body" }, sent.body)
+											: null,
+										h("div", { className: "cea-tl-meta" }, `${t("api.timeout")}: ${sent.timeoutMs ?? 30000}ms${response.error ? "" : ` · ${response.status} · ${response.ms ?? 0}ms · ${prettySize(response.size ?? 0)}`}`),
+									)
+									: h("div", { className: "ce-note" }, t("api.timelineEmpty")))
+								: h("pre", { className: "cea-resp" }, !response.error ? (respJson ?? response.text ?? "") : `${t("api.err")}: ${response.error}`),
 					),
 				)
 				: h("div", { className: "cea-empty" }, h("strong", null, t("api.responseEmpty")), h("span", null, t("api.sendShortcut"))),
@@ -525,7 +677,7 @@ export function ApiView({ t, useTabInfo }) {
 					h("span", null, t("api.importTitle")),
 					h("button", { type: "button", className: "ce-tool ce-tiny", onClick: () => setImportOpen(false) }, "✕"),
 				),
-				h("textarea", { className: "cea-body cea-import", autoFocus: true, "aria-label": t("api.importTitle"), value: importText, spellcheck: false, placeholder: "curl -X POST 'https://…' -H 'K: V' -d '{…}'", onChange: (e) => setImportText(e.target.value) }),
+				h("textarea", { className: "cea-body cea-import", autoFocus: true, "aria-label": t("api.importTitle"), value: importText, spellcheck: false, placeholder: t("api.importPlaceholder"), onChange: (e) => setImportText(e.target.value) }),
 				h("div", { className: "cea-bar" },
 					h("span", { className: "ce-spacer" }),
 					h("button", { type: "button", className: "ce-sk-btn", disabled: importText.trim() === "", onClick: doImport }, t("api.importBtn")),

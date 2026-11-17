@@ -546,6 +546,93 @@ check("removed tools release left entries and main seats", ![...leftSlots.values
 disposeLeftTools();
 check("plugin unload releases all left registrations and subscriptions", leftSlots.size === 0 && leftLayoutListeners.size === 0 && leftRegistryListeners.size === 0, { slots: leftSlots.size, layout: leftLayoutListeners.size, registry: leftRegistryListeners.size });
 
+// --- Right sidebar first opening: widest the frame allows, then the user's own drag ----------
+const { installRightbarWidth, rightbarWidthWriter, readRememberedWidth, rememberWidth, measureRightbarWidth, WIDTH_KEY } = await import("./src/client/rightbarwidth.js");
+const widthStorage = (initial = {}) => {
+	const data = new Map(Object.entries(initial));
+	return { getItem: (key) => (data.has(key) ? data.get(key) : null), setItem: (key, value) => { data.set(key, String(value)); } };
+};
+// The host store's own clamp for the frame it is measuring: [300px, 70%], rounded.
+const widthLayout = (viewport) => {
+	const state = { viewport };
+	const log = [];
+	return { log, state, layout: { panels: { setRightbar: (px) => log.push(Math.min(Math.max(300, Math.round(px)), Math.round(state.viewport * 0.7))) } } };
+};
+// The frame as the plugin sees it: the right column track, the rightbar handle, the resize event.
+const widthFrame = ({ track = 0, handle = false } = {}) => {
+	const listeners = new Map();
+	const on = (kind, fn) => { const set = listeners.get(kind) ?? new Set(); set.add(fn); listeners.set(kind, set); };
+	const fire = (kind) => { for (const fn of listeners.get(kind) ?? []) fn({}); return listeners.get(kind)?.size ?? 0; };
+	const target = { closest: (selector) => (handle && selector === '[data-side="rightbar"]' ? {} : null) };
+	return {
+		doc: {
+			addEventListener: on,
+			removeEventListener: (kind, fn) => { listeners.get(kind)?.delete(fn); },
+			querySelector: (selector) => selector === "[data-rightbar-col]"
+				? { getBoundingClientRect: () => ({ width: track }) }
+				: selector === '[data-side="rightbar"]' && handle ? {} : null,
+			pointerUp: () => { for (const fn of listeners.get("pointerup") ?? []) fn({ target }); return listeners.get("pointerup")?.size ?? 0; },
+		},
+		view: { addEventListener: on, removeEventListener: (kind, fn) => { listeners.get(kind)?.delete(fn); }, resize: () => fire("resize") },
+	};
+};
+check("the width seam is probed before anything is written", rightbarWidthWriter(null) === null && rightbarWidthWriter({}) === null && rightbarWidthWriter({ panels: {} }) === null);
+check("a host without the internal width action keeps its own 45% opening", [undefined, null, {}, { panels: {} }].every((layout) => typeof installRightbarWidth({ layout, doc: null, storage: null }) === "function"));
+const firstOpen = widthLayout(1400);
+installRightbarWidth({ layout: firstOpen.layout, doc: null, storage: widthStorage() });
+check("the first opening asks for the ceiling and lands on 70% of the frame", firstOpen.log.length === 1 && firstOpen.log[0] === 980, firstOpen.log);
+const restored = widthLayout(1400);
+installRightbarWidth({ layout: restored.layout, doc: null, storage: widthStorage({ [WIDTH_KEY]: "520" }) });
+check("a remembered drag is what the first opening restores", restored.log[0] === 520, restored.log);
+check("junk and below-floor widths are not a remembered choice", ["missing", "", "abc", "0", "120", "NaN"].map((raw) => readRememberedWidth(widthStorage(raw === "missing" ? {} : { [WIDTH_KEY]: raw }))).every((px) => px === null) && readRememberedWidth(widthStorage({ [WIDTH_KEY]: "300" })) === 300);
+check("rememberWidth rejects junk and rounds a real width", rememberWidth(0, widthStorage()) === false && rememberWidth(Number.NaN, widthStorage()) === false && rememberWidth(900.4, widthStorage()) === true);
+const dragged = widthStorage();
+const draggedFrame = widthFrame({ track: 760, handle: true });
+installRightbarWidth({ layout: widthLayout(1400).layout, doc: draggedFrame.doc, storage: dragged, afterDrag: (run) => run() });
+draggedFrame.doc.pointerUp();
+check("a settled drag becomes the width the next opening restores", dragged.getItem(WIDTH_KEY) === "760", dragged.getItem(WIDTH_KEY));
+const plainPointer = widthFrame({ track: 760, handle: false });
+const plainStore = widthStorage();
+installRightbarWidth({ layout: widthLayout(1400).layout, doc: plainPointer.doc, storage: plainStore, afterDrag: (run) => run() });
+plainPointer.doc.pointerUp();
+check("a pointerup that is not the rightbar handle stores nothing", plainStore.getItem(WIDTH_KEY) === null, plainStore.getItem(WIDTH_KEY));
+const noTrack = widthStorage();
+const closedFrame = widthFrame({ track: 0, handle: true });
+installRightbarWidth({ layout: widthLayout(1400).layout, doc: closedFrame.doc, storage: noTrack, afterDrag: (run) => run() });
+closedFrame.doc.pointerUp();
+check("a column with no track is not a width the user chose", noTrack.getItem(WIDTH_KEY) === null && measureRightbarWidth(closedFrame.doc) === 0, noTrack.getItem(WIDTH_KEY));
+const deferredFrame = widthFrame({ track: 700, handle: true });
+const deferredRuns = [];
+installRightbarWidth({ layout: widthLayout(1400).layout, doc: deferredFrame.doc, storage: widthStorage(), afterDrag: (run) => { deferredRuns.push(run); } });
+deferredFrame.doc.pointerUp();
+check("the width is read only after the gesture settles", deferredRuns.length === 1, deferredRuns.length);
+const resizeStore = widthStorage();
+const widened = widthLayout(1400);
+const closedForResize = widthFrame({ handle: false });
+installRightbarWidth({ layout: widened.layout, doc: closedForResize.doc, storage: resizeStore, view: closedForResize.view, afterDrag: (run) => run() });
+widened.state.viewport = 2000;
+closedForResize.view.resize();
+check("a wider window before the first opening moves the ceiling with the frame", widened.log.length === 2 && widened.log[1] === 1400, widened.log);
+const chosenStore = widthStorage({ [WIDTH_KEY]: "640" });
+const chosen = widthLayout(1400);
+const chosenFrame = widthFrame({ handle: false });
+installRightbarWidth({ layout: chosen.layout, doc: chosenFrame.doc, storage: chosenStore, view: chosenFrame.view, afterDrag: (run) => run() });
+chosen.state.viewport = 2000;
+chosenFrame.view.resize();
+check("a user who already chose a width is never re-widened by a resize", chosen.log.length === 1 && chosen.log[0] === 640, chosen.log);
+const openFrame = widthFrame({ track: 980, handle: true });
+const openLayout = widthLayout(1400);
+installRightbarWidth({ layout: openLayout.layout, doc: openFrame.doc, storage: widthStorage(), view: openFrame.view, afterDrag: (run) => run() });
+openLayout.state.viewport = 2000;
+openFrame.view.resize();
+check("a panel already on screen is not yanked wider by a resize", openLayout.log.length === 1, openLayout.log);
+const unloadFrame = widthFrame({ track: 700, handle: true });
+const unloadStorage = widthStorage();
+const disposeWidth = installRightbarWidth({ layout: widthLayout(1400).layout, doc: unloadFrame.doc, storage: unloadStorage, view: unloadFrame.view, afterDrag: (run) => run() });
+disposeWidth();
+check("plugin unload unhooks the drag memory and the resize pin", unloadFrame.doc.pointerUp() === 0 && unloadFrame.view.resize() === 0 && unloadStorage.getItem(WIDTH_KEY) === null, unloadStorage.getItem(WIDTH_KEY));
+
+
 // --- Tool toggle closes exact current-session tabs; sole guide is not a tool -----------------
 let toggleSession = "A", togglePanel = null, toggleBlocked = false;
 let toggleSerial = 0;
@@ -640,12 +727,12 @@ retryBrowser();
 check("failed browser open can retry immediately", browserAttempts === 2, browserAttempts);
 
 // --- curl parser -----------------------------------------------------------------------------
-const { parseCurl, toCurl, shellQuote } = await import("./src/client/curl.js");
-const { substituteVars, buildEnvMap } = await import("./src/client/apiclient.js");
+const { parseCurl, toCurl, shellQuote, tokenizeCurl, expandShortFlags } = await import("./src/client/curl.js");
+const { substituteVars, buildEnvMap } = await import("./src/client/reqmodel.js");
 const c1 = parseCurl("curl -X POST 'https://a.b/c?d=1' -H 'Content-Type: application/json' -H 'X-T: v' --data '{\"x\":1}'");
 check("parseCurl post json", c1.method === "POST" && c1.url === "https://a.b/c?d=1" && c1.headers.length === 2 && c1.body === '{"x":1}', c1);
 const c2 = parseCurl("curl https://a.b/x \\\n  -H 'A: b' \\\n  -u user:pass");
-check("parseCurl continuation + basic auth", c2.method === "GET" && c2.headers.some((hd) => hd.name === "Authorization" && hd.value.startsWith("Basic ")) && c2.headers.some((hd) => hd.name === "A" && hd.value === "b"), c2);
+check("parseCurl continuation + -u folds into the auth section (Bruno-style)", c2.method === "GET" && c2.auth?.mode === "basic" && c2.auth.user === "user" && c2.auth.pass === "pass" && !c2.headers.some((hd) => hd.name.toLowerCase() === "authorization") && c2.headers.some((hd) => hd.name === "A" && hd.value === "b"), c2);
 const c3 = parseCurl("curl -G https://a.b/s -d 'q=1' -d 'r=2'");
 check("parseCurl -G appends query", c3.method === "GET" && c3.url === "https://a.b/s?q=1&r=2" && c3.body === "", c3);
 const c4 = parseCurl("curl --json '{\"a\":1}' https://a.b/j");
@@ -656,6 +743,25 @@ const c8 = parseCurl("curl --data-raw 'line1\\\nline2' https://a.b/y");
 check("parseCurl keeps literal backslash+newline in single-quoted body", c8.body === "line1\\\nline2", JSON.stringify(c8.body));
 const c9 = parseCurl("curl -H \"X-A: 1 \\\n2\" https://a.b/z");
 check("parseCurl folds double-quoted line continuations", c9.headers.some((hd) => hd.name === "X-A" && hd.value === "1 2"), c9.headers);
+// curlconverter-style shapes (the parser Bruno's importer is built on)
+const ca = parseCurl("curl -XPOST 'https://a.b/x' -H'Authorization: Bearer tok' -d a=1 -d 'b=2 3'");
+check("parseCurl attached short flags (-XPOST, -H'…')", ca.method === "POST" && ca.headers.some((hd) => hd.name === "Authorization") === false, ca);
+check("parseCurl Bearer header folds into auth", ca.auth?.mode === "bearer" && ca.auth.token === "tok", ca);
+check("parseCurl k=v data chunks become form pairs", JSON.stringify(ca.form) === JSON.stringify([{ name: "a", value: "1" }, { name: "b", value: "2 3" }]) && ca.body === "", ca);
+const cb = parseCurl("curl 'https://a.b/z' --data-raw $'line1\\nline2\\x41\\''");
+check("parseCurl ANSI-C $'…' quoting decodes escapes", cb.body === "line1\nline2A'", JSON.stringify(cb.body));
+const cc = parseCurl("curl 'https://a.b/w?q=1' --url-query 'r=2' -H 'X-Empty;' --form-string 'f=v'");
+check("parseCurl --url-query appends to the URL", cc.url === "https://a.b/w?q=1&r=2", cc.url);
+check("parseCurl curl empty-header form (Name;)", cc.headers.some((hd) => hd.name === "X-Empty" && hd.value === ""), cc.headers);
+check("parseCurl --form-string becomes a multipart field", cc.multipart?.[0]?.name === "f" && cc.multipart[0].value === "v", cc.multipart);
+const cd = parseCurl("curl --data=a=1 --header='X-H: v' https://a.b/eq");
+check("parseCurl long flags with attached values (--data=, --header=)", cd.form?.[0]?.name === "a" && cd.headers.some((hd) => hd.name === "X-H" && hd.value === "v"), cd);
+check("tokenizeCurl keeps quoted spaces and drops the curl word", JSON.stringify(tokenizeCurl("curl 'a b' \"c d\"")) === JSON.stringify(["a b", "c d"]), tokenizeCurl("curl 'a b' \"c d\""));
+check("expandShortFlags leaves boolean clusters alone", JSON.stringify(expandShortFlags(["-sS", "-d", "x"])) === JSON.stringify(["-sS", "-d", "x"]), null);
+const ce = parseCurl("curl -H 'Authorization: Basic " + btoa(unescape(encodeURIComponent("u:p"))) + "' https://a.b/basic");
+check("parseCurl Basic header decodes into the auth section", ce.auth?.mode === "basic" && ce.auth.user === "u" && ce.auth.pass === "p" && ce.headers.length === 0, ce);
+const cf = parseCurl("curl -H 'Authorization: Basic !!!not-base64!!!' https://a.b/keep");
+check("parseCurl keeps undecodable Authorization headers as-is", cf.auth === undefined && cf.headers.some((hd) => hd.name === "Authorization"), cf);
 
 // --- curl export + env variables ----------------------------------------------------------------
 check("shellQuote escapes single quotes", shellQuote("it's") === `'it'\\''s'`, shellQuote("it's"));
@@ -675,13 +781,177 @@ check("substituteVars passthrough without braces", substituteVars("plain", {}) =
 check("buildEnvMap skips empty names, last wins", JSON.stringify(buildEnvMap([{ name: "", value: "x" }, { name: "a", value: "1" }, { name: "a", value: "2" }])) === JSON.stringify({ a: "2" }), buildEnvMap([{ name: "a", value: "1" }, { name: "a", value: "2" }]));
 
 // --- query params merge ---------------------------------------------------------------------------
-const { mergeParams } = await import("./src/client/apiclient.js");
+const { mergeParams } = await import("./src/client/reqmodel.js");
 check("mergeParams appends new param", mergeParams("https://a.b/x", [{ name: "q", value: "1" }]) === "https://a.b/x?q=1", mergeParams("https://a.b/x", [{ name: "q", value: "1" }]));
 check("mergeParams overrides same name, keeps others", mergeParams("https://a.b/x?q=1&r=2", [{ name: "q", value: "9" }]) === "https://a.b/x?q=9&r=2", mergeParams("https://a.b/x?q=1&r=2", [{ name: "q", value: "9" }]));
 check("mergeParams without active pairs is identity", mergeParams("https://a.b/x?q=1", []) === "https://a.b/x?q=1" && mergeParams("https://a.b/x", [{ name: " ", value: "1" }]) === "https://a.b/x", null);
 check("mergeParams preserves fragment", mergeParams("https://a.b/x#frag", [{ name: "q", value: "1" }]) === "https://a.b/x?q=1#frag", mergeParams("https://a.b/x#frag", [{ name: "q", value: "1" }]));
 check("mergeParams empty value sends bare name", mergeParams("https://a.b/x", [{ name: "q", value: "" }]) === "https://a.b/x?q=", mergeParams("https://a.b/x", [{ name: "q", value: "" }]));
 check("mergeParams encodes special chars", mergeParams("https://a.b/x", [{ name: "q", value: "a b&c" }]).includes("q=a+b%26c") || mergeParams("https://a.b/x", [{ name: "q", value: "a b&c" }]).includes("q=a%20b%26c"), mergeParams("https://a.b/x", [{ name: "q", value: "a b&c" }]));
+
+// --- request model: URL ↔ params two-way sync (Bruno query sync) ---------------------------------
+const {
+	splitUrl, parseQueryPairs, buildQuery, syncParamsFromUrl, applyParamsToUrl, normalizeUrlParams,
+	normalizeEnvStore, emptyEnvStore, activeEnvOf, envMapOf, addEnv, renameEnv, removeEnv, selectEnv, setEnvVars,
+	normalizeAuth, basicAuthValue, decodeBasicAuth, authHeaders, applyAuth, resolveRequest, guessRawSubType,
+} = await import("./src/client/reqmodel.js");
+check("splitUrl separates base, query and fragment", JSON.stringify(splitUrl("https://a.b/x?q=1#f")) === JSON.stringify({ base: "https://a.b/x", query: "q=1", fragment: "#f" }), splitUrl("https://a.b/x?q=1#f"));
+check("splitUrl tolerates missing query/fragment", splitUrl("https://a.b/x").query === "" && splitUrl("https://a.b/x").fragment === "" && splitUrl("").base === "", null);
+check("parseQueryPairs decodes and keeps duplicates in order", JSON.stringify(parseQueryPairs("q=1&x=a+b&q=2")) === JSON.stringify([{ name: "q", value: "1" }, { name: "x", value: "a b" }, { name: "q", value: "2" }]), parseQueryPairs("q=1&x=a+b&q=2"));
+check("buildQuery skips disabled and nameless rows", buildQuery([{ name: "a", value: "1" }, { name: "b", value: "2", enabled: false }, { name: " ", value: "3" }]) === "a=1", buildQuery([{ name: "a", value: "1" }]));
+check("URL→params mirrors the query and carries descriptions over once", JSON.stringify(syncParamsFromUrl("https://a.b/x?q=1&q=2&z=", [{ name: "q", value: "old", description: "first" }]).map((r) => [r.name, r.value, r.enabled, r.kind, r.description])) === JSON.stringify([["q", "1", true, "query", "first"], ["q", "2", true, "query", ""], ["z", "", true, "query", ""]]), syncParamsFromUrl("https://a.b/x?q=1&q=2", [{ name: "q", description: "first" }]));
+check("URL→params drops rows that left the URL", syncParamsFromUrl("https://a.b/x", [{ name: "gone", value: "1" }]).length === 0, null);
+check("params→URL rebuilds query and preserves base and fragment", applyParamsToUrl("https://a.b/x?stale=1#f", [{ name: "q", value: "1" }, { name: "q", value: "2" }, { name: "off", value: "x", enabled: false }]) === "https://a.b/x?q=1&q=2#f", applyParamsToUrl("https://a.b/x?stale=1#f", [{ name: "q", value: "1" }]));
+check("params→URL with no active rows clears the query", applyParamsToUrl("https://a.b/x?q=1", []) === "https://a.b/x" && applyParamsToUrl("https://a.b/x?q=1", [{ name: "q", value: "1", enabled: false }]) === "https://a.b/x", null);
+check("sync round-trips: url→params→url is stable", applyParamsToUrl("https://a.b/x?a=1&b=x+y", syncParamsFromUrl("https://a.b/x?a=1&b=x+y", [])) === "https://a.b/x?a=1&b=x+y", null);
+check("normalizeUrlParams merges legacy snapshots then re-projects", JSON.stringify(normalizeUrlParams("https://a.b/x?keep=1", [{ name: "q", value: "2" }]).pairs.map((r) => [r.name, r.value, r.enabled, r.kind])) === JSON.stringify([["keep", "1", true, "query"], ["q", "2", true, "query"]]) && normalizeUrlParams("https://a.b/x?keep=1", [{ name: "q", value: "2" }]).url === "https://a.b/x?keep=1&q=2", normalizeUrlParams("https://a.b/x?keep=1", [{ name: "q", value: "2" }]));
+
+// --- request model: environments (Bruno named environment store) ---------------------------------
+check("normalizeEnvStore migrates the legacy flat array", (() => {
+	const s = normalizeEnvStore([{ name: "base", value: "https://h" }]);
+	return s.envs.length === 1 && s.envs[0].id === "env-default" && s.envs[0].name === "Default" && s.activeId === "env-default" && envMapOf(s).base === "https://h";
+})(), null);
+check("normalizeEnvStore migrates an empty legacy array to no environment", normalizeEnvStore([]).envs.length === 0 && normalizeEnvStore([]).activeId === null && normalizeEnvStore(null).activeId === null && normalizeEnvStore("junk").activeId === null, null);
+check("normalizeEnvStore drops an unknown activeId", normalizeEnvStore({ envs: [{ id: "x", name: "X", vars: [] }], activeId: "zz" }).activeId === null, null);
+check("normalizeEnvStore sanitizes env rows", normalizeEnvStore({ envs: [null, { name: "  ", vars: "junk" }, { id: "y", name: "Y", vars: [{ name: "a", value: 1 }] }] , activeId: "y" }).envs.length === 2, normalizeEnvStore({ envs: [null, { id: "y" }] }));
+let envStore = emptyEnvStore();
+envStore = addEnv(envStore, { id: "e1" });
+check("addEnv creates an active auto-named environment", envStore.activeId === "e1" && envStore.envs[0].name === "Environment 1", envStore);
+envStore = addEnv(envStore, { id: "e2", name: "Prod" });
+envStore = setEnvVars(envStore, "e1", [{ name: "base", value: "https://dev" }]);
+envStore = setEnvVars(envStore, "e2", [{ name: "base", value: "https://prod" }, { name: "off", value: "x", enabled: false }]);
+check("the active environment drives the send-time variable map", envMapOf(envStore).base === "https://prod" && envMapOf(envStore).off === undefined, envMapOf(envStore));
+envStore = selectEnv(envStore, "e1");
+check("selectEnv switches the active variable map", envMapOf(envStore).base === "https://dev", envMapOf(envStore));
+check("selectEnv rejects unknown ids", selectEnv(envStore, "nope").activeId === "e1" && selectEnv(envStore, "").activeId === null, null);
+check("activeEnvOf returns null for No Environment", activeEnvOf(selectEnv(envStore, null)) === null && envMapOf(selectEnv(envStore, null)) && Object.keys(envMapOf(selectEnv(envStore, null))).length === 0, null);
+check("renameEnv trims and refuses empty names", renameEnv(envStore, "e1", "  Dev  ").envs[0].name === "Dev" && renameEnv(envStore, "e1", "   ") === envStore, null);
+check("removeEnv drops the environment and deactivates it", removeEnv(envStore, "e1").envs.length === 1 && removeEnv(envStore, "e1").activeId === null && removeEnv(envStore, "e2").activeId === "e1", null);
+check("addEnv avoids duplicate auto names", addEnv({ envs: [{ id: "a", name: "Environment 1", vars: [] }, { id: "b", name: "Environment 2", vars: [] }], activeId: null }).envs[2].name === "Environment 3", null);
+
+// --- request model: auth section (Bruno Auth tab) -------------------------------------------------
+check("normalizeAuth coerces arbitrary input", JSON.stringify(normalizeAuth({ mode: "bogus", token: 5 })) === JSON.stringify({ mode: "none", token: "", user: "", pass: "" }) && normalizeAuth(null).mode === "none", null);
+check("basicAuthValue is UTF-8 safe and decodable", decodeBasicAuth(basicAuthValue("üser", "p:ss"))?.user === "üser" && decodeBasicAuth(basicAuthValue("üser", "p:ss")).pass === "p:ss", null);
+check("decodeBasicAuth rejects malformed values", decodeBasicAuth("Bearer x") === null && decodeBasicAuth("Basic !!!") === null && decodeBasicAuth("") === null, null);
+check("authHeaders generates Bearer/Basic and nothing for none", JSON.stringify(authHeaders({ mode: "bearer", token: "T" })) === JSON.stringify([{ name: "Authorization", value: "Bearer T" }]) && authHeaders({ mode: "none" }).length === 0 && authHeaders({ mode: "bearer", token: " " }).length === 0 && authHeaders({ mode: "basic", user: "", pass: "" }).length === 0, null);
+check("applyAuth overrides a manual Authorization header once", (() => {
+	const out = applyAuth([{ name: "X", value: "1" }, { name: "authorization", value: "manual" }], { mode: "bearer", token: "T" });
+	return out.length === 2 && out[1].name === "Authorization" && out[1].value === "Bearer T";
+})(), null);
+check("applyAuth with mode none leaves headers untouched", applyAuth([{ name: "authorization", value: "manual" }], { mode: "none" })[0].value === "manual", null);
+
+// --- request model: send resolution (one builder for wire, timeline and codegen) ------------------
+const resolvedSend = resolveRequest({
+	method: "post", url: "  https://{{host}}/x?a=1 ", headers: [{ name: " X-T ", value: "{{tok}}" }, { name: "Authorization", value: "manual" }, { name: "off", value: "x", enabled: false }, { name: "", value: "y" }],
+	bodyType: "raw", rawSub: "json", body: '{"i":{{id}}}', auth: { mode: "bearer", token: "T" }, timeoutMs: 5000,
+}, { host: "h.test", tok: "tv", id: 9 });
+check("resolveRequest substitutes vars in URL, headers and body", resolvedSend.url === "https://h.test/x?a=1" && resolvedSend.headers[0].name === "X-T" && resolvedSend.headers[0].value === "tv" && resolvedSend.body === '{"i":9}', resolvedSend);
+check("resolveRequest folds auth last, dropping the manual header", resolvedSend.headers.filter((hd) => hd.name.toLowerCase() === "authorization").length === 1 && resolvedSend.headers.at(-1).value === "Bearer T", resolvedSend.headers);
+check("resolveRequest normalizes the method and keeps a finite timeout", resolvedSend.method === "POST" && resolvedSend.timeoutMs === 5000, resolvedSend);
+const resolvedForm = resolveRequest({ method: "POST", url: "https://a.b/f", headers: [], bodyType: "form", formPairs: [{ name: "a", value: "{{v}}" }, { name: "b", value: "x", enabled: false }] }, { v: "1 2" });
+check("resolveRequest form-encodes active pairs and sets the content type", resolvedForm.body === "a=1+2" && resolvedForm.headers.some((hd) => hd.value === "application/x-www-form-urlencoded"), resolvedForm);
+const resolvedMp = resolveRequest({ method: "POST", url: "https://a.b/m", headers: [{ name: "Content-Type", value: "text/plain" }], bodyType: "multipart", formPairs: [{ name: "f", value: "v" }] }, {});
+check("resolveRequest multipart keeps fields separate from the body", resolvedMp.multipart?.[0]?.name === "f" && resolvedMp.body === undefined, resolvedMp);
+const resolvedNone = resolveRequest({ method: "GET", url: "https://a.b/n", headers: [], bodyType: "none", timeoutMs: 0 }, {});
+check("resolveRequest omits body/multipart/timeout for a plain GET", resolvedNone.body === undefined && resolvedNone.multipart === undefined && resolvedNone.timeoutMs === undefined && resolvedNone.headers.length === 0, resolvedNone);
+check("guessRawSubType prefers the content type then shape then text", guessRawSubType([{ name: "Content-Type", value: "application/vnd.api+json" }], "x") === "json" && guessRawSubType([], '{"a":1}') === "json" && guessRawSubType([], "[oops") === "text" && guessRawSubType([], "<?xml v") === "xml" && guessRawSubType([], "hello") === "text", null);
+
+// --- code snippet generators (Bruno-style codegen) ---------------------------------------------------
+const { toCurlSnippet, toFetchSnippet, toPythonSnippet, SNIPPET_KINDS } = await import("./src/client/codegen.js");
+check("codegen menu offers curl, fetch, python and bru generators", JSON.stringify(SNIPPET_KINDS.map((k) => k.id)) === JSON.stringify(["curl", "fetch", "python", "bru"]), SNIPPET_KINDS.map((k) => k.id));
+check("curl snippet from a resolved request round-trips through parseCurl", (() => {
+	const text = toCurlSnippet({ method: "POST", url: "https://a.b/x?q=1", headers: [{ name: "Authorization", value: "Bearer T" }], body: '{"a":1}', timeoutMs: 30000 });
+	const back = parseCurl(text);
+	return back.method === "POST" && back.url === "https://a.b/x?q=1" && back.auth?.mode === "bearer" && back.body === '{"a":1}';
+})(), null);
+const fetchSnippet = toFetchSnippet({ method: "POST", url: "https://a.b/x", headers: [{ name: "Content-Type", value: "application/json" }], body: '{"a":"q\\"uote"}', timeoutMs: 30000 });
+check("fetch snippet is valid JS with escaped literals and a timeout signal", fetchSnippet.includes('await fetch("https://a.b/x"') && fetchSnippet.includes('body: "{\\"a\\":\\"q\\\\\\"uote\\"}"') && fetchSnippet.includes("AbortSignal.timeout(30000)"), fetchSnippet);
+check("fetch snippet builds FormData for multipart and skips manual content types", (() => {
+	const s = toFetchSnippet({ method: "POST", url: "https://a.b/m", headers: [], multipart: [{ name: "f", value: "v v" }] });
+	return s.includes("new FormData()") && s.includes('form.append("f", "v v")') && s.includes("body: form") && !s.includes("headers");
+})(), null);
+const pySnippet = toPythonSnippet({ method: "POST", url: "https://a.b/x", headers: [{ name: "X-T", value: "v" }], body: "b", timeoutMs: 30000 });
+check("python snippet wires headers, data and timeout", pySnippet.includes("import requests") && pySnippet.includes('url = "https://a.b/x"') && pySnippet.includes('requests.request("POST", url, headers=headers, data=data, timeout=30)'), pySnippet);
+check("python snippet uses files= tuples for multipart", toPythonSnippet({ method: "POST", url: "https://a.b/m", headers: [], multipart: [{ name: "f", value: "v" }] }).includes('("f", (None, "v"))'), null);
+check("snippets never embed unresolved placeholders when vars are resolved", !toFetchSnippet(resolveRequest({ method: "GET", url: "https://{{h}}/x", headers: [], bodyType: "none" }, { h: "real" })).includes("{{"), null);
+
+// --- editor tab list operations (VS Code tab model) ---------------------------------------------------
+const { closeOtherTabs, closeTabsToRight, removedPaths, pushClosedTab, popClosedTab, excludePinned, pinTab } = await import("./src/client/tabs.js");
+check("closeOtherTabs keeps only the anchor", JSON.stringify(closeOtherTabs(["a", "b", "c"], "b")) === JSON.stringify(["b"]) && closeOtherTabs(["a"], "gone").length === 0 && JSON.stringify(closeOtherTabs(null, "x")) === "[]", null);
+check("closeTabsToRight keeps through the anchor and no-ops without it", JSON.stringify(closeTabsToRight(["a", "b", "c"], "b")) === JSON.stringify(["a", "b"]) && closeTabsToRight(["a", "b"], "z").length === 2, null);
+check("removedPaths diffs the closing set out of the tab list", JSON.stringify(removedPaths(["a", "b", "c"], ["b"])) === JSON.stringify(["a", "c"]) && removedPaths(null, null).length === 0, null);
+let closedStack = pushClosedTab([], { path: "a", line: 3, col: 2 });
+closedStack = pushClosedTab(closedStack, { path: "b" });
+check("pushClosedTab stacks newest first with view state", closedStack[0].path === "b" && closedStack[1].line === 3, closedStack);
+check("pushClosedTab rejects garbage and caps the stack", pushClosedTab(closedStack, null).length === 2 && pushClosedTab(closedStack, { path: "" }).length === 2 && pushClosedTab(Array.from({ length: 12 }, (_, i) => ({ path: `p${i}` })), { path: "new" }, 10).length === 10, null);
+const [reopened, restStack] = popClosedTab(closedStack);
+check("popClosedTab returns MRU entry and the rest", reopened.path === "b" && restStack.length === 1 && restStack[0].path === "a" && popClosedTab([])[0] === null && popClosedTab(null)[1].length === 0, null);
+
+// --- find-widget replace (VS Code replace row) ---------------------------------------------------------
+const { applyReplace } = await import("./src/client/codeview.js");
+const repLines = ["foo bar", "bar foo bar", "untouched"];
+const repMatches = [
+	{ line: 1, col: 1, text: "foo" }, { line: 1, col: 5, text: "bar" },
+	{ line: 2, col: 1, text: "bar" }, { line: 2, col: 5, text: "foo" }, { line: 2, col: 9, text: "bar" },
+];
+const repAll = applyReplace(repLines, repMatches, "X", { all: true });
+check("replace-all rewrites every match right-to-left per line", repAll.count === 5 && repAll.lines[0] === "X X" && repAll.lines[1] === "X X X" && repAll.lines[2] === "untouched", repAll);
+const repOne = applyReplace(repLines, repMatches, "X", { all: false, index: 3 });
+check("replace-one rewrites only the indexed match", repOne.count === 1 && repOne.lines[1] === "bar X bar" && repOne.lines[0] === "foo bar", repOne);
+const repRe = applyReplace(["a1 b22"], [{ line: 1, col: 1, text: "a1" }, { line: 1, col: 4, text: "b22" }], "[$1 $&]", { all: true, regexRe: /([a-z])(\d+)/g });
+check("regex replace expands $1/$& references per match", repRe.lines[0] === "[a a1] [b b22]", repRe);
+check("applyReplace refuses empty inputs and stale matches", applyReplace([], repMatches, "X", { all: true }) === null && applyReplace(repLines, [], "X", { all: true }) === null && applyReplace(["changed"], [{ line: 1, col: 1, text: "foo" }], "X", { all: true }) === null && applyReplace(repLines, repMatches, "X", { all: false, index: 99 }) === null, null);
+check("applyReplace leaves the input lines untouched", repLines[0] === "foo bar" && repAll.lines !== repLines, null);
+
+// --- VS Code preserve-case replace (ported from base/common/search.ts) ---------------------------
+const { preserveCaseReplace } = await import("./src/client/codeview.js");
+check("preserveCase upper-cases for ALL-CAPS matches", preserveCaseReplace("FOO", "bar") === "BAR" && preserveCaseReplace("FOO_BAR", "baz_qux") === "BAZ_QUX", preserveCaseReplace("FOO_BAR", "baz_qux"));
+check("preserveCase lower-cases for all-lower matches", preserveCaseReplace("foo", "BAR") === "bar", null);
+check("preserveCase capitalizes for capitalized matches (and mirrors)", preserveCaseReplace("Foo", "bar") === "Bar" && preserveCaseReplace("fooBar", "BazQux") === "bazQux", null);
+check("preserveCase applies per hyphen/underscore segment", preserveCaseReplace("My-Var", "your-name") === "Your-Name" && preserveCaseReplace("my_var", "Your-Name") === "your-name", preserveCaseReplace("My-Var", "your-name"));
+check("preserveCase passes through when the case pattern is mixed", preserveCaseReplace("fOo", "bar") === "bar", null);
+const pcAll = applyReplace(["Foo foo FOO"], [{ line: 1, col: 1, text: "Foo" }, { line: 1, col: 5, text: "foo" }, { line: 1, col: 9, text: "FOO" }], "bar", { all: true, preserveCase: true });
+check("applyReplace preserves case per match", pcAll.lines[0] === "Bar bar BAR", pcAll);
+check("applyReplace ignores preserveCase once $-references exist (VS Code parity)", applyReplace(["Foo"], [{ line: 1, col: 1, text: "Foo" }], "$&-x", { all: true, regexRe: /Foo/g, preserveCase: true }).lines[0] === "Foo-x", null);
+
+// --- Bruno path params (:name segments) --------------------------------------------------------------
+const { parsePathParams, substitutePathParams } = await import("./src/client/reqmodel.js");
+check("parsePathParams finds :name segments in order", JSON.stringify(parsePathParams("https://a.b/users/:id/posts/:postId?q=1")) === JSON.stringify(["id", "postId"]) && parsePathParams("https://a.b/x").length === 0, null);
+check("sync keeps disabled query rows and existing path values through URL edits", JSON.stringify(syncParamsFromUrl("https://a.b/users/:id?q=1", [{ name: "q", value: "old", description: "d" }, { name: "gone", value: "x", enabled: false }, { name: "id", value: "7", kind: "path", description: "user" }]).map((r) => [r.name, r.value, r.enabled, r.kind, r.description])) === JSON.stringify([["q", "1", true, "query", "d"], ["id", "7", true, "path", "user"], ["gone", "x", false, "query", ""]]), syncParamsFromUrl("https://a.b/users/:id?q=1", [{ name: "gone", value: "x", enabled: false }]));
+check("sync adds fresh path segments empty and drops vanished ones", syncParamsFromUrl("https://a.b/:new", [])[0].value === "" && syncParamsFromUrl("https://a.b/x", [{ name: "id", value: "7", kind: "path" }]).length === 0, null);
+check("params→URL keeps :name literal and rebuilds only the query", applyParamsToUrl("https://a.b/u/:id?old=1#f", [{ name: "q", value: "2" }, { name: "id", value: "9", kind: "path" }]) === "https://a.b/u/:id?q=2#f", applyParamsToUrl("https://a.b/u/:id?old=1#f", [{ name: "q", value: "2" }]));
+check("substitutePathParams encodes values and leaves unresolved segments", substitutePathParams("https://a.b/u/:id/x/:miss", [{ name: "id", value: "a b", kind: "path" }, { name: "miss", value: "", kind: "path" }, { name: "off", value: "z", kind: "path", enabled: false }]) === "https://a.b/u/a%20b/x/:miss", substitutePathParams("https://a.b/u/:id/x/:miss", [{ name: "id", value: "a b", kind: "path" }]));
+check("resolveRequest substitutes path params on the wire URL only", resolveRequest({ method: "GET", url: "https://a.b/u/:id", paramPairs: [{ name: "id", value: "42", kind: "path" }], headers: [], bodyType: "none" }, {}).url === "https://a.b/u/42", null);
+
+// --- VS Code sticky tabs: pins survive bulk closes ------------------------------------------------------
+check("excludePinned removes pinned paths from bulk close sets", JSON.stringify(excludePinned(["a", "b", "c"], ["b"])) === JSON.stringify(["a", "c"]) && excludePinned(["a"], []).length === 1 && excludePinned(null, null).length === 0, null);
+check("pinTab moves the pinned tab to the front of the strip", JSON.stringify(pinTab(["a", "b", "c"], "c")) === JSON.stringify(["c", "a", "b"]) && pinTab(["a"], "z").length === 1, null);
+
+// --- Bruno .bru collection interop (plain-text, Git-friendly) -------------------------------------------
+const { requestToBru, parseBru, looksLikeBru, bruNameFor } = await import("./src/client/brucol.js");
+const bruState = {
+	method: "POST", url: "https://{{host}}/u/:id?q=1",
+	headers: [{ name: "X-A", value: "1" }, { name: "X-Off", value: "2", enabled: false }],
+	bodyType: "raw", rawSub: "json", body: '{\n  "a": 1\n}',
+	formPairs: [], paramPairs: [{ name: "q", value: "1", kind: "query" }, { name: "id", value: "", kind: "path" }, { name: "dbg", value: "1", enabled: false, kind: "query" }],
+	auth: { mode: "bearer", token: "tk" },
+};
+const bruText = requestToBru(bruState);
+check("bru export writes meta, method block, params, headers, auth and body", bruText.includes("meta {") && bruText.includes("  type: http") && bruText.includes("post {") && bruText.includes("  url: https://{{host}}/u/:id?q=1") && bruText.includes("  body: json") && bruText.includes("params:query {") && bruText.includes("  ~dbg: 1") && bruText.includes("params:path {") && bruText.includes("  id: ") && bruText.includes("  ~X-Off: 2") && bruText.includes("auth:bearer {") && bruText.includes("  token: tk") && bruText.includes("body:json {"), bruText);
+check("bru export keeps {{var}} templates verbatim", bruText.includes("{{host}}"), null);
+check("looksLikeBru separates bru documents from curl commands", looksLikeBru(bruText) === true && looksLikeBru("curl https://a.b/x") === false && looksLikeBru("meta {\n  name: x\n}") === true, null);
+const bruBack = parseBru(bruText);
+check("bru import restores method, url and auth", bruBack.method === "POST" && bruBack.url === "https://{{host}}/u/:id?q=1" && bruBack.auth.mode === "bearer" && bruBack.auth.token === "tk", bruBack);
+check("bru import restores params with kinds and disabled flags", JSON.stringify(bruBack.paramPairs.map((p) => [p.name, p.enabled, p.kind])) === JSON.stringify([["q", true, "query"], ["dbg", false, "query"], ["id", true, "path"]]), bruBack.paramPairs);
+check("bru import restores headers with disabled flags", JSON.stringify(bruBack.headers.map((hd) => [hd.name, hd.value, hd.enabled])) === JSON.stringify([["X-A", "1", true], ["X-Off", "2", false]]), bruBack.headers);
+check("bru import restores multi-line raw bodies exactly", bruBack.bodyType === "raw" && bruBack.rawSub === "json" && bruBack.body === '{\n  "a": 1\n}', bruBack.body);
+const bruFormBack = parseBru(requestToBru({ method: "PUT", url: "https://a.b/f", headers: [], bodyType: "form", formPairs: [{ name: "a", value: "b c" }, { name: "off", value: "x", enabled: false }], paramPairs: [], auth: { mode: "none" } }));
+check("bru form-urlencoded bodies round-trip with disabled rows", bruFormBack.bodyType === "form" && bruFormBack.formPairs[0].value === "b c" && bruFormBack.formPairs[1].enabled === false, bruFormBack);
+const bruMpBack = parseBru(requestToBru({ method: "POST", url: "https://a.b/m", headers: [], bodyType: "multipart", formPairs: [{ name: "f", value: "@pic.png" }], paramPairs: [], auth: { mode: "basic", user: "u", pass: "p" } }));
+check("bru multipart and basic auth round-trip", bruMpBack.bodyType === "multipart" && bruMpBack.formPairs[0].value === "@pic.png" && bruMpBack.auth.mode === "basic" && bruMpBack.auth.user === "u" && bruMpBack.auth.pass === "p", bruMpBack);
+check("bru quotes keys with spaces/colons and re-parses them", parseBru(requestToBru({ method: "GET", url: "https://a.b/x", headers: [{ name: "weird key: x", value: "v" }], bodyType: "none", paramPairs: [], auth: { mode: "none" } })).headers[0].name === "weird key: x", null);
+check("bru parser skips unknown blocks from newer Bruno versions", parseBru("meta {\n  name: x\n}\n\nget {\n  url: https://a.b/y\n}\n\nauth:awsv4 {\n  accessKeyId: A\n}\n").url === "https://a.b/y", null);
+check("bru names derive from the URL path", bruNameFor("https://a.b/v1/projects?x=1", "GET") === "projects" && bruNameFor("https://a.b/", "POST") === "post", bruNameFor("https://a.b/v1/projects?x=1", "GET"));
 
 // --- editor tabs ----------------------------------------------------------------------------------
 const { addTabPath } = await import("./src/client/code.js");
@@ -723,10 +993,10 @@ check(
 	c5,
 );
 const c6 = parseCurl("curl -d 'a=1' https://a.b/x");
-check("parseCurl -d has no multipart", c6.multipart === undefined && c6.body === "a=1", c6);
+check("parseCurl -d k=v imports as a form pair (Bruno body view)", c6.multipart === undefined && c6.form?.[0]?.name === "a" && c6.form[0].value === "1" && c6.body === "" && c6.method === "POST", c6);
 
 // --- API history store helpers -----------------------------------------------------------------
-const { pushEntry, relTimeAgo } = await import("./src/client/apiclient.js");
+const { pushEntry, relTimeAgo } = await import("./src/client/reqmodel.js");
 const h1 = pushEntry([], { id: "a", ts: 1 }, 30);
 const h2 = pushEntry(h1, { id: "b", ts: 2 }, 30);
 check("pushEntry prepends newest first", h2[0].id === "b" && h2[1].id === "a" && h2.length === 2, h2);
@@ -827,7 +1097,11 @@ chooseApiTab("api.headers");
 tableNode((n) => n.type === RequestFields).props.onChange([{ name: "X-On", value: "yes" }, { name: "X-Off", value: "no", enabled: false }]); tableApi = renderTableApi();
 check("header tab count includes enabled named fields only", collect(tableApi).find((n) => n.props.className === "cea-config-tab cea-config-tab-on").children[1].children[0] === 1, null);
 chooseApiTab("api.environment");
-check("environment editor is a configuration tab", Boolean(tableNode((n) => n.type === RequestFields && n.props.label === "api.environment")), null);
+check("environment tab offers a create action while no environment exists", Boolean(tableNode((n) => n.props.className === "cea-empty")) && Boolean(tableNode((n) => n.props.title === "api.envNewTitle")) && !tableNode((n) => n.type === RequestFields), null);
+tableNode((n) => n.props.title === "api.envNewTitle").props.onClick(); tableApi = renderTableApi();
+check("creating an environment reveals the variables editor", Boolean(tableNode((n) => n.type === RequestFields && n.props.label === "api.environment")) && Boolean(tableNode((n) => n.props["aria-label"] === "api.envName")), null);
+tableNode((n) => n.type === RequestFields).props.onChange([{ name: "who", value: "world" }]); tableApi = renderTableApi();
+check("environment variables persist into the store and count on the tab", tableNode((n) => n.props.className === "cea-config-tab cea-config-tab-on").children[1].children[0] === 1, null);
 const tableFetch = globalThis.fetch;
 let tableWire;
 globalThis.fetch = async (_url, options) => { tableWire = JSON.parse(options.body); return { json: async () => ({ ok: true, value: { status: 200, headers: [], text: "ok" } }) }; };
@@ -840,6 +1114,104 @@ try {
  chooseApiTab("api.headers");
  check("request history restores disabled fields without losing metadata", tableNode((n) => n.type === RequestFields).props.rows[1].enabled === false, null);
 } finally { globalThis.fetch = tableFetch; }
+
+// --- Bruno-style API flows: query sync, environments, auth, timeline, codegen, import ------------
+const renderBrunoApi = createHookRenderer(ApiView, { t: (k) => k });
+let bApi = renderBrunoApi();
+const bNode = (predicate) => collect(bApi).find(predicate);
+const bChoose = (key) => { bNode((n) => n.props.className?.startsWith("cea-config-tab") && n.children[0] === key).props.onClick(); bApi = renderBrunoApi(); };
+const bUrlValue = () => bNode((n) => n.props.className === "ce-input cea-url").props.value;
+const bSend = () => bNode((n) => n.props.className === "ce-sk-btn cea-send").props.onClick();
+const bWire = [];
+const brunoFetch = globalThis.fetch;
+globalThis.fetch = async (_url, options) => { bWire.push(JSON.parse(options.body)); return { json: async () => ({ ok: true, value: { status: 201, statusText: "Created", headers: [["content-type", "application/json"]], text: '{"ok":true}', ms: 12, size: 11 } }) }; };
+const brunoClipboard = [];
+const brunoNavigator = globalThis.navigator;
+globalThis.navigator = { clipboard: { writeText: async (text) => { brunoClipboard.push(text); } } };
+const tick = () => new Promise((resolve) => setImmediate(resolve));
+try {
+	// Bruno query sync, direction 1: the URL bar feeds the params table.
+	bNode((n) => n.props.className === "ce-input cea-url").props.onChange({ target: { value: "https://{{host}}/search?q=term&lang=en" } }); bApi = renderBrunoApi();
+	bChoose("api.params");
+	check("typing a query into the URL fills the params table", JSON.stringify(bNode((n) => n.type === RequestFields).props.rows.map((r) => [r.name, r.value, r.enabled, r.kind])) === JSON.stringify([["q", "term", true, "query"], ["lang", "en", true, "query"]]), bNode((n) => n.type === RequestFields).props.rows);
+	// Direction 2: the table rebuilds the URL; disabled rows leave it.
+	bNode((n) => n.type === RequestFields).props.onChange([{ name: "q", value: "term", enabled: true }, { name: "lang", value: "en", enabled: false }]); bApi = renderBrunoApi();
+	check("disabling a param removes it from the URL bar but keeps the row", bUrlValue() === "https://{{host}}/search?q=term" && bNode((n) => n.type === RequestFields).props.rows.length === 2, bUrlValue());
+
+	// Environments: two named sets; the tool-row selector picks which one sends.
+	bChoose("api.environment");
+	bNode((n) => n.props.title === "api.envNewTitle").props.onClick(); bApi = renderBrunoApi();
+	bNode((n) => n.type === RequestFields).props.onChange([{ name: "host", value: "dev.test" }]); bApi = renderBrunoApi();
+	bNode((n) => n.props.title === "api.envNewTitle").props.onClick(); bApi = renderBrunoApi();
+	bNode((n) => n.type === RequestFields).props.onChange([{ name: "host", value: "prod.test" }]); bApi = renderBrunoApi();
+	const envSelect = bNode((n) => n.props["aria-label"] === "api.envSelect");
+	const envOptions = (envSelect.children ?? []).flat(Infinity).filter((c) => c && c.props?.value !== undefined);
+	const devOption = envOptions.find((o) => o.children[0] === "Environment 1");
+	envSelect.props.onChange({ target: { value: devOption.props.value } }); bApi = renderBrunoApi();
+	check("the environment selector lists every environment plus No Environment", bNode((n) => n.props["aria-label"] === "api.envSelect").props.value === devOption.props.value && envOptions.some((o) => o.children[0] === "api.envNone"), envOptions.map((o) => o.children[0]));
+	// Renaming through the vars toolbar commits on Enter.
+	bChoose("api.environment");
+	bNode((n) => n.props["aria-label"] === "api.envName").props.onChange({ target: { value: "Dev" } }); bApi = renderBrunoApi();
+	bNode((n) => n.props["aria-label"] === "api.envName").props.onKeyDown({ key: "Enter", stopPropagation() {}, currentTarget: { blur() {} } }); bApi = renderBrunoApi();
+	check("renaming an environment updates the selector label", (bNode((n) => n.props["aria-label"] === "api.envSelect").children ?? []).flat(Infinity).some((c) => c?.children?.[0] === "Dev"), null);
+	bSend(); await tick(); bApi = renderBrunoApi();
+	check("sending resolves {{host}} from the active environment only", bWire.at(-1).url === "https://dev.test/search?q=term", bWire.at(-1).url);
+
+	// Timeline: the exact wire request is inspectable after sending.
+	bNode((n) => n.props.className?.startsWith?.("cea-tab") && n.children[0] === "api.timeline").props.onClick(); bApi = renderBrunoApi();
+	check("the timeline tab shows the resolved request, not the template", Boolean(bNode((n) => n.props.className === "cea-timeline")) && bNode((n) => n.props.className === "cea-tl-req").children[1].children[0] === "https://dev.test/search?q=term", bNode((n) => n.props.className === "cea-tl-req")?.children?.[1]?.children?.[0]);
+	bNode((n) => n.props.className?.startsWith?.("cea-tab") && n.children[0] === "api.respBody").props.onClick(); bApi = renderBrunoApi();
+	check("response tabs switch back to the pretty body", Boolean(bNode((n) => n.props.className === "cea-resp")), null);
+
+	// Auth section: bearer overrides a manual Authorization header on the wire.
+	bChoose("api.headers");
+	bNode((n) => n.type === RequestFields).props.onChange([{ name: "Authorization", value: "manual" }]); bApi = renderBrunoApi();
+	bChoose("api.auth");
+	bNode((n) => n.type === "select" && n.props["aria-label"] === "api.auth").props.onChange({ target: { value: "bearer" } }); bApi = renderBrunoApi();
+	bNode((n) => n.props["aria-label"] === "api.authToken").props.onChange({ target: { value: "tk-9" } }); bApi = renderBrunoApi();
+	check("a configured auth section counts on its tab", bNode((n) => n.props.className?.startsWith("cea-config-tab") && n.children[0] === "api.auth").children[1].children[0] === 1, null);
+	bSend(); await tick();
+	check("bearer auth replaces the manual Authorization header exactly once", bWire.at(-1).headers.filter((hd) => hd.name.toLowerCase() === "authorization").length === 1 && bWire.at(-1).headers.at(-1).value === "Bearer tk-9", bWire.at(-1).headers);
+	bNode((n) => n.type === "select" && n.props["aria-label"] === "api.auth").props.onChange({ target: { value: "basic" } }); bApi = renderBrunoApi();
+	bNode((n) => n.props["aria-label"] === "api.authUser").props.onChange({ target: { value: "u1" } }); bApi = renderBrunoApi();
+	bNode((n) => n.props["aria-label"] === "api.authPass").props.onChange({ target: { value: "p1" } }); bApi = renderBrunoApi();
+	bSend(); await tick();
+	check("basic auth sends the base64 credential", bWire.at(-1).headers.at(-1).value === `Basic ${btoa(unescape(encodeURIComponent("u1:p1")))}`, bWire.at(-1).headers);
+
+	// Codegen popup: snippets come from the resolved request.
+	bNode((n) => n.props["data-ce-popup-trigger"] === "api-code").props.onClick(); bApi = renderBrunoApi();
+	const codeItems = collect(bApi).filter((n) => n.props.className === "cea-hmain cea-code-item");
+	check("the code menu offers curl, fetch, python and bru generators", codeItems.length === 4 && JSON.stringify(codeItems.map((n) => n.children[0].children[0])) === JSON.stringify(["curl", "JavaScript · fetch", "Python · requests", "Bruno · .bru"]), codeItems.map((n) => n.children[0].children[0]));
+	codeItems[1].props.onClick(); await tick(); bApi = renderBrunoApi();
+	check("copying a fetch snippet resolves environment variables first", brunoClipboard.at(-1)?.includes('await fetch("https://dev.test/search?q=term"') === true && brunoClipboard.at(-1)?.includes(`"Authorization": "Basic ${btoa(unescape(encodeURIComponent("u1:p1")))}"`) === true, brunoClipboard.at(-1));
+
+	// curl import: -u folds into Auth, k=v data into the form body, query into params.
+	bNode((n) => n.props["data-ce-popup-trigger"] === "api-import").props.onClick(); bApi = renderBrunoApi();
+	bNode((n) => n.props.className === "cea-body cea-import").props.onChange({ target: { value: "curl -X POST 'https://example.test/login?next=%2Fhome' -u 'admin:s3cr3t' -d 'user=admin' -d 'pass=x%20y'" } }); bApi = renderBrunoApi();
+	bNode((n) => n.type === "button" && n.children[0] === "api.importBtn").props.onClick(); bApi = renderBrunoApi();
+	check("import maps -u onto the auth section", bNode((n) => n.props.className?.startsWith("cea-config-tab") && n.children[0] === "api.auth").children[1].children[0] === 1, null);
+	check("import maps k=v data onto a form body", bNode((n) => n.type === "select" && n.props.value === "form") !== undefined, null);
+	bChoose("api.params");
+	check("import fills the params table from the URL query", JSON.stringify(bNode((n) => n.type === RequestFields).props.rows.map((r) => [r.name, r.value, r.kind])) === JSON.stringify([["next", "/home", "query"]]), bNode((n) => n.type === RequestFields).props.rows);
+	bChoose("api.body");
+	check("imported form values stay URL-decoded for editing", JSON.stringify(bNode((n) => n.type === RequestFields && n.props.label === "api.body").props.rows.map((r) => [r.name, r.value])) === JSON.stringify([["user", "admin"], ["pass", "x y"]]), null);
+
+	// Bruno .bru collection documents import through the same dialog.
+	bNode((n) => n.props["data-ce-popup-trigger"] === "api-import").props.onClick(); bApi = renderBrunoApi();
+	bNode((n) => n.props.className === "cea-body cea-import").props.onChange({ target: { value: "meta {\n  name: demo\n  type: http\n}\n\npost {\n  url: https://example.test/u/:id\n  body: json\n  auth: bearer\n}\n\nparams:path {\n  id: 7\n}\n\nauth:bearer {\n  token: tk\n}\n\nbody:json {\n{\"a\":1}\n}\n" } }); bApi = renderBrunoApi();
+	bNode((n) => n.type === "button" && n.children[0] === "api.importBtn").props.onClick(); bApi = renderBrunoApi();
+	check("bru import restores url, method and the auth section", bUrlValue() === "https://example.test/u/:id" && bNode((n) => n.props.className?.startsWith("cea-config-tab") && n.children[0] === "api.auth").children[1].children[0] === 1, bUrlValue());
+	bChoose("api.params");
+	check("bru import surfaces path params in their own table", JSON.stringify(collect(bApi).filter((n) => n.type === RequestFields).map((n) => [n.props.label, n.props.rows.map((r) => [r.name, r.value, r.kind])])) === JSON.stringify([["api.params", []], ["api.pathParams", [["id", "7", "path"]]]]), collect(bApi).filter((n) => n.type === RequestFields).map((n) => n.props.label));
+	bChoose("api.body");
+	check("bru import restores the raw json body", bNode((n) => n.type === "textarea" && n.props.className === "cea-body")?.props.value === '{"a":1}', null);
+	bNode((n) => n.props["data-ce-popup-trigger"] === "api-code").props.onClick(); bApi = renderBrunoApi();
+	collect(bApi).filter((n) => n.props.className === "cea-hmain cea-code-item")[3].props.onClick(); await tick(); bApi = renderBrunoApi();
+	check("the .bru snippet keeps templates and path params for the collection file", brunoClipboard.at(-1)?.includes("meta {") === true && brunoClipboard.at(-1)?.includes("params:path {") === true && brunoClipboard.at(-1)?.includes("url: https://example.test/u/:id") === true, brunoClipboard.at(-1));
+} finally {
+	globalThis.fetch = brunoFetch;
+	if (brunoNavigator === undefined) delete globalThis.navigator; else globalThis.navigator = brunoNavigator;
+}
 
 // --- Task layout: narrow code navigation and review-first changes ---------------------------
 const { CodeBody } = await import("./src/client/code.js");
@@ -955,6 +1327,191 @@ try {
 }
 const composerDetails = panelNodes.find((n) => n.type === "details" && n.props.className === "ce-commit-disclosure");
 check("changes review shows file tree before collapsed commit form", Boolean(composerDetails) && !composerDetails.props.open && panelNodes.indexOf(workingTree) < panelNodes.indexOf(composerDetails), null);
+
+// --- VS Code workbench flows: tab context menu, reopen closed editor, replace, problems ---------
+const wbGlobals = { fetch: globalThis.fetch, requestAnimationFrame: globalThis.requestAnimationFrame, cancelAnimationFrame: globalThis.cancelAnimationFrame, setTimeout: globalThis.setTimeout, window: globalThis.window, document: globalThis.document };
+const wbRequests = [];
+globalThis.fetch = async (url, options) => {
+	wbRequests.push({ url, body: JSON.parse(options?.body ?? "{}") });
+	if (url.endsWith("/fs.read")) return { json: async () => ({ ok: true, value: { kind: "text", content: "alpha beta\nbeta gamma\n", mtimeMs: 1 } }) };
+	if (url.endsWith("/lsp.diagnostics")) return { json: async () => ({ ok: true, value: { items: [{ line: 2, col: 1, endLine: 2, endCol: 5, severity: 1, message: "undefined: beta", source: "gopls" }] } }) };
+	if (url.endsWith("/lsp.request")) return { json: async () => ({ ok: true, value: { symbols: [], targets: [] } }) };
+	if (url.endsWith("/lsp.status")) return { json: async () => ({ ok: true, value: { state: "ready", label: "gopls" } }) };
+	return { json: async () => ({ ok: true, value: {} }) };
+};
+globalThis.requestAnimationFrame = (fn) => { fn(); return 0; };
+globalThis.cancelAnimationFrame = () => {};
+globalThis.setTimeout = () => 0;
+globalThis.window = { innerWidth: 1200, innerHeight: 900 };
+globalThis.document = { addEventListener() {}, removeEventListener() {} };
+try {
+	const renderWb = createHookRenderer(CodeBody, { sessionId: "wb", useSessions: (select) => select({ byId: { wb: { cwd: "/w" } } }), t: (k) => k }, { effects: true });
+	const paintWb = () => { wbTree = renderWb(); renderWb.flushEffects(); wbTree = renderWb(); };
+	let wbTree = renderWb();
+	renderWb.flushEffects();
+	const tickWb = async () => { await new Promise((resolve) => setImmediate(resolve)); paintWb(); };
+	const getWb = (test) => collect(wbTree).find(test);
+	const tabNodes = () => collect(wbTree).filter((n) => typeof n.props.className === "string" && n.props.className.split(" ").includes("ce-tab"));
+	const menuItems = () => collect(wbTree).filter((n) => n.props.role === "menuitem");
+	getWb((n) => n.type === TreePanelCmp).props.onOpenFile("main.go", 1, 1);
+	await tickWb();
+	getWb((n) => n.type === TreePanelCmp).props.onOpenFile("util.go", 1, 1);
+	await tickWb();
+	check("opening two files fills the editor tab strip", tabNodes().length === 2 && tabNodes()[1].props.className.includes("ce-tab-active"), tabNodes().map((n) => n.props.title));
+	tabNodes()[0].props.onContextMenu({ preventDefault() {}, stopPropagation() {}, clientX: 300, clientY: 200 });
+	paintWb();
+	check("tab context menu offers pin plus the VS Code close family", Boolean(getWb((n) => typeof n.props.className === "string" && n.props.className.includes("ce-tabmenu"))) && menuItems().map((n) => n.children[0]).join(",") === "tabs.pin,tabs.close,tabs.closeOthers,tabs.closeRight,tabs.closeAll", menuItems().map((n) => n.children[0]));
+	check("close-to-the-right stays enabled with a tab on the right", menuItems()[3].props.disabled === false, null);
+	menuItems()[3].props.onClick();
+	await tickWb();
+	check("close-to-the-right closes later tabs and activates the neighbour", tabNodes().length === 1 && tabNodes()[0].props.title === "main.go" && getWb((n) => n.props.className === "ce-head-path")?.children[0] === "main.go", tabNodes().map((n) => n.props.title));
+	wbTree.props.onKeyDown({ code: "KeyT", metaKey: true, shiftKey: true, preventDefault() {} });
+	await tickWb();
+	check("⌘⇧T reopens the most recently closed editor", tabNodes().length === 2 && getWb((n) => n.props.className === "ce-head-path")?.children[0] === "util.go", tabNodes().map((n) => n.props.title));
+	tabNodes()[1].props.onContextMenu({ preventDefault() {}, stopPropagation() {}, clientX: 300, clientY: 200 });
+	paintWb();
+	check("close-to-the-right disables on the last tab", menuItems()[3].props.disabled === true, null);
+	menuItems()[2].props.onClick();
+	await tickWb();
+	check("close-others keeps only the anchored tab", tabNodes().length === 1 && tabNodes()[0].props.title === "util.go", tabNodes().map((n) => n.props.title));
+	wbTree.props.onKeyDown({ code: "KeyT", metaKey: true, shiftKey: true, preventDefault() {} });
+	await tickWb();
+	check("the reopen stack is most-recently-closed-first", tabNodes().length === 2 && getWb((n) => n.props.className === "ce-head-path")?.children[0] === "main.go", tabNodes().map((n) => n.props.title));
+	wbTree.props.onKeyDown({ code: "KeyF", metaKey: true, preventDefault() {} });
+	paintWb();
+	getWb((n) => n.props.className === "ce-input ce-find-input").props.onChange({ target: { value: "beta" } });
+	paintWb();
+	check("the find widget counts matches across the document", getWb((n) => n.props.className === "ce-find-count")?.children[0] === "1/2", getWb((n) => n.props.className === "ce-find-count")?.children[0]);
+	check("the active find match keeps a solid current-match highlight", collect(wbTree).some((n) => typeof n.props.className === "string" && n.props.className.includes("ce-mark-cur")), null);
+	getWb((n) => typeof n.props.title === "string" && n.props.title.startsWith("editor.replaceToggle")).props.onClick();
+	paintWb();
+	check("the replace row exposes replace and replace-all actions", Boolean(getWb((n) => n.props["aria-label"] === "editor.replace")) && collect(wbTree).some((n) => n.children?.[0] === "editor.replaceAll"), null);
+	getWb((n) => n.props["aria-label"] === "editor.replace").props.onChange({ target: { value: "GAMMA" } });
+	paintWb();
+	getWb((n) => n.type === "button" && n.children?.[0] === "editor.replaceAll").props.onClick();
+	paintWb();
+	check("replace-all lands in the edit buffer for review instead of writing to disk", getWb((n) => typeof n.props.className === "string" && n.props.className.startsWith("ce-edit-ta"))?.props.value === "alpha GAMMA\nGAMMA gamma\n" && !wbRequests.some((r) => r.url.endsWith("/fs.write")), getWb((n) => typeof n.props.className === "string" && n.props.className.startsWith("ce-edit-ta"))?.props.value);
+	getWb((n) => n.children?.[0] === "editor.cancel").props.onClick();
+	paintWb();
+	// VS Code preserve-case: each match's case pattern maps onto the replacement.
+	getWb((n) => n.props.className === "ce-input ce-find-input").props.onChange({ target: { value: "BETA" } });
+	paintWb();
+	getWb((n) => typeof n.props.title === "string" && n.props.title.startsWith("find.preserveCase")).props.onClick();
+	paintWb();
+	getWb((n) => n.props["aria-label"] === "editor.replace").props.onChange({ target: { value: "GAMMA" } });
+	paintWb();
+	getWb((n) => n.type === "button" && n.children?.[0] === "editor.replaceAll").props.onClick();
+	paintWb();
+	check("preserve-case maps each match's case pattern onto the replacement", getWb((n) => typeof n.props.className === "string" && n.props.className.startsWith("ce-edit-ta"))?.props.value === "alpha gamma\ngamma gamma\n", getWb((n) => typeof n.props.className === "string" && n.props.className.startsWith("ce-edit-ta"))?.props.value);
+	getWb((n) => n.children?.[0] === "editor.cancel").props.onClick();
+	paintWb();
+	const diagChip = getWb((n) => typeof n.props.className === "string" && n.props.className.includes("ce-diag-btn"));
+	check("the diagnostics chip became a problems toggle", Boolean(diagChip) && diagChip.children[0] === "1 diag.count", diagChip?.children?.[0]);
+	wbTree.props.onKeyDown({ code: "KeyM", metaKey: true, shiftKey: true, preventDefault() {} });
+	paintWb();
+	const problemsNode = getWb((n) => n.type.name === "ProblemsPanel");
+	check("⇧⌘M opens the problems panel carrying the file diagnostics", Boolean(problemsNode) && problemsNode.props.diagnostics.length === 1, null);
+	const { ProblemsPanel } = await import("./src/client/overlays.js");
+	let pickedProblem = null;
+	const problemRow = collect(ProblemsPanel({ t: (k) => k, diagnostics: problemsNode.props.diagnostics, onPick: (item) => { pickedProblem = item; }, onClose: () => {} })).find((n) => n.props.className === "ce-loc");
+	check("problem rows show severity, position and source message", problemRow.children[0].props.className.includes("ce-problem-err") && problemRow.children[1].children[0] === "2:1" && problemRow.children[2].children[0] === "gopls: undefined: beta", problemRow.children.map((c) => collect(c)));
+	problemRow.props.onClick();
+	check("clicking a problem row picks its position", pickedProblem?.line === 2 && pickedProblem?.col === 1, pickedProblem);
+	problemsNode.props.onPick({ line: 2, col: 1 });
+	paintWb();
+	check("the panel closes and the cursor jumps to the problem line", !getWb((n) => n.type.name === "ProblemsPanel") && String(getWb((n) => n.props.className === "ce-pos ce-pos-btn")?.children?.[0]).startsWith("Ln 2"), getWb((n) => n.props.className === "ce-pos ce-pos-btn")?.children?.[0]);
+	diagChip.props.onClick();
+	paintWb();
+	check("the diagnostics chip toggles the panel too", Boolean(getWb((n) => n.type.name === "ProblemsPanel")), null);
+	wbTree.props.onKeyDown({ key: "Escape", preventDefault() {}, stopPropagation() {} });
+	paintWb();
+	check("Escape closes the problems panel without touching the document", !getWb((n) => n.type.name === "ProblemsPanel") && getWb((n) => n.props.className === "ce-head-path")?.children[0] === "main.go", null);
+	const drawProblems = createHookRenderer(ProblemsPanel, { t: (k) => k, diagnostics: [{ line: 1, col: 1, severity: 1, message: "e" }, { line: 2, col: 1, severity: 2, message: "w" }, { line: 3, col: 1, severity: 3, message: "i" }], onPick: () => {}, onClose: () => {} });
+	let pTree = drawProblems();
+	const pFilters = () => collect(pTree).filter((n) => typeof n.props.className === "string" && n.props.className.includes("ce-problem-filter"));
+	check("problems header shows per-severity counts (VS Code markers view)", pFilters().map((n) => n.children[0]).join(",") === "✕ 1,⚠ 1,ℹ 1", pFilters().map((n) => n.children[0]));
+	pFilters()[0].props.onClick();
+	pTree = drawProblems();
+	check("severity filters hide their bucket and report shown/total", collect(pTree).filter((n) => n.props.className === "ce-loc").length === 2 && collect(pTree).some((n) => Array.isArray(n.children) && n.children[0] === "problems.title · 2/3"), null);
+	tabNodes()[1].props.onContextMenu({ preventDefault() {}, stopPropagation() {}, clientX: 300, clientY: 200 });
+	paintWb();
+	check("the menu offers pin for unpinned tabs", menuItems()[0].children[0] === "tabs.pin", menuItems()[0].children[0]);
+	menuItems()[0].props.onClick();
+	paintWb();
+	check("pinning moves the tab to the front and marks it", tabNodes()[0].props.title === "main.go" && collect(tabNodes()[0]).some((n) => typeof n.props.className === "string" && n.props.className.includes("ce-tab-pin")), tabNodes().map((n) => n.props.title));
+	tabNodes()[0].props.onContextMenu({ preventDefault() {}, stopPropagation() {}, clientX: 300, clientY: 200 });
+	paintWb();
+	check("the menu offers unpin for pinned tabs", menuItems()[0].children[0] === "tabs.unpin", null);
+	menuItems()[4].props.onClick();
+	await tickWb();
+	check("close-all skips pinned tabs like VS Code excludeSticky", tabNodes().length === 1 && tabNodes()[0].props.title === "main.go" && getWb((n) => n.props.className === "ce-head-path")?.children[0] === "main.go", tabNodes().map((n) => n.props.title));
+	tabNodes()[0].props.onContextMenu({ preventDefault() {}, stopPropagation() {}, clientX: 300, clientY: 200 });
+	paintWb();
+	menuItems()[0].props.onClick();
+	paintWb();
+	tabNodes()[0].props.onContextMenu({ preventDefault() {}, stopPropagation() {}, clientX: 300, clientY: 200 });
+	paintWb();
+	menuItems()[4].props.onClick();
+	paintWb();
+	check("after unpinning, close-all empties the strip", tabNodes().length === 0 && !getWb((n) => n.props.className === "ce-head-path"), tabNodes().map((n) => n.props.title));
+	wbTree.props.onKeyDown({ code: "KeyP", metaKey: true, shiftKey: true, preventDefault() {} });
+	paintWb();
+	const commandLabels = (getWb((n) => n.type.name === "CommandPalette")?.props.commands ?? []).map((c) => c.label);
+	check("the command center exposes the new VS Code actions", ["command.replace", "command.problems", "command.reopenTab", "command.closeAllTabs"].every((label) => commandLabels.includes(label)), commandLabels);
+	renderWb.unmount();
+} finally {
+	for (const [key, value] of Object.entries(wbGlobals)) { if (value === undefined) delete globalThis[key]; else globalThis[key] = value; }
+}
+
+// --- copy-path feedback is visible at the click site ----------------------------------------------
+const cpWrites = [];
+const cpNavigator = globalThis.navigator;
+globalThis.navigator = { clipboard: { writeText: async (text) => { cpWrites.push(text); } } };
+try {
+	const drawCopyBtn = createHookRenderer(CopyChangePathButton, { path: "a/b.txt", t: (k) => k, onCopyPath: async (path, relative) => { cpWrites.push(`${path}:${relative}`); return true; } });
+	let copyBtnTree = drawCopyBtn();
+	const copyBtn = () => collect(copyBtnTree).find((n) => n.type === "button");
+	check("copy-path button starts with the copy glyph", copyBtn().props.className === "cet-act cet-copy-path", copyBtn().props.className);
+	copyBtn().props.onClick({ stopPropagation() {}, altKey: true });
+	await new Promise((resolve) => setImmediate(resolve));
+	copyBtnTree = drawCopyBtn();
+	check("successful copy flips the button to a check with done color", copyBtn().props.className.includes("cet-act-done") && copyBtn().props.title === "tree.copied" && cpWrites.at(-1) === "a/b.txt:true", copyBtn().props.className);
+	const drawFailBtn = createHookRenderer(CopyChangePathButton, { path: "a/b.txt", t: (k) => k, onCopyPath: async () => false });
+	let failBtnTree = drawFailBtn();
+	collect(failBtnTree).find((n) => n.type === "button").props.onClick({ stopPropagation() {}, altKey: false });
+	await new Promise((resolve) => setImmediate(resolve));
+	failBtnTree = drawFailBtn();
+	check("failed copy keeps the copy glyph instead of faking success", !collect(failBtnTree).find((n) => n.type === "button").props.className.includes("cet-act-done"), null);
+} finally {
+	if (cpNavigator === undefined) delete globalThis.navigator; else globalThis.navigator = cpNavigator;
+}
+const treeCopyFetch = globalThis.fetch;
+const treeCopyWrites = [];
+const treeCopyNavigator = globalThis.navigator;
+globalThis.fetch = async (url, options) => {
+	if (url.endsWith("/fs.list")) return { json: async () => ({ ok: true, value: { entries: [{ name: "copy.txt", type: "file" }], truncated: false } }) };
+	return { json: async () => ({ ok: true, value: {} }) };
+};
+globalThis.navigator = { clipboard: { writeText: async (text) => { treeCopyWrites.push(text); } } };
+try {
+	const treeNotices = [];
+	const drawCopyTree = createHookRenderer(TreePanelCmp, { cwd: "/w", sessionId: "copy", t: (k) => k, onNotify: (text) => treeNotices.push(text) }, { effects: true });
+	let copyTree = drawCopyTree();
+	drawCopyTree.flushEffects();
+	await new Promise((resolve) => setImmediate(resolve));
+	copyTree = drawCopyTree();
+	const copyAct = () => collect(copyTree).find((n) => n.props.hint === "tree.copyPath" || n.props.hint === "tree.copied");
+	check("explorer rows expose the copy action", Boolean(copyAct()), null);
+	copyAct().props.onClick({ stopPropagation() {} });
+	await new Promise((resolve) => setImmediate(resolve));
+	copyTree = drawCopyTree();
+	const doneAct = collect(copyTree).find((n) => n.props.hint === "tree.copied");
+	check("explorer copy flips the row glyph to a check and notifies", Boolean(doneAct) && doneAct.children[0] === "✓" && doneAct.props.className.includes("cet-act-done") && treeNotices.at(-1) === "tree.copied" && treeCopyWrites.at(-1) === "/w/copy.txt", { children: doneAct?.children, notices: treeNotices });
+	drawCopyTree.unmount();
+} finally {
+	globalThis.fetch = treeCopyFetch;
+	if (treeCopyNavigator === undefined) delete globalThis.navigator; else globalThis.navigator = treeCopyNavigator;
+}
 
 // --- File-tree deletion has explicit visible confirmation and reliable sibling controls ------
 const savedDeleteFetch = globalThis.fetch;

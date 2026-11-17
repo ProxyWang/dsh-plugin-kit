@@ -184,6 +184,11 @@ var zh = {
   "command.toggleRail": "显示或隐藏侧栏",
   "command.refresh": "刷新工作区",
   "command.terminal": "新建终端",
+  "command.replace": "查找并替换",
+  "command.replaceUnavailable": "当前视图不支持替换",
+  "command.problems": "问题面板",
+  "command.reopenTab": "重新打开已关闭的编辑器",
+  "command.closeAllTabs": "关闭全部编辑器标签",
   "toolbar.terminal": "新建终端",
   "toolbar.terminalHint": "新建终端，有空间时在旁侧分栏打开；命令在当前会话目录运行",
   "terminal.fail.noSession": "没有当前会话，无法打开终端",
@@ -342,7 +347,7 @@ var zh = {
   "api.addHeader": "添加请求头",
   "api.params": "Query 参数",
   "api.addParam": "添加参数",
-  "api.paramsHint": "发送时合并进 URL，同名覆盖",
+  "api.paramsHint": "与 URL 查询串双向同步；取消勾选的行不发送",
   "api.method": "请求方法",
   "api.environment": "环境变量",
   "api.requestConfig": "请求配置",
@@ -377,9 +382,36 @@ var zh = {
   "api.copyCurl": "复制为 curl",
   "api.copied": "已复制 ✓",
   "api.env": "环境变量",
-  "api.envTitle": "发送时替换 URL、请求头与请求体中的双花括号变量；未定义的变量原样保留",
+  "api.envTitle": "发送时以当前环境替换 URL、请求头与请求体中的双花括号变量；未定义的变量原样保留",
   "api.envEmpty": "暂无变量，点下方 + 添加",
   "api.addEnv": "添加变量",
+  "api.code": "代码",
+  "api.codeTitle": "生成代码片段（变量按当前环境解析）",
+  "api.codeItemTitle": "复制到剪贴板",
+  "api.auth": "认证",
+  "api.authNone": "无认证",
+  "api.authBearer": "Bearer Token",
+  "api.authBasic": "Basic Auth",
+  "api.authToken": "令牌",
+  "api.authTokenPlaceholder": "粘贴 Bearer token…",
+  "api.authUser": "用户名",
+  "api.authPass": "密码",
+  "api.authPassPlaceholder": "密码",
+  "api.authHint": "发送时生成 Authorization 请求头，并覆盖请求头表中的同名项",
+  "api.envSelect": "环境变量集",
+  "api.envNone": "无环境",
+  "api.envName": "环境名称",
+  "api.envNew": "新建",
+  "api.envNewTitle": "新建环境变量集",
+  "api.envDelete": "删除环境",
+  "api.envDeleteConfirm": "确认删除？",
+  "api.envNoActive": "未选择环境。点「＋ 新建」创建，或在工具栏右侧选择。",
+  "api.respBody": "响应体",
+  "api.timeline": "时间线",
+  "api.timelineEmpty": "发送请求后，这里显示实际发出的请求明细",
+  "api.pathParams": "路径参数",
+  "api.pathParamsHint": "URL 中的 :name 段；发送时以取值替换（URL 编码）",
+  "api.importPlaceholder": "curl -X POST 'https://…' -H 'K: V' -d '{…}'，或 Bruno 的 .bru 文档",
   "toolrow.edit": "编辑",
   "toolrow.write": "写入",
   "toolrow.failed": "失败",
@@ -441,6 +473,13 @@ var zh = {
   "editor.dirty": "未保存",
   "editor.tooBig": "文件过大，无法编辑",
   "editor.find": "文件内查找",
+  "editor.replace": "替换",
+  "editor.replaceAll": "全部替换",
+  "editor.replaceToggle": "切换替换",
+  "editor.replacePlaceholder": "替换为…",
+  "editor.replaceOneTitle": "替换当前匹配，结果进入编辑态，⌘S 保存",
+  "editor.replaceAllTitle": "替换全部匹配，结果进入编辑态，⌘S 保存",
+  "editor.noClosedTabs": "没有可恢复的已关闭编辑器",
   "editor.wrap": "自动换行",
   "editor.wrapTooBig": "文件超过 {n} 行，暂不支持自动换行",
   "editor.wrapCapped": "文件过大，换行模式仅渲染前 {n} 行",
@@ -450,6 +489,25 @@ var zh = {
   "find.case": "区分大小写",
   "find.words": "全词匹配",
   "find.regex": "正则表达式",
+  "find.prev": "上一个匹配",
+  "find.next": "下一个匹配",
+  "find.preserveCase": "替换时保留大小写 (AB)",
+  "replace.replacedOne": "已替换 {n} 处，进入编辑态，⌘S 保存生效",
+  "replace.replacedAll": "已替换 {n} 处，进入编辑态，⌘S 保存生效",
+  "replace.noMatch": "没有可替换的匹配",
+  "problems.title": "问题",
+  "problems.empty": "当前文件没有诊断问题",
+  "problems.filtered": "当前筛选下没有问题",
+  "problems.showErr": "显示或隐藏错误",
+  "problems.showWarn": "显示或隐藏警告",
+  "problems.showInfo": "显示或隐藏信息",
+  "tabs.close": "关闭",
+  "tabs.closeOthers": "关闭其他",
+  "tabs.closeRight": "关闭右侧",
+  "tabs.closeAll": "全部关闭",
+  "tabs.pin": "固定标签",
+  "tabs.unpin": "取消固定",
+  "tabs.pinned": "已固定 · 批量关闭会跳过",
   "find.badRegex": "正则无效",
   "editor.preview": "预览",
   "editor.raw": "原始",
@@ -638,6 +696,11 @@ var en = {
   "command.toggleRail": "Toggle Side Panel",
   "command.refresh": "Refresh Workspace",
   "command.terminal": "New Terminal",
+  "command.replace": "Find and Replace",
+  "command.replaceUnavailable": "Replace is unavailable in the current view",
+  "command.problems": "Toggle Problems",
+  "command.reopenTab": "Reopen Closed Editor",
+  "command.closeAllTabs": "Close All Editors",
   "toolbar.terminal": "New Terminal",
   "toolbar.terminalHint": "Open a new terminal, in a split pane beside the workspace when there is room; commands run in the session directory",
   "terminal.fail.noSession": "No session is on screen to open a terminal",
@@ -796,7 +859,7 @@ var en = {
   "api.addHeader": "Add header",
   "api.params": "Query Params",
   "api.addParam": "Add param",
-  "api.paramsHint": "Merged into the URL at send time; same names override",
+  "api.paramsHint": "Two-way synced with the URL query string; unchecked rows are not sent",
   "api.method": "Request method",
   "api.environment": "Environment",
   "api.requestConfig": "Request configuration",
@@ -831,9 +894,36 @@ var en = {
   "api.copyCurl": "Copy as curl",
   "api.copied": "Copied ✓",
   "api.env": "Environment",
-  "api.envTitle": "Double-brace variables in URL, headers and body are substituted at send time; unknown names stay literal",
+  "api.envTitle": "Double-brace variables in URL, headers and body resolve from the active environment at send time; unknown names stay literal",
   "api.envEmpty": "No variables yet — add one with +",
   "api.addEnv": "Add variable",
+  "api.code": "Code",
+  "api.codeTitle": "Generate a code snippet (variables resolved from the active environment)",
+  "api.codeItemTitle": "Copy to clipboard",
+  "api.auth": "Auth",
+  "api.authNone": "No Auth",
+  "api.authBearer": "Bearer Token",
+  "api.authBasic": "Basic Auth",
+  "api.authToken": "Token",
+  "api.authTokenPlaceholder": "Paste bearer token…",
+  "api.authUser": "Username",
+  "api.authPass": "Password",
+  "api.authPassPlaceholder": "Password",
+  "api.authHint": "Generates the Authorization header at send time, overriding a same-named row in Headers",
+  "api.envSelect": "Environment",
+  "api.envNone": "No Environment",
+  "api.envNew": "New",
+  "api.envNewTitle": "Create a new environment",
+  "api.envName": "Environment name",
+  "api.envDelete": "Delete",
+  "api.envDeleteConfirm": "Confirm delete?",
+  "api.envNoActive": "No environment selected. Create one with ＋ New or pick one on the tool row.",
+  "api.respBody": "Body",
+  "api.timeline": "Timeline",
+  "api.timelineEmpty": "Send a request to see the exact wire request here",
+  "api.pathParams": "Path Params",
+  "api.pathParamsHint": "`:name` segments from the URL; substituted (URL-encoded) at send time",
+  "api.importPlaceholder": "curl -X POST 'https://…' -H 'K: V' -d '{…}' — or a Bruno .bru document",
   "toolrow.edit": "Edit",
   "toolrow.write": "Write",
   "toolrow.failed": "failed",
@@ -895,6 +985,13 @@ var en = {
   "editor.dirty": "unsaved",
   "editor.tooBig": "File too large to edit",
   "editor.find": "Find in file",
+  "editor.replace": "Replace",
+  "editor.replaceAll": "Replace All",
+  "editor.replaceToggle": "Toggle Replace",
+  "editor.replacePlaceholder": "Replace with…",
+  "editor.replaceOneTitle": "Replace the current match; the result enters edit mode (⌘S to save)",
+  "editor.replaceAllTitle": "Replace all matches; the result enters edit mode (⌘S to save)",
+  "editor.noClosedTabs": "No closed editor to reopen",
   "editor.wrap": "Word wrap",
   "editor.wrapTooBig": "File exceeds {n} lines; word wrap unavailable",
   "editor.wrapCapped": "File too large; wrap mode renders the first {n} lines only",
@@ -904,6 +1001,25 @@ var en = {
   "find.case": "Match case",
   "find.words": "Match whole word",
   "find.regex": "Regular expression",
+  "find.prev": "Previous match",
+  "find.next": "Next match",
+  "find.preserveCase": "Preserve Case (AB)",
+  "replace.replacedOne": "Replaced {n} match — now in edit mode; ⌘S saves",
+  "replace.replacedAll": "Replaced {n} matches — now in edit mode; ⌘S saves",
+  "replace.noMatch": "Nothing to replace",
+  "problems.title": "Problems",
+  "problems.empty": "No problems detected in the open file",
+  "problems.filtered": "No problems under the current filters",
+  "problems.showErr": "Toggle errors",
+  "problems.showWarn": "Toggle warnings",
+  "problems.showInfo": "Toggle infos",
+  "tabs.close": "Close",
+  "tabs.closeOthers": "Close Others",
+  "tabs.closeRight": "Close to the Right",
+  "tabs.closeAll": "Close All",
+  "tabs.pin": "Pin Tab",
+  "tabs.unpin": "Unpin Tab",
+  "tabs.pinned": "Pinned — bulk closes skip it",
   "find.badRegex": "Invalid regex",
   "editor.preview": "Preview",
   "editor.raw": "Raw",
@@ -2105,22 +2221,41 @@ async function copyChangePath({ cwd, repo, path, relative = false, onNotify, t }
     return false;
   }
 }
+var CopyGlyph = () => h(
+  "svg",
+  { viewBox: "0 0 16 16", width: 14, height: 14, fill: "none", stroke: "currentColor", strokeWidth: 1.3, "aria-hidden": true },
+  h("rect", { x: 5, y: 5, width: 8, height: 9, rx: 1.2 }),
+  h("path", { d: "M10 4V2H2v9h2" })
+);
+var CheckGlyph = () => h(
+  "svg",
+  { viewBox: "0 0 16 16", width: 14, height: 14, fill: "none", stroke: "currentColor", strokeWidth: 1.8, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true },
+  h("path", { d: "M3 8.5 6.5 12 13 4.5" })
+);
 function CopyChangePathButton({ path, onCopyPath, t }) {
+  const [copied, setCopied] = useState(false);
+  const timer = useRef(null);
+  useEffect(() => () => {
+    if (timer.current) clearTimeout(timer.current);
+  }, []);
   return h("button", {
     type: "button",
-    className: "cet-act cet-copy-path",
-    title: t("changes.copyPath"),
+    className: `cet-act cet-copy-path${copied ? " cet-act-done" : ""}`,
+    title: copied ? t("tree.copied") : t("changes.copyPath"),
     "aria-label": `${t("changes.copyPath")} · ${path}`,
     onClick: (event) => {
       event.stopPropagation();
-      void onCopyPath?.(path, event.altKey);
+      const done = onCopyPath?.(path, event.altKey);
+      if (done && typeof done.then === "function") {
+        done.then((ok) => {
+          if (ok === false) return;
+          setCopied(true);
+          if (timer.current) clearTimeout(timer.current);
+          timer.current = setTimeout(() => setCopied(false), 1400);
+        });
+      }
     }
-  }, h(
-    "svg",
-    { viewBox: "0 0 16 16", width: 14, height: 14, fill: "none", stroke: "currentColor", strokeWidth: 1.3, "aria-hidden": true },
-    h("rect", { x: 5, y: 5, width: 8, height: 9, rx: 1.2 }),
-    h("path", { d: "M10 4V2H2v9h2" })
-  ));
+  }, copied ? h(CheckGlyph) : h(CopyGlyph));
 }
 
 // src/client/changetree.js
@@ -2436,6 +2571,11 @@ function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshKey, onN
   const [dragPath, setDragPath] = useState(null);
   const [dropDir, setDropDir] = useState(null);
   const [contextMenu, setContextMenu] = useState(null);
+  const [copiedPath, setCopiedPath] = useState(null);
+  const copiedTimer = useRef(null);
+  useEffect(() => () => {
+    if (copiedTimer.current) clearTimeout(copiedTimer.current);
+  }, []);
   const railRef = useRef(null);
   const contextMenuRef = useDismissLayer({ open: Boolean(contextMenu), onDismiss: () => setContextMenu(null) });
   const deleteRef = useDismissLayer({ open: action?.kind === "delete", onDismiss: () => {
@@ -2659,7 +2799,12 @@ function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshKey, onN
   const depthOf = (path) => path === "" ? 0 : path.split("/").length;
   const copyPath = (path, event) => {
     const text = event?.altKey ? path : toAbs(cwd, path);
-    const ok = () => onNotify?.(t("tree.copied"));
+    const ok = () => {
+      setCopiedPath(path);
+      if (copiedTimer.current) clearTimeout(copiedTimer.current);
+      copiedTimer.current = setTimeout(() => setCopiedPath(null), 1400);
+      onNotify?.(t("tree.copied"));
+    };
     const bad = () => onNotify?.(`${t("error")}: clipboard`, "error");
     try {
       const p = navigator.clipboard?.writeText(text);
@@ -2739,13 +2884,13 @@ function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshKey, onN
     }, "+") : null,
     h(HintButton, {
       type: "button",
-      className: "cet-act",
-      hint: t("tree.copyPath"),
+      className: copiedPath === path ? "cet-act cet-act-done" : "cet-act",
+      hint: copiedPath === path ? t("tree.copied") : t("tree.copyPath"),
       onClick: (e) => {
         e.stopPropagation();
         copyPath(path, e);
       }
-    }, "📋"),
+    }, copiedPath === path ? "✓" : "📋"),
     h(HintButton, {
       type: "button",
       className: "cet-act",
@@ -3644,6 +3789,61 @@ function FileHistoryOverlay({ t, hist, onPick, onClose }) {
     )
   );
 }
+function problemSeverity(severity) {
+  if (severity === 1) return { glyph: "✕", cls: " ce-problem-err" };
+  if (severity === 2) return { glyph: "⚠", cls: " ce-problem-warn" };
+  if (severity === 3) return { glyph: "ℹ", cls: "" };
+  return { glyph: "·", cls: "" };
+}
+function ProblemsPanel({ t, diagnostics, onPick, onClose }) {
+  const panelRef = useDismissLayer({ onDismiss: onClose });
+  const [filters, setFilters] = useState({ err: true, warn: true, info: true });
+  const all = useMemo(
+    () => [...diagnostics ?? []].sort((a, b) => (a.line ?? 0) - (b.line ?? 0) || (a.col ?? 0) - (b.col ?? 0)),
+    [diagnostics]
+  );
+  const bucketOf = (item) => item?.severity === 1 ? "err" : item?.severity === 2 ? "warn" : "info";
+  const counts = useMemo(() => {
+    const c = { err: 0, warn: 0, info: 0 };
+    for (const item of all) c[bucketOf(item)]++;
+    return c;
+  }, [all]);
+  const items = all.filter((item) => filters[bucketOf(item)]);
+  return h(
+    "div",
+    { className: "ce-overlay ce-problems", ref: panelRef, role: "dialog", "aria-label": t("problems.title"), onMouseDown: (event) => event.stopPropagation() },
+    h(
+      "div",
+      { className: "ce-overlay-head" },
+      h("span", null, `${t("problems.title")} · ${items.length}${items.length !== all.length ? `/${all.length}` : ""}`),
+      h("span", { className: "ce-spacer" }),
+      [["err", "✕", "problems.showErr"], ["warn", "⚠", "problems.showWarn"], ["info", "ℹ", "problems.showInfo"]].map(([key, glyph, label]) => h("button", {
+        type: "button",
+        key,
+        className: `ce-tool ce-tiny ce-problem-filter${filters[key] ? "" : " ce-problem-off"}`,
+        "aria-pressed": filters[key],
+        title: t(label),
+        onClick: () => setFilters((f) => ({ ...f, [key]: !f[key] }))
+      }, `${glyph} ${counts[key]}`)),
+      h("button", { className: "ce-tool ce-tiny", type: "button", title: `${t("close")} (Esc)`, onClick: onClose }, "✕")
+    ),
+    h(
+      "div",
+      { className: "ce-overlay-list ce-scroll" },
+      items.length === 0 ? h("div", { className: "ce-note" }, all.length === 0 ? t("problems.empty") : t("problems.filtered")) : null,
+      items.map((item, i) => {
+        const sev = problemSeverity(item.severity);
+        return h(
+          "button",
+          { key: i, type: "button", className: "ce-loc", title: `${item.line}:${item.col}`, onClick: () => onPick(item) },
+          h("span", { className: `ce-problem-sev${sev.cls}` }, sev.glyph),
+          h("span", { className: "ce-loc-path" }, `${item.line}:${item.col}`),
+          h("span", { className: "ce-loc-snippet" }, `${item.source ? `${item.source}: ` : ""}${item.message ?? ""}`)
+        );
+      })
+    )
+  );
+}
 
 // src/client/replace.js
 function escapeReLocal(s) {
@@ -4020,23 +4220,44 @@ function SearchPanel({ t, cwd, state, onQuery, onInclude, onDirectory, onToggleR
 }
 
 // src/client/codeview.js
-function buildTokenCells(text, lang, state, lineNo, flash) {
+function buildTokenCells(text, lang, state, lineNo, flash, current) {
   const runs = tokenizeLine(text, lang, state);
   const jumpable = lang === "go" || lang === "js" || lang === "py";
-  return runs.map((run, r) => {
+  const curStart = current && current.line === lineNo ? (current.col ?? 1) - 1 : null;
+  const curEnd = curStart !== null ? curStart + String(current.text ?? "").length : null;
+  const cells = [];
+  runs.forEach((run, r) => {
     const marked = flash && flash.col != null && run.startCol === flash.col && flash.word && run.s === flash.word;
-    return run.cls === "ce-id" || run.cls === "ce-type" || run.cls === "ce-kw" ? h(
-      "span",
-      {
-        key: r,
-        className: `ce-t ${run.cls}${jumpable ? " ce-jump" : ""}${marked ? " ce-mark" : ""}`,
-        ...jumpable ? { "data-ce-l": lineNo, "data-ce-c": run.startCol ?? 1, "data-ce-w": run.word ?? "" } : {}
-      },
-      run.s
-    ) : h("span", { key: r, className: `ce-t ${run.cls}${marked ? " ce-mark" : ""}` }, run.s);
+    const segments = curStart !== null ? splitRunAt(run, curStart, curEnd) : [{ s: run.s, in: false, offset: 0 }];
+    for (const seg of segments) {
+      const cls = `ce-t ${run.cls}${jumpable ? " ce-jump" : ""}${marked ? " ce-mark" : ""}${seg.in ? " ce-mark-cur" : ""}`;
+      const hookable = run.cls === "ce-id" || run.cls === "ce-type" || run.cls === "ce-kw";
+      cells.push(h(
+        "span",
+        {
+          key: `${r}:${seg.offset}`,
+          className: cls,
+          ...hookable && jumpable ? { "data-ce-l": lineNo, "data-ce-c": (run.startCol ?? 1) + seg.offset, "data-ce-w": run.word ?? "" } : {}
+        },
+        seg.s
+      ));
+    }
   });
+  return cells;
 }
-function computeVisible({ doc, scroll, viewport, diagByLine, flash, diffMarks, delAnchors, delGroups, t, blameOn, blame, openCommit, onDelPreview }) {
+function splitRunAt(run, start, end) {
+  const rs = (run.startCol ?? 1) - 1;
+  const re = rs + run.s.length;
+  if (end <= rs || start >= re) return [{ s: run.s, in: false, offset: 0 }];
+  const from = Math.max(0, start - rs);
+  const to = Math.min(run.s.length, end - rs);
+  const out = [];
+  if (from > 0) out.push({ s: run.s.slice(0, from), in: false, offset: 0 });
+  if (to > from) out.push({ s: run.s.slice(from, to), in: true, offset: from });
+  if (to < run.s.length) out.push({ s: run.s.slice(to), in: false, offset: to });
+  return out;
+}
+function computeVisible({ doc, scroll, viewport, diagByLine, flash, current, diffMarks, delAnchors, delGroups, t, blameOn, blame, openCommit, onDelPreview }) {
   if (!doc) return null;
   const extraAt = (line) => {
     let n = 0;
@@ -4062,7 +4283,7 @@ function computeVisible({ doc, scroll, viewport, diagByLine, flash, diffMarks, d
   for (let i = start; i < doc.lines.length && yOf(i) <= scroll + viewport + 8 * ROW; i++) {
     const lineFlash = flash && flash.line === i + 1 ? flash : null;
     const lineChanged = diffMarks !== null && diffMarks.has(i + 1);
-    const cells = buildTokenCells(doc.lines[i], lang, doc.states[i], i + 1, lineFlash);
+    const cells = buildTokenCells(doc.lines[i], lang, doc.states[i], i + 1, lineFlash, current);
     const lineDiags = diagByLine.get(i + 1);
     const underlines = (lineDiags ?? []).map((item, d) => {
       const endCol = item.endLine === item.line ? Math.min(item.endCol, item.startCol + 200) : item.startCol + 200;
@@ -4111,7 +4332,7 @@ function computeVisible({ doc, scroll, viewport, diagByLine, flash, diffMarks, d
   });
   return { rows, blameRows, start, end: doc.lines.length, total: (doc.lines.length + 2) * ROW + delAnchors.length * ROW };
 }
-function computeGutter({ doc, scroll, viewport, cursor, findLines, diffMarks, delAnchors }) {
+function computeGutter({ doc, scroll, viewport, cursor, findLines, current, diffMarks, delAnchors }) {
   if (!doc) return null;
   const extraAt = (line) => {
     let n = 0;
@@ -4136,7 +4357,7 @@ function computeGutter({ doc, scroll, viewport, cursor, findLines, diffMarks, de
     rows.push(
       h(
         "div",
-        { key: i, className: `ce-gline${cursor?.line === i + 1 ? " ce-gline-active" : ""}${findLines.has(i + 1) ? " ce-gline-find" : ""}${diffMarks !== null && diffMarks.has(i + 1) ? " ce-gline-changed" : ""}`, style: { transform: `translateY(${yOf(i)}px)` } },
+        { key: i, className: `ce-gline${cursor?.line === i + 1 ? " ce-gline-active" : ""}${findLines.has(i + 1) ? " ce-gline-find" : ""}${current?.line === i + 1 ? " ce-gline-find-cur" : ""}${diffMarks !== null && diffMarks.has(i + 1) ? " ce-gline-changed" : ""}`, style: { transform: `translateY(${yOf(i)}px)` } },
         String(i + 1)
       )
     );
@@ -4144,7 +4365,7 @@ function computeGutter({ doc, scroll, viewport, cursor, findLines, diffMarks, de
   return rows;
 }
 var WRAP_LINE_CAP = 5e3;
-function computeWrapRows({ doc, flash, diffMarks, delAnchors, delGroups, cursor, findLines, t, onDelPreview }) {
+function computeWrapRows({ doc, flash, current, diffMarks, delAnchors, delGroups, cursor, findLines, t, onDelPreview }) {
   if (!doc) return null;
   const lang = langFor(doc.path);
   const total = doc.lines.length;
@@ -4166,7 +4387,7 @@ function computeWrapRows({ doc, flash, diffMarks, delAnchors, delGroups, cursor,
     const lineNo = i + 1;
     const lineFlash = flash && flash.line === lineNo ? flash : null;
     const lineChanged = diffMarks !== null && diffMarks.has(lineNo);
-    const cells = buildTokenCells(doc.lines[i], lang, doc.states[i], lineNo, lineFlash);
+    const cells = buildTokenCells(doc.lines[i], lang, doc.states[i], lineNo, lineFlash, current);
     rows.push(h(
       "div",
       {
@@ -4211,6 +4432,99 @@ function findRangesInLine(line, re) {
     out.push({ start: m.index, end: m.index + m[0].length, text: m[0] });
   }
   return out;
+}
+function preserveCaseReplace(matchText, pattern) {
+  const match = String(matchText ?? "");
+  const repl = String(pattern ?? "");
+  if (match === "") return repl;
+  const segmented = (sep) => match.includes(sep) && repl.includes(sep) && match.split(sep).length === repl.split(sep).length;
+  const hasHyphens = segmented("-");
+  const hasUnderscores = segmented("_");
+  if (hasHyphens && !hasUnderscores) return segmentReplace(match, repl, "-");
+  if (!hasHyphens && hasUnderscores) return segmentReplace(match, repl, "_");
+  if (match.toUpperCase() === match) return repl.toUpperCase();
+  if (match.toLowerCase() === match) return repl.toLowerCase();
+  if (/[A-Z]/.test(match[0]) && repl.length > 0) return repl[0].toUpperCase() + repl.slice(1);
+  if (match[0].toUpperCase() !== match[0] && repl.length > 0) return repl[0].toLowerCase() + repl.slice(1);
+  return repl;
+}
+function segmentReplace(match, repl, sep) {
+  const matchParts = match.split(sep);
+  return repl.split(sep).map((part, i) => preserveCaseReplace(matchParts[i] ?? "", part)).join(sep);
+}
+function applyReplace(lines2, matches, replaceText, { all = false, index = 0, regexRe = null, preserveCase = false } = {}) {
+  if (!Array.isArray(lines2) || !Array.isArray(matches) || matches.length === 0) return null;
+  const targets = all ? matches : [matches[index]].filter(Boolean);
+  if (targets.length === 0) return null;
+  const replacementFor = (match) => {
+    const text = String(replaceText ?? "");
+    if (regexRe && typeof regexRe.source === "string" && text.includes("$")) {
+      try {
+        const flags = String(regexRe.flags ?? "").replace(/g/g, "");
+        return String(match.text ?? "").replace(new RegExp(regexRe.source, flags), text);
+      } catch {
+        return text;
+      }
+    }
+    return preserveCase ? preserveCaseReplace(match.text, text) : text;
+  };
+  const next = lines2.slice();
+  const byLine = /* @__PURE__ */ new Map();
+  for (const m of targets) {
+    const rows = byLine.get(m.line) ?? [];
+    rows.push(m);
+    byLine.set(m.line, rows);
+  }
+  let count = 0;
+  for (const [lineNo, rows] of byLine) {
+    const at = lineNo - 1;
+    if (at < 0 || at >= next.length) continue;
+    let text = String(next[at] ?? "");
+    rows.sort((a, b) => (b.col ?? 1) - (a.col ?? 1));
+    for (const m of rows) {
+      const start = Math.max(0, (m.col ?? 1) - 1);
+      const len = String(m.text ?? "").length;
+      if (len === 0 || text.slice(start, start + len) !== m.text) continue;
+      text = text.slice(0, start) + replacementFor(m) + text.slice(start + len);
+      count++;
+    }
+    next[at] = text;
+  }
+  if (count === 0) return null;
+  return { lines: next, count };
+}
+
+// src/client/tabs.js
+function closeOtherTabs(tabs, keep) {
+  const list = Array.isArray(tabs) ? tabs : [];
+  return list.filter((p) => p === keep);
+}
+function closeTabsToRight(tabs, anchor) {
+  const list = Array.isArray(tabs) ? tabs : [];
+  const at = list.indexOf(anchor);
+  return at < 0 ? list : list.slice(0, at + 1);
+}
+function removedPaths(prev, next) {
+  const kept = new Set(Array.isArray(next) ? next : []);
+  return (Array.isArray(prev) ? prev : []).filter((p) => !kept.has(p));
+}
+function pushClosedTab(stack, entry, cap = 10) {
+  const list = Array.isArray(stack) ? stack : [];
+  if (!entry || typeof entry.path !== "string" || entry.path === "") return list;
+  return [entry, ...list].slice(0, Math.max(1, cap));
+}
+function popClosedTab(stack) {
+  const list = Array.isArray(stack) ? stack : [];
+  return [list[0] ?? null, list.slice(1)];
+}
+function excludePinned(paths2, pinned) {
+  const pins = new Set(Array.isArray(pinned) ? pinned : []);
+  return (Array.isArray(paths2) ? paths2 : []).filter((p) => !pins.has(p));
+}
+function pinTab(tabs, path) {
+  const list = Array.isArray(tabs) ? tabs : [];
+  if (!list.includes(path)) return list;
+  return [path, ...list.filter((p) => p !== path)];
 }
 
 // src/client/usegit.js
@@ -4378,6 +4692,7 @@ function useNavPersistence(params) {
     wrapOn,
     findOpts,
     tabs,
+    pinned,
     histTick,
     histRef,
     docRef,
@@ -4388,6 +4703,7 @@ function useNavPersistence(params) {
     setWrapOn,
     setFindOpts,
     setTabs,
+    setPinned,
     setMode,
     setHistTick,
     setScroll
@@ -4409,6 +4725,7 @@ function useNavPersistence(params) {
     if (typeof blob.wrapOn === "boolean") setWrapOn(blob.wrapOn);
     if (blob.findOpts && typeof blob.findOpts === "object") setFindOpts({ regex: blob.findOpts.regex === true, caseSensitive: blob.findOpts.caseSensitive === true, words: blob.findOpts.words === true });
     if (Array.isArray(blob.tabs)) setTabs(blob.tabs.filter((p) => typeof p === "string" && p !== "").slice(0, 15));
+    if (Array.isArray(blob.pinned) && setPinned) setPinned(blob.pinned.filter((p) => typeof p === "string" && p !== "").slice(0, 15));
     if (typeof blob.mode === "string") setMode(blob.mode === "skills" ? "files" : blob.mode);
     if (blob.path && !docRef.current) {
       histRef.current = { back: Array.isArray(blob.back) ? blob.back : [], forward: Array.isArray(blob.forward) ? blob.forward : [] };
@@ -4434,6 +4751,7 @@ function useNavPersistence(params) {
       wrapOn,
       findOpts,
       tabs,
+      pinned,
       back: histRef.current.back.slice(-40),
       forward: histRef.current.forward.slice(-40)
     };
@@ -4445,7 +4763,7 @@ function useNavPersistence(params) {
       } catch {
       }
     }, 700);
-  }, [persistKey, doc, cursor, scroll, mode, railW, railVisible, wrapOn, findOpts, tabs, histTick]);
+  }, [persistKey, doc, cursor, scroll, mode, railW, railVisible, wrapOn, findOpts, tabs, pinned, histTick]);
   useEffect(() => () => {
     if (saveTimer.current) clearTimeout(saveTimer.current);
     const last = latestPersistRef.current;
@@ -4500,6 +4818,9 @@ function CodeBody(props) {
   const [findQuery, setFindQuery] = useState("");
   const [findIdx, setFindIdx] = useState(0);
   const [findOpts, setFindOpts] = useState({ regex: false, caseSensitive: false, words: false });
+  const [replaceOpen, setReplaceOpen] = useState(false);
+  const [replaceText, setReplaceText] = useState("");
+  const [preserveCase, setPreserveCase] = useState(false);
   const [diffMarks, setDiffMarks] = useState(null);
   const [branchPickOpen, setBranchPickOpen] = useState(false);
   const [blameOn, setBlameOn] = useState(false);
@@ -4522,6 +4843,10 @@ function CodeBody(props) {
   const [fileDropOver, setFileDropOver] = useState(false);
   const [tabDropOver, setTabDropOver] = useState(null);
   const [commitsOpen, setCommitsOpen] = useState(false);
+  const [tabMenu, setTabMenu] = useState(null);
+  const [pinned, setPinned] = useState([]);
+  const [problemsOpen, setProblemsOpen] = useState(false);
+  const tabMenuRef = useDismissLayer({ open: Boolean(tabMenu), onDismiss: () => setTabMenu(null) });
   const peekNonce = useRef(0);
   const paletteTimer = useRef(null);
   const searchTimer = useRef(null);
@@ -4541,6 +4866,7 @@ function CodeBody(props) {
   const tabViewRef = useRef({});
   const autoMarksTimer = useRef(null);
   const tabsRef = useRef(null);
+  const closedTabsRef = useRef([]);
   const dirtyRef = useRef(false);
   dirtyRef.current = editing && editText !== (doc?.raw ?? "");
   docRef.current = doc;
@@ -4637,6 +4963,8 @@ function CodeBody(props) {
     setGotoOpen(false);
     setSymPalette(null);
     setDelPreview(null);
+    setTabMenu(null);
+    setProblemsOpen(false);
   }, []);
   useEffect(() => {
     if (tab?.visible === false) dismissPanels();
@@ -4860,19 +5188,31 @@ function CodeBody(props) {
     const saved = tabViewRef.current[path];
     void openFile(path, saved?.line ?? 1, saved?.col ?? 1, false);
   }, [editing, editText, openFile, say, t, diff, showDiffView, dismissPanels]);
-  const closeTab = useCallback((path) => {
+  const closeTabs = useCallback((paths2, { respectPins = false } = {}) => {
+    const candidates = respectPins ? excludePinned(paths2, pinned) : paths2;
+    const remove = new Set((Array.isArray(candidates) ? candidates : []).filter((p) => typeof p === "string" && p !== ""));
+    if (remove.size === 0) return;
     const current = docRef.current;
-    if (editing && current?.path === path && editText !== (current?.raw ?? "")) {
+    if (editing && current && remove.has(current.path) && editText !== (current.raw ?? "")) {
       say(t("editor.dirtyGuard"), "error");
       return;
     }
-    const idx = tabs.indexOf(path);
-    if (idx < 0) return;
-    const next = tabs.filter((p) => p !== path);
+    const firstIdx = tabs.findIndex((p) => remove.has(p));
+    if (firstIdx < 0) return;
+    let stack = closedTabsRef.current;
+    for (const p of tabs) {
+      if (!remove.has(p)) continue;
+      const view = tabViewRef.current[p];
+      stack = pushClosedTab(stack, { path: p, line: view?.line ?? 1, col: view?.col ?? 1 });
+      delete tabViewRef.current[p];
+    }
+    closedTabsRef.current = stack;
+    const next = tabs.filter((p) => !remove.has(p));
     setTabs(next);
-    delete tabViewRef.current[path];
-    if (current?.path === path) {
-      const neighbor = next[Math.min(idx, next.length - 1)];
+    setPinned((prev) => prev.filter((p) => !remove.has(p)));
+    setTabMenu(null);
+    if (current && remove.has(current.path)) {
+      const neighbor = next[Math.min(firstIdx, next.length - 1)];
       if (neighbor) {
         const saved = tabViewRef.current[neighbor];
         void openFile(neighbor, saved?.line ?? 1, saved?.col ?? 1, false);
@@ -4884,7 +5224,33 @@ function CodeBody(props) {
         setDelPreview(null);
       }
     }
-  }, [tabs, editing, editText, openFile, say, t]);
+  }, [tabs, pinned, editing, editText, openFile, say, t]);
+  const closeTab = useCallback((path) => closeTabs([path]), [closeTabs]);
+  const togglePin = useCallback((path) => {
+    const has = pinned.includes(path);
+    setPinned(has ? pinned.filter((p) => p !== path) : [...pinned, path]);
+    if (!has) setTabs((current) => pinTab(current, path));
+    setTabMenu(null);
+  }, [pinned]);
+  const reopenClosedTab = useCallback(() => {
+    if (!canNavigate()) return;
+    const [entry, rest] = popClosedTab(closedTabsRef.current);
+    if (!entry) {
+      say(t("editor.noClosedTabs"));
+      return;
+    }
+    closedTabsRef.current = rest;
+    void openFile(entry.path, entry.line, entry.col, false);
+  }, [canNavigate, openFile, say, t]);
+  const openTabMenu = useCallback((event, path) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setTabMenu({
+      path,
+      x: Math.max(8, Math.min(event.clientX, (window.innerWidth || 1e3) - 218)),
+      y: Math.max(8, Math.min(event.clientY, (window.innerHeight || 800) - 200))
+    });
+  }, []);
   useNavPersistence({
     persistKey,
     cwd,
@@ -4897,6 +5263,7 @@ function CodeBody(props) {
     wrapOn,
     findOpts,
     tabs,
+    pinned,
     histTick,
     histRef,
     docRef,
@@ -4907,6 +5274,7 @@ function CodeBody(props) {
     setWrapOn,
     setFindOpts,
     setTabs,
+    setPinned,
     setMode,
     setHistTick,
     setScroll
@@ -5167,6 +5535,7 @@ function CodeBody(props) {
     return out;
   }, [doc, findRe]);
   const findLines = useMemo(() => new Set(findMatches.map((m) => m.line)), [findMatches]);
+  const currentFind = findOpen && !editing && findRe && findMatches.length > 0 ? findMatches[Math.min(findIdx, findMatches.length - 1)] : null;
   const jumpFind = useCallback((delta) => {
     if (findMatches.length === 0) return;
     const next = (findIdx + delta + findMatches.length) % findMatches.length;
@@ -5177,6 +5546,25 @@ function CodeBody(props) {
     setFlash({ line: m.line, col: m.col, word: m.text ?? findQuery });
     setTimeout(() => setFlash((f) => f && f.line === m.line ? null : f), 1200);
   }, [findMatches, findIdx, findQuery, scrollAreaToLine]);
+  const doReplace = useCallback((all) => {
+    const d = docRef.current;
+    if (!d || !findQuery || findRe === false) return;
+    const res = applyReplace(d.lines, findMatches, replaceText, {
+      all,
+      index: findIdx,
+      regexRe: findRe && typeof findRe === "object" ? findRe : null,
+      preserveCase
+    });
+    if (!res) {
+      say(t("replace.noMatch"), "error");
+      return;
+    }
+    let text = res.lines.join("\n");
+    if (String(d.raw ?? "").endsWith("\n")) text += "\n";
+    setEditText(text);
+    setEditing(true);
+    say(t(all ? "replace.replacedAll" : "replace.replacedOne", { n: res.count }));
+  }, [findQuery, findRe, findMatches, findIdx, replaceText, preserveCase, say, t]);
   const startEdit = useCallback(() => {
     if (!doc || doc.truncated || doc.image) return;
     if (doc.raw.length > 2 * 1024 * 1024 || doc.lines.length > 5e4) {
@@ -5244,12 +5632,25 @@ function CodeBody(props) {
     dismissPanels();
     setCommandOpen(next);
   }, [commandOpen, dismissPanels]);
+  const toggleProblems = useCallback(() => {
+    const next = !problemsOpen;
+    dismissPanels();
+    setProblemsOpen(next);
+  }, [problemsOpen, dismissPanels]);
   const onRootKeyDown = useCallback(
     (event) => {
       if ((event.metaKey || event.ctrlKey) && !event.altKey && event.code === "KeyF" && !event.shiftKey) {
         if (modeRef.current === "code" && docRef.current && !editing) {
           event.preventDefault();
           setFindOpen((v) => !v);
+        }
+        return;
+      }
+      if ((event.metaKey || event.ctrlKey) && event.altKey && !event.shiftKey && event.code === "KeyF") {
+        if (modeRef.current === "code" && docRef.current && !editing) {
+          event.preventDefault();
+          setFindOpen(true);
+          setReplaceOpen(true);
         }
         return;
       }
@@ -5288,6 +5689,16 @@ function CodeBody(props) {
         toggleCommand();
         return;
       }
+      if ((event.metaKey || event.ctrlKey) && event.shiftKey && !event.altKey && event.code === "KeyM") {
+        event.preventDefault();
+        toggleProblems();
+        return;
+      }
+      if ((event.metaKey || event.ctrlKey) && event.shiftKey && !event.altKey && event.code === "KeyT") {
+        event.preventDefault();
+        reopenClosedTab();
+        return;
+      }
       if ((event.metaKey || event.ctrlKey) && !event.altKey && event.code === "KeyP") {
         event.preventDefault();
         if (palette) closePalette();
@@ -5316,7 +5727,7 @@ function CodeBody(props) {
         return;
       }
       if (event.key === "Escape") {
-        if (searchOpen || palette || commandOpen || branchPickOpen || fileHist || gotoOpen || symPalette || peek || overlay) {
+        if (searchOpen || palette || commandOpen || branchPickOpen || fileHist || gotoOpen || symPalette || peek || overlay || problemsOpen || tabMenu) {
           event.preventDefault();
           event.stopPropagation();
           dismissPanels();
@@ -5353,7 +5764,7 @@ function CodeBody(props) {
         if (searchOpen) setSearchOpen(false);
       }
     },
-    [palette, closePalette, openPalette, openSearch, searchOpen, peek, closePeek, goBack, goForward, symPalette, editing, saveEdit, cancelEdit, findOpen, delPreview, gotoOpen, toggleWrap, fileHist, toggleCommand, dismissPanels, commandOpen, branchPickOpen, overlay]
+    [palette, closePalette, openPalette, openSearch, searchOpen, peek, closePeek, goBack, goForward, symPalette, editing, saveEdit, cancelEdit, findOpen, delPreview, gotoOpen, toggleWrap, fileHist, toggleCommand, toggleProblems, reopenClosedTab, dismissPanels, commandOpen, branchPickOpen, overlay, problemsOpen, tabMenu]
   );
   const doJump = useCallback(
     async (kind, pos) => {
@@ -5514,16 +5925,16 @@ function CodeBody(props) {
     setTimeout(() => setFlash((f) => f && f.line === line ? null : f), 1200);
   }, [scrollAreaToLine]);
   const visible = useMemo(
-    () => wrapOn ? null : computeVisible({ doc, scroll, viewport, diagByLine, flash, diffMarks, delAnchors, delGroups, t, blameOn, blame, openCommit, onDelPreview: setDelPreview }),
-    [wrapOn, doc, scroll, viewport, diagByLine, flash, diffMarks, delAnchors, delGroups, t, blameOn, blame, openCommit]
+    () => wrapOn ? null : computeVisible({ doc, scroll, viewport, diagByLine, flash, current: currentFind, diffMarks, delAnchors, delGroups, t, blameOn, blame, openCommit, onDelPreview: setDelPreview }),
+    [wrapOn, doc, scroll, viewport, diagByLine, flash, currentFind, diffMarks, delAnchors, delGroups, t, blameOn, blame, openCommit]
   );
   const gutter = useMemo(
-    () => wrapOn ? null : computeGutter({ doc, scroll, viewport, cursor, findLines, diffMarks, delAnchors }),
-    [wrapOn, doc, scroll, viewport, cursor, findLines, diffMarks, delAnchors]
+    () => wrapOn ? null : computeGutter({ doc, scroll, viewport, cursor, findLines, current: currentFind, diffMarks, delAnchors }),
+    [wrapOn, doc, scroll, viewport, cursor, findLines, currentFind, diffMarks, delAnchors]
   );
   const wrapDoc = useMemo(
-    () => wrapOn ? computeWrapRows({ doc, flash, diffMarks, delAnchors, delGroups, cursor, findLines, t, onDelPreview: setDelPreview }) : null,
-    [wrapOn, doc, flash, diffMarks, delAnchors, delGroups, cursor, findLines, t]
+    () => wrapOn ? computeWrapRows({ doc, flash, current: currentFind, diffMarks, delAnchors, delGroups, cursor, findLines, t, onDelPreview: setDelPreview }) : null,
+    [wrapOn, doc, flash, currentFind, diffMarks, delAnchors, delGroups, cursor, findLines, t]
   );
   const statusTitle = (status.state === "error" ? `${t("status.error")}: ${status.message}` : status.state === "starting" ? t("status.starting") : status.state === "ready" ? t("status.ready") : t("status.off")) + (status.progress ? ` · ${status.progress}` : "");
   const previewActive = previewOn && doc !== null && PREVIEW_RE.test(doc.path);
@@ -5568,6 +5979,15 @@ function CodeBody(props) {
       if (LSP_RE.test(docRef.current?.path ?? "")) setSymPalette({});
       else say(t("command.outlineUnavailable"), "error");
     } },
+    { id: "replace", icon: "⇄", label: t("command.replace"), hint: "⌘⌥F", run: () => {
+      if (modeRef.current === "code" && docRef.current && !editing && !docRef.current.image) {
+        setFindOpen(true);
+        setReplaceOpen(true);
+      } else say(t("command.replaceUnavailable"), "error");
+    } },
+    { id: "problems", icon: "⚠", label: t("command.problems"), hint: "⇧⌘M", run: toggleProblems },
+    { id: "reopen-tab", icon: "↺", label: t("command.reopenTab"), hint: "⌘⇧T", run: reopenClosedTab },
+    { id: "close-all-tabs", icon: "✕", label: t("command.closeAllTabs"), run: () => closeTabs(tabs, { respectPins: true }) },
     { id: "wrap", icon: "↩", label: t("command.wrap"), hint: "⌥Z", run: () => toggleWrap() },
     { id: "toggle-rail", icon: "◧", label: t("command.toggleRail"), hint: "⌘B", run: () => setRailVisible((value) => !value) },
     { id: "refresh", icon: "⟳", label: t("command.refresh"), run: () => {
@@ -5576,7 +5996,7 @@ function CodeBody(props) {
       if (docRef.current) void loadFile(docRef.current.path, cursorRef.current?.line ?? 1, cursorRef.current?.col ?? 1);
     } },
     ...terminalEntry.available() ? [{ id: "terminal", icon: "‣", label: t("command.terminal"), run: openTerminal }] : []
-  ], [t, refreshGit, openSearch, openPalette, toggleWrap, say, loadFile, dismissPanels, openTerminal, terminalEntry]);
+  ], [t, refreshGit, openSearch, openPalette, toggleWrap, say, loadFile, dismissPanels, openTerminal, terminalEntry, editing, toggleProblems, reopenClosedTab, closeTabs, tabs]);
   const startRailDrag = useCallback((event) => {
     event.preventDefault();
     const startX = event.clientX;
@@ -5814,6 +6234,7 @@ function CodeBody(props) {
                 },
                 title: RelPath(cwd, p) || p,
                 onClick: () => switchTab(p),
+                onContextMenu: (e) => openTabMenu(e, p),
                 onAuxClick: (e) => {
                   if (e.button === 1) {
                     e.preventDefault();
@@ -5822,6 +6243,7 @@ function CodeBody(props) {
                 }
               },
               h("span", { className: `ce-tab-dot${dirty ? " ce-tab-dirty" : ""}` }, dirty ? "●" : ""),
+              pinned.includes(p) ? h("span", { className: "ce-tab-pin", title: t("tabs.pinned"), "aria-label": t("tabs.pinned") }, "◉") : null,
               h("span", { className: "ce-tab-name" }, p.split("/").pop()),
               h("button", {
                 type: "button",
@@ -5834,6 +6256,20 @@ function CodeBody(props) {
               }, "✕")
             );
           })
+        ) : null,
+        // VS Code-style editor tab context menu: Close / Close Others /
+        // Close to the Right / Close All, all through closeTabs().
+        tabMenu ? h(
+          "div",
+          { className: "cet-context ce-tabmenu", ref: tabMenuRef, style: { left: tabMenu.x, top: tabMenu.y }, role: "menu", onMouseDown: (e) => e.stopPropagation() },
+          h("div", { className: "cet-context-path" }, tabMenu.path.split("/").pop()),
+          h("button", { type: "button", role: "menuitem", onClick: () => togglePin(tabMenu.path) }, pinned.includes(tabMenu.path) ? t("tabs.unpin") : t("tabs.pin")),
+          h("div", { className: "cet-context-rule" }),
+          h("button", { type: "button", role: "menuitem", onClick: () => closeTabs([tabMenu.path]) }, t("tabs.close")),
+          h("button", { type: "button", role: "menuitem", disabled: tabs.length <= 1, onClick: () => closeTabs(removedPaths(tabs, closeOtherTabs(tabs, tabMenu.path)), { respectPins: true }) }, t("tabs.closeOthers")),
+          h("button", { type: "button", role: "menuitem", disabled: closeTabsToRight(tabs, tabMenu.path).length >= tabs.length, onClick: () => closeTabs(removedPaths(tabs, closeTabsToRight(tabs, tabMenu.path)), { respectPins: true }) }, t("tabs.closeRight")),
+          h("div", { className: "cet-context-rule" }),
+          h("button", { type: "button", role: "menuitem", className: "cet-context-danger", onClick: () => closeTabs(tabs, { respectPins: true }) }, t("tabs.closeAll"))
         ) : null,
         diff && showDiffView ? h(DiffView, {
           t,
@@ -5878,44 +6314,71 @@ function CodeBody(props) {
             doc && !diff && !doc.image ? h("button", { type: "button", className: `ce-tool ce-tiny${fileHist ? " ce-tool-on" : ""}`, title: t("history.title"), onClick: openFileHistory }, "🕘") : null,
             h("span", { className: "ce-spacer" }),
             cursor ? h("button", { type: "button", className: "ce-pos ce-pos-btn", title: t("goto.title"), onClick: () => setGotoOpen(true) }, `Ln ${cursor.line}, Col ${cursor.col}${cursor.word ? ` · ${cursor.word}` : ""}`) : null,
-            diagnostics.length ? h("span", { className: "ce-diag" }, `${diagnostics.length} ${t("diag.count")}`) : null
+            diagnostics.length ? h("button", { type: "button", className: `ce-diag ce-diag-btn${problemsOpen ? " ce-tool-on" : ""}`, title: `${t("problems.title")} (⇧⌘M / Ctrl+Shift+M)`, "aria-expanded": problemsOpen, onClick: toggleProblems }, `${diagnostics.length} ${t("diag.count")}`) : null
           ),
           findOpen && !editing ? h(
-            "div",
-            { className: "ce-find" },
-            h("input", {
-              className: "ce-input ce-find-input",
-              placeholder: t("editor.findPlaceholder"),
-              value: findQuery,
-              autoFocus: true,
-              onChange: (e) => {
-                setFindQuery(e.target.value);
+            Fragment,
+            null,
+            h(
+              "div",
+              { className: "ce-find" },
+              h("input", {
+                className: "ce-input ce-find-input",
+                placeholder: t("editor.findPlaceholder"),
+                value: findQuery,
+                autoFocus: true,
+                "aria-label": t("editor.findPlaceholder"),
+                onChange: (e) => {
+                  setFindQuery(e.target.value);
+                  setFindIdx(0);
+                },
+                onKeyDown: (e) => {
+                  e.stopPropagation();
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    jumpFind(e.shiftKey ? -1 : 1);
+                  } else if (e.key === "Escape") setFindOpen(false);
+                }
+              }),
+              h("button", { type: "button", className: `ce-tool ce-tiny${findOpts.caseSensitive ? " ce-tool-on" : ""}`, title: t("find.case"), onClick: () => {
+                setFindOpts((o) => ({ ...o, caseSensitive: !o.caseSensitive }));
                 setFindIdx(0);
-              },
-              onKeyDown: (e) => {
-                e.stopPropagation();
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  jumpFind(e.shiftKey ? -1 : 1);
-                } else if (e.key === "Escape") setFindOpen(false);
-              }
-            }),
-            h("button", { type: "button", className: `ce-tool ce-tiny${findOpts.caseSensitive ? " ce-tool-on" : ""}`, title: t("find.case"), onClick: () => {
-              setFindOpts((o) => ({ ...o, caseSensitive: !o.caseSensitive }));
-              setFindIdx(0);
-            } }, "Aa"),
-            h("button", { type: "button", className: `ce-tool ce-tiny${findOpts.words ? " ce-tool-on" : ""}`, title: t("find.words"), onClick: () => {
-              setFindOpts((o) => ({ ...o, words: !o.words }));
-              setFindIdx(0);
-            } }, "ab|"),
-            h("button", { type: "button", className: `ce-tool ce-tiny${findOpts.regex ? " ce-tool-on" : ""}`, title: t("find.regex"), onClick: () => {
-              setFindOpts((o) => ({ ...o, regex: !o.regex }));
-              setFindIdx(0);
-            } }, ".*"),
-            findRe === false ? h("span", { className: "ce-find-count cea-err" }, t("find.badRegex")) : h("span", { className: "ce-find-count" }, findQuery ? `${findMatches.length === 0 ? 0 : Math.min(findIdx + 1, findMatches.length)}/${findMatches.length}` : ""),
-            h("button", { type: "button", className: "ce-tool ce-tiny", onClick: () => jumpFind(-1) }, "↑"),
-            h("button", { type: "button", className: "ce-tool ce-tiny", onClick: () => jumpFind(1) }, "↓"),
-            h("button", { type: "button", className: "ce-tool ce-tiny", onClick: () => setFindOpen(false) }, "✕")
+              } }, "Aa"),
+              h("button", { type: "button", className: `ce-tool ce-tiny${findOpts.words ? " ce-tool-on" : ""}`, title: t("find.words"), onClick: () => {
+                setFindOpts((o) => ({ ...o, words: !o.words }));
+                setFindIdx(0);
+              } }, "ab|"),
+              h("button", { type: "button", className: `ce-tool ce-tiny${findOpts.regex ? " ce-tool-on" : ""}`, title: t("find.regex"), onClick: () => {
+                setFindOpts((o) => ({ ...o, regex: !o.regex }));
+                setFindIdx(0);
+              } }, ".*"),
+              h("button", { type: "button", className: `ce-tool ce-tiny${replaceOpen ? " ce-tool-on" : ""}`, title: `${t("editor.replaceToggle")} (⌘⌥F / Ctrl+Alt+F)`, "aria-expanded": replaceOpen, onClick: () => setReplaceOpen((v) => !v) }, "⇄"),
+              findRe === false ? h("span", { className: "ce-find-count cea-err" }, t("find.badRegex")) : h("span", { className: "ce-find-count" }, findQuery ? `${findMatches.length === 0 ? 0 : Math.min(findIdx + 1, findMatches.length)}/${findMatches.length}` : ""),
+              h("button", { type: "button", className: "ce-tool ce-tiny", title: t("find.prev"), onClick: () => jumpFind(-1) }, "↑"),
+              h("button", { type: "button", className: "ce-tool ce-tiny", title: t("find.next"), onClick: () => jumpFind(1) }, "↓"),
+              h("button", { type: "button", className: "ce-tool ce-tiny", title: t("close"), onClick: () => setFindOpen(false) }, "✕")
+            ),
+            replaceOpen ? h(
+              "div",
+              { className: "ce-find ce-find-replace" },
+              h("input", {
+                className: "ce-input ce-find-input",
+                placeholder: t("editor.replacePlaceholder"),
+                "aria-label": t("editor.replace"),
+                value: replaceText,
+                onChange: (e) => setReplaceText(e.target.value),
+                onKeyDown: (e) => {
+                  e.stopPropagation();
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    doReplace(false);
+                  } else if (e.key === "Escape") setReplaceOpen(false);
+                }
+              }),
+              h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost", title: t("editor.replaceOneTitle"), disabled: findMatches.length === 0 || findRe === false, onClick: () => doReplace(false) }, t("editor.replace")),
+              h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost", title: t("editor.replaceAllTitle"), disabled: findMatches.length === 0 || findRe === false, onClick: () => doReplace(true) }, t("editor.replaceAll")),
+              h("button", { type: "button", className: `ce-tool ce-tiny${preserveCase ? " ce-tool-on" : ""}`, title: t("find.preserveCase"), "aria-pressed": preserveCase, onClick: () => setPreserveCase((v) => !v) }, "AB")
+            ) : null
           ) : null,
           h(
             "div",
@@ -5986,6 +6449,15 @@ function CodeBody(props) {
         palette ? h(QuickOpen, { t, state: palette, onQuery: onPaletteQuery, onPick: onPalettePick, onClose: closePalette }) : null,
         gotoOpen && doc && !doc.image ? h(GotoLinePalette, { t, totalLines: wrapOn ? Math.min(doc.lines.length, WRAP_LINE_CAP) : doc.lines.length, initial: cursor?.line ?? 1, onGo: jumpToLine, onClose: () => setGotoOpen(false) }) : null,
         fileHist ? h(FileHistoryOverlay, { t, hist: fileHist, onPick: (c) => void openHistCommit(c), onClose: () => setFileHist(null) }) : null,
+        problemsOpen ? h(ProblemsPanel, {
+          t,
+          diagnostics,
+          onPick: (item) => {
+            setProblemsOpen(false);
+            revealPosition(item.line, item.col, "");
+          },
+          onClose: () => setProblemsOpen(false)
+        }) : null,
         searchOpen && search ? h(SearchPanel, {
           t,
           cwd,
@@ -6386,6 +6858,22 @@ var CSS2 = `
 .ce-find{display:flex;gap:6px;align-items:center;padding:4px 8px;border-bottom:.5px solid var(--dsw-alias-border-l1,#333);flex:none}
 .ce-find-input{flex:0 1 240px}
 .ce-find-count{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;color:var(--dsw-alias-label-tertiary,#889);flex:none}
+.ce-find-replace{border-top:0;background:color-mix(in srgb,var(--dsw-alias-bg-layer-1,#1e2126) 55%,transparent)}
+.ce-find-replace .ce-sk-btn{flex:none;font-size:11px;padding:3px 9px}
+.ce-diag-btn{border:.5px solid color-mix(in srgb,var(--dsw-alias-state-error-primary,#f85149) 45%,transparent);background:transparent;border-radius:6px;font:inherit;cursor:pointer;padding:1px 7px}
+.ce-diag-btn:hover{background:color-mix(in srgb,var(--dsw-alias-state-error-primary,#f85149) 12%,transparent)}
+.ce-problem-sev{flex:none;width:16px;text-align:center;font-weight:700;color:var(--dsw-alias-label-tertiary,#889)}
+.ce-problem-err{color:var(--dsw-alias-state-error-primary,#f85149)}
+.ce-problem-warn{color:var(--dsw-alias-state-warn-primary,#e3b341)}
+.cet-context>button:disabled{opacity:.45;cursor:default}
+.cet-context>button:disabled:hover{background:transparent}
+.ce-tabmenu{min-width:170px}
+.ce-tab-pin{flex:none;font-size:8px;line-height:1;color:var(--dsw-alias-brand-primary,#59b7ff);transform:translateY(-1px)}
+.ce-mark-cur{background:color-mix(in srgb,var(--dsw-alias-state-warn-primary,#e3b341) 55%,transparent);border-radius:2px;box-shadow:0 0 0 1px color-mix(in srgb,var(--dsw-alias-state-warn-primary,#e3b341) 70%,transparent)}
+.ce-gline-find-cur{background:color-mix(in srgb,var(--dsw-alias-state-warn-primary,#e3b341) 30%,transparent);color:var(--dsw-alias-label-primary,#ddd);font-weight:700}
+.ce-problem-filter{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:10.5px}
+.ce-problem-off{opacity:.45;text-decoration:line-through}
+.cea-request-panel .cea-fields+.cea-fields{margin-top:10px;border-top:.5px solid var(--dsw-alias-border-l1,#333);padding-top:6px}
 .ce-edit-ta{flex:1;min-height:0;resize:none;border:0;outline:none;background:var(--dsw-alias-bg-base,#181818);color:var(--dsw-alias-label-primary,#ddd);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;line-height:${ROW}px;padding:8px 10px;white-space:pre;overflow:auto;tab-size:4}
 .ce-gline-find{color:var(--dsw-alias-state-warn-primary,#e3b341)}
 .ce-line-changed{background:color-mix(in srgb,var(--dsw-alias-state-success-primary,#3fb950) 20%,transparent);box-shadow:inset 3px 0 0 0 var(--dsw-alias-state-success-primary,#3fb950)}
@@ -6440,6 +6928,7 @@ var CSS2 = `
 .cet-context>button{display:block;width:100%;border:0;border-radius:4px;background:transparent;color:inherit;text-align:left;font:inherit;font-size:12px;padding:6px 9px;cursor:pointer}
 .cet-context>button:hover,.cet-context>button:focus-visible{background:var(--dsw-alias-interactive-bg-hover,#2b3038);outline:0}
 .cet-context-danger{color:var(--dsw-alias-state-error-primary,#f85149)!important}
+.cet-act-done{color:var(--dsw-alias-state-success-primary,#3fb950)!important}
 
 .cet-context{position:fixed;z-index:100001;min-width:190px;max-width:260px;padding:4px;background:var(--dsw-alias-bg-layer-2,#24272c);border:.5px solid var(--dsw-alias-border-l2,#444);border-radius:7px;box-shadow:0 8px 24px rgba(0,0,0,.28);color:var(--dsw-alias-label-primary,#ddd)}
 .cet-context-path{padding:6px 9px;color:var(--dsw-alias-label-tertiary,#889);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -6447,6 +6936,7 @@ var CSS2 = `
 .cet-context>button{display:block;width:100%;border:0;border-radius:4px;background:transparent;color:inherit;text-align:left;font:inherit;font-size:12px;padding:6px 9px;cursor:pointer}
 .cet-context>button:hover,.cet-context>button:focus-visible{background:var(--dsw-alias-interactive-bg-hover,#2b3038);outline:0}
 .cet-context-danger{color:var(--dsw-alias-state-error-primary,#f85149)!important}
+.cet-act-done{color:var(--dsw-alias-state-success-primary,#3fb950)!important}
 .cet-status{flex:none;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;font-weight:700}
 .cet-st-m{color:var(--dsw-alias-state-warn-primary,#e3b341)}
 .cet-st-u,.cet-st-a{color:var(--dsw-alias-state-success-primary,#3fb950)}
@@ -6537,6 +7027,25 @@ var CSS2 = `
 .cea-root .cea-hist{top:94px}
 @container (max-width:380px){.cea-root>.cea-bar{grid-template-columns:76px minmax(0,1fr)}.cea-root>.cea-bar .cea-request-method{width:76px}.cea-root>.cea-bar .cea-send{grid-column:1/-1;margin:8px 0 0}.cea-tools{gap:2px}.cea-request-tabs{gap:12px}.cea-root .cea-hist{top:138px}}
 .cea-hts{flex:none;font-size:10px;color:var(--dsw-alias-label-tertiary,#778);font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+/* Bruno-style environments / auth / codegen / timeline additions */
+.cea-env{width:auto;max-width:150px;min-width:96px}
+.cea-envbar{display:flex;gap:6px;align-items:center;padding:4px 8px 8px;flex:none}
+.cea-env-name{flex:1;min-width:0;font-size:12px}
+.cea-envbar .ce-sk-btn{flex:none;font-size:11px;padding:4px 8px}
+.cea-danger{color:var(--dsw-alias-state-error-primary,#f85149)!important;border-color:color-mix(in srgb,var(--dsw-alias-state-error-primary,#f85149) 45%,transparent)!important}
+.cea-auth{display:flex;flex-direction:column;gap:8px;padding:4px 8px}
+.cea-auth-row{display:flex;gap:10px;align-items:center;font-size:12px;color:var(--dsw-alias-label-secondary,#999)}
+.cea-auth-row>span{flex:0 0 88px}
+.cea-auth-row .ce-input{flex:1;min-width:0;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px}
+.cea-codemenu{max-width:260px;min-width:210px}
+.cea-code-item{align-items:center}
+.cea-code-label{flex:1;min-width:0;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px}
+.cea-code-copied{flex:none;font-size:11px}
+.cea-resp-tabs{padding:2px 8px 0;border-bottom:.5px solid var(--dsw-alias-border-l1,#333);flex:none}
+.cea-timeline{display:flex;flex-direction:column;gap:4px;padding:6px 4px}
+.cea-tl-req{display:flex;gap:8px;align-items:center;padding:0 8px 2px}
+.cea-tl-body{margin:0 8px;border-radius:6px;max-height:160px;overflow:auto}
+.cea-tl-meta{padding:2px 8px;font-size:10.5px;color:var(--dsw-alias-label-tertiary,#889);font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
 .ce-htmlprev{flex:1;min-height:0;width:100%;border:0;background:#fff}
 .ctp-tools{display:flex;gap:6px;padding:4px 8px;border-bottom:.5px solid var(--dsw-alias-border-l1,#333);flex:none}
 .ctp-acts{margin-left:0;display:inline-flex;flex:none;gap:2px;width:0;overflow:hidden;visibility:hidden;pointer-events:none}
@@ -7433,7 +7942,39 @@ function SkillsTitle({ useTabInfo }) {
 
 // src/client/curl.js
 var SUB_CT = { json: "application/json", text: "text/plain", html: "text/html", xml: "application/xml" };
-function parseCurl(input) {
+var SHORT_VALUE_FLAGS = "dHXuAebFTomxcwK";
+var VALUE_FLAGS = /* @__PURE__ */ new Set([
+  "-o",
+  "--output",
+  "--max-time",
+  "-m",
+  "--retry",
+  "--connect-timeout",
+  "-w",
+  "--write-out",
+  "--resolve",
+  "--cacert",
+  "--cert",
+  "--key",
+  "--proxy",
+  "-x",
+  "-c",
+  "--cookie-jar",
+  "-T",
+  "--upload-file",
+  "--retry-delay",
+  "--retry-max-time",
+  "--limit-rate",
+  "--compressed-ssh",
+  "-K",
+  "--config",
+  "--proto",
+  "--max-redirs",
+  "--ciphers",
+  "--max-filesize"
+]);
+var ANSI_C_ESCAPES = { n: "\n", t: "	", r: "\r", a: "\x07", b: "\b", f: "\f", v: "\v", e: "\x1B", "\\": "\\", "'": "'", '"': '"' };
+function tokenizeCurl(input) {
   const joined = String(input ?? "").trim();
   const tokens = [];
   let cur = "";
@@ -7448,10 +7989,29 @@ function parseCurl(input) {
   for (let i = 0; i < joined.length; i++) {
     const ch = joined[i];
     if (quote !== null) {
-      if (ch === "\\" && quote === '"') {
+      if (ch === "\\" && quote !== "'") {
         const cont2 = continuationLen(i);
         if (cont2 > 0) {
           i += cont2 - 1;
+          continue;
+        }
+        if (quote === "$'") {
+          const esc = joined[i + 1];
+          if (esc === "x") {
+            const hex = joined.slice(i + 2, i + 4);
+            if (/^[0-9a-fA-F]{1,2}$/.test(hex)) {
+              const digits = /^[0-9a-fA-F]{2}$/.test(hex) ? 2 : 1;
+              cur += String.fromCharCode(parseInt(hex.slice(0, digits), 16));
+              i += 1 + digits;
+              continue;
+            }
+          }
+          if (esc !== void 0 && esc in ANSI_C_ESCAPES) {
+            cur += ANSI_C_ESCAPES[esc];
+            i += 1;
+            continue;
+          }
+          if (i + 1 < joined.length) cur += joined[++i];
           continue;
         }
         if (i + 1 < joined.length) {
@@ -7460,7 +8020,7 @@ function parseCurl(input) {
         }
         continue;
       }
-      if (ch === quote) {
+      if (ch === quote[quote.length - 1]) {
         quote = null;
         continue;
       }
@@ -7470,6 +8030,12 @@ function parseCurl(input) {
     const cont = continuationLen(i);
     if (cont > 0) {
       i += cont - 1;
+      continue;
+    }
+    if (ch === "$" && joined[i + 1] === "'") {
+      quote = "$'";
+      started = true;
+      i += 1;
       continue;
     }
     if (ch === "'" || ch === '"') {
@@ -7495,19 +8061,47 @@ function parseCurl(input) {
   }
   if (cur !== "" || started) tokens.push(cur);
   if (tokens.length > 0 && /^curl$/i.test(tokens[0])) tokens.shift();
+  return tokens;
+}
+var ATTACHED_SHORT_RE = new RegExp(`^-([${SHORT_VALUE_FLAGS}])(.+)$`, "s");
+var ATTACHED_LONG_RE = /^--([A-Za-z0-9-]+)=([\s\S]*)$/;
+function expandShortFlags(tokens) {
+  const out = [];
+  for (const token of tokens) {
+    const short = ATTACHED_SHORT_RE.exec(token);
+    if (short) {
+      out.push(`-${short[1]}`, short[2]);
+      continue;
+    }
+    const long = ATTACHED_LONG_RE.exec(token);
+    if (long) out.push(`--${long[1]}`, long[2]);
+    else out.push(token);
+  }
+  return out;
+}
+function decodeFormBody(joined) {
+  const pairs = [];
+  for (const [name, value] of new URLSearchParams(joined)) pairs.push({ name, value });
+  return pairs;
+}
+function parseCurl(input) {
+  const tokens = expandShortFlags(tokenizeCurl(input));
   let method = "";
   let url = "";
   let body = "";
   let hasBody = false;
   let asQuery = false;
+  let userPass = null;
+  let hasJson = false;
   const headers = [];
   const form = [];
+  const dataChunks = [];
+  const urlQueries = [];
   const setHeader = (name, value) => {
     const existing = headers.find((hd) => hd.name.toLowerCase() === name.toLowerCase());
     if (existing) existing.value = value;
     else headers.push({ name, value });
   };
-  const VALUE_FLAGS = /* @__PURE__ */ new Set(["-o", "--output", "--max-time", "-m", "--retry", "--connect-timeout", "-w", "--write-out", "--resolve", "--cacert", "--cert", "--key", "--proxy", "-x", "-c", "--cookie-jar", "-T", "--upload-file", "--url-query", "--retry-delay", "--retry-max-time", "--limit-rate", "--compressed-ssh"]);
   for (let i = 0; i < tokens.length; i++) {
     const t = tokens[i];
     const next = () => {
@@ -7522,27 +8116,37 @@ function parseCurl(input) {
       const hv = next();
       const at = hv.indexOf(":");
       if (at > 0) setHeader(hv.slice(0, at).trim(), hv.slice(at + 1).trim());
+      else if (hv.endsWith(";")) setHeader(hv.slice(0, -1).trim(), "");
       continue;
     }
-    if (t === "-d" || t === "--data" || t === "--data-raw" || t === "--data-binary" || t === "--data-urlencode") {
-      const d = next();
+    if (t === "-d" || t === "--data" || t === "--data-raw" || t === "--data-binary" || t === "--data-ascii") {
+      dataChunks.push(next());
       hasBody = true;
-      body = body === "" ? d : `${body}&${d}`;
+      continue;
+    }
+    if (t === "--data-urlencode") {
+      dataChunks.push(next());
+      hasBody = true;
       continue;
     }
     if (t === "--json") {
-      body = next();
+      dataChunks.push(next());
       hasBody = true;
+      hasJson = true;
       setHeader("Content-Type", "application/json");
       continue;
     }
-    if (t === "-F" || t === "--form") {
+    if (t === "-F" || t === "--form" || t === "--form-string") {
       form.push(next());
       hasBody = true;
       continue;
     }
+    if (t === "--url-query") {
+      urlQueries.push(next());
+      continue;
+    }
     if (t === "-u" || t === "--user") {
-      setHeader("Authorization", `Basic ${btoa(unescape(encodeURIComponent(next())))}`);
+      userPass = next();
       continue;
     }
     if (t === "-A" || t === "--user-agent") {
@@ -7575,21 +8179,66 @@ function parseCurl(input) {
     }
     if (url === "") url = t;
   }
+  body = dataChunks.join("&");
   if (asQuery && body !== "") {
     url = url + (url.includes("?") ? "&" : "?") + body;
     body = "";
     hasBody = false;
   }
+  for (const q of urlQueries) {
+    url = url + (url.includes("?") ? "&" : "?") + q;
+  }
+  let auth;
+  const authAt = headers.findIndex((hd) => hd.name.toLowerCase() === "authorization");
+  if (authAt >= 0) {
+    const value = String(headers[authAt].value ?? "");
+    const bearer = /^Bearer\s+(.+)$/i.exec(value);
+    const basic = /^Basic\s+\S+$/i.test(value) ? decodeBasicValue(value) : null;
+    if (bearer) {
+      auth = { mode: "bearer", token: bearer[1].trim() };
+      headers.splice(authAt, 1);
+    } else if (basic) {
+      auth = { mode: "basic", user: basic.user, pass: basic.pass };
+      headers.splice(authAt, 1);
+    }
+  } else if (userPass !== null) {
+    const at = userPass.indexOf(":");
+    auth = at >= 0 ? { mode: "basic", user: userPass.slice(0, at), pass: userPass.slice(at + 1) } : { mode: "basic", user: userPass, pass: "" };
+  }
   let multipart = null;
+  let formPairs = null;
   if (form.length > 0) {
     multipart = form.map((f) => {
       const eq = f.indexOf("=");
       return eq > 0 ? { name: f.slice(0, eq), value: f.slice(eq + 1) } : { name: f, value: "" };
     });
+    body = "";
+  } else if (body !== "") {
+    const ct = headers.find((hd) => hd.name.toLowerCase() === "content-type")?.value ?? "";
+    const isFormCt = /x-www-form-urlencoded/i.test(ct);
+    const looksForm = !hasJson && dataChunks.every((chunk) => /^[^=&]+=/.test(chunk));
+    if (isFormCt || !ct && looksForm) {
+      formPairs = decodeFormBody(body);
+      body = "";
+    }
   }
   if (hasBody && method === "") method = "POST";
   if (method === "") method = "GET";
-  return multipart ? { method, url, headers, body, multipart } : { method, url, headers, body };
+  const result = { method, url, headers, body };
+  if (multipart) result.multipart = multipart;
+  if (formPairs) result.form = formPairs;
+  if (auth) result.auth = auth;
+  return result;
+}
+function decodeBasicValue(value) {
+  try {
+    const plain = decodeURIComponent(escape(atob(String(value).replace(/^Basic\s+/i, "").trim())));
+    const at = plain.indexOf(":");
+    if (at < 0) return null;
+    return { user: plain.slice(0, at), pass: plain.slice(at + 1) };
+  } catch {
+    return null;
+  }
 }
 function shellQuote(s) {
   return `'${String(s).replace(/'/g, "'\\''")}'`;
@@ -7600,7 +8249,14 @@ function toCurl(req) {
   const bodyType = req?.bodyType || "none";
   if (method !== "GET" || bodyType !== "none") parts.push(`-X ${method}`);
   parts.push(shellQuote(String(req?.url ?? "")));
-  const headers = (req?.headers ?? []).filter((hd) => hd?.enabled !== false && String(hd?.name ?? "").trim() !== "");
+  const auth = req?.auth && typeof req.auth === "object" ? req.auth : null;
+  if (auth?.mode === "basic" && (String(auth.user ?? "") !== "" || String(auth.pass ?? "") !== "")) {
+    parts.push(`-u ${shellQuote(`${auth.user ?? ""}:${auth.pass ?? ""}`)}`);
+  }
+  let headers = (req?.headers ?? []).filter((hd) => hd?.enabled !== false && String(hd?.name ?? "").trim() !== "");
+  if (auth?.mode === "bearer" && String(auth.token ?? "").trim() !== "") {
+    headers = [...headers.filter((hd) => String(hd.name).trim().toLowerCase() !== "authorization"), { name: "Authorization", value: `Bearer ${String(auth.token).trim()}` }];
+  }
   for (const hd of headers) parts.push(`-H ${shellQuote(`${String(hd.name).trim()}: ${hd.value ?? ""}`)}`);
   const hasCT = headers.some((hd) => String(hd.name).trim().toLowerCase() === "content-type");
   if (bodyType === "raw") {
@@ -7618,6 +8274,547 @@ function toCurl(req) {
     }
   }
   return parts.length <= 2 ? parts.join(" ") : parts.join(" \\\n  ");
+}
+
+// src/client/brucol.js
+var BODY_MODES = { json: "json", text: "text", xml: "xml", html: "text", form: "form-urlencoded", multipart: "multipart-form", none: "none" };
+var MODE_TO_BODY = { json: ["raw", "json"], text: ["raw", "text"], xml: ["raw", "xml"], "form-urlencoded": ["form", null], "multipart-form": ["multipart", null], none: ["none", null] };
+var METHOD_RE = /^(get|post|put|patch|delete|head|options)$/i;
+function quoteKey(name) {
+  const raw = String(name ?? "");
+  if (raw === "" || /[\s":{}~]/.test(raw)) return JSON.stringify(raw);
+  return raw;
+}
+function oneLine(value) {
+  return String(value ?? "").replace(/\r?\n/g, " ");
+}
+function rowsBlock(title, rows) {
+  const active = (rows ?? []).filter((r) => r && String(r.name ?? "").trim() !== "");
+  if (active.length === 0) return [];
+  const lines2 = [`${title} {`];
+  for (const r of active) lines2.push(`  ${r.enabled === false ? "~" : ""}${quoteKey(r.name)}: ${oneLine(r.value)}`);
+  lines2.push("}");
+  return lines2;
+}
+function bruNameFor(url, method) {
+  const noScheme = String(url ?? "").replace(/^[a-z][a-z0-9+.-]*:\/\//i, "");
+  const pathPart = noScheme.includes("/") ? noScheme.slice(noScheme.indexOf("/")) : "/";
+  const seg = pathPart.split("?")[0].split("#")[0].split("/").filter(Boolean).pop() ?? "";
+  const clean = seg.replace(/\.[a-z0-9]+$/i, "").replace(/[^A-Za-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "");
+  if (clean !== "") return clean;
+  return String(method || "request").toLowerCase();
+}
+function requestToBru(state) {
+  const method = String(state?.method || "GET").toLowerCase();
+  const bodyType = state?.bodyType || "none";
+  const mode = BODY_MODES[bodyType === "raw" ? state?.rawSub ?? "json" : bodyType] ?? "none";
+  const authMode = state?.auth?.mode === "basic" || state?.auth?.mode === "bearer" ? state.auth.mode : "none";
+  const queryRows = (state?.paramPairs ?? []).filter((p) => p?.kind !== "path");
+  const pathRows = (state?.paramPairs ?? []).filter((p) => p?.kind === "path");
+  const lines2 = [
+    "meta {",
+    `  name: ${oneLine(bruNameFor(state?.url, method))}`,
+    "  type: http",
+    "}",
+    "",
+    `${method} {`,
+    `  url: ${oneLine(state?.url ?? "")}`,
+    `  body: ${mode}`,
+    `  auth: ${authMode}`,
+    "}"
+  ];
+  const push = (block) => {
+    if (block.length === 0) return;
+    lines2.push("", ...block);
+  };
+  push(rowsBlock("params:query", queryRows));
+  push(rowsBlock("params:path", pathRows));
+  push(rowsBlock("headers", state?.headers));
+  if (authMode === "bearer") push(["", "auth:bearer {", `  token: ${oneLine(state?.auth?.token)}`, "}"]);
+  if (authMode === "basic") push(["", "auth:basic {", `  username: ${oneLine(state?.auth?.user)}`, `  password: ${oneLine(state?.auth?.pass)}`, "}"]);
+  if (mode === "form-urlencoded" || mode === "multipart-form") {
+    push(rowsBlock(`body:${mode}`, state?.formPairs));
+  } else if (mode !== "none" && String(state?.body ?? "") !== "") {
+    push(["", `body:${mode} {`, String(state.body).split("\n").map((line) => line === "" ? "" : `  ${line}`).join("\n"), "}"]);
+  }
+  return `${lines2.join("\n")}
+`;
+}
+function looksLikeBru(text) {
+  const head = String(text ?? "").trimStart();
+  return /^\s*meta\s*\{/m.test(head) || /^\s*(get|post|put|patch|delete|head|options)\s*\{/im.test(head);
+}
+function parseRow(line) {
+  const m = /^(~?)("((?:[^"\\]|\\.)*)"|[^:]+):\s?(.*)$/.exec(line);
+  if (!m) return null;
+  const enabled = m[1] !== "~";
+  const name = m[2].startsWith('"') ? JSON.parse(m[2]) : m[2].trim();
+  return { name, value: m[4] ?? "", enabled, description: "", kind: "query" };
+}
+function parseBru(text) {
+  const out = {
+    name: "",
+    method: "GET",
+    url: "",
+    headers: [],
+    paramPairs: [],
+    bodyType: "none",
+    rawSub: "json",
+    body: "",
+    formPairs: [],
+    auth: { mode: "none", token: "", user: "", pass: "" }
+  };
+  const lines2 = String(text ?? "").replace(/\r\n/g, "\n").split("\n");
+  let i = 0;
+  const readBlock = (onLine) => {
+    i++;
+    for (; i < lines2.length; i++) {
+      const line = lines2[i];
+      if (line === "}") {
+        i++;
+        return;
+      }
+      onLine(line);
+    }
+  };
+  const kv = (line) => {
+    const at = line.indexOf(":");
+    return at < 0 ? null : [line.slice(0, at).trim(), line.slice(at + 1).trim()];
+  };
+  for (; i < lines2.length; i++) {
+    const line = lines2[i].trim();
+    if (line === "" || line.startsWith("#")) continue;
+    if (line === "meta {") {
+      readBlock((inner) => {
+        const pair = kv(inner.trim());
+        if (pair?.[0] === "name") out.name = pair[1];
+      });
+      continue;
+    }
+    const methodBlock = METHOD_RE.exec(line.replace(/\s*\{$/, ""));
+    if (methodBlock && line.endsWith("{")) {
+      out.method = methodBlock[1].toUpperCase();
+      readBlock((inner) => {
+        const pair = kv(inner.trim());
+        if (!pair) return;
+        if (pair[0] === "url") out.url = pair[1];
+        if (pair[0] === "body" && MODE_TO_BODY[pair[1]]) {
+          const [bodyType, rawSub] = MODE_TO_BODY[pair[1]];
+          out.bodyType = bodyType;
+          if (rawSub) out.rawSub = rawSub;
+        }
+        if (pair[0] === "auth" && (pair[1] === "basic" || pair[1] === "bearer")) out.auth.mode = pair[1];
+      });
+      continue;
+    }
+    if (line === "params:query {" || line === "params:path {") {
+      const kind = line.startsWith("params:query") ? "query" : "path";
+      readBlock((inner) => {
+        const row = parseRow(inner.trim());
+        if (row) out.paramPairs.push({ ...row, kind });
+      });
+      continue;
+    }
+    if (line === "headers {") {
+      readBlock((inner) => {
+        const row = parseRow(inner.trim());
+        if (row) out.headers.push({ name: row.name, value: row.value, enabled: row.enabled, description: "" });
+      });
+      continue;
+    }
+    if (line === "auth:bearer {") {
+      readBlock((inner) => {
+        const pair = kv(inner.trim());
+        if (pair?.[0] === "token") {
+          out.auth.mode = "bearer";
+          out.auth.token = pair[1];
+        }
+      });
+      continue;
+    }
+    if (line === "auth:basic {") {
+      readBlock((inner) => {
+        const pair = kv(inner.trim());
+        if (pair?.[0] === "username") {
+          out.auth.mode = "basic";
+          out.auth.user = pair[1];
+        }
+        if (pair?.[0] === "password") {
+          out.auth.mode = "basic";
+          out.auth.pass = pair[1];
+        }
+      });
+      continue;
+    }
+    const bodyBlock = /^body:([\w-]+)\s*\{$/.exec(line);
+    if (bodyBlock) {
+      const mode = bodyBlock[1];
+      const raw = [];
+      readBlock((inner) => {
+        if (MODE_TO_BODY[mode]) raw.push(inner);
+      });
+      if (!MODE_TO_BODY[mode]) continue;
+      const [bodyType, rawSub] = MODE_TO_BODY[mode];
+      if (bodyType === "raw") {
+        out.bodyType = "raw";
+        if (rawSub) out.rawSub = rawSub;
+        out.body = raw.map((line2) => line2.startsWith("  ") ? line2.slice(2) : line2).join("\n");
+      } else if (bodyType === "form" || bodyType === "multipart") {
+        out.bodyType = bodyType;
+        for (const inner of raw) {
+          const row = parseRow(inner.trim());
+          if (row) out.formPairs.push({ name: row.name, value: row.value, enabled: row.enabled, description: "" });
+        }
+      }
+      continue;
+    }
+    if (line.endsWith("{")) {
+      readBlock(() => {
+      });
+    }
+  }
+  return out;
+}
+
+// src/client/codegen.js
+function resolvedToCurlRequest(resolved) {
+  const req = {
+    method: resolved?.method ?? "GET",
+    url: resolved?.url ?? "",
+    headers: resolved?.headers ?? [],
+    bodyType: "none"
+  };
+  if (Array.isArray(resolved?.multipart)) {
+    req.bodyType = "multipart";
+    req.formPairs = resolved.multipart.map((f) => ({ name: f.name, value: f.value, enabled: true }));
+  } else if (typeof resolved?.body === "string") {
+    req.bodyType = "raw";
+    req.body = resolved.body;
+  }
+  return req;
+}
+function toCurlSnippet(resolved) {
+  return toCurl(resolvedToCurlRequest(resolved));
+}
+function toFetchSnippet(resolved) {
+  const req = resolved ?? {};
+  const lines2 = [];
+  if (Array.isArray(req.multipart)) {
+    lines2.push("const form = new FormData();");
+    for (const f of req.multipart) lines2.push(`form.append(${JSON.stringify(String(f?.name ?? ""))}, ${JSON.stringify(String(f?.value ?? ""))});`);
+    lines2.push("");
+  }
+  const opts = [`  method: ${JSON.stringify(String(req.method ?? "GET"))}`];
+  const headers = req.headers ?? [];
+  if (headers.length > 0) {
+    opts.push("  headers: {");
+    for (const hd of headers) opts.push(`    ${JSON.stringify(String(hd?.name ?? ""))}: ${JSON.stringify(String(hd?.value ?? ""))},`);
+    opts.push("  }");
+  }
+  if (Array.isArray(req.multipart)) opts.push("  body: form");
+  else if (typeof req.body === "string") opts.push(`  body: ${JSON.stringify(req.body)}`);
+  if (Number.isFinite(req.timeoutMs) && req.timeoutMs > 0) opts.push(`  signal: AbortSignal.timeout(${req.timeoutMs})`);
+  lines2.push(`const response = await fetch(${JSON.stringify(String(req.url ?? ""))}, {`);
+  lines2.push(opts.join(",\n"));
+  lines2.push("});");
+  lines2.push("");
+  lines2.push("console.log(response.status);");
+  lines2.push("console.log(await response.text());");
+  return lines2.join("\n");
+}
+function pyLiteral(value) {
+  return JSON.stringify(String(value ?? ""));
+}
+function toPythonSnippet(resolved) {
+  const req = resolved ?? {};
+  const lines2 = ["import requests", ""];
+  lines2.push(`url = ${pyLiteral(req.url)}`);
+  const headers = req.headers ?? [];
+  if (headers.length > 0) {
+    lines2.push("headers = {");
+    for (const hd of headers) lines2.push(`    ${pyLiteral(hd?.name)}: ${pyLiteral(hd?.value)},`);
+    lines2.push("}");
+  }
+  const args = [pyLiteral(req.method ?? "GET"), "url"];
+  if (headers.length > 0) args.push("headers=headers");
+  if (Array.isArray(req.multipart)) {
+    lines2.push("files = [");
+    for (const f of req.multipart) lines2.push(`    (${pyLiteral(f?.name)}, (None, ${pyLiteral(f?.value)})),`);
+    lines2.push("]");
+    args.push("files=files");
+  } else if (typeof req.body === "string") {
+    lines2.push(`data = ${pyLiteral(req.body)}`);
+    args.push("data=data");
+  }
+  if (Number.isFinite(req.timeoutMs) && req.timeoutMs > 0) args.push(`timeout=${Math.max(1, Math.round(req.timeoutMs / 1e3))}`);
+  lines2.push("");
+  lines2.push(`resp = requests.request(${args.join(", ")})`);
+  lines2.push("");
+  lines2.push("print(resp.status_code)");
+  lines2.push("print(resp.text)");
+  return lines2.join("\n");
+}
+var SNIPPET_KINDS = [
+  { id: "curl", label: "curl", build: toCurlSnippet },
+  { id: "fetch", label: "JavaScript · fetch", build: toFetchSnippet },
+  { id: "python", label: "Python · requests", build: toPythonSnippet },
+  // Bruno collection file: keeps {{var}} templates verbatim (the second
+  // argument is the raw editor state), so the file stays environment-agnostic.
+  { id: "bru", label: "Bruno · .bru", build: (_resolved, state) => requestToBru(state) }
+];
+
+// src/client/reqmodel.js
+function substituteVars(text, envMap) {
+  if (typeof text !== "string" || !text.includes("{{")) return text;
+  return text.replace(/\{\{\s*([A-Za-z0-9_.\-]+)\s*\}\}/g, (whole, name) => Object.prototype.hasOwnProperty.call(envMap, name) ? String(envMap[name]) : whole);
+}
+function buildEnvMap(pairs) {
+  const map = {};
+  for (const p of pairs ?? []) {
+    const name = String(p?.name ?? "").trim();
+    if (name && p.enabled !== false) map[name] = p?.value ?? "";
+  }
+  return map;
+}
+function splitUrl(url) {
+  const raw = String(url ?? "");
+  const hAt = raw.indexOf("#");
+  const fragment = hAt >= 0 ? raw.slice(hAt) : "";
+  const work = hAt >= 0 ? raw.slice(0, hAt) : raw;
+  const qAt = work.indexOf("?");
+  return { base: qAt >= 0 ? work.slice(0, qAt) : work, query: qAt >= 0 ? work.slice(qAt + 1) : "", fragment };
+}
+function parseQueryPairs(query) {
+  const rows = [];
+  for (const [name, value] of new URLSearchParams(String(query ?? ""))) rows.push({ name, value });
+  return rows;
+}
+function buildQuery(pairs) {
+  const params = new URLSearchParams();
+  for (const p of pairs ?? []) {
+    const name = String(p?.name ?? "").trim();
+    if (name && p.enabled !== false && (p.kind ?? "query") === "query") params.append(name, String(p?.value ?? ""));
+  }
+  return params.toString();
+}
+function parsePathParams(url) {
+  const names = [];
+  for (const segment of splitUrl(url).base.split("/")) {
+    if (segment.startsWith(":") && segment.length > 1) names.push(segment.slice(1));
+  }
+  return names;
+}
+function syncParamsFromUrl(url, prevPairs) {
+  const prev = (Array.isArray(prevPairs) ? prevPairs : []).filter((p) => p && String(p.name ?? "").trim() !== "");
+  const isPath = (p) => p.kind === "path";
+  const enabledPool = prev.filter((p) => !isPath(p) && p.enabled !== false);
+  const disabledPool = prev.filter((p) => !isPath(p) && p.enabled === false);
+  const used = /* @__PURE__ */ new Set();
+  const queryRows = parseQueryPairs(splitUrl(url).query).map((row) => {
+    const at = enabledPool.findIndex((p, i) => !used.has(i) && String(p.name).trim() === row.name);
+    let description = "";
+    if (at >= 0) {
+      used.add(at);
+      description = enabledPool[at].description ?? "";
+    }
+    return { ...row, enabled: true, description, kind: "query" };
+  });
+  const prevPath = prev.filter(isPath);
+  const pathRows = parsePathParams(url).map((name) => {
+    const existing = prevPath.find((p) => String(p.name).trim() === name);
+    return existing ? { ...existing, enabled: existing.enabled !== false, kind: "path" } : { name, value: "", enabled: true, description: "", kind: "path" };
+  });
+  return [...queryRows, ...pathRows, ...disabledPool.map((p) => ({ name: String(p.name), value: String(p.value ?? ""), description: String(p.description ?? ""), ...p.enabled === false ? { enabled: false } : {}, kind: "query" }))];
+}
+function applyParamsToUrl(url, pairs) {
+  const { base, fragment } = splitUrl(url);
+  const qs = buildQuery(pairs);
+  return `${base}${qs ? `?${qs}` : ""}${fragment}`;
+}
+function substitutePathParams(url, pairs) {
+  const raw = String(url ?? "");
+  const rows = (pairs ?? []).filter((p) => p?.kind === "path" && p.enabled !== false && String(p?.name ?? "").trim() !== "" && String(p?.value ?? "") !== "");
+  if (rows.length === 0 || !raw.includes("/:")) return raw;
+  return raw.split("/").map((segment) => {
+    if (!segment.startsWith(":")) return segment;
+    const row = rows.find((p) => String(p.name).trim() === segment.slice(1));
+    return row ? encodeURIComponent(String(row.value)) : segment;
+  }).join("/");
+}
+function mergeParams(url, pairs) {
+  const raw = String(url ?? "");
+  const active = (pairs ?? []).filter((p) => p?.enabled !== false && String(p?.name ?? "").trim() !== "");
+  if (active.length === 0) return raw;
+  const { base, fragment } = splitUrl(raw);
+  const params = new URLSearchParams(splitUrl(raw).query);
+  for (const p of active) params.set(String(p.name).trim(), String(p.value ?? ""));
+  const qs = params.toString();
+  return `${base}${qs ? `?${qs}` : ""}${fragment}`;
+}
+function normalizeUrlParams(url, pairs) {
+  const merged = mergeParams(String(url ?? ""), Array.isArray(pairs) ? pairs : []);
+  return { url: merged, pairs: syncParamsFromUrl(merged, pairs) };
+}
+var DEFAULT_ENV_ID = "env-default";
+function sanitizeVars(vars) {
+  return (Array.isArray(vars) ? vars : []).filter((v) => v && typeof v === "object").map((v) => ({ name: String(v.name ?? ""), value: String(v.value ?? ""), description: String(v.description ?? ""), ...v.enabled === false ? { enabled: false } : {} }));
+}
+function sanitizeEnv(env, fallbackId) {
+  if (!env || typeof env !== "object") return null;
+  const id = typeof env.id === "string" && env.id !== "" ? env.id : fallbackId;
+  const name = typeof env.name === "string" && env.name.trim() !== "" ? env.name.trim() : "Environment";
+  return { id, name, vars: sanitizeVars(env.vars) };
+}
+function normalizeEnvStore(raw) {
+  if (Array.isArray(raw)) {
+    const vars = sanitizeVars(raw);
+    if (vars.length === 0) return { envs: [], activeId: null };
+    return { envs: [{ id: DEFAULT_ENV_ID, name: "Default", vars }], activeId: DEFAULT_ENV_ID };
+  }
+  if (raw && typeof raw === "object" && Array.isArray(raw.envs)) {
+    const envs = raw.envs.map((env, i) => sanitizeEnv(env, `env-${i + 1}`)).filter(Boolean);
+    const ids = new Set(envs.map((e) => e.id));
+    const activeId = typeof raw.activeId === "string" && ids.has(raw.activeId) ? raw.activeId : null;
+    return { envs, activeId };
+  }
+  return { envs: [], activeId: null };
+}
+function emptyEnvStore() {
+  return { envs: [], activeId: null };
+}
+function activeEnvOf(store) {
+  if (!store || typeof store.activeId !== "string") return null;
+  return (store.envs ?? []).find((e) => e.id === store.activeId) ?? null;
+}
+function envMapOf(store) {
+  return buildEnvMap(activeEnvOf(store)?.vars);
+}
+function newEnvId() {
+  return `env-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+function nextName(store) {
+  let n = (store.envs ?? []).length + 1;
+  const names = new Set((store.envs ?? []).map((e) => e.name));
+  while (names.has(`Environment ${n}`)) n++;
+  return `Environment ${n}`;
+}
+function addEnv(store, { name, id } = {}) {
+  const base = store ?? emptyEnvStore();
+  const env = { id: typeof id === "string" && id !== "" ? id : newEnvId(), name: typeof name === "string" && name.trim() !== "" ? name.trim() : nextName(base), vars: [] };
+  return { envs: [...base.envs ?? [], env], activeId: env.id };
+}
+function renameEnv(store, id, name) {
+  const clean = typeof name === "string" ? name.trim() : "";
+  if (clean === "") return store;
+  return { ...store, envs: (store?.envs ?? []).map((e) => e.id === id ? { ...e, name: clean } : e) };
+}
+function removeEnv(store, id) {
+  const envs = (store?.envs ?? []).filter((e) => e.id !== id);
+  return { envs, activeId: store?.activeId === id ? null : store?.activeId ?? null };
+}
+function selectEnv(store, id) {
+  const wanted = typeof id === "string" && id !== "" ? id : null;
+  if (wanted !== null && !(store?.envs ?? []).some((e) => e.id === wanted)) return store;
+  return { ...store, activeId: wanted };
+}
+function setEnvVars(store, id, vars) {
+  return { ...store, envs: (store?.envs ?? []).map((e) => e.id === id ? { ...e, vars: sanitizeVars(vars) } : e) };
+}
+var AUTH_MODES = ["none", "bearer", "basic"];
+function normalizeAuth(raw) {
+  const mode = AUTH_MODES.includes(raw?.mode) ? raw.mode : "none";
+  return {
+    mode,
+    token: typeof raw?.token === "string" ? raw.token : "",
+    user: typeof raw?.user === "string" ? raw.user : "",
+    pass: typeof raw?.pass === "string" ? raw.pass : ""
+  };
+}
+function base64Encode(text) {
+  return btoa(unescape(encodeURIComponent(String(text))));
+}
+function basicAuthValue(user, pass) {
+  return `Basic ${base64Encode(`${user ?? ""}:${pass ?? ""}`)}`;
+}
+function authHeaders(auth) {
+  if (auth?.mode === "bearer" && String(auth.token ?? "").trim() !== "") {
+    return [{ name: "Authorization", value: `Bearer ${String(auth.token).trim()}` }];
+  }
+  if (auth?.mode === "basic" && (String(auth.user ?? "") !== "" || String(auth.pass ?? "") !== "")) {
+    return [{ name: "Authorization", value: basicAuthValue(auth.user, auth.pass) }];
+  }
+  return [];
+}
+function applyAuth(headers, auth) {
+  const generated = authHeaders(auth);
+  if (generated.length === 0) return headers;
+  return [...headers.filter((hd) => hd.name.toLowerCase() !== "authorization"), ...generated];
+}
+function guessRawSubType(headers, body) {
+  const ct = String((headers ?? []).find((hd) => String(hd?.name ?? "").toLowerCase() === "content-type")?.value ?? "");
+  if (/json/i.test(ct)) return "json";
+  if (/xml/i.test(ct)) return "xml";
+  if (/html/i.test(ct)) return "html";
+  if (/^text\/plain/i.test(ct)) return "text";
+  const text = String(body ?? "").trim();
+  if (text.startsWith("{") || text.startsWith("[")) {
+    try {
+      JSON.parse(text);
+      return "json";
+    } catch {
+    }
+  }
+  if (/^<\?xml/i.test(text)) return "xml";
+  if (/^<!doctype html>/i.test(text)) return "html";
+  return "text";
+}
+function activePairs(pairs) {
+  return (pairs ?? []).filter((p) => p?.enabled !== false && String(p?.name ?? "").trim() !== "");
+}
+function upsertHeader(list, name, value) {
+  const found = list.find((hd) => hd.name.toLowerCase() === name.toLowerCase());
+  if (found) found.value = value;
+  else list.push({ name, value });
+}
+function resolveRequest(state, envMap) {
+  const env = envMap ?? {};
+  const method = String(state?.method || "GET").toUpperCase();
+  const url = substituteVars(substitutePathParams(String(state?.url ?? "").trim(), state?.paramPairs), env);
+  const headers = (state?.headers ?? []).filter((hd) => hd?.enabled !== false && String(hd?.name ?? "").trim() !== "").map((hd) => ({ name: String(hd.name).trim(), value: substituteVars(String(hd.value ?? ""), env) }));
+  let body;
+  let multipart;
+  const bodyType = state?.bodyType || "none";
+  if (bodyType === "raw") {
+    body = substituteVars(String(state?.body ?? ""), env);
+    upsertHeader(headers, "Content-Type", SUB_CT[state?.rawSub] ?? "text/plain");
+  } else if (bodyType === "form") {
+    body = new URLSearchParams(activePairs(state?.formPairs).map((p) => [String(p.name).trim(), substituteVars(String(p.value ?? ""), env)])).toString();
+    upsertHeader(headers, "Content-Type", "application/x-www-form-urlencoded");
+  } else if (bodyType === "multipart") {
+    multipart = activePairs(state?.formPairs).map((p) => ({ name: String(p.name).trim(), value: substituteVars(String(p.value ?? ""), env) }));
+  }
+  const timeoutMs = Number.isFinite(state?.timeoutMs) && state.timeoutMs > 0 ? state.timeoutMs : void 0;
+  return {
+    method,
+    url,
+    headers: applyAuth(headers, normalizeAuth(state?.auth)),
+    ...body !== void 0 ? { body } : {},
+    ...multipart ? { multipart } : {},
+    ...timeoutMs !== void 0 ? { timeoutMs } : {}
+  };
+}
+function relTimeAgo(ts) {
+  const s = Math.max(0, Math.floor((Date.now() - (ts || 0)) / 1e3));
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m`;
+  const hh = Math.floor(m / 60);
+  if (hh < 24) return `${hh}h`;
+  return `${Math.floor(hh / 24)}d`;
+}
+function pushEntry(list, entry, cap) {
+  const base = Array.isArray(list) ? list.filter((e) => e && e.id !== entry.id) : [];
+  return [entry, ...base].slice(0, cap);
 }
 
 // src/client/requestfields.js
@@ -7667,79 +8864,48 @@ function RequestFields({ t, label, rows, onChange, hint }) {
 
 // src/client/apiclient.js
 var DRAFT_KEY = "dsh.ce.api.draft.v1";
-function upsertHeader(list, name, value) {
-  const found = list.find((hd) => hd.name.toLowerCase() === name.toLowerCase());
-  if (found) found.value = value;
-  else list.push({ name, value });
-}
+var HIST_KEY = "dsh.ce.api.history.v1";
+var SAVED_KEY = "dsh.ce.api.saved.v1";
+var ENV_KEY = "dsh.ce.api.env.v1";
+var HIST_CAP = 30;
+var SAVED_CAP = 50;
+var SNAPSHOT_V = 2;
 function statusClass(status) {
   if (status < 300) return "cea-ok";
   if (status < 400) return "cea-info";
   if (status < 500) return "cea-warn";
   return "cea-err";
 }
-function substituteVars(text, envMap) {
-  if (typeof text !== "string" || !text.includes("{{")) return text;
-  return text.replace(/\{\{\s*([A-Za-z0-9_.\-]+)\s*\}\}/g, (whole, name) => Object.prototype.hasOwnProperty.call(envMap, name) ? String(envMap[name]) : whole);
-}
-function buildEnvMap(pairs) {
-  const map = {};
-  for (const p of pairs ?? []) {
-    const name = String(p?.name ?? "").trim();
-    if (name && p.enabled !== false) map[name] = p?.value ?? "";
-  }
-  return map;
-}
-function mergeParams(url, pairs) {
-  const raw = String(url ?? "");
-  const active = (pairs ?? []).filter((p) => p?.enabled !== false && String(p?.name ?? "").trim() !== "");
-  if (active.length === 0) return raw;
-  const hAt = raw.indexOf("#");
-  const frag = hAt >= 0 ? raw.slice(hAt) : "";
-  const work = hAt >= 0 ? raw.slice(0, hAt) : raw;
-  const qAt = work.indexOf("?");
-  const base = qAt >= 0 ? work.slice(0, qAt) : work;
-  const params = new URLSearchParams(qAt >= 0 ? work.slice(qAt + 1) : "");
-  for (const p of active) params.set(String(p.name).trim(), String(p.value ?? ""));
-  const qs = params.toString();
-  return `${base}${qs ? `?${qs}` : ""}${frag}`;
-}
 function prettySize(n) {
   if (n < 1024) return `${n}B`;
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)}KB`;
   return `${(n / 1024 / 1024).toFixed(1)}MB`;
 }
-var HIST_KEY = "dsh.ce.api.history.v1";
-var SAVED_KEY = "dsh.ce.api.saved.v1";
-var ENV_KEY = "dsh.ce.api.env.v1";
-var HIST_CAP = 30;
-var SAVED_CAP = 50;
-function pushEntry(list, entry, cap) {
-  const base = Array.isArray(list) ? list.filter((e) => e && e.id !== entry.id) : [];
-  return [entry, ...base].slice(0, cap);
-}
-function relTimeAgo(ts) {
-  const s = Math.max(0, Math.floor((Date.now() - (ts || 0)) / 1e3));
-  if (s < 60) return `${s}s`;
-  const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m`;
-  const hh = Math.floor(m / 60);
-  if (hh < 24) return `${hh}h`;
-  return `${Math.floor(hh / 24)}d`;
+function loadJson(key) {
+  try {
+    return JSON.parse(localStorage.getItem(key) ?? "null");
+  } catch {
+    return null;
+  }
 }
 function loadList(key) {
+  const value = loadJson(key);
+  return Array.isArray(value) ? value : [];
+}
+function storeJson(key, value) {
   try {
-    const list = JSON.parse(localStorage.getItem(key) ?? "[]");
-    return Array.isArray(list) ? list : [];
+    localStorage.setItem(key, JSON.stringify(value));
   } catch {
-    return [];
   }
 }
-function storeList(key, list) {
-  try {
-    localStorage.setItem(key, JSON.stringify(list));
-  } catch {
+function requestSnapshot(state) {
+  return { v: SNAPSHOT_V, ...state };
+}
+function restoredUrlParams(req) {
+  if (req?.v === SNAPSHOT_V) {
+    return { url: typeof req.url === "string" ? req.url : "", pairs: Array.isArray(req.paramPairs) ? req.paramPairs : [] };
   }
+  return normalizeUrlParams(req?.url ?? "", req?.paramPairs);
 }
 function ApiView({ t, useTabInfo }) {
   const hostTab = useTabInfo ? useTabInfo()?.tab : null;
@@ -7751,9 +8917,10 @@ function ApiView({ t, useTabInfo }) {
   const [formPairs, setFormPairs] = useState([]);
   const [beautifyErr, setBeautifyErr] = useState("");
   const [body, setBody] = useState("");
+  const [auth, setAuth] = useState(() => normalizeAuth(null));
   const [sending, setSending] = useState(false);
   const [response, setResponse] = useState(null);
-  const [showRespHeaders, setShowRespHeaders] = useState(false);
+  const [respTab, setRespTab] = useState("body");
   const [importOpen, setImportOpen] = useState(false);
   const [importText, setImportText] = useState("");
   const [histOpen, setHistOpen] = useState(false);
@@ -7762,17 +8929,23 @@ function ApiView({ t, useTabInfo }) {
   const [saved, setSaved] = useState([]);
   const [saveOpen, setSaveOpen] = useState(false);
   const [saveName, setSaveName] = useState("");
+  const [codeMenuOpen, setCodeMenuOpen] = useState(false);
+  const [copiedCode, setCopiedCode] = useState("");
+  const [envStore, setEnvStore] = useState(() => normalizeEnvStore(loadJson(ENV_KEY)));
+  const [envNameDraft, setEnvNameDraft] = useState(null);
+  const [envDeleteArmed, setEnvDeleteArmed] = useState(false);
   const importRef = useDismissLayer({ open: importOpen, onDismiss: () => setImportOpen(false), ignoreSelector: '[data-ce-popup-trigger="api-import"]' });
   const saveRef = useDismissLayer({ open: saveOpen, onDismiss: () => setSaveOpen(false), ignoreSelector: '[data-ce-popup-trigger="api-save"]' });
   const historyRef = useDismissLayer({ open: histOpen, onDismiss: () => setHistOpen(false), ignoreSelector: '[data-ce-popup-trigger="api-history"]' });
+  const codeMenuRef = useDismissLayer({ open: codeMenuOpen, onDismiss: () => setCodeMenuOpen(false), ignoreSelector: '[data-ce-popup-trigger="api-code"]' });
   useEffect(() => {
     if (hostTab?.visible === false) {
       setImportOpen(false);
       setSaveOpen(false);
       setHistOpen(false);
+      setCodeMenuOpen(false);
     }
   }, [hostTab?.visible]);
-  const [envPairs, setEnvPairs] = useState(() => loadList(ENV_KEY));
   const [copied, setCopied] = useState(false);
   const [paramPairs, setParamPairs] = useState([]);
   const [requestTab, setRequestTab] = useState("params");
@@ -7781,6 +8954,7 @@ function ApiView({ t, useTabInfo }) {
   const [requestShare, setRequestShare] = useState(42);
   const workspaceRef = useRef(null);
   const splitDrag = useRef(null);
+  const copiedTimer = useRef(null);
   const setSplit = (value) => setRequestShare(Math.max(24, Math.min(72, value)));
   const splitPointer = (event) => {
     const rect = workspaceRef.current?.getBoundingClientRect();
@@ -7788,8 +8962,8 @@ function ApiView({ t, useTabInfo }) {
     setSplit((event.clientY - rect.top) / rect.height * 100);
   };
   useEffect(() => {
-    storeList(ENV_KEY, envPairs);
-  }, [envPairs]);
+    storeJson(ENV_KEY, envStore);
+  }, [envStore]);
   useEffect(() => {
     setHistory(loadList(HIST_KEY));
     setSaved(loadList(SAVED_KEY));
@@ -7800,7 +8974,9 @@ function ApiView({ t, useTabInfo }) {
       if (raw === null) return;
       const d = JSON.parse(raw);
       if (typeof d.method === "string") setMethod(d.method);
-      if (typeof d.url === "string") setUrl(d.url);
+      const restored = restoredUrlParams(d);
+      setUrl(restored.url);
+      setParamPairs(restored.pairs);
       if (Array.isArray(d.headers)) setHeaders(d.headers);
       if (typeof d.bodyType === "string") {
         setBodyType(d.bodyType);
@@ -7809,17 +8985,17 @@ function ApiView({ t, useTabInfo }) {
       if (typeof d.rawSub === "string") setRawSub(d.rawSub);
       if (Array.isArray(d.formPairs)) setFormPairs(d.formPairs);
       if (typeof d.body === "string") setBody(d.body);
-      if (Array.isArray(d.paramPairs)) setParamPairs(d.paramPairs);
+      if (d.auth) setAuth(normalizeAuth(d.auth));
       if (Number.isFinite(d.timeoutMs) && d.timeoutMs >= 1e3) setTimeoutMs(Math.min(12e4, d.timeoutMs));
     } catch {
     }
   }, []);
   useEffect(() => {
-    try {
-      localStorage.setItem(DRAFT_KEY, JSON.stringify({ method, url, headers, bodyType, rawSub, formPairs, body, paramPairs, timeoutMs }));
-    } catch {
-    }
-  }, [method, url, headers, bodyType, rawSub, formPairs, body, paramPairs, timeoutMs]);
+    storeJson(DRAFT_KEY, requestSnapshot({ method, url, headers, bodyType, rawSub, formPairs, body, paramPairs, timeoutMs, auth }));
+  }, [method, url, headers, bodyType, rawSub, formPairs, body, paramPairs, timeoutMs, auth]);
+  useEffect(() => () => {
+    if (copiedTimer.current) clearTimeout(copiedTimer.current);
+  }, []);
   const beautify = useCallback(() => {
     try {
       setBody(JSON.stringify(JSON.parse(body), null, 2));
@@ -7828,14 +9004,17 @@ function ApiView({ t, useTabInfo }) {
       setBeautifyErr(t("api.beautifyErr"));
     }
   }, [body, t]);
-  const snapshot = useCallback(
-    () => ({ method, url, headers, bodyType, rawSub, formPairs, body, paramPairs, timeoutMs }),
-    [method, url, headers, bodyType, rawSub, formPairs, body, paramPairs, timeoutMs]
+  const editorState = useCallback(
+    () => ({ method, url, headers, bodyType, rawSub, formPairs, body, paramPairs, timeoutMs, auth }),
+    [method, url, headers, bodyType, rawSub, formPairs, body, paramPairs, timeoutMs, auth]
   );
+  const snapshot = useCallback(() => requestSnapshot(editorState()), [editorState]);
   const restoreRequest = useCallback((req) => {
     if (!req || typeof req !== "object") return;
     if (typeof req.method === "string") setMethod(req.method);
-    if (typeof req.url === "string") setUrl(req.url);
+    const restored = restoredUrlParams(req);
+    setUrl(restored.url);
+    setParamPairs(restored.pairs);
     if (Array.isArray(req.headers)) setHeaders(req.headers);
     if (typeof req.bodyType === "string") {
       setBodyType(req.bodyType);
@@ -7844,47 +9023,27 @@ function ApiView({ t, useTabInfo }) {
     if (typeof req.rawSub === "string") setRawSub(req.rawSub);
     if (Array.isArray(req.formPairs)) setFormPairs(req.formPairs);
     if (typeof req.body === "string") setBody(req.body);
-    if (Array.isArray(req.paramPairs)) setParamPairs(req.paramPairs);
+    setAuth(normalizeAuth(req.auth));
     if (Number.isFinite(req.timeoutMs) && req.timeoutMs >= 1e3) setTimeoutMs(Math.min(12e4, req.timeoutMs));
     setResponse(null);
     setHistOpen(false);
   }, []);
   const send = useCallback(() => {
     if (url.trim() === "" || sending) return;
-    const envMap = buildEnvMap(envPairs);
-    const sendHeaders = headers.filter((hd) => hd.enabled !== false && String(hd.name ?? "").trim() !== "").map((hd) => ({ name: String(hd.name).trim(), value: substituteVars(String(hd.value ?? ""), envMap) }));
-    let sendBody;
-    let multipart;
-    if (bodyType === "raw") {
-      sendBody = substituteVars(body, envMap);
-      upsertHeader(sendHeaders, "Content-Type", SUB_CT[rawSub] ?? "text/plain");
-    } else if (bodyType === "form") {
-      sendBody = new URLSearchParams(formPairs.filter((p) => p.enabled !== false && String(p.name ?? "").trim() !== "").map((p) => [p.name.trim(), substituteVars(String(p.value ?? ""), envMap)])).toString();
-      upsertHeader(sendHeaders, "Content-Type", "application/x-www-form-urlencoded");
-    } else if (bodyType === "multipart") {
-      multipart = formPairs.filter((p) => p.enabled !== false && String(p.name ?? "").trim() !== "").map((p) => ({ name: p.name.trim(), value: substituteVars(String(p.value ?? ""), envMap) }));
-    }
-    const sentMethod = method;
-    const sentUrl = substituteVars(mergeParams(url.trim(), paramPairs), envMap);
+    const resolved = resolveRequest(editorState(), envMapOf(envStore));
     const sentSnapshot = snapshot();
     setSending(true);
     setResponseCopied(false);
-    api("api.send", {
-      method,
-      url: sentUrl,
-      headers: sendHeaders,
-      body: sendBody,
-      timeoutMs: Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : void 0,
-      ...multipart ? { multipart } : {}
-    }).then((res) => {
+    api("api.send", resolved).then((res) => {
       setSending(false);
       const value = res.ok ? res.value : { error: res.error };
-      setResponse(value);
+      setResponse({ ...value, sent: resolved });
+      if (value?.error) setRespTab("body");
       const entry = {
         id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         ts: Date.now(),
-        method: sentMethod,
-        url: sentUrl,
+        method: resolved.method,
+        url: resolved.url,
         status: value?.status,
         ms: value?.ms,
         error: value?.error ?? void 0,
@@ -7892,42 +9051,73 @@ function ApiView({ t, useTabInfo }) {
       };
       setHistory((prev) => {
         const next = pushEntry(prev, entry, HIST_CAP);
-        storeList(HIST_KEY, next);
+        storeJson(HIST_KEY, next);
         return next;
       });
     });
-  }, [method, url, headers, bodyType, rawSub, formPairs, body, sending, snapshot, envPairs, paramPairs, timeoutMs]);
-  const copyCurl = useCallback(() => {
-    const text = toCurl({ method, url: mergeParams(url.trim(), paramPairs), headers, bodyType, rawSub, formPairs, body });
-    const done = () => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    };
+  }, [url, sending, editorState, snapshot, envStore]);
+  const flashCopied = useCallback(() => {
+    setCopied(true);
+    if (copiedTimer.current) clearTimeout(copiedTimer.current);
+    copiedTimer.current = setTimeout(() => setCopied(false), 1500);
+  }, []);
+  const copyText = useCallback((text) => {
     try {
       const p = navigator.clipboard?.writeText(text);
-      if (p && typeof p.then === "function") p.then(done, () => {
-      });
-      else done();
+      return p && typeof p.then === "function" ? p : Promise.resolve();
     } catch {
+      return Promise.resolve();
     }
-  }, [method, url, headers, bodyType, rawSub, formPairs, body, paramPairs]);
+  }, []);
+  const copyCurl = useCallback(() => {
+    copyText(toCurl(editorState())).then(flashCopied);
+  }, [copyText, editorState, flashCopied]);
+  const copySnippet = useCallback((kind) => {
+    const text = kind.build(resolveRequest(editorState(), envMapOf(envStore)), editorState());
+    copyText(text).then(() => {
+      setCopiedCode(kind.id);
+      if (copiedTimer.current) clearTimeout(copiedTimer.current);
+      copiedTimer.current = setTimeout(() => setCopiedCode(""), 1500);
+    });
+  }, [copyText, editorState, envStore]);
   const doImport = useCallback(() => {
-    const p = parseCurl(importText);
+    const isBru = looksLikeBru(importText);
+    const bru = isBru ? parseBru(importText) : null;
+    const p = isBru ? {
+      method: bru.method,
+      url: bru.url,
+      headers: bru.headers,
+      auth: bru.auth,
+      body: bru.bodyType === "raw" ? bru.body : "",
+      multipart: bru.bodyType === "multipart" ? bru.formPairs : null,
+      form: bru.bodyType === "form" ? bru.formPairs : null
+    } : parseCurl(importText);
+    const seedPairs = isBru ? bru.paramPairs : [];
+    const syncedUrl = isBru ? applyParamsToUrl(p.url, seedPairs) : p.url;
     setMethod(p.method);
-    setUrl(p.url);
+    setUrl(syncedUrl);
+    setParamPairs(syncParamsFromUrl(syncedUrl, seedPairs));
     setHeaders(p.headers);
-    setParamPairs([]);
-    setBody(p.body ?? "");
-    setFormPairs(p.multipart ?? []);
-    setBodyType("none");
+    setAuth(normalizeAuth(p.auth));
     setResponse(null);
-    setRequestTab(p.multipart || p.body !== "" ? "body" : "params");
     if (p.multipart) {
       setFormPairs(p.multipart);
       setBodyType("multipart");
+      setRequestTab("body");
+    } else if (p.form) {
+      setFormPairs(p.form);
+      setBodyType("form");
+      setRequestTab("body");
     } else if (p.body !== "") {
       setBody(p.body);
+      setRawSub(isBru ? bru.rawSub : guessRawSubType(p.headers, p.body));
       setBodyType("raw");
+      setRequestTab("body");
+    } else {
+      setFormPairs([]);
+      setBody(p.body ?? "");
+      setBodyType("none");
+      setRequestTab("params");
     }
     setImportText("");
     setImportOpen(false);
@@ -7938,7 +9128,7 @@ function ApiView({ t, useTabInfo }) {
     const entry = { id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, name, ts: Date.now(), request: snapshot() };
     setSaved((prev) => {
       const next = [entry, ...prev.filter((e) => e && e.name !== name)].slice(0, SAVED_CAP);
-      storeList(SAVED_KEY, next);
+      storeJson(SAVED_KEY, next);
       return next;
     });
     setSaveName("");
@@ -7949,21 +9139,56 @@ function ApiView({ t, useTabInfo }) {
   const removeHistory = useCallback((id) => {
     setHistory((prev) => {
       const next = prev.filter((e) => e && e.id !== id);
-      storeList(HIST_KEY, next);
+      storeJson(HIST_KEY, next);
       return next;
     });
   }, []);
   const removeSaved = useCallback((id) => {
     setSaved((prev) => {
       const next = prev.filter((e) => e && e.id !== id);
-      storeList(SAVED_KEY, next);
+      storeJson(SAVED_KEY, next);
       return next;
     });
   }, []);
   const clearHistory = useCallback(() => {
     setHistory([]);
-    storeList(HIST_KEY, []);
+    storeJson(HIST_KEY, []);
   }, []);
+  const activeEnv = activeEnvOf(envStore);
+  const envDraftName = envNameDraft && activeEnv && envNameDraft.id === activeEnv.id ? envNameDraft.name : activeEnv?.name ?? "";
+  const createEnv = useCallback(() => {
+    setEnvStore((store) => addEnv(store));
+    setEnvNameDraft(null);
+    setEnvDeleteArmed(false);
+  }, []);
+  const commitEnvName = useCallback(() => {
+    const draft = envNameDraft;
+    setEnvNameDraft(null);
+    if (draft) setEnvStore((store) => renameEnv(store, draft.id, draft.name));
+  }, [envNameDraft]);
+  const deleteActiveEnv = useCallback(() => {
+    if (!envDeleteArmed) {
+      setEnvDeleteArmed(true);
+      return;
+    }
+    if (activeEnv) setEnvStore((store) => removeEnv(store, activeEnv.id));
+    setEnvDeleteArmed(false);
+    setEnvNameDraft(null);
+  }, [envDeleteArmed, activeEnv]);
+  const onUrlChange = useCallback((value) => {
+    setUrl(value);
+    setParamPairs((prev) => syncParamsFromUrl(value, prev));
+  }, []);
+  const onQueryPairsChange = useCallback((rows) => {
+    const paths2 = paramPairs.filter((p) => p.kind === "path");
+    const next = [...rows.map((r) => r.kind === "path" ? r : { ...r, kind: "query" }), ...paths2];
+    setParamPairs(next);
+    setUrl((prev) => applyParamsToUrl(prev, next));
+  }, [paramPairs]);
+  const onPathPairsChange = useCallback((rows) => {
+    const queries = paramPairs.filter((p) => p.kind !== "path");
+    setParamPairs([...queries, ...rows.map((r) => ({ ...r, kind: "path" }))]);
+  }, [paramPairs]);
   const respJson = useMemo(() => {
     if (!response || response.error || typeof response.text !== "string") return null;
     const ct = (response.headers ?? []).find((hd) => hd[0].toLowerCase() === "content-type")?.[1] ?? "";
@@ -7974,11 +9199,14 @@ function ApiView({ t, useTabInfo }) {
       return null;
     }
   }, [response]);
-  const activeParamCount = paramPairs.filter((p) => p?.enabled !== false && String(p?.name ?? "").trim() !== "").length;
+  const activeParamCount = paramPairs.filter((p) => p?.kind !== "path" && p?.enabled !== false && String(p?.name ?? "").trim() !== "").length;
+  const pathPairs = paramPairs.filter((p) => p?.kind === "path");
+  const activeEnvVarCount = (activeEnv?.vars ?? []).filter((p) => p?.enabled !== false && String(p?.name ?? "").trim() !== "").length;
+  const sent = response?.sent;
   return h(
     "div",
     { className: "ce-root cea-root", onKeyDown: (e) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === "Enter" && !importOpen && !saveOpen) {
+      if ((e.metaKey || e.ctrlKey) && e.key === "Enter" && !importOpen && !saveOpen && !codeMenuOpen) {
         e.preventDefault();
         e.stopPropagation();
         send();
@@ -7991,18 +9219,43 @@ function ApiView({ t, useTabInfo }) {
         setImportOpen((value) => !value);
         setHistOpen(false);
         setSaveOpen(false);
+        setCodeMenuOpen(false);
       } }, t("api.import")),
       h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost", title: t("api.copyCurl"), disabled: url.trim() === "", onClick: copyCurl }, copied ? t("api.copied") : "⧉ curl"),
+      h("button", { type: "button", className: `ce-sk-btn ce-sk-btn-ghost${codeMenuOpen ? " cea-btn-on" : ""}`, title: t("api.codeTitle"), disabled: url.trim() === "", "data-ce-popup-trigger": "api-code", "aria-expanded": codeMenuOpen, onClick: () => {
+        setCodeMenuOpen((value) => !value);
+        setHistOpen(false);
+        setSaveOpen(false);
+        setImportOpen(false);
+      } }, copiedCode ? t("api.copied") : `</> ${t("api.code")}`),
       h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost", title: t("api.saveTitle"), "data-ce-popup-trigger": "api-save", "aria-expanded": saveOpen, onClick: () => {
         setSaveOpen((value) => !value);
         setHistOpen(false);
         setImportOpen(false);
+        setCodeMenuOpen(false);
       } }, t("api.saveBtn")),
       h("button", { type: "button", className: `ce-sk-btn ce-sk-btn-ghost${histOpen ? " cea-btn-on" : ""}`, title: t("api.history"), "data-ce-popup-trigger": "api-history", "aria-expanded": histOpen, onClick: () => {
         setHistOpen((v) => !v);
         setSaveOpen(false);
         setImportOpen(false);
-      } }, `${t("api.history")}${history.length ? ` ${history.length}` : ""}`)
+        setCodeMenuOpen(false);
+      } }, `${t("api.history")}${history.length ? ` ${history.length}` : ""}`),
+      h("span", { className: "ce-spacer" }),
+      h(
+        "select",
+        {
+          className: "cea-method cea-env",
+          "aria-label": t("api.envSelect"),
+          title: t("api.envSelect"),
+          value: envStore.activeId ?? "",
+          onChange: (e) => {
+            setEnvStore((store) => selectEnv(store, e.target.value || null));
+            setEnvDeleteArmed(false);
+          }
+        },
+        h("option", { value: "" }, t("api.envNone")),
+        envStore.envs.map((env) => h("option", { key: env.id, value: env.id }, env.name))
+      )
     ),
     h(
       "div",
@@ -8017,7 +9270,7 @@ function ApiView({ t, useTabInfo }) {
         placeholder: t("api.urlPlaceholder"),
         "aria-label": t("api.urlPlaceholder"),
         value: url,
-        onChange: (e) => setUrl(e.target.value),
+        onChange: (e) => onUrlChange(e.target.value),
         onKeyDown: (e) => {
           if (e.key === "Enter") {
             e.preventDefault();
@@ -8028,6 +9281,27 @@ function ApiView({ t, useTabInfo }) {
       }),
       h("button", { type: "button", className: "ce-sk-btn cea-send", title: t("api.sendShortcut"), disabled: sending || url.trim() === "", onClick: send }, sending ? t("api.sending") : t("api.send"))
     ),
+    codeMenuOpen ? h(
+      "div",
+      { className: "cea-hist cea-codemenu", ref: codeMenuRef, role: "dialog", "aria-label": t("api.codeTitle") },
+      h(
+        "div",
+        { className: "cea-hist-tabs" },
+        h("span", null, t("api.codeTitle")),
+        h("span", { className: "ce-spacer" }),
+        h("button", { type: "button", className: "ce-tool ce-tiny", title: t("close"), onClick: () => setCodeMenuOpen(false) }, "✕")
+      ),
+      h(
+        "div",
+        { className: "cea-hist-list ce-scroll" },
+        SNIPPET_KINDS.map((kind) => h(
+          "button",
+          { key: kind.id, type: "button", className: "cea-hmain cea-code-item", title: t("api.codeItemTitle"), onClick: () => copySnippet(kind) },
+          h("span", { className: "cea-code-label" }, kind.label),
+          copiedCode === kind.id ? h("span", { className: "cea-ok cea-code-copied" }, "✓") : null
+        ))
+      )
+    ) : null,
     histOpen ? h(
       "div",
       { className: "cea-hist", ref: historyRef, role: "dialog", "aria-label": t("api.history") },
@@ -8078,7 +9352,10 @@ function ApiView({ t, useTabInfo }) {
         h(
           "div",
           { className: "cea-request-tabs", role: "group", "aria-label": t("api.requestConfig") },
-          [["params", t("api.params"), activeParamCount], ["headers", t("api.headers"), headers.filter((p) => p.enabled !== false && p.name?.trim()).length], ["body", t("api.body"), bodyType === "none" ? 0 : 1], ["variables", t("api.environment"), envPairs.filter((p) => p.enabled !== false && p.name?.trim()).length], ["settings", t("api.settings"), 0]].map(([id, label, count]) => h("button", { type: "button", key: id, className: `cea-config-tab${requestTab === id ? " cea-config-tab-on" : ""}`, "aria-pressed": requestTab === id, onClick: () => setRequestTab(id) }, label, count ? h("span", { className: "cea-tab-count" }, count) : null))
+          [["params", t("api.params"), activeParamCount], ["headers", t("api.headers"), headers.filter((p) => p.enabled !== false && p.name?.trim()).length], ["body", t("api.body"), bodyType === "none" ? 0 : 1], ["auth", t("api.auth"), auth.mode === "none" ? 0 : 1], ["variables", t("api.environment"), activeEnvVarCount], ["settings", t("api.settings"), 0]].map(([id, label, count]) => h("button", { type: "button", key: id, className: `cea-config-tab${requestTab === id ? " cea-config-tab-on" : ""}`, "aria-pressed": requestTab === id, onClick: () => {
+            setRequestTab(id);
+            setEnvDeleteArmed(false);
+          } }, label, count ? h("span", { className: "cea-tab-count" }, count) : null))
         ),
         h(
           "div",
@@ -8097,9 +9374,80 @@ function ApiView({ t, useTabInfo }) {
               onChange: (e) => setTimeoutMs(Math.max(1e3, Math.min(12e4, Number(e.target.value) || 3e4)))
             })
           )) : null,
-          requestTab === "params" ? h(RequestFields, { t, label: t("api.params"), rows: paramPairs, onChange: setParamPairs, hint: t("api.paramsHint") }) : null,
+          requestTab === "params" ? h(
+            Fragment,
+            null,
+            h(RequestFields, { t, label: t("api.params"), rows: paramPairs.filter((p) => p?.kind !== "path"), onChange: onQueryPairsChange, hint: t("api.paramsHint") }),
+            pathPairs.length > 0 ? h(RequestFields, { t, label: t("api.pathParams"), rows: pathPairs, onChange: onPathPairsChange, hint: t("api.pathParamsHint") }) : null
+          ) : null,
           requestTab === "headers" ? h(RequestFields, { t, label: t("api.headers"), rows: headers, onChange: setHeaders }) : null,
-          requestTab === "variables" ? h(RequestFields, { t, label: t("api.environment"), rows: envPairs, onChange: setEnvPairs, hint: t("api.envTitle") }) : null,
+          requestTab === "variables" ? h(
+            Fragment,
+            null,
+            h(
+              "div",
+              { className: "cea-envbar" },
+              h("input", {
+                className: "ce-input cea-env-name",
+                "aria-label": t("api.envName"),
+                placeholder: t("api.envName"),
+                value: envDraftName,
+                disabled: !activeEnv,
+                spellCheck: false,
+                onChange: (e) => activeEnv && setEnvNameDraft({ id: activeEnv.id, name: e.target.value }),
+                onBlur: commitEnvName,
+                onKeyDown: (e) => {
+                  e.stopPropagation();
+                  if (e.key === "Enter") {
+                    commitEnvName();
+                    e.currentTarget?.blur?.();
+                  }
+                }
+              }),
+              h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost", title: t("api.envNewTitle"), onClick: createEnv }, `＋ ${t("api.envNew")}`),
+              activeEnv ? h("button", { type: "button", className: `ce-sk-btn ce-sk-btn-ghost${envDeleteArmed ? " cea-danger" : ""}`, title: t("api.envDelete"), onClick: deleteActiveEnv }, envDeleteArmed ? t("api.envDeleteConfirm") : t("api.envDelete")) : null
+            ),
+            activeEnv ? h(RequestFields, { t, label: t("api.environment"), rows: activeEnv.vars, onChange: (rows) => setEnvStore((store) => setEnvVars(store, activeEnv.id, rows)), hint: t("api.envTitle") }) : h("div", { className: "cea-empty" }, h("span", null, t("api.envNoActive")))
+          ) : null,
+          requestTab === "auth" ? h(
+            "div",
+            { className: "cea-auth" },
+            h(
+              "div",
+              { className: "cea-sec" },
+              h("span", null, t("api.auth")),
+              h(
+                "select",
+                { className: "cea-method", "aria-label": t("api.auth"), value: auth.mode, onChange: (e) => setAuth({ ...auth, mode: e.target.value }) },
+                h("option", { value: "none" }, t("api.authNone")),
+                h("option", { value: "bearer" }, t("api.authBearer")),
+                h("option", { value: "basic" }, t("api.authBasic"))
+              )
+            ),
+            auth.mode === "bearer" ? h(
+              "label",
+              { className: "cea-auth-row" },
+              h("span", null, t("api.authToken")),
+              h("input", { className: "ce-input", "aria-label": t("api.authToken"), placeholder: t("api.authTokenPlaceholder"), value: auth.token, spellCheck: false, autoComplete: "off", onChange: (e) => setAuth({ ...auth, token: e.target.value }) })
+            ) : null,
+            auth.mode === "basic" ? h(
+              Fragment,
+              null,
+              h(
+                "label",
+                { className: "cea-auth-row" },
+                h("span", null, t("api.authUser")),
+                h("input", { className: "ce-input", "aria-label": t("api.authUser"), value: auth.user, spellCheck: false, autoComplete: "off", onChange: (e) => setAuth({ ...auth, user: e.target.value }) })
+              ),
+              h(
+                "label",
+                { className: "cea-auth-row" },
+                h("span", null, t("api.authPass")),
+                h("input", { className: "ce-input", "aria-label": t("api.authPass"), placeholder: t("api.authPassPlaceholder"), value: auth.pass, spellCheck: false, autoComplete: "off", onChange: (e) => setAuth({ ...auth, pass: e.target.value }) })
+              )
+            ) : null,
+            h("div", { className: "cea-fields-footer" }, h("span", null, t("api.authHint")))
+          ) : null,
           requestTab === "body" ? h(
             Fragment,
             null,
@@ -8212,16 +9560,31 @@ function ApiView({ t, useTabInfo }) {
               Fragment,
               null,
               h("span", { className: statusClass(response.status) }, `${response.status} ${response.statusText ?? ""}`),
-              h("span", { className: "cea-meta" }, `${response.ms ?? 0}ms · ${prettySize(response.size ?? 0)}${response.truncated ? " · truncated" : ""}`),
-              h("span", { className: "ce-spacer" }),
-              h("button", { type: "button", className: "ce-link", onClick: () => setShowRespHeaders((v) => !v) }, `${t("api.respHeaders")} ${showRespHeaders ? "▾" : "▸"}`)
+              h("span", { className: "cea-meta" }, `${response.ms ?? 0}ms · ${prettySize(response.size ?? 0)}${response.truncated ? " · truncated" : ""}`)
             )
           ),
           h(
             "div",
+            { className: "cea-hist-tabs cea-resp-tabs", role: "tablist", "aria-label": t("api.resp") },
+            [["body", t("api.respBody")], ["headers", t("api.respHeaders")], ["timeline", t("api.timeline")]].map(([id, label]) => h("button", { type: "button", role: "tab", key: id, className: `cea-tab${respTab === id ? " cea-tab-on" : ""}`, "aria-selected": respTab === id, onClick: () => setRespTab(id) }, label))
+          ),
+          h(
+            "div",
             { className: "cea-response-content ce-scroll" },
-            showRespHeaders && !response.error ? h("div", { className: "cea-hlist" }, (response.headers ?? []).map((hd, i) => h("div", { key: i }, h("span", { className: "cea-hk" }, hd[0]), h("span", null, hd[1])))) : null,
-            !response.error ? h("pre", { className: "cea-resp" }, respJson ?? response.text ?? "") : null
+            respTab === "headers" ? response.error ? h("div", { className: "ce-note" }, `${t("api.err")}: ${response.error}`) : h("div", { className: "cea-hlist" }, (response.headers ?? []).map((hd, i) => h("div", { key: i }, h("span", { className: "cea-hk" }, hd[0]), h("span", null, hd[1])))) : respTab === "timeline" ? sent ? h(
+              "div",
+              { className: "cea-timeline" },
+              h(
+                "div",
+                { className: "cea-tl-req" },
+                h("span", { className: `cea-mbadge cea-m-${String(sent.method).toLowerCase()}` }, sent.method),
+                h("span", { className: "cea-hurl" }, sent.url)
+              ),
+              h("div", { className: "cea-hlist" }, (sent.headers ?? []).map((hd, i) => h("div", { key: i }, h("span", { className: "cea-hk" }, hd.name), h("span", null, hd.value)))),
+              Array.isArray(sent.multipart) ? h("div", { className: "cea-hlist" }, sent.multipart.map((f, i) => h("div", { key: i }, h("span", { className: "cea-hk" }, `[form] ${f.name}`), h("span", null, f.value)))) : null,
+              typeof sent.body === "string" && sent.body !== "" ? h("pre", { className: "cea-resp cea-tl-body" }, sent.body) : null,
+              h("div", { className: "cea-tl-meta" }, `${t("api.timeout")}: ${sent.timeoutMs ?? 3e4}ms${response.error ? "" : ` · ${response.status} · ${response.ms ?? 0}ms · ${prettySize(response.size ?? 0)}`}`)
+            ) : h("div", { className: "ce-note" }, t("api.timelineEmpty")) : h("pre", { className: "cea-resp" }, !response.error ? respJson ?? response.text ?? "" : `${t("api.err")}: ${response.error}`)
           )
         ) : h("div", { className: "cea-empty" }, h("strong", null, t("api.responseEmpty")), h("span", null, t("api.sendShortcut")))
       )
@@ -8235,7 +9598,7 @@ function ApiView({ t, useTabInfo }) {
         h("span", null, t("api.importTitle")),
         h("button", { type: "button", className: "ce-tool ce-tiny", onClick: () => setImportOpen(false) }, "✕")
       ),
-      h("textarea", { className: "cea-body cea-import", autoFocus: true, "aria-label": t("api.importTitle"), value: importText, spellcheck: false, placeholder: "curl -X POST 'https://…' -H 'K: V' -d '{…}'", onChange: (e) => setImportText(e.target.value) }),
+      h("textarea", { className: "cea-body cea-import", autoFocus: true, "aria-label": t("api.importTitle"), value: importText, spellcheck: false, placeholder: t("api.importPlaceholder"), onChange: (e) => setImportText(e.target.value) }),
       h(
         "div",
         { className: "cea-bar" },
@@ -9303,6 +10666,109 @@ function BrowserIcon({ size = 18 }) {
   return h("svg", { viewBox: "0 0 24 24", width: size, height: size, fill: "none", stroke: "currentColor", strokeWidth: 1.6, "aria-hidden": true }, h("circle", { cx: 12, cy: 12, r: 9 }), h("path", { d: "M3 12h18M12 3c5 5 5 13 0 18-5-5-5-13 0-18Z" }));
 }
 
+// src/client/rightbarwidth.js
+var WIDTH_KEY = "dsh-kit.rightbar-width";
+var MIN_WIDTH = 300;
+var MAX_REQUEST = 1e7;
+function rightbarWidthWriter(layout) {
+  const actions = layout && layout.panels;
+  if (typeof actions?.setRightbar !== "function") return null;
+  return (px) => {
+    try {
+      actions.setRightbar(px);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+}
+function readRememberedWidth(storage = globalThis.localStorage) {
+  let raw = null;
+  try {
+    raw = storage?.getItem(WIDTH_KEY);
+  } catch {
+    return null;
+  }
+  if (raw === null || raw === void 0) return null;
+  const px = Math.round(Number(raw));
+  return Number.isFinite(px) && px >= MIN_WIDTH ? px : null;
+}
+function rememberWidth(px, storage = globalThis.localStorage) {
+  const width = Math.round(Number(px));
+  if (!Number.isFinite(width) || width < MIN_WIDTH) return false;
+  try {
+    storage?.setItem(WIDTH_KEY, String(width));
+    return true;
+  } catch {
+    return false;
+  }
+}
+function measureRightbarWidth(doc = globalThis.document) {
+  let box = null;
+  try {
+    box = doc?.querySelector?.("[data-rightbar-col]")?.getBoundingClientRect?.();
+  } catch {
+    return 0;
+  }
+  const width = box && Number.isFinite(box.width) ? Math.round(box.width) : 0;
+  return width >= MIN_WIDTH ? width : 0;
+}
+var settle = (run) => {
+  const raf = typeof globalThis.requestAnimationFrame === "function" ? globalThis.requestAnimationFrame.bind(globalThis) : null;
+  if (raf) raf(() => raf(run));
+  else globalThis.setTimeout?.(run, 32);
+};
+var shownOnScreen = (doc) => {
+  try {
+    return Boolean(doc?.querySelector?.('[data-side="rightbar"]'));
+  } catch {
+    return false;
+  }
+};
+function installRightbarWidth({
+  layout,
+  doc = globalThis.document,
+  storage = globalThis.localStorage,
+  view,
+  afterDrag = settle
+} = {}) {
+  const write = rightbarWidthWriter(layout);
+  if (write === null) return () => {
+  };
+  let chosen = readRememberedWidth(storage);
+  write(chosen ?? MAX_REQUEST);
+  if (typeof doc?.addEventListener !== "function") return () => {
+  };
+  const frame = view ?? doc.defaultView ?? globalThis.window;
+  const onPointerUp = (event) => {
+    const handle = event?.target?.closest?.('[data-side="rightbar"]');
+    if (!handle) return;
+    afterDrag(() => {
+      const px = measureRightbarWidth(doc);
+      if (px > 0) {
+        chosen = px;
+        rememberWidth(px, storage);
+      }
+    });
+  };
+  const onResize = () => {
+    if (chosen !== null || shownOnScreen(doc)) return;
+    write(MAX_REQUEST);
+  };
+  doc.addEventListener("pointerup", onPointerUp, true);
+  if (typeof frame?.addEventListener === "function") frame.addEventListener("resize", onResize);
+  return () => {
+    try {
+      doc.removeEventListener("pointerup", onPointerUp, true);
+    } catch {
+    }
+    try {
+      frame?.removeEventListener?.("resize", onResize);
+    } catch {
+    }
+  };
+}
+
 // src/client/index.js
 var index_default = {
   inject: ["slots", "locale", "sidebarRightTabs", "sidebarRight", "layout"],
@@ -9315,6 +10781,7 @@ var index_default = {
       }
     };
     safe("styles", insertStyles);
+    safe("right sidebar width", () => installRightbarWidth({ layout: ctx.layout }));
     const bound = ctx.locale.bind(NS);
     safe("dictionaries", () => ctx.locale.register(NS, { zh, en }));
     const terminal = createTerminalEntry({ sidebarRight: ctx.sidebarRight, sidebarRightTabs: ctx.sidebarRightTabs });
