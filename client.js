@@ -342,6 +342,9 @@ var zh = {
   "api.sending": "发送中…",
   "api.import": "导入 curl",
   "api.importBtn": "导入",
+  "api.importFailed": "集合导入失败",
+  "api.importEmpty": "文档里没有可用的操作",
+  "api.importPlaceholderHint": "支持 curl、.bru、OpenAPI JSON 与 Postman 集合",
   "api.importTitle": "粘贴 curl 命令一键导入",
   "api.headers": "请求头",
   "api.addHeader": "添加请求头",
@@ -411,7 +414,7 @@ var zh = {
   "api.timelineEmpty": "发送请求后，这里显示实际发出的请求明细",
   "api.pathParams": "路径参数",
   "api.pathParamsHint": "URL 中的 :name 段；发送时以取值替换（URL 编码）",
-  "api.importPlaceholder": "curl -X POST 'https://…' -H 'K: V' -d '{…}'，或 Bruno 的 .bru 文档",
+  "api.importPlaceholder": "curl / Bruno .bru / OpenAPI JSON / Postman 集合",
   "toolrow.edit": "编辑",
   "toolrow.write": "写入",
   "toolrow.failed": "失败",
@@ -468,6 +471,22 @@ var zh = {
   "editor.cancel": "取消",
   "editor.saved": "已保存",
   "editor.conflict": "磁盘上的文件已被外部修改，保存被拒绝 — 请刷新（⟳）后重试",
+  "api.extracts": "响应提取",
+  "api.extractHint": "发送后把响应中的值写回当前环境，供下一个请求用 {{变量}} 引用",
+  "api.extractName": "变量名",
+  "api.extractSource": "来源",
+  "api.extractExpr": "表达式",
+  "api.addExtract": "添加提取",
+  "api.extractEmpty": "还没有提取规则",
+  "api.extractNoEnv": "没有激活环境：先选择或新建一个环境",
+  "api.extractMissed": "未命中",
+  "api.extractAllMissed": "所有提取规则都未命中，未写入环境",
+  "api.extractSrc.json": "JSON 路径",
+  "api.extractSrc.header": "响应头",
+  "api.extractSrc.status": "状态码",
+  "api.extractSrc.body": "完整正文",
+  "api.extractSrc.regex": "正则捕获",
+  "api.extractSrc.query": "请求查询参数",
   "watch.external": "「{path}」在磁盘上已被外部修改（可能来自终端或 Agent）",
   "watch.reloadDiscarding": "重新加载（放弃未保存）",
   "watch.keepEditing": "保持编辑",
@@ -909,6 +928,9 @@ var en = {
   "api.sending": "Sending…",
   "api.import": "Import curl",
   "api.importBtn": "Import",
+  "api.importFailed": "collection import failed",
+  "api.importEmpty": "no operations found in the document",
+  "api.importPlaceholderHint": "accepts curl, .bru, OpenAPI JSON and Postman collections",
   "api.importTitle": "Paste a curl command to import",
   "api.headers": "Headers",
   "api.addHeader": "Add header",
@@ -978,7 +1000,7 @@ var en = {
   "api.timelineEmpty": "Send a request to see the exact wire request here",
   "api.pathParams": "Path Params",
   "api.pathParamsHint": "`:name` segments from the URL; substituted (URL-encoded) at send time",
-  "api.importPlaceholder": "curl -X POST 'https://…' -H 'K: V' -d '{…}' — or a Bruno .bru document",
+  "api.importPlaceholder": "curl / Bruno .bru / OpenAPI JSON / Postman collection",
   "toolrow.edit": "Edit",
   "toolrow.write": "Write",
   "toolrow.failed": "failed",
@@ -1035,6 +1057,22 @@ var en = {
   "editor.cancel": "Cancel",
   "editor.saved": "Saved",
   "editor.conflict": "The file changed on disk; the save was refused — refresh (⟳) and retry",
+  "api.extracts": "Extracts",
+  "api.extractHint": "write values from the response back into the active environment for the next request's {{var}}",
+  "api.extractName": "Variable",
+  "api.extractSource": "Source",
+  "api.extractExpr": "Expression",
+  "api.addExtract": "Add extract",
+  "api.extractEmpty": "No extract rules yet",
+  "api.extractNoEnv": "No active environment: pick or create one first",
+  "api.extractMissed": "not found",
+  "api.extractAllMissed": "No extract matched; the environment was left unchanged",
+  "api.extractSrc.json": "JSON path",
+  "api.extractSrc.header": "Response header",
+  "api.extractSrc.status": "Status code",
+  "api.extractSrc.body": "Full body",
+  "api.extractSrc.regex": "Regex capture",
+  "api.extractSrc.query": "Request query",
   "watch.external": "“{path}” changed on disk (a terminal or the Agent may have edited it)",
   "watch.reloadDiscarding": "Reload (discard draft)",
   "watch.keepEditing": "Keep editing",
@@ -9319,6 +9357,146 @@ function parseBru(text) {
   return out;
 }
 
+// src/client/openimp.js
+var METHODS = ["get", "put", "post", "patch", "delete", "options", "head", "trace"];
+function sampleFromSchema(schema, depth = 0) {
+  if (!schema || typeof schema !== "object" || depth > 3) return {};
+  if (schema.example !== void 0) return schema.example;
+  if (Array.isArray(schema.enum) && schema.enum.length > 0) return schema.enum[0];
+  switch (schema.type) {
+    case "string":
+      return "";
+    case "number":
+    case "integer":
+      return 0;
+    case "boolean":
+      return false;
+    case "array":
+      return [sampleFromSchema(schema.items, depth + 1)];
+    case "object": {
+      const out = {};
+      for (const [key, sub] of Object.entries(schema.properties ?? {})) out[key] = sampleFromSchema(sub, depth + 1);
+      return out;
+    }
+    default:
+      return {};
+  }
+}
+function firstServer(doc) {
+  const s = Array.isArray(doc.servers) ? doc.servers[0]?.url : void 0;
+  return typeof s === "string" ? s.replace(/\/+$/, "") : "";
+}
+function openApiRequest(path, method, op, doc) {
+  const url = `${firstServer(doc)}${path}`.replace(/[?&]$/, "");
+  const urlOut = url.replace(/\{([^/}]+)\}/g, ":$1");
+  const query = [];
+  const pathParams = [];
+  for (const p of Array.isArray(op?.parameters) ? op.parameters : []) {
+    if (!p || typeof p.name !== "string") continue;
+    const value = p.example ?? p.schema?.example ?? "";
+    if (p.in === "query") query.push({ name: p.name, value: String(value), enabled: true });
+    else if (p.in === "path") pathParams.push({ name: p.name, kind: "path", value: String(value), enabled: true });
+  }
+  const headers = [];
+  let bodyType = "none";
+  let rawSub = "json";
+  let body = "";
+  const content = op?.requestBody?.content;
+  if (content && typeof content === "object") {
+    const types = Object.keys(content);
+    const jsonType = types.find((c) => c.includes("json"));
+    const formType = types.find((c) => c.includes("form-urlencoded"));
+    if (jsonType) {
+      bodyType = "raw";
+      rawSub = "json";
+      const c = content[jsonType];
+      const example = c?.example ?? c?.examples?.[Object.keys(c?.examples ?? {})[0]]?.value;
+      body = JSON.stringify(example ?? sampleFromSchema(c?.schema) ?? {}, null, 2);
+      headers.push({ name: "Content-Type", value: jsonType, enabled: true });
+    } else if (formType) {
+      bodyType = "form";
+      const formPairs = [];
+      const props = content[formType]?.schema?.properties ?? {};
+      for (const [key, sub] of Object.entries(props)) formPairs.push({ name: key, value: String(sub?.example ?? sampleFromSchema(sub) ?? ""), enabled: true });
+      body = JSON.stringify(formPairs);
+      headers.push({ name: "Content-Type", value: "application/x-www-form-urlencoded", enabled: true });
+    }
+  }
+  const name = op?.summary ?? op?.operationId ?? `${method.toUpperCase()} ${path}`;
+  return { method: method.toUpperCase(), url: urlOut, headers, bodyType, rawSub, body, paramPairs: [...query, ...pathParams], name: String(name) };
+}
+function parseOpenApi(doc) {
+  if (!doc || typeof doc !== "object" || typeof doc.openapi !== "string") return null;
+  const out = [];
+  for (const [path, item] of Object.entries(doc.paths ?? {})) {
+    if (!item || typeof item !== "object") continue;
+    for (const [method, op] of Object.entries(item)) {
+      if (!METHODS.includes(method.toLowerCase()) || op === null || typeof op !== "object") continue;
+      out.push(openApiRequest(path, method.toLowerCase(), op, doc));
+    }
+  }
+  if (out.length === 0) return { requests: [], error: "no operations found" };
+  return { requests: out };
+}
+function postmanUrl(raw) {
+  if (typeof raw === "string") return { url: raw, query: [] };
+  if (raw && typeof raw === "object") {
+    const query = (Array.isArray(raw.query) ? raw.query : []).filter((p) => p && typeof p.key === "string").map((p) => ({ name: p.key, value: String(p.value ?? ""), enabled: p.disabled !== true }));
+    return { url: typeof raw.raw === "string" ? raw.raw : "", query };
+  }
+  return { url: "", query: [] };
+}
+function postmanItem(item, out) {
+  if (!item || typeof item !== "object") return;
+  if (Array.isArray(item.item)) {
+    for (const sub of item.item) postmanItem(sub, out);
+    return;
+  }
+  const req = item.request;
+  if (!req || typeof req !== "object" || typeof req.method !== "string") return;
+  const { url, query } = postmanUrl(req.url);
+  const headers = (Array.isArray(req.header) ? req.header : []).filter((hd) => hd && typeof hd.key === "string").map((hd) => ({ name: hd.key, value: String(hd.value ?? ""), enabled: hd.disabled !== true }));
+  let bodyType = "none";
+  let rawSub = "json";
+  let body = "";
+  const b = req.body;
+  if (b && typeof b === "object") {
+    if (b.mode === "urlencoded" && Array.isArray(b.urlencoded)) {
+      bodyType = "form";
+      body = JSON.stringify(b.urlencoded.filter((p) => p && typeof p.key === "string").map((p) => ({ name: p.key, value: String(p.value ?? ""), enabled: p.disabled !== true })));
+    } else if (b.mode === "formdata" && Array.isArray(b.formdata)) {
+      bodyType = "multipart";
+      body = JSON.stringify(b.formdata.filter((p) => p && typeof p.key === "string" && p.type !== "file").map((p) => ({ name: p.key, value: String(p.src ?? p.value ?? ""), enabled: p.disabled !== true })));
+    } else if (typeof b.raw === "string") {
+      bodyType = "raw";
+      rawSub = b.options?.raw?.language ?? (/^\s*[{[]/.test(b.raw) ? "json" : "text");
+      body = b.raw;
+    }
+  }
+  out.push({ method: req.method.toUpperCase(), url, headers, bodyType, rawSub, body, paramPairs: query, name: String(item.name ?? req.method.toUpperCase()) });
+}
+function parsePostman(doc) {
+  if (!doc || typeof doc !== "object" || !Array.isArray(doc.item)) return null;
+  if (typeof doc.info?.schema === "string" && !/collection/.test(doc.info.schema)) return null;
+  const requests = [];
+  for (const item of doc.item) postmanItem(item, requests);
+  if (requests.length === 0) return { requests: [], error: "no requests found" };
+  return { requests };
+}
+function detectCollectionImport(text) {
+  const trimmed = String(text ?? "").trim();
+  if (!trimmed.startsWith("{")) return null;
+  let doc;
+  try {
+    doc = JSON.parse(trimmed);
+  } catch {
+    return null;
+  }
+  if (typeof doc?.openapi === "string") return parseOpenApi(doc);
+  if (Array.isArray(doc?.item)) return parsePostman(doc);
+  return null;
+}
+
 // src/client/codegen.js
 function resolvedToCurlRequest(resolved) {
   const req = {
@@ -9659,6 +9837,108 @@ function pushEntry(list, entry, cap) {
   const base = Array.isArray(list) ? list.filter((e) => e && e.id !== entry.id) : [];
   return [entry, ...base].slice(0, cap);
 }
+function jsonPath(value, expr) {
+  const src = String(expr ?? "").trim().replace(/^\$\.?/, "");
+  if (src === "") return void 0;
+  let cur = value;
+  let i = 0;
+  const readKey = (name) => {
+    if (cur === null || typeof cur !== "object" || Array.isArray(cur)) return false;
+    if (!Object.hasOwn(cur, name)) return false;
+    cur = cur[name];
+    return true;
+  };
+  while (i < src.length) {
+    if (src.charCodeAt(i) === 46) i++;
+    const dot = src.indexOf(".", i);
+    const brack = src.indexOf("[", i);
+    const segEnd = dot === -1 ? brack === -1 ? src.length : brack : brack === -1 ? dot : Math.min(dot, brack);
+    if (segEnd > i) {
+      const key = src.slice(i, segEnd);
+      if (!readKey(key)) return void 0;
+      i = segEnd;
+      continue;
+    }
+    if (src.charCodeAt(i) !== 91) return void 0;
+    const close = src.indexOf("]", i);
+    if (close === -1) return void 0;
+    const inner = src.slice(i + 1, close).trim();
+    if (inner.startsWith('"') || inner.startsWith("'")) {
+      if (!readKey(inner.slice(1, -1))) return void 0;
+    } else if (/^\d+$/.test(inner)) {
+      if (!Array.isArray(cur) || Number(inner) >= cur.length) return void 0;
+      cur = cur[Number(inner)];
+    } else {
+      return void 0;
+    }
+    i = close + 1;
+  }
+  return cur;
+}
+function runExtract(rule, response, resolvedRequest) {
+  if (!rule) return void 0;
+  const source = rule.source ?? "json";
+  if (source !== "status" && !rule.expr) return void 0;
+  if (source === "status") return String(response?.status ?? "");
+  if (source === "header") {
+    const list = response?.headers ?? [];
+    const want = String(rule.expr).toLowerCase();
+    const hit = list.find(([k]) => String(k).toLowerCase() === want);
+    return hit ? String(hit[1]) : void 0;
+  }
+  if (source === "body") return response?.text ?? void 0;
+  if (source === "regex") {
+    try {
+      const re = new RegExp(rule.expr, "m");
+      const m = re.exec(response?.text ?? "");
+      if (!m) return void 0;
+      return m[1] ?? m[0];
+    } catch {
+      return void 0;
+    }
+  }
+  if (source === "query") {
+    try {
+      const u = new URL(resolvedRequest?.url ?? "", "http://example.invalid");
+      const v = u.searchParams.get(rule.expr);
+      return v === null ? void 0 : v;
+    } catch {
+      return void 0;
+    }
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(response?.text ?? "");
+  } catch {
+    return void 0;
+  }
+  const found = jsonPath(parsed, rule.expr);
+  if (found === void 0 || found === null) return void 0;
+  return typeof found === "object" ? JSON.stringify(found) : String(found);
+}
+function applyExtracts(extracts, response, resolvedRequest, store) {
+  const rules = (Array.isArray(extracts) ? extracts : []).filter((r) => r && r.enabled !== false && String(r.name ?? "").trim() && String(r.expr ?? "").trim());
+  if (rules.length === 0) return { store, applied: [], missed: [] };
+  const env = activeEnvOf(store);
+  if (!env) return { store, applied: [], missed: rules.map((r) => String(r.name).trim()) };
+  const applied = [];
+  const missed = [];
+  const vars = [...Array.isArray(env.vars) ? env.vars : []];
+  for (const rule of rules) {
+    const value = runExtract(rule, response, resolvedRequest);
+    if (value === void 0) {
+      missed.push(rule.name);
+      continue;
+    }
+    const idx = vars.findIndex((v) => v.name === rule.name);
+    const row = { name: rule.name, value, enabled: true };
+    if (idx === -1) vars.push(row);
+    else vars[idx] = row;
+    applied.push(row);
+  }
+  if (applied.length === 0) return { store, applied, missed };
+  return { store: setEnvVars(store, env.id, vars), applied, missed };
+}
 
 // src/client/requestfields.js
 function RequestFields({ t, label, rows, onChange, hint }) {
@@ -9766,6 +10046,7 @@ function ApiView({ t, useTabInfo }) {
   const [respTab, setRespTab] = useState("body");
   const [importOpen, setImportOpen] = useState(false);
   const [importText, setImportText] = useState("");
+  const [importError, setImportError] = useState("");
   const [histOpen, setHistOpen] = useState(false);
   const [histTab, setHistTab] = useState("history");
   const [history, setHistory] = useState([]);
@@ -9794,6 +10075,8 @@ function ApiView({ t, useTabInfo }) {
   const [requestTab, setRequestTab] = useState("params");
   const [responseCopied, setResponseCopied] = useState(false);
   const [timeoutMs, setTimeoutMs] = useState(3e4);
+  const [extracts, setExtracts] = useState([]);
+  const [extractNote, setExtractNote] = useState("");
   const [requestShare, setRequestShare] = useState(42);
   const workspaceRef = useRef(null);
   const splitDrag = useRef(null);
@@ -9830,12 +10113,13 @@ function ApiView({ t, useTabInfo }) {
       if (typeof d.body === "string") setBody(d.body);
       if (d.auth) setAuth(normalizeAuth(d.auth));
       if (Number.isFinite(d.timeoutMs) && d.timeoutMs >= 1e3) setTimeoutMs(Math.min(12e4, d.timeoutMs));
+      if (Array.isArray(d.extracts)) setExtracts(d.extracts);
     } catch {
     }
   }, []);
   useEffect(() => {
-    storeJson(DRAFT_KEY, requestSnapshot({ method, url, headers, bodyType, rawSub, formPairs, body, paramPairs, timeoutMs, auth }));
-  }, [method, url, headers, bodyType, rawSub, formPairs, body, paramPairs, timeoutMs, auth]);
+    storeJson(DRAFT_KEY, requestSnapshot({ method, url, headers, bodyType, rawSub, formPairs, body, paramPairs, timeoutMs, auth, extracts }));
+  }, [method, url, headers, bodyType, rawSub, formPairs, body, paramPairs, timeoutMs, auth, extracts]);
   useEffect(() => () => {
     if (copiedTimer.current) clearTimeout(copiedTimer.current);
   }, []);
@@ -9848,8 +10132,8 @@ function ApiView({ t, useTabInfo }) {
     }
   }, [body, t]);
   const editorState = useCallback(
-    () => ({ method, url, headers, bodyType, rawSub, formPairs, body, paramPairs, timeoutMs, auth }),
-    [method, url, headers, bodyType, rawSub, formPairs, body, paramPairs, timeoutMs, auth]
+    () => ({ method, url, headers, bodyType, rawSub, formPairs, body, paramPairs, timeoutMs, auth, extracts }),
+    [method, url, headers, bodyType, rawSub, formPairs, body, paramPairs, timeoutMs, auth, extracts]
   );
   const snapshot = useCallback(() => requestSnapshot(editorState()), [editorState]);
   const restoreRequest = useCallback((req) => {
@@ -9867,6 +10151,8 @@ function ApiView({ t, useTabInfo }) {
     if (Array.isArray(req.formPairs)) setFormPairs(req.formPairs);
     if (typeof req.body === "string") setBody(req.body);
     setAuth(normalizeAuth(req.auth));
+    if (Array.isArray(req.extracts)) setExtracts(req.extracts);
+    else setExtracts([]);
     if (Number.isFinite(req.timeoutMs) && req.timeoutMs >= 1e3) setTimeoutMs(Math.min(12e4, req.timeoutMs));
     setResponse(null);
     setHistOpen(false);
@@ -9897,8 +10183,15 @@ function ApiView({ t, useTabInfo }) {
         storeJson(HIST_KEY, next);
         return next;
       });
+      const { store: nextStore, applied, missed } = applyExtracts(extracts, value, resolved, envStore);
+      if (applied.length > 0) setEnvStore(nextStore);
+      if (applied.length + missed.length > 0) {
+        setExtractNote(applied.length > 0 ? `${applied.map((a) => a.name).join(", ")}${missed.length > 0 ? ` · ${missed.map((m) => m).join(", ")} ${t("api.extractMissed")}` : ""}` : t("api.extractAllMissed"));
+      } else {
+        setExtractNote("");
+      }
     });
-  }, [url, sending, editorState, snapshot, envStore]);
+  }, [url, sending, editorState, snapshot, envStore, extracts, t]);
   const flashCopied = useCallback(() => {
     setCopied(true);
     if (copiedTimer.current) clearTimeout(copiedTimer.current);
@@ -9924,6 +10217,43 @@ function ApiView({ t, useTabInfo }) {
     });
   }, [copyText, editorState, envStore]);
   const doImport = useCallback(() => {
+    let collection = null;
+    try {
+      collection = detectCollectionImport(importText);
+    } catch {
+      collection = null;
+    }
+    if (collection) {
+      if (collection.error || collection.requests.length === 0) {
+        setImportError(`${t("api.importFailed")}: ${collection.error ?? t("api.importEmpty")}`);
+        return;
+      }
+      const entries = collection.requests.map((req, i) => ({
+        id: `${Date.now()}-${i}-${Math.random().toString(36).slice(2, 8)}`,
+        name: req.name,
+        ts: Date.now(),
+        request: requestSnapshot({ method: req.method, url: req.url, headers: req.headers, bodyType: req.bodyType, rawSub: req.rawSub, formPairs: [], body: req.body, paramPairs: req.paramPairs, timeoutMs: 3e4, auth: normalizeAuth(null), extracts: [] })
+      }));
+      setSaved((prev) => {
+        const names = new Set(entries.map((e) => e.name));
+        const next = [...entries, ...prev.filter((e) => e && !names.has(e.name))].slice(0, SAVED_CAP);
+        storeJson(SAVED_KEY, next);
+        return next;
+      });
+      const first = collection.requests[0];
+      setMethod(first.method);
+      setUrl(first.url);
+      setParamPairs(syncParamsFromUrl(first.url, first.paramPairs));
+      setHeaders(first.headers);
+      setBody(first.body);
+      setBodyType(first.bodyType);
+      setRawSub(first.rawSub);
+      setImportText("");
+      setImportOpen(false);
+      setHistTab("saved");
+      setHistOpen(true);
+      return;
+    }
     const isBru = looksLikeBru(importText);
     const bru = isBru ? parseBru(importText) : null;
     const p = isBru ? {
@@ -9964,7 +10294,7 @@ function ApiView({ t, useTabInfo }) {
     }
     setImportText("");
     setImportOpen(false);
-  }, [importText]);
+  }, [importText, t]);
   const doSaveFavorite = useCallback(() => {
     const name = saveName.trim();
     if (name === "") return;
@@ -10195,7 +10525,7 @@ function ApiView({ t, useTabInfo }) {
         h(
           "div",
           { className: "cea-request-tabs", role: "group", "aria-label": t("api.requestConfig") },
-          [["params", t("api.params"), activeParamCount], ["headers", t("api.headers"), headers.filter((p) => p.enabled !== false && p.name?.trim()).length], ["body", t("api.body"), bodyType === "none" ? 0 : 1], ["auth", t("api.auth"), auth.mode === "none" ? 0 : 1], ["variables", t("api.environment"), activeEnvVarCount], ["settings", t("api.settings"), 0]].map(([id, label, count]) => h("button", { type: "button", key: id, className: `cea-config-tab${requestTab === id ? " cea-config-tab-on" : ""}`, "aria-pressed": requestTab === id, onClick: () => {
+          [["params", t("api.params"), activeParamCount], ["headers", t("api.headers"), headers.filter((p) => p.enabled !== false && p.name?.trim()).length], ["body", t("api.body"), bodyType === "none" ? 0 : 1], ["auth", t("api.auth"), auth.mode === "none" ? 0 : 1], ["variables", t("api.environment"), activeEnvVarCount], ["extracts", t("api.extracts"), extracts.filter((r) => r && r.enabled !== false && String(r.name ?? "").trim() !== "" && String(r.expr ?? "").trim() !== "").length], ["settings", t("api.settings"), 0]].map(([id, label, count]) => h("button", { type: "button", key: id, className: `cea-config-tab${requestTab === id ? " cea-config-tab-on" : ""}`, "aria-pressed": requestTab === id, onClick: () => {
             setRequestTab(id);
             setEnvDeleteArmed(false);
           } }, label, count ? h("span", { className: "cea-tab-count" }, count) : null))
@@ -10251,6 +10581,63 @@ function ApiView({ t, useTabInfo }) {
               activeEnv ? h("button", { type: "button", className: `ce-sk-btn ce-sk-btn-ghost${envDeleteArmed ? " cea-danger" : ""}`, title: t("api.envDelete"), onClick: deleteActiveEnv }, envDeleteArmed ? t("api.envDeleteConfirm") : t("api.envDelete")) : null
             ),
             activeEnv ? h(RequestFields, { t, label: t("api.environment"), rows: activeEnv.vars, onChange: (rows) => setEnvStore((store) => setEnvVars(store, activeEnv.id, rows)), hint: t("api.envTitle") }) : h("div", { className: "cea-empty" }, h("span", null, t("api.envNoActive")))
+          ) : null,
+          requestTab === "extracts" ? h(
+            Fragment,
+            null,
+            h("div", { className: "cea-fields-footer" }, h("span", null, t("api.extractHint"))),
+            activeEnv === null ? h("div", { className: "cea-fields-footer" }, h("span", { className: "cea-warn" }, t("api.extractNoEnv"))) : null,
+            h(
+              "div",
+              { className: "cea-fields" },
+              h(
+                "div",
+                { className: "cea-fields-scroll" },
+                h(
+                  "table",
+                  { className: "cea-fields-table", "aria-label": t("api.extracts") },
+                  h("colgroup", null, h("col", { className: "cea-fields-check" }), h("col", { className: "cea-fields-name" }), h("col", { className: "cea-fields-value" }), h("col", { className: "cea-fields-description" }), h("col", { className: "cea-fields-action" })),
+                  h(
+                    "thead",
+                    null,
+                    h(
+                      "tr",
+                      null,
+                      h("th", { scope: "col" }, h("span", { className: "cea-sr-only" }, t("api.fieldEnabled"))),
+                      h("th", { scope: "col" }, t("api.extractName")),
+                      h("th", { scope: "col" }, t("api.extractSource")),
+                      h("th", { scope: "col" }, t("api.extractExpr")),
+                      h("th", { scope: "col" }, h("span", { className: "cea-sr-only" }, t("api.delete")))
+                    )
+                  ),
+                  h(
+                    "tbody",
+                    null,
+                    extracts.map((rule, index) => h(
+                      "tr",
+                      { key: index, className: rule.enabled === false ? "cea-field-disabled" : void 0 },
+                      h("td", null, h("input", { type: "checkbox", checked: rule.enabled !== false, "aria-label": `${t("api.extracts")} · ${t("api.fieldEnabled")} ${index + 1}`, onChange: (e) => setExtracts((prev) => prev.map((r, j) => j === index ? { ...r, enabled: e.target.checked } : r)) })),
+                      h("td", null, h("input", { className: "cea-field-input", type: "text", spellCheck: false, autoComplete: "off", placeholder: t("api.extractName"), "aria-label": `${t("api.extracts")} · ${t("api.extractName")} ${index + 1}`, value: rule.name ?? "", onChange: (e) => setExtracts((prev) => prev.map((r, j) => j === index ? { ...r, name: e.target.value } : r)) })),
+                      h("td", null, h("select", {
+                        className: "cea-field-input",
+                        "aria-label": `${t("api.extracts")} · ${t("api.extractSource")} ${index + 1}`,
+                        value: rule.source ?? "json",
+                        onChange: (e) => setExtracts((prev) => prev.map((r, j) => j === index ? { ...r, source: e.target.value } : r))
+                      }, ["json", "header", "status", "body", "regex", "query"].map((s) => h("option", { key: s, value: s }, t(`api.extractSrc.${s}`))))),
+                      h("td", null, h("input", { className: "cea-field-input", type: "text", spellCheck: false, autoComplete: "off", placeholder: t("api.extractExpr"), "aria-label": `${t("api.extracts")} · ${t("api.extractExpr")} ${index + 1}`, value: rule.expr ?? "", onChange: (e) => setExtracts((prev) => prev.map((r, j) => j === index ? { ...r, expr: e.target.value } : r)) })),
+                      h("td", null, h("button", { type: "button", className: "ce-tool cea-field-delete", title: t("api.delete"), "aria-label": `${t("api.delete")} ${t("api.extracts")} ${index + 1}`, onClick: () => setExtracts((prev) => prev.filter((_, j) => j !== index)) }, "×"))
+                    ))
+                  )
+                )
+              ),
+              h(
+                "div",
+                { className: "cea-fields-footer" },
+                h("button", { type: "button", className: "ce-tool cea-link", onClick: () => setExtracts((prev) => [...prev, { name: "", source: "json", expr: "", enabled: true }]) }, `+ ${t("api.addExtract")}`),
+                extracts.length === 0 ? h("span", null, t("api.extractEmpty")) : null
+              )
+            ),
+            extractNote !== "" ? h("div", { className: "cea-fields-footer", role: "status" }, h("span", null, extractNote)) : null
           ) : null,
           requestTab === "auth" ? h(
             "div",
@@ -10441,7 +10828,11 @@ function ApiView({ t, useTabInfo }) {
         h("span", null, t("api.importTitle")),
         h("button", { type: "button", className: "ce-tool ce-tiny", onClick: () => setImportOpen(false) }, "✕")
       ),
-      h("textarea", { className: "cea-body cea-import", autoFocus: true, "aria-label": t("api.importTitle"), value: importText, spellcheck: false, placeholder: t("api.importPlaceholder"), onChange: (e) => setImportText(e.target.value) }),
+      h("textarea", { className: "cea-body cea-import", autoFocus: true, "aria-label": t("api.importTitle"), value: importText, spellcheck: false, placeholder: t("api.importPlaceholder"), onChange: (e) => {
+        setImportText(e.target.value);
+        if (importError !== "") setImportError("");
+      } }),
+      importError !== "" ? h("div", { className: "cea-bar" }, h("span", { className: "cea-warn", role: "status" }, importError)) : null,
       h(
         "div",
         { className: "cea-bar" },

@@ -15,9 +15,10 @@ import { Fragment, h, useCallback, useEffect, useMemo, useRef, useState } from "
 import { api } from "./api.js";
 import { parseCurl, toCurl } from "./curl.js";
 import { looksLikeBru, parseBru } from "./brucol.js";
+import { detectCollectionImport } from "./openimp.js";
 import { SNIPPET_KINDS } from "./codegen.js";
 import {
-	activeEnvOf, addEnv, applyParamsToUrl, envMapOf, guessRawSubType, normalizeAuth, normalizeEnvStore,
+	activeEnvOf, addEnv, applyExtracts, applyParamsToUrl, envMapOf, guessRawSubType, normalizeAuth, normalizeEnvStore,
 	normalizeUrlParams, pushEntry, relTimeAgo, removeEnv, renameEnv, resolveRequest, selectEnv,
 	setEnvVars, syncParamsFromUrl,
 } from "./reqmodel.js";
@@ -98,6 +99,7 @@ export function ApiView({ t, useTabInfo }) {
 	const [respTab, setRespTab] = useState("body"); // body | headers | timeline
 	const [importOpen, setImportOpen] = useState(false);
 	const [importText, setImportText] = useState("");
+	const [importError, setImportError] = useState("");
 	const [histOpen, setHistOpen] = useState(false);
 	const [histTab, setHistTab] = useState("history"); // history | saved
 	const [history, setHistory] = useState([]);
@@ -121,6 +123,8 @@ export function ApiView({ t, useTabInfo }) {
 	const [requestTab, setRequestTab] = useState("params");
 	const [responseCopied, setResponseCopied] = useState(false);
 	const [timeoutMs, setTimeoutMs] = useState(30000);
+	const [extracts, setExtracts] = useState([]); // [{name, source, expr, enabled}]
+	const [extractNote, setExtractNote] = useState("");
 	const [requestShare, setRequestShare] = useState(42);
 	const workspaceRef = useRef(null);
 	const splitDrag = useRef(null);
@@ -155,11 +159,12 @@ export function ApiView({ t, useTabInfo }) {
 			if (typeof d.body === "string") setBody(d.body);
 			if (d.auth) setAuth(normalizeAuth(d.auth));
 			if (Number.isFinite(d.timeoutMs) && d.timeoutMs >= 1000) setTimeoutMs(Math.min(120000, d.timeoutMs));
+			if (Array.isArray(d.extracts)) setExtracts(d.extracts);
 		} catch { /* corrupt draft: start clean */ }
 	}, []);
 	useEffect(() => {
-		storeJson(DRAFT_KEY, requestSnapshot({ method, url, headers, bodyType, rawSub, formPairs, body, paramPairs, timeoutMs, auth }));
-	}, [method, url, headers, bodyType, rawSub, formPairs, body, paramPairs, timeoutMs, auth]);
+		storeJson(DRAFT_KEY, requestSnapshot({ method, url, headers, bodyType, rawSub, formPairs, body, paramPairs, timeoutMs, auth, extracts }));
+	}, [method, url, headers, bodyType, rawSub, formPairs, body, paramPairs, timeoutMs, auth, extracts]);
 	useEffect(() => () => { if (copiedTimer.current) clearTimeout(copiedTimer.current); }, []);
 
 	const beautify = useCallback(() => {
@@ -173,8 +178,8 @@ export function ApiView({ t, useTabInfo }) {
 
 	/** The full editor state — one shape feeds snapshots and resolveRequest. */
 	const editorState = useCallback(
-		() => ({ method, url, headers, bodyType, rawSub, formPairs, body, paramPairs, timeoutMs, auth }),
-		[method, url, headers, bodyType, rawSub, formPairs, body, paramPairs, timeoutMs, auth],
+		() => ({ method, url, headers, bodyType, rawSub, formPairs, body, paramPairs, timeoutMs, auth, extracts }),
+		[method, url, headers, bodyType, rawSub, formPairs, body, paramPairs, timeoutMs, auth, extracts],
 	);
 	const snapshot = useCallback(() => requestSnapshot(editorState()), [editorState]);
 
@@ -190,6 +195,7 @@ export function ApiView({ t, useTabInfo }) {
 		if (Array.isArray(req.formPairs)) setFormPairs(req.formPairs);
 		if (typeof req.body === "string") setBody(req.body);
 		setAuth(normalizeAuth(req.auth));
+		if (Array.isArray(req.extracts)) setExtracts(req.extracts); else setExtracts([]);
 		if (Number.isFinite(req.timeoutMs) && req.timeoutMs >= 1000) setTimeoutMs(Math.min(120000, req.timeoutMs));
 		setResponse(null);
 		setHistOpen(false);
@@ -225,8 +231,19 @@ export function ApiView({ t, useTabInfo }) {
 				storeJson(HIST_KEY, next);
 				return next;
 			});
+			// Post-response extracts: write hits into the ACTIVE environment
+			// (misses only get reported, never half-written as empty vars).
+			const { store: nextStore, applied, missed } = applyExtracts(extracts, value, resolved, envStore);
+			if (applied.length > 0) setEnvStore(nextStore);
+			if (applied.length + missed.length > 0) {
+				setExtractNote(applied.length > 0
+					? `${applied.map((a) => a.name).join(", ")}${missed.length > 0 ? ` · ${missed.map((m) => m).join(", ")} ${t("api.extractMissed")}` : ""}`
+					: t("api.extractAllMissed"));
+			} else {
+				setExtractNote("");
+			}
 		});
-	}, [url, sending, editorState, snapshot, envStore]);
+	}, [url, sending, editorState, snapshot, envStore, extracts, t]);
 
 	const flashCopied = useCallback(() => {
 		setCopied(true);
@@ -261,6 +278,45 @@ export function ApiView({ t, useTabInfo }) {
 	}, [copyText, editorState, envStore]);
 
 	const doImport = useCallback(() => {
+		// Collection documents (OpenAPI / Postman) import as a SET: every
+		// operation becomes a favorite and the first one lands in the editor.
+		let collection = null;
+		try {
+			collection = detectCollectionImport(importText);
+		} catch {
+			collection = null;
+		}
+		if (collection) {
+			if (collection.error || collection.requests.length === 0) {
+				setImportError(`${t("api.importFailed")}: ${collection.error ?? t("api.importEmpty")}`);
+				return;
+			}
+			const entries = collection.requests.map((req, i) => ({
+				id: `${Date.now()}-${i}-${Math.random().toString(36).slice(2, 8)}`,
+				name: req.name,
+				ts: Date.now(),
+				request: requestSnapshot({ method: req.method, url: req.url, headers: req.headers, bodyType: req.bodyType, rawSub: req.rawSub, formPairs: [], body: req.body, paramPairs: req.paramPairs, timeoutMs: 30000, auth: normalizeAuth(null), extracts: [] }),
+			}));
+			setSaved((prev) => {
+				const names = new Set(entries.map((e) => e.name));
+				const next = [...entries, ...prev.filter((e) => e && !names.has(e.name))].slice(0, SAVED_CAP);
+				storeJson(SAVED_KEY, next);
+				return next;
+			});
+			const first = collection.requests[0];
+			setMethod(first.method);
+			setUrl(first.url);
+			setParamPairs(syncParamsFromUrl(first.url, first.paramPairs));
+			setHeaders(first.headers);
+			setBody(first.body);
+			setBodyType(first.bodyType);
+			setRawSub(first.rawSub);
+			setImportText("");
+			setImportOpen(false);
+			setHistTab("saved");
+			setHistOpen(true);
+			return;
+		}
 		// The import dialog accepts curl commands and Bruno .bru documents;
 		// .bru carries its own param rows (disabled + path included), curl
 		// projects the URL query into the table.
@@ -306,7 +362,7 @@ export function ApiView({ t, useTabInfo }) {
 		}
 		setImportText("");
 		setImportOpen(false);
-	}, [importText]);
+	}, [importText, t]);
 
 	const doSaveFavorite = useCallback(() => {
 		const name = saveName.trim();
@@ -495,7 +551,7 @@ export function ApiView({ t, useTabInfo }) {
 		h("div", { className: "cea-scroll cea-workspace", ref: workspaceRef, style: { gridTemplateRows: `minmax(0, ${requestShare}fr) 10px minmax(0, ${100 - requestShare}fr)` } },
 			h("section", { className: "cea-request", "aria-label": t("api.requestConfig") },
 			h("div", { className: "cea-request-tabs", role: "group", "aria-label": t("api.requestConfig") },
-				[ ["params", t("api.params"), activeParamCount], ["headers", t("api.headers"), headers.filter((p) => p.enabled !== false && p.name?.trim()).length], ["body", t("api.body"), bodyType === "none" ? 0 : 1], ["auth", t("api.auth"), auth.mode === "none" ? 0 : 1], ["variables", t("api.environment"), activeEnvVarCount], ["settings", t("api.settings"), 0] ].map(([id, label, count]) =>
+				[ ["params", t("api.params"), activeParamCount], ["headers", t("api.headers"), headers.filter((p) => p.enabled !== false && p.name?.trim()).length], ["body", t("api.body"), bodyType === "none" ? 0 : 1], ["auth", t("api.auth"), auth.mode === "none" ? 0 : 1], ["variables", t("api.environment"), activeEnvVarCount], ["extracts", t("api.extracts"), extracts.filter((r) => r && r.enabled !== false && String(r.name ?? "").trim() !== "" && String(r.expr ?? "").trim() !== "").length], ["settings", t("api.settings"), 0] ].map(([id, label, count]) =>
 					h("button", { type: "button", key: id, className: `cea-config-tab${requestTab === id ? " cea-config-tab-on" : ""}`, "aria-pressed": requestTab === id, onClick: () => { setRequestTab(id); setEnvDeleteArmed(false); } }, label, count ? h("span", { className: "cea-tab-count" }, count) : null)),
 			),
 			h("div", { className: "cea-request-panel" },
@@ -541,6 +597,45 @@ export function ApiView({ t, useTabInfo }) {
 				activeEnv
 					? h(RequestFields, { t, label: t("api.environment"), rows: activeEnv.vars, onChange: (rows) => setEnvStore((store) => setEnvVars(store, activeEnv.id, rows)), hint: t("api.envTitle") })
 					: h("div", { className: "cea-empty" }, h("span", null, t("api.envNoActive"))),
+			) : null,
+			requestTab === "extracts" ? h(Fragment, null,
+				h("div", { className: "cea-fields-footer" }, h("span", null, t("api.extractHint"))),
+				activeEnv === null ? h("div", { className: "cea-fields-footer" }, h("span", { className: "cea-warn" }, t("api.extractNoEnv"))) : null,
+				h("div", { className: "cea-fields" },
+					h("div", { className: "cea-fields-scroll" },
+						h("table", { className: "cea-fields-table", "aria-label": t("api.extracts") },
+							h("colgroup", null, h("col", { className: "cea-fields-check" }), h("col", { className: "cea-fields-name" }), h("col", { className: "cea-fields-value" }), h("col", { className: "cea-fields-description" }), h("col", { className: "cea-fields-action" })),
+							h("thead", null,
+								h("tr", null,
+									h("th", { scope: "col" }, h("span", { className: "cea-sr-only" }, t("api.fieldEnabled"))),
+									h("th", { scope: "col" }, t("api.extractName")),
+									h("th", { scope: "col" }, t("api.extractSource")),
+									h("th", { scope: "col" }, t("api.extractExpr")),
+									h("th", { scope: "col" }, h("span", { className: "cea-sr-only" }, t("api.delete"))),
+								),
+							),
+							h("tbody", null,
+								extracts.map((rule, index) => h("tr", { key: index, className: rule.enabled === false ? "cea-field-disabled" : undefined },
+									h("td", null, h("input", { type: "checkbox", checked: rule.enabled !== false, "aria-label": `${t("api.extracts")} · ${t("api.fieldEnabled")} ${index + 1}`, onChange: (e) => setExtracts((prev) => prev.map((r, j) => (j === index ? { ...r, enabled: e.target.checked } : r))) })),
+									h("td", null, h("input", { className: "cea-field-input", type: "text", spellCheck: false, autoComplete: "off", placeholder: t("api.extractName"), "aria-label": `${t("api.extracts")} · ${t("api.extractName")} ${index + 1}`, value: rule.name ?? "", onChange: (e) => setExtracts((prev) => prev.map((r, j) => (j === index ? { ...r, name: e.target.value } : r))) })),
+									h("td", null, h("select", {
+										className: "cea-field-input",
+										"aria-label": `${t("api.extracts")} · ${t("api.extractSource")} ${index + 1}`,
+										value: rule.source ?? "json",
+										onChange: (e) => setExtracts((prev) => prev.map((r, j) => (j === index ? { ...r, source: e.target.value } : r))),
+									}, ["json", "header", "status", "body", "regex", "query"].map((s) => h("option", { key: s, value: s }, t(`api.extractSrc.${s}`))))),
+									h("td", null, h("input", { className: "cea-field-input", type: "text", spellCheck: false, autoComplete: "off", placeholder: t("api.extractExpr"), "aria-label": `${t("api.extracts")} · ${t("api.extractExpr")} ${index + 1}`, value: rule.expr ?? "", onChange: (e) => setExtracts((prev) => prev.map((r, j) => (j === index ? { ...r, expr: e.target.value } : r))) })),
+									h("td", null, h("button", { type: "button", className: "ce-tool cea-field-delete", title: t("api.delete"), "aria-label": `${t("api.delete")} ${t("api.extracts")} ${index + 1}`, onClick: () => setExtracts((prev) => prev.filter((_, j) => j !== index)) }, "×")),
+								)),
+							),
+						),
+					),
+					h("div", { className: "cea-fields-footer" },
+						h("button", { type: "button", className: "ce-tool cea-link", onClick: () => setExtracts((prev) => [...prev, { name: "", source: "json", expr: "", enabled: true }]) }, `+ ${t("api.addExtract")}`),
+						extracts.length === 0 ? h("span", null, t("api.extractEmpty")) : null,
+					),
+				),
+				extractNote !== "" ? h("div", { className: "cea-fields-footer", role: "status" }, h("span", null, extractNote)) : null,
 			) : null,
 			requestTab === "auth" ? h("div", { className: "cea-auth" },
 				h("div", { className: "cea-sec" },
@@ -677,7 +772,8 @@ export function ApiView({ t, useTabInfo }) {
 					h("span", null, t("api.importTitle")),
 					h("button", { type: "button", className: "ce-tool ce-tiny", onClick: () => setImportOpen(false) }, "✕"),
 				),
-				h("textarea", { className: "cea-body cea-import", autoFocus: true, "aria-label": t("api.importTitle"), value: importText, spellcheck: false, placeholder: t("api.importPlaceholder"), onChange: (e) => setImportText(e.target.value) }),
+				h("textarea", { className: "cea-body cea-import", autoFocus: true, "aria-label": t("api.importTitle"), value: importText, spellcheck: false, placeholder: t("api.importPlaceholder"), onChange: (e) => { setImportText(e.target.value); if (importError !== "") setImportError(""); } }),
+				importError !== "" ? h("div", { className: "cea-bar" }, h("span", { className: "cea-warn", role: "status" }, importError)) : null,
 				h("div", { className: "cea-bar" },
 					h("span", { className: "ce-spacer" }),
 					h("button", { type: "button", className: "ce-sk-btn", disabled: importText.trim() === "", onClick: doImport }, t("api.importBtn")),

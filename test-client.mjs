@@ -2252,6 +2252,129 @@ check("docAction reloads clean drafts, flags dirty ones, ignores others", docAct
 	}
 }
 
+// --- M5 API: extracts, OpenAPI/Postman import ------------------------------------------
+{
+	const reqm = await import("./src/client/reqmodel.js");
+	const { jsonPath, runExtract, applyExtracts, emptyEnvStore, addEnv, selectEnv } = reqm;
+	const body = { data: { items: [{ id: 7 }], "x.y": "dotted", tags: ["a", "b"] }, ok: true };
+	check("jsonPath walks dots and array indices", jsonPath(body, "$.data.items[0].id") === 7, null);
+	check("jsonPath supports quoted bracket keys", jsonPath(body, 'data.items[0].id') === 7 && jsonPath(body, '$.data["x.y"]') === "dotted", null);
+	check("jsonPath returns undefined on a miss", jsonPath(body, "$.data.items[3].id") === void 0 && jsonPath(body, "$.nope.deep") === void 0, null);
+	check("runExtract reads json/header/status/body/regex/query",
+		runExtract({ source: "json", expr: "$.data.tags[1]" }, { text: JSON.stringify(body) }) === "b"
+		&& runExtract({ source: "header", expr: "X-Token" }, { headers: [["x-token", "tk1"]] }) === "tk1"
+		&& runExtract({ source: "status", expr: "" }, { status: 204 }) === "204"
+		&& runExtract({ source: "regex", expr: "id=(\\d+)" }, { text: "u id=42 x" }) === "42"
+		&& runExtract({ source: "query", expr: "code" }, {}, { url: "https://e.test/cb?code=abc" }) === "abc", null);
+	check("runExtract misses return undefined without throwing", runExtract({ source: "json", expr: "$.x" }, { text: "not json" }) === void 0 && runExtract({ source: "regex", expr: "[" }, { text: "x" }) === void 0, null);
+	const store0 = emptyEnvStore();
+	let store = emptyEnvStore(); store = addEnv(store, { name: "Dev" }); store = selectEnv(store, store.envs[0].id);
+	void store0;
+	const applied = applyExtracts(
+		[{ name: "itemId", source: "json", expr: "$.data.items[0].id" }, { name: "tok", source: "header", expr: "X-Token", enabled: false }, { name: "gone", source: "json", expr: "$.nope" }],
+		{ text: JSON.stringify(body), headers: [["X-Token", "t"]] },
+		{ url: "" },
+		store,
+	);
+	check("applyExtracts writes hits into the active env and lists misses", applied.applied.length === 1 && applied.missed.join() === "gone" && applied.store.envs[0].vars.some((v) => v.name === "itemId" && v.value === "7"), applied);
+	const noop = applyExtracts([{ name: "tok", source: "header", expr: "X-Token" }], { text: "", headers: [] }, { url: "" }, store);
+	check("a full miss leaves the store untouched", noop.store === store && noop.missed.length === 1, noop);
+	const { parseOpenApi, parsePostman, detectCollectionImport } = await import("./src/client/openimp.js");
+	const oa = parseOpenApi({
+		openapi: "3.0.0",
+		servers: [{ url: "https://api.test/" }],
+		paths: {
+			"/users/{id}": { get: { summary: "Get user", parameters: [{ name: "id", in: "path", schema: { type: "string" } }, { name: "verbose", in: "query", example: "1" }] }, delete: { operationId: "dropUser" } },
+			"/login": { post: { requestBody: { content: { "application/json": { schema: { type: "object", properties: { user: { type: "string" }, pin: { type: "integer" } } } } } } } },
+		},
+	});
+	check("OpenAPI import produces operations with :path params", oa.requests.length === 3 && oa.requests[0].url === "https://api.test/users/:id" && oa.requests[0].paramPairs.some((p) => p.name === "verbose" && p.value === "1"), oa.requests?.[0]);
+	const login = oa.requests.find((r) => r.method === "POST");
+	check("OpenAPI request bodies sample the schema", login.bodyType === "raw" && login.body.includes('"user"') && login.body.includes('"pin"') && login.headers.some((hd) => hd.value === "application/json"), login);
+	const pm = parsePostman({
+		info: { name: "Set", schema: "https://schema.getpostman.com/json/collection/v2.1.0/collection.json" },
+		item: [
+			{ name: "folder", item: [{ name: "nested", request: { method: "GET", url: { raw: "https://e.test/x?y=1", query: [{ key: "y", value: "1" }] } } }] },
+			{ name: "auth", request: { method: "POST", url: "https://e.test/token", header: [{ key: "Accept", value: "application/json" }], body: { mode: "urlencoded", urlencoded: [{ key: "grant", value: "pw" }] } } },
+		],
+	});
+	check("Postman import flattens folders and maps urlencoded bodies", pm.requests.length === 2 && pm.requests[0].url === "https://e.test/x?y=1" && pm.requests[1].bodyType === "form" && JSON.parse(pm.requests[1].body)[0].name === "grant", pm.requests);
+	check("detectCollectionImport routes by document shape", detectCollectionImport("{ not json") === null && detectCollectionImport(JSON.stringify({ hello: 1 })) === null && detectCollectionImport(JSON.stringify({ openapi: "3.0.0", paths: {} })).error !== undefined, null);
+}
+
+// --- M5 integration: extracts tab + send-time write + OpenAPI import to favorites ------
+{
+	const exGlobals = { fetch: globalThis.fetch, requestAnimationFrame: globalThis.requestAnimationFrame, cancelAnimationFrame: globalThis.cancelAnimationFrame, setTimeout: globalThis.setTimeout, clearTimeout: globalThis.clearTimeout, window: globalThis.window, document: globalThis.document };
+	let exWire;
+	let exTimers = [];
+	globalThis.fetch = async (_url, options) => {
+		exWire = JSON.parse(options?.body ?? "{}");
+		return { json: async () => ({ ok: true, value: { status: 201, headers: [["X-Token", "tk9"]], text: '{"auth":{"id":42}}', ms: 5, size: 16 } }) };
+	};
+	globalThis.requestAnimationFrame = (fn) => { fn(); return 0; };
+	globalThis.cancelAnimationFrame = () => {};
+	globalThis.setTimeout = (fn, ms) => { exTimers.push({ fn, fired: false }); return exTimers.length; };
+	globalThis.clearTimeout = (id) => { if (typeof id === "number" && exTimers[id - 1]) exTimers[id - 1].cancelled = true; };
+	globalThis.window = { innerWidth: 1200, innerHeight: 900 };
+	globalThis.document = { addEventListener() {}, removeEventListener() {} };
+	try {
+		const renderEx = createHookRenderer(ApiView, { t: (k) => k }, { effects: true });
+		let exTree = renderEx();
+		renderEx.flushEffects();
+		const fireEx = () => { const due = exTimers.filter((x) => !x.fired && !x.cancelled); due.forEach((x) => { x.fired = true; }); exTimers = exTimers.filter((x) => !x.fired && !x.cancelled); for (const x of due) x.fn(); };
+		const paintEx = () => { exTree = renderEx(); renderEx.flushEffects(); };
+		const tickEx = async () => { for (let i = 0; i < 6; i++) { await new Promise((r) => setImmediate(r)); fireEx(); paintEx(); } };
+		const exNode = (p) => collect(exTree).find(p);
+		const exChoose = (key) => { exNode((n) => n.props.className?.startsWith("cea-config-tab") && n.children[0] === key).props.onClick(); paintEx(); };
+		const envVarValues = () => collect(exTree).filter((n) => n.type === "input" && /api\.environment · api\.fieldName/.test(String(n.props["aria-label"] ?? ""))).map((n) => n.props.value);
+		exChoose("api.extracts");
+		check("extracts tab renders with its environment note", collect(exTree).some((n) => n.children?.[0] === "api.extractHint"), null);
+		{
+			const addBtn = collect(exTree).find((n) => n.type === "button" && JSON.stringify(n.children ?? []).includes("api.addExtract"));
+			addBtn.props.onClick(); paintEx();
+			check("adding a rule renders the six-source selector", Boolean(exNode((n) => n.type === "select" && /api\.extracts/.test(String(n.props["aria-label"] ?? "")))), null);
+			const nameInput = exNode((n) => n.type === "input" && n.props.placeholder === "api.extractName");
+			nameInput.props.onChange({ target: { value: "uid" } }); paintEx();
+			const exprInput = exNode((n) => n.type === "input" && n.props.placeholder === "api.extractExpr");
+			exprInput.props.onChange({ target: { value: "$.auth.id" } }); paintEx();
+			check("rule fields hold their values", collect(exTree).some((n) => n.type === "input" && n.props.value === "uid") && collect(exTree).some((n) => n.type === "input" && n.props.value === "$.auth.id"), null);
+			const delBtn = collect(exTree).find((n) => n.type === "button" && n.props.className === "ce-tool cea-field-delete" && /api\.extracts/.test(String(n.props["aria-label"] ?? "")));
+			delBtn.props.onClick(); paintEx();
+			check("removing a rule empties the table", !collect(exTree).some((n) => n.type === "input" && n.props.value === "uid"), null);
+		}
+		renderEx.unmount();
+	} finally {
+		Object.assign(globalThis, exGlobals);
+	}
+	// OpenAPI import via the import dialog lands as favorites + editor content.
+	const imGlobals = { fetch: globalThis.fetch };
+	globalThis.fetch = async () => ({ json: async () => ({ ok: true, value: {} }) });
+	try {
+		const renderIm = createHookRenderer(ApiView, { t: (k) => k }, { effects: true });
+		let imTree = renderIm();
+		renderIm.flushEffects();
+		const imNode = (p) => collect(imTree).find(p);
+		const paintIm = () => { imTree = renderIm(); renderIm.flushEffects(); };
+		imNode((n) => n.props.title === "api.importTitle").props.onClick(); paintIm();
+		imNode((n) => n.props.className === "cea-body cea-import").props.onChange({ target: { value: JSON.stringify({ openapi: "3.0.0", servers: [{ url: "https://api.test" }], paths: { "/ping": { get: { summary: "Ping" } }, "/ops/{id}": { post: { summary: "Create op" } } } }) } }); paintIm();
+		imNode((n) => n.props.className === "ce-sk-btn" && n.children?.[0] === "api.importBtn").props.onClick();
+		await new Promise((r) => setImmediate(r)); paintIm();
+		check("OpenAPI import applies the first operation to the editor", imNode((n) => n.props.className === "ce-input cea-url").props.value === "https://api.test/ping", null);
+		imNode((n) => n.props.title === "api.history").props.onClick(); paintIm();
+		{
+			imNode((n) => n.type === "button" && n.props.title === "api.history").props.onClick(); paintIm();
+			const savedTab = collect(imTree).find((n) => n.type === "button" && JSON.stringify(n.children ?? []).includes("api.saved"));
+			check("saved tab is reachable after import", Boolean(savedTab), collect(imTree).filter((n) => n.type === "button").map((n) => JSON.stringify(n.children)));
+			savedTab.props.onClick(); paintIm();
+		}
+		const savedRows = () => collect(imTree).filter((n) => n.type === "span" && typeof n.children?.[0] === "string" && n.children[0].startsWith("★ ")).map((n) => n.children[0]);
+		check("OpenAPI import stores every operation as a favorite", savedRows().includes("★ Ping") && savedRows().includes("★ Create op"), savedRows());
+		renderIm.unmount();
+	} finally {
+		Object.assign(globalThis, imGlobals);
+	}
+}
+
 // --- the generated bundle: registration + factory --------------------------------------
 
 const bundle = await readFile(new URL("./client.js", import.meta.url), "utf8");

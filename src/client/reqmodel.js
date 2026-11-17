@@ -429,3 +429,127 @@ export function pushEntry(list, entry, cap) {
 	const base = Array.isArray(list) ? list.filter((e) => e && e.id !== entry.id) : [];
 	return [entry, ...base].slice(0, cap);
 }
+
+/* ============================== post-response extracts ============================== */
+
+/**
+ * Read a dotted JSONPath-lite expression out of a decoded JSON body:
+ * `data.items[0].id`, `meta["x.y"]`. Brackets only index arrays or quote
+ * keys; there is no wildcard/slice engine here on purpose — extracts feed
+ * the next request, they are not a query language.
+ */
+export function jsonPath(value, expr) {
+	const src = String(expr ?? "").trim().replace(/^\$\.?/, "");
+	if (src === "") return void 0;
+	let cur = value;
+	let i = 0;
+	const readKey = (name) => {
+		if (cur === null || typeof cur !== "object" || Array.isArray(cur)) return false;
+		if (!Object.hasOwn(cur, name)) return false;
+		cur = cur[name];
+		return true;
+	};
+	while (i < src.length) {
+		if (src.charCodeAt(i) === 46 /* . */) i++;
+		const dot = src.indexOf(".", i);
+		const brack = src.indexOf("[", i);
+		const segEnd = dot === -1 ? (brack === -1 ? src.length : brack) : brack === -1 ? dot : Math.min(dot, brack);
+		if (segEnd > i) {
+			const key = src.slice(i, segEnd);
+			if (!readKey(key)) return void 0;
+			i = segEnd;
+			continue;
+		}
+		if (src.charCodeAt(i) !== 91 /* [ */) return void 0;
+		const close = src.indexOf("]", i);
+		if (close === -1) return void 0;
+		const inner = src.slice(i + 1, close).trim();
+		if (inner.startsWith('"') || inner.startsWith("'")) {
+			if (!readKey(inner.slice(1, -1))) return void 0;
+		} else if (/^\d+$/.test(inner)) {
+			if (!Array.isArray(cur) || Number(inner) >= cur.length) return void 0;
+			cur = cur[Number(inner)];
+		} else {
+			return void 0;
+		}
+		i = close + 1;
+	}
+	return cur;
+}
+
+/**
+ * Run one extract rule against a settled response. Returns the resolved
+ * string value, or undefined when the rule misses (header absent, JSONPath
+ * not found, regex without a group).
+ */
+export function runExtract(rule, response, resolvedRequest) {
+	if (!rule) return void 0;
+	const source = rule.source ?? "json";
+	// status needs no expression; everything else does.
+	if (source !== "status" && !rule.expr) return void 0;
+	if (source === "status") return String(response?.status ?? "");
+	if (source === "header") {
+		const list = response?.headers ?? [];
+		const want = String(rule.expr).toLowerCase();
+		const hit = list.find(([k]) => String(k).toLowerCase() === want);
+		return hit ? String(hit[1]) : void 0;
+	}
+	if (source === "body") return response?.text ?? void 0;
+	if (source === "regex") {
+		try {
+			const re = new RegExp(rule.expr, "m");
+			const m = re.exec(response?.text ?? "");
+			if (!m) return void 0;
+			return m[1] ?? m[0];
+		} catch {
+			return void 0;
+		}
+	}
+	if (source === "query") {
+		// extract from the REQUEST wire url's query — e.g. a redirect token
+		try {
+			const u = new URL(resolvedRequest?.url ?? "", "http://example.invalid");
+			const v = u.searchParams.get(rule.expr);
+			return v === null ? void 0 : v;
+		} catch {
+			return void 0;
+		}
+	}
+	// json (default): parse the body then walk the path
+	let parsed;
+	try {
+		parsed = JSON.parse(response?.text ?? "");
+	} catch {
+		return void 0;
+	}
+	const found = jsonPath(parsed, rule.expr);
+	if (found === void 0 || found === null) return void 0;
+	return typeof found === "object" ? JSON.stringify(found) : String(found);
+}
+
+/**
+ * Apply all enabled extracts of a request to the env store after a send.
+ * Returns {store, applied:[{name,value}], missed:[names]} — callers persist
+ * `store` only when something applied, and the UI reports misses without
+ * writing half-baked variables.
+ */
+export function applyExtracts(extracts, response, resolvedRequest, store) {
+	const rules = (Array.isArray(extracts) ? extracts : []).filter((r) => r && r.enabled !== false && String(r.name ?? "").trim() && String(r.expr ?? "").trim());
+	if (rules.length === 0) return { store, applied: [], missed: [] };
+	const env = activeEnvOf(store);
+	if (!env) return { store, applied: [], missed: rules.map((r) => String(r.name).trim()) };
+	const applied = [];
+	const missed = [];
+	const vars = [...(Array.isArray(env.vars) ? env.vars : [])];
+	for (const rule of rules) {
+		const value = runExtract(rule, response, resolvedRequest);
+		if (value === void 0) { missed.push(rule.name); continue; }
+		const idx = vars.findIndex((v) => v.name === rule.name);
+		const row = { name: rule.name, value, enabled: true };
+		if (idx === -1) vars.push(row);
+		else vars[idx] = row;
+		applied.push(row);
+	}
+	if (applied.length === 0) return { store, applied, missed };
+	return { store: setEnvVars(store, env.id, vars), applied, missed };
+}
