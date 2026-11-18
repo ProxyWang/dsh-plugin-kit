@@ -1,4 +1,10 @@
 - insert:
     - id: code-explorer
       name: 'dsh-plugin-kit'
-      config: {}
+      config:
+        formatOnSave: true
+        liveRefresh: true
+        lspIdleMs: 300000
+        apiTimeoutMs: 30000
+        collectionDir: ''
+        dbDefaultDriver: sqlite

@@ -33,7 +33,9 @@
   },
   "scripts": {
     "build": "node scripts/build-client.mjs",
-    "test": "node scripts/build-client.mjs && node test-host.mjs && node test-client.mjs && node test-browser.mjs && node test-search.mjs && node test-nested.mjs && node test-parent.mjs && node test-remote.mjs"
+    "build:min": "DSH_MINIFY=1 node scripts/build-client.mjs",
+    "test": "node scripts/build-client.mjs && node test-host.mjs && node test-client.mjs && node test-browser.mjs && node test-search.mjs && node test-nested.mjs && node test-parent.mjs && node test-remote.mjs",
+    "test:contract": "ELECTRON_RUN_AS_NODE=1 \"$DSH_NODE_EXECUTABLE\" test-contract.mjs"
   },
   "icon": "icon.svg",
   "files": [

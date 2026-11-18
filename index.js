@@ -34,7 +34,18 @@ import { createVaultService } from "./lib/host/vault.js";
 import { dbRoutes, closeAll as closeAllDb } from "./lib/host/db.js";
 import { createToolboxTools } from "./lib/host/tools.js";
 
-function apply(ctx) {
+/** Plugin configuration schema. Fields are read at apply time; changes require
+ *  a plugin restart (non-volatile). Users override via cordis.patch.yml. */
+export const Config = {
+	formatOnSave: { type: "boolean", default: true, description: "Format Go/TS/JS/Python files on save via the language server." },
+	liveRefresh: { type: "boolean", default: true, description: "Watch the workspace and live-refresh editor, tree and git status." },
+	lspIdleMs: { type: "number", default: 300_000, description: "Shut down idle LSP servers after this many milliseconds." },
+	apiTimeoutMs: { type: "number", default: 30_000, description: "Default timeout for API workbench requests (1000–120000 ms)." },
+	collectionDir: { type: "string", default: "", description: "Workspace-relative .bru collection directory for the API workbench." },
+	dbDefaultDriver: { type: "string", default: "sqlite", description: "Default database driver for new connections (sqlite, mysql, postgres)." },
+};
+
+function apply(ctx, config) {
 	let browser;
 	let vault;
 	ctx.inject(["storageDomain"], (storageCtx) => {

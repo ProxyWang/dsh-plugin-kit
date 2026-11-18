@@ -32,6 +32,7 @@ const FOOTER = `		return module.exports;
 	},
 });`;
 
+const minify = process.env.DSH_MINIFY === "1";
 const result = await build({
 	entryPoints: ["src/client/index.js"],
 	outfile: "client.js",
@@ -39,7 +40,7 @@ const result = await build({
 	format: "cjs",
 	platform: "browser",
 	external: ["react"],
-	minify: false,
+	minify,
 	sourcemap: false,
 	charset: "utf8", // keep the CJK copy as written instead of \uXXXX escapes
 	legalComments: "none",
