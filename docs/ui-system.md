@@ -85,6 +85,14 @@ The new layout was checked with fixture component previews in light and dark at 
 [Narrow dark preview](images/api-request-builder-narrow-dark.png)
 
 
+### Database workbench
+
+The database page is a three-zone surface: a rail (connections, then the schema tree), a tab strip (one tab per table or query), and a main region whose top half is the editor or table bar and whose bottom half is the result. The result grid uses the base surface with layer-1 sticky headers; NULL renders in tertiary italic so it reads differently from an empty string; long cells ellipsize and open a detail panel on click. Paging, sorting and filtering are all server-side, so the grid never grows past one page of elements. A destructive-looking control is avoided entirely: the panel only reads, and every write goes through the SQL editor where the user wrote it.
+
+### RPC (gRPC)
+
+The RPC page is a two-zone surface: a method rail grouped by service, and a stack of request → response panes. The request pane holds the JSON message, the metadata rows and the invoke action; the response pane holds the status chip, one card per returned message, and the trailers. Streaming methods are marked in the rail with the same `→` / `|→` / `→|` / `↔` glyphs the request tools use, so a server-streaming call is recognisable before it is invoked.
+
 ### Skill instructions
 
 The detail header prioritizes skill name, source and editability. Long descriptions and installation paths move into a native details disclosure. Preview and source/edit controls stay directly above the document, giving instructions more vertical space.

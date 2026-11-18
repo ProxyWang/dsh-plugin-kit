@@ -488,22 +488,30 @@ const Launch = makeLauncher({ registry: fakeRegistry, sidebarRight: { openTab: (
 check("launcher renders element", Launch({}) != null, null);
 check("launcher null on empty registry", makeLauncher({ registry: { entries: () => [] }, sidebarRight: { openTab: () => {} }, getShortcuts: () => null, t: (k) => k })({}) === null, null);
 
-// --- Host terminal entry: the workspace opens the product's terminal beside itself ----------
-const { createTerminalEntry, terminalKindRegistered, inertTerminalEntry } = await import("./src/client/terminal.js");
-check("terminal entry probes the host tab registry", terminalKindRegistered(fakeRegistry) === true && terminalKindRegistered({ entries: () => [{ kind: "code" }] }) === false && terminalKindRegistered({ entries: () => { throw new Error("x"); } }) === false, null);
-const hiddenEntry = createTerminalEntry({ sidebarRight: { openTab: () => { throw new Error("must not open"); } }, sidebarRightTabs: { entries: () => [] } });
-check("terminal entry hides and refuses without the host tab type", hiddenEntry.available() === false && hiddenEntry.open().reason === "unavailable", hiddenEntry.open());
-const terminalOpens = [];
-const terminalSidebar = { mounted: { getSnapshot: () => "s1" }, openTab: (kind, options) => { terminalOpens.push([kind, options]); } };
-const entry = createTerminalEntry({ sidebarRight: terminalSidebar, sidebarRightTabs: fakeRegistry });
-check("terminal entry asks the docked pane to split", entry.open().ok === true && terminalOpens[0][0] === "terminal" && terminalOpens[0][1].preferNewPane === true, terminalOpens[0]);
-check("terminal entry trusts the host instead of diffing tabs", entry.open().sessionId === "s1" && terminalOpens.length === 2, terminalOpens.length);
-const noSessionEntry = createTerminalEntry({ sidebarRight: { mounted: { getSnapshot: () => undefined }, openTab: () => {} }, sidebarRightTabs: fakeRegistry });
-check("terminal entry reports a missing session", noSessionEntry.open().reason === "noSession", noSessionEntry.open());
-const failingEntry = createTerminalEntry({ sidebarRight: { mounted: { getSnapshot: () => "s" }, openTab: () => { throw new Error("no surface"); } }, sidebarRightTabs: fakeRegistry });
-check("terminal entry turns an openTab failure into a reason", failingEntry.open().reason === "failed", failingEntry.open());
-check("terminal entry survives a hostile registry", createTerminalEntry({ sidebarRight: terminalSidebar, sidebarRightTabs: { entries: () => { throw new Error("x"); } } }).available() === false, null);
-check("inert terminal entry never claims a terminal", inertTerminalEntry.available() === false && inertTerminalEntry.open().ok === false, null);
+// --- External terminal entry: the workspace asks the Host to open the OS terminal -----------
+const { createTerminalEntry, externalTerminalAvailable, inertTerminalEntry } = await import("./src/client/terminal.js");
+const desktopGlobal = { dshDesktop: { protocolVersion: 1 } };
+check("external terminal is offered where a desktop session exists", externalTerminalAvailable(desktopGlobal.dshDesktop) === true && externalTerminalAvailable(undefined) === false, null);
+const noDesktop = createTerminalEntry({ desktop: undefined, call: async () => ({ ok: true }) });
+check("external terminal hides and refuses without a desktop session", noDesktop.available() === false && (await noDesktop.open("/w")).reason === "unavailable", null);
+const noSession = createTerminalEntry({ desktop: desktopGlobal.dshDesktop, call: async () => ({ ok: true }) });
+check("external terminal needs a session directory", (await noSession.open("")).reason === "noSession" && (await noSession.open(undefined)).reason === "noSession", null);
+const calls = [];
+const opener = createTerminalEntry({ desktop: desktopGlobal.dshDesktop, call: async (route, body) => { calls.push([route, body]); return { ok: true, value: { app: "iTerm", cwd: body.cwd, launcher: "open" } }; } });
+const opened = await opener.open("/w/project");
+check("external terminal asks the Host for the session directory", opened.ok === true && calls[0][0] === "terminal.open" && calls[0][1].cwd === "/w/project" && opened.value.app === "iTerm", { calls, opened });
+const failing = createTerminalEntry({ desktop: desktopGlobal.dshDesktop, call: async () => ({ ok: false, error: "no terminal application found (tried: iTerm, Terminal)" }) });
+const failed = await failing.open("/w");
+check("external terminal carries the Host failure verbatim", failed.ok === false && failed.reason === "failed" && failed.error.includes("tried: iTerm, Terminal"), failed);
+const throwing = createTerminalEntry({ desktop: desktopGlobal.dshDesktop, call: async () => { throw new Error("connection lost"); } });
+const transportFailed = await throwing.open("/w");
+check("external terminal turns a transport failure into a reason", transportFailed.reason === "failed" && transportFailed.error === "connection lost", transportFailed);
+let termClock = 0;
+const debounced = createTerminalEntry({ desktop: desktopGlobal.dshDesktop, now: () => termClock, debounceMs: 900, call: async () => ({ ok: true }) });
+check("a double click inside the debounce window opens one window", (await debounced.open("/w")).ok === true && (await debounced.open("/w")).reason === "busy", null);
+termClock = 1000;
+check("a later click opens again once the window has appeared", (await debounced.open("/w")).ok === true, null);
+check("inert terminal entry never claims a terminal", inertTerminalEntry.available() === false && (await inertTerminalEntry.open("/w")).ok === false, null);
 const terminalCopy = ["toolbar.terminal", "toolbar.terminalHint", "command.terminal", "terminal.fail.noSession", "terminal.fail.unavailable", "terminal.fail.failed"];
 const { zh: zhDict, en: enDict } = await import("./src/client/locale.js");
 check("terminal copy exists in both dictionaries", terminalCopy.every((key) => typeof zhDict[key] === "string" && zhDict[key] !== "" && typeof enDict[key] === "string" && enDict[key] !== ""), terminalCopy.filter((key) => typeof zhDict[key] !== "string" || typeof enDict[key] !== "string"));
@@ -520,8 +528,8 @@ const leftDefinitions = [definition((k) => k), apiDefinition((k) => k), skillsDe
 const leftRegistryListeners = new Set();
 const leftRegistry = { entries: () => leftDefinitions, subscribe(fn) { leftRegistryListeners.add(fn); return () => leftRegistryListeners.delete(fn); } };
 const leftTools = collectLeftTools(leftRegistry, (k) => k);
-check("left navigation collects workspace API skills and browser", leftTools.map((tool) => tool.kind).join() === "code,code-api,code-skills,browser", leftTools.map((tool) => tool.kind));
-check("terminal entry is folded into the workspace instead of the left rail", isHiddenLeftToolKind("terminal") === true && isHiddenLeftToolKind("browser") === false && leftTools.every((tool) => tool.kind !== "terminal"), leftTools.map((tool) => tool.kind));
+check("left navigation collects workspace API skills, browser and the product terminal", leftTools.map((tool) => tool.kind).join() === "code,code-api,code-skills,browser,terminal", leftTools.map((tool) => tool.kind));
+check("no host tool row is folded away now that the workspace opens the system terminal", isHiddenLeftToolKind("terminal") === false && isHiddenLeftToolKind("browser") === false && leftTools.some((tool) => tool.kind === "terminal"), leftTools.map((tool) => tool.kind));
 check("owned tools have no duplicate right guide entries", leftDefinitions.slice(0,3).every((entry) => entry.guide.length === 0), null);
 check("right workspace guide contains no launcher buttons", !collect(WorkspaceGuide({ t: (k) => k })).some((node) => node.type === "button"), null);
 let selectedLeftPanel = null;
@@ -2668,72 +2676,8 @@ check("docAction reloads clean drafts, flags dirty ones, ignores others", docAct
 	}
 }
 
-// --- Terminal typing: focus handoff to the host xterm, no focus theft afterwards --------
+// --- Terminal screens: Escape belongs to the shell, focus is never stolen back ----------
 {
-	const { focusHostTerminal, scheduleTerminalFocus } = await import("./src/client/terminal.js");
-	const makeScreen = ({ connected = true, hidden = false, disabled = false, withXterm = true } = {}) => {
-		const doc = { activeElement: null };
-		const textarea = { disabled, focus() { doc.activeElement = textarea; } };
-		const xterm = { querySelector: (sel) => (sel === "textarea" ? textarea : null) };
-		const screen = {
-			isConnected: connected,
-			closest: (sel) => (hidden && sel.includes("aria-hidden") ? {} : null),
-			querySelector: (sel) => (sel === ".xterm" && withXterm ? xterm : null),
-		};
-		doc.querySelectorAll = () => [screen];
-		return { doc, textarea, screen };
-	};
-	const live = makeScreen();
-	check("focus handoff targets the host terminal textarea", focusHostTerminal(live.doc) === true && live.doc.activeElement === live.textarea, null);
-	const hiddenScreen = makeScreen({ hidden: true });
-	check("hidden terminal screens are never focused", focusHostTerminal(hiddenScreen.doc) === false && hiddenScreen.doc.activeElement === null, null);
-	const detached = makeScreen({ connected: false });
-	check("detached terminal screens are skipped", focusHostTerminal(detached.doc) === false, null);
-	const noXterm = makeScreen({ withXterm: false });
-	check("a terminal without a mounted xterm is left alone", focusHostTerminal(noXterm.doc) === false, null);
-	const disabledTa = makeScreen({ disabled: true });
-	check("read-only terminal textareas are not forced", focusHostTerminal(disabledTa.doc) === false, null);
-	check("focus handoff survives a missing document", focusHostTerminal(undefined) === false, null);
-
-	// Retry loop: waits for the shell to connect, stops on success and at the deadline.
-	let clock = 0; const pending = new Map(); let nextId = 1;
-	const setTimer = (fn) => { const id = nextId++; pending.set(id, fn); return id; };
-	const clearTimer = (id) => pending.delete(id);
-	const fireTimers = () => { for (const [id, fn] of [...pending]) { pending.delete(id); fn(); } };
-	const late = makeScreen({ withXterm: false });
-	const cancelLate = scheduleTerminalFocus({ doc: late.doc, setTimer, clearTimer, now: () => clock });
-	fireTimers();
-	check("focus retries while the terminal is still connecting", pending.size === 1 && late.doc.activeElement === null, pending.size);
-	late.screen.querySelector = (sel) => (sel === ".xterm" ? { querySelector: () => late.textarea } : null);
-	clock = 240; fireTimers();
-	check("focus lands as soon as the xterm mounts and stops retrying", late.doc.activeElement === late.textarea && pending.size === 0, pending.size);
-	cancelLate();
-	const never = makeScreen({ withXterm: false });
-	const cancelNever = scheduleTerminalFocus({ doc: never.doc, setTimer, clearTimer, now: () => clock });
-	for (let i = 0; i < 40 && pending.size > 0; i++) { clock += 120; fireTimers(); }
-	check("focus retries stop at the deadline instead of polling forever", pending.size === 0 && clock >= 3000, clock);
-	cancelNever();
-	const cancelled = makeScreen();
-	const cancelIt = scheduleTerminalFocus({ doc: cancelled.doc, setTimer, clearTimer, now: () => clock });
-	cancelIt(); fireTimers();
-	check("cancelling the handoff prevents any later focus grab", cancelled.doc.activeElement === null && pending.size === 0, null);
-
-	// Opening through the entry schedules the handoff (real timers stubbed out).
-	const openGlobals = { setTimeout: globalThis.setTimeout, clearTimeout: globalThis.clearTimeout, document: globalThis.document };
-	const scheduled = [];
-	globalThis.setTimeout = (fn, ms) => { scheduled.push(ms); return scheduled.length; };
-	globalThis.clearTimeout = () => {};
-	try {
-		const opens = [];
-		const entryDoc = makeScreen();
-		globalThis.document = entryDoc.doc;
-		const opening = createTerminalEntry({ sidebarRight: { mounted: { getSnapshot: () => "s1" }, openTab: (kind, opts) => opens.push([kind, opts]) }, sidebarRightTabs: fakeRegistry });
-		check("successful terminal open schedules the keyboard handoff", opening.open().ok === true && scheduled.length === 1, scheduled);
-		scheduled.length = 0;
-		createTerminalEntry({ sidebarRight: { mounted: { getSnapshot: () => undefined }, openTab: () => {} }, sidebarRightTabs: fakeRegistry }).open();
-		check("failed opens never schedule a focus grab", scheduled.length === 0, scheduled);
-	} finally { Object.assign(globalThis, openGlobals); }
-
 	// Dismiss layers must not steal Escape or focus from a focused host terminal.
 	const termDismissListeners = new Map();
 	const termLayerDoc = {
@@ -2849,97 +2793,6 @@ check("docAction reloads clean drafts, flags dirty ones, ignores others", docAct
 		check("visible tabs still focus the editor on reveal jumps", codeFocusCalls === 1, codeFocusCalls);
 		renderHidden.unmount();
 	} finally { Object.assign(globalThis, hiddenGlobals); }
-
-	// Terminal refresh guard: repay the host's dropped repaints. The emulator
-	// buffer is right (the command runs), only the paint is stale, so the heal
-	// is one `blur` on the xterm textarea — DomRenderer.handleBlur repaints
-	// every row — with the keyboard handed straight back when it had it.
-	const { refreshHostTerminalScreen, installTerminalRefreshGuard } = await import("./src/client/terminal.js");
-	const FakeFocusEvent = class { constructor(type) { this.type = type; } };
-	const makeGuardScreen = ({ connected = true, hidden = false, withTa = true } = {}) => {
-		const events = [];
-		const textarea = {
-			focused: 0,
-			dispatchEvent(ev) { events.push(ev.type); return true; },
-			focus() { textarea.focused++; },
-		};
-		const screen = {
-			isConnected: connected,
-			closest: (sel) => (hidden && /aria-hidden|hidden|inert/.test(sel) ? {} : null),
-			querySelector: (sel) => (sel === ".xterm textarea" && withTa ? textarea : null),
-		};
-		return { screen, textarea, events };
-	};
-	const gLive = makeGuardScreen();
-	check("terminal repaint dispatches blur on a live screen", refreshHostTerminalScreen(gLive.screen, { doc: { activeElement: null }, FE: FakeFocusEvent }) === true && gLive.events.join() === "blur", gLive.events);
-	check("terminal repaint leaves an unfocused terminal unfocused", gLive.textarea.focused === 0, gLive.textarea.focused);
-	const gFocused = makeGuardScreen();
-	refreshHostTerminalScreen(gFocused.screen, { doc: { activeElement: gFocused.textarea }, FE: FakeFocusEvent });
-	check("terminal repaint hands the keyboard straight back", gFocused.events.join() === "blur" && gFocused.textarea.focused === 1, [gFocused.events, gFocused.textarea.focused]);
-	const gHidden = makeGuardScreen({ hidden: true });
-	check("terminal repaint skips hidden screens", refreshHostTerminalScreen(gHidden.screen, { FE: FakeFocusEvent }) === false && gHidden.events.length === 0, null);
-	const gDetached = makeGuardScreen({ connected: false });
-	check("terminal repaint skips detached screens", refreshHostTerminalScreen(gDetached.screen, { FE: FakeFocusEvent }) === false, null);
-	const gNoTa = makeGuardScreen({ withTa: false });
-	check("terminal repaint skips screens without an xterm", refreshHostTerminalScreen(gNoTa.screen, { FE: FakeFocusEvent }) === false, null);
-	check("terminal repaint survives a missing screen", refreshHostTerminalScreen(null, { FE: FakeFocusEvent }) === false, null);
-	const gFallback = makeGuardScreen();
-	check("terminal repaint falls back to a plain Event without FocusEvent", refreshHostTerminalScreen(gFallback.screen, { FE: undefined }) === true && gFallback.events.join() === "blur", gFallback.events);
-
-	// Guard lifecycle: only a real false→true transition repaints; a burst
-	// coalesces into one timer; screens mounted later join the observation.
-	{
-		const guardTimers = new Map(); let guardNextId = 1;
-		const gSetTimer = (fn) => { const id = guardNextId++; guardTimers.set(id, fn); return id; };
-		const gClearTimer = (id) => guardTimers.delete(id);
-		const fireGuardTimers = () => { for (const [id, fn] of [...guardTimers]) { guardTimers.delete(id); fn(); } };
-		let ioCallback = null; const ioObserved = [];
-		class FakeIO { constructor(cb) { ioCallback = cb; } observe(el) { ioObserved.push(el); } disconnect() { ioObserved.length = 0; } }
-		let moCallback = null;
-		class FakeMO { constructor(cb) { moCallback = cb; } observe() {} disconnect() { moCallback = null; } }
-		const gScreenA = makeGuardScreen();
-		const gScreenB = makeGuardScreen();
-		const gDoc = {
-			body: {},
-			activeElement: null,
-			querySelectorAll: (sel) => (sel === "[data-sidebar-terminal]" ? [gScreenA.screen, gScreenB.screen] : []),
-		};
-		const savedFO = globalThis.FocusEvent;
-		globalThis.FocusEvent = FakeFocusEvent;
-		try {
-			const dispose = installTerminalRefreshGuard({ doc: gDoc, setTimer: gSetTimer, clearTimer: gClearTimer, IO: FakeIO, MO: FakeMO });
-			check("guard observes the terminal screens present at install", ioObserved.length === 2, ioObserved.length);
-			// The first report is a screen's current state, not a transition: the
-			// terminal just mounted and nothing was dropped yet.
-			ioCallback([{ isIntersecting: true, target: gScreenA.screen }, { isIntersecting: true, target: gScreenB.screen }]);
-			check("guard ignores the initial visible report", guardTimers.size === 0 && gScreenA.events.length === 0, guardTimers.size);
-			// Hidden then revealed: the dock slide-in / tab switch that drops paints.
-			ioCallback([{ isIntersecting: false, target: gScreenA.screen }, { isIntersecting: false, target: gScreenB.screen }]);
-			ioCallback([{ isIntersecting: true, target: gScreenA.screen }, { isIntersecting: true, target: gScreenB.screen }]);
-			ioCallback([{ isIntersecting: true, target: gScreenA.screen }]);
-			check("guard coalesces a re-entry burst into one timer", guardTimers.size === 1, guardTimers.size);
-			fireGuardTimers();
-			check("guard repaints every screen that re-entered", gScreenA.events.join() === "blur" && gScreenB.events.join() === "blur", [gScreenA.events, gScreenB.events]);
-			gScreenA.events.length = 0; gScreenB.events.length = 0;
-			ioCallback([{ isIntersecting: false, target: gScreenA.screen }]);
-			check("guard schedules nothing for an off-viewport report", guardTimers.size === 0 && gScreenA.events.length === 0, null);
-			// A screen mounted after install joins the observation.
-			const gScreenC = makeGuardScreen();
-			gDoc.querySelectorAll = () => [gScreenA.screen, gScreenB.screen, gScreenC.screen];
-			moCallback();
-			check("guard observes terminals mounted after install", ioObserved.includes(gScreenC.screen), ioObserved.length);
-			// Focused terminal keeps the keyboard across the repaint.
-			gDoc.activeElement = gScreenA.textarea;
-			ioCallback([{ isIntersecting: false, target: gScreenA.screen }]);
-			ioCallback([{ isIntersecting: true, target: gScreenA.screen }]);
-			fireGuardTimers();
-			check("guard repaints a focused terminal without losing the caret", gScreenA.events.join() === "blur" && gScreenA.textarea.focused === 1, [gScreenA.events, gScreenA.textarea.focused]);
-			dispose();
-			check("guard disposer clears timers and observers", guardTimers.size === 0 && ioObserved.length === 0 && moCallback === null, null);
-		} finally {
-			if (savedFO === undefined) delete globalThis.FocusEvent; else globalThis.FocusEvent = savedFO;
-		}
-	}
 }
 
 // --- hover tooltip + VS Code click model -----------------------------------------------
@@ -3140,6 +2993,457 @@ check("docAction reloads clean drafts, flags dirty ones, ignores others", docAct
 	check("truncateCell short passthrough", truncateCell("hello") === "hello", null);
 	check("truncateCell long truncates with ellipsis", truncateCell("x".repeat(200), 10) === "x".repeat(9) + "…", truncateCell("x".repeat(200), 10));
 	check("truncateCell null → NULL", truncateCell(null) === "NULL", null);
+}
+
+// --- Built-in terminal: emulator, key encoding, renderer and tab registration ----------
+{
+	const { createScreen } = await import("./src/client/vt/screen.js");
+	const { cellWidth } = await import("./src/client/vt/width.js");
+	const { keyToBytes, pasteToBytes } = await import("./src/client/vt/keys.js");
+	const { rowHtml, colorCss, palette256 } = await import("./src/client/vt/render.js");
+	const { applyRenderFrame } = await import("./src/client/vt/body.js");
+	const { terminalDefinition, canInstallTerminalTab, installTerminalTab, TERM_TAB_KIND, TERM_TAB_ID } = await import("./src/client/termtab.js");
+	const vtRows = (screen) => screen.viewport().map((line) => line.cells.map((cell) => (cell ? cell.c : " ")).join("").replace(/\s+$/u, ""));
+	const vtScreen = (opts) => createScreen(opts);
+
+	check("cell width: ASCII 1, CJK 2, combining 0", cellWidth(0x41) === 1 && cellWidth(0x4e2d) === 2 && cellWidth(0x0301) === 0, [cellWidth(0x41), cellWidth(0x4e2d), cellWidth(0x0301)]);
+	check("cell width: emoji and full-width forms are wide", cellWidth(0x1f600) === 2 && cellWidth(0xff21) === 2, [cellWidth(0x1f600), cellWidth(0xff21)]);
+	check("cell width: a lone surrogate still advances the cursor", cellWidth(0xd800) === 1, cellWidth(0xd800));
+
+	{ // text, control characters, wrapping
+		const s = vtScreen({ cols: 10, rows: 3 });
+		s.write("hello\r\nworld");
+		check("terminal prints text and honours CR LF", vtRows(s)[0] === "hello" && vtRows(s)[1] === "world", vtRows(s));
+		const w = vtScreen({ cols: 5, rows: 3 });
+		w.write("abcdefg");
+		check("terminal wraps at the column count and marks the row", vtRows(w)[0] === "abcde" && vtRows(w)[1] === "fg" && w.viewport()[0].wrapped === true, vtRows(w));
+	}
+	{ // the reason this terminal exists: backspace erases
+		const s = vtScreen({ cols: 40, rows: 3 });
+		s.write("└ git commit");
+		for (let i = 0; i < 6; i++) s.write("\b\x1b[K");
+		check("BS + erase-to-end removes the deleted word completely", vtRows(s)[0] === "└ git", vtRows(s)[0]);
+	}
+	{ // scrolling and scrollback
+		const s = vtScreen({ cols: 5, rows: 2, scrollback: 10 });
+		s.write("1\r\n2\r\n3\r\n4");
+		check("terminal scrolls and keeps scrollback", vtRows(s)[0] === "3" && vtRows(s)[1] === "4" && s.scrollbackRows === 2, [vtRows(s), s.scrollbackRows]);
+		const up = s.viewportAt(1).map((line) => line.cells.map((cell) => (cell ? cell.c : " ")).join("").replace(/\s+$/u, ""));
+		check("scrollback is addressable for the painter", up[0] === "2", up);
+	}
+	{ // colours
+		const s = vtScreen({ cols: 20, rows: 2 });
+		s.write("\x1b[1;31mA\x1b[0m\x1b[38;5;200mB\x1b[38;2;1;2;3mC");
+		const cells = s.viewport()[0].cells;
+		check("SGR bold/palette/default stored on cells", cells[0].fl === 1 && cells[0].fg === 1 && cells[1].fg === 200, [cells[0], cells[1]]);
+		check("truecolour stored above the palette range", cells[2].fg === ((1 << 24) | 1 << 16 | 2 << 8 | 3), cells[2].fg);
+	}
+	{ // cursor addressing and erasing
+		const s = vtScreen({ cols: 10, rows: 5 });
+		s.write("\x1b[3;4HX");
+		check("CUP addresses a row and column", s.viewport()[2].cells[3].c === "X", vtRows(s));
+		const ed = vtScreen({ cols: 10, rows: 3 });
+		ed.write("aaa\r\nbbb\x1b[2J");
+		check("ED 2 clears every row", vtRows(ed).every((row) => row === ""), vtRows(ed));
+		const el = vtScreen({ cols: 10, rows: 2 });
+		el.write("abcdef\x1b[1;4H\x1b[K");
+		check("EL 0 erases from the cursor rightwards", vtRows(el)[0] === "abc", vtRows(el)[0]);
+		const dch = vtScreen({ cols: 10, rows: 2 });
+		dch.write("abcdef\x1b[1;3H\x1b[2P");
+		check("DCH pulls the tail left", vtRows(dch)[0] === "abef", vtRows(dch)[0]);
+		const ich = vtScreen({ cols: 10, rows: 2 });
+		ich.write("abc\x1b[1;1H\x1b[2@");
+		check("ICH pushes the tail right", vtRows(ich)[0] === "  abc", vtRows(ich)[0]);
+	}
+	{ // alternate screen
+		const s = vtScreen({ cols: 10, rows: 3 });
+		s.write("primary\x1b[?1049hALT");
+		check("alternate screen replaces the viewport", vtRows(s)[0] === "ALT" && s.alt === true, vtRows(s)[0]);
+		s.write("\x1b[?1049l");
+		check("leaving the alternate screen restores the primary", vtRows(s)[0] === "primary" && s.alt === false, vtRows(s)[0]);
+	}
+	{ // wide glyphs and combining marks
+		const s = vtScreen({ cols: 10, rows: 2 });
+		s.write("中a");
+		const cells = s.viewport()[0].cells;
+		check("a wide glyph occupies two cells", cells[0].c === "中" && cells[1].w === 0 && cells[2].c === "a" && s.cursor.x === 3, [cells[0], cells[1], s.cursor.x]);
+		const c = vtScreen({ cols: 10, rows: 2 });
+		c.write("e\u0301x");
+		check("a combining mark joins the previous cell", c.viewport()[0].cells[0].c === "e\u0301" && c.cursor.x === 2, [c.viewport()[0].cells[0], c.cursor.x]);
+	}
+	{ // sequences split across frames, snapshot replay, charsets, resize
+		const s = vtScreen({ cols: 10, rows: 2 });
+		s.write("\x1b");
+		s.write("[2;3HZ");
+		check("a sequence split across frames still applies", vtRows(s)[1].startsWith("  Z"), vtRows(s));
+		const osc = vtScreen({ cols: 10, rows: 2 });
+		osc.write("\x1b]0;my tit");
+		osc.write("le\u0007ok");
+		check("an OSC title split across frames is joined", osc.title === "my title" && vtRows(osc)[0] === "ok", [osc.title, vtRows(osc)]);
+		const snap = vtScreen({ cols: 20, rows: 4 });
+		snap.write("\x1b[0m\x1b[1;32muser@host\x1b[0m:~$ ls\r\n\x1b[0mfile.txt\r\n");
+		check("a serialised host snapshot replays into rows", vtRows(snap)[0] === "user@host:~$ ls" && vtRows(snap)[1] === "file.txt", vtRows(snap));
+		const gfx = vtScreen({ cols: 10, rows: 2 });
+		gfx.write("\x1b(0lqk\x1b(B");
+		check("DEC graphics map to box drawing", vtRows(gfx)[0] === "┌─┐", vtRows(gfx)[0]);
+		const resized = vtScreen({ cols: 10, rows: 3 });
+		resized.write("hello");
+		check("resize reports a change and keeps the content", resized.resize(20, 5) === true && vtRows(resized)[0] === "hello" && resized.resize(20, 5) === false, vtRows(resized)[0]);
+	}
+
+	{ // key encoding
+		const plain = (init) => keyToBytes(init, { appCursor: false });
+		const app = (init) => keyToBytes(init, { appCursor: true });
+		check("arrows use CSI normally and SS3 in application cursor mode", plain({ key: "ArrowUp" }) === "\x1b[A" && app({ key: "ArrowUp" }) === "\x1bOA", [plain({ key: "ArrowUp" }), app({ key: "ArrowUp" })]);
+		check("modified arrows carry the modifier parameter", plain({ key: "ArrowLeft", altKey: true }) === "\x1b[1;3D" && plain({ key: "ArrowRight", ctrlKey: true }) === "\x1b[1;5C", [plain({ key: "ArrowLeft", altKey: true }), plain({ key: "ArrowRight", ctrlKey: true })]);
+		check("Ctrl+letter becomes a control byte", plain({ key: "c", ctrlKey: true }) === "\x03" && plain({ key: "d", ctrlKey: true }) === "\x04" && plain({ key: "z", ctrlKey: true }) === "\x1a", null);
+		check("Ctrl+[ is Escape and Ctrl+space is NUL", plain({ key: "[", ctrlKey: true }) === "\x1b" && plain({ key: " ", ctrlKey: true }) === "\x00", null);
+		check("editing keys keep their VT forms", plain({ key: "Backspace" }) === "\x7f" && plain({ key: "Delete" }) === "\x1b[3~" && plain({ key: "Enter" }) === "\r" && plain({ key: "Tab" }) === "\t" && plain({ key: "Tab", shiftKey: true }) === "\x1b[Z", null);
+		check("function keys use SS3 and tilde forms", plain({ key: "F1" }) === "\x1bOP" && plain({ key: "F5" }) === "\x1b[15~" && plain({ key: "F12" }) === "\x1b[24~", null);
+		check("printable keys are left to the textarea for IME", plain({ key: "a" }) === null && plain({ key: "中" }) === null && plain({ key: "a", metaKey: true }) === null, null);
+		check("paste normalises newlines and honours bracketed mode", pasteToBytes("a\nb", true) === "\x1b[200~a\rb\x1b[201~" && pasteToBytes("a\r\nb", false) === "a\rb" && pasteToBytes("", true) === "", null);
+	}
+
+	{ // renderer: row HTML and colours
+		const line = { cells: [ { c: "a", fg: 1, bg: -1, fl: 0, w: 1 }, { c: "b", fg: 1, bg: -1, fl: 0, w: 1 }, undefined, undefined ] };
+		const html = rowHtml(line, { fg: "#fff", bg: "#000" });
+		check("a row coalesces equal attributes into one span", (html.match(/<span/gu) ?? []).length === 1 && html.includes(">ab<"), html);
+		check("trailing blanks never paint a background", !/>\s+</u.test(html) && !html.trimEnd().endsWith(" "), html);
+		const inverse = rowHtml({ cells: [{ c: "x", fg: 2, bg: 4, fl: 32, w: 1 }] }, { fg: "#fff", bg: "#000" });
+		check("inverse video swaps foreground and background", inverse.includes("background:#00cd00") && inverse.includes("color:#0000ee"), inverse);
+		check("row HTML escapes markup characters", rowHtml({ cells: [{ c: "<", fg: -1, bg: -1, fl: 0, w: 1 }] }, { fg: "#fff", bg: "#000" }).includes("&lt;"), null);
+		check("palette has 256 entries with the ANSI base", palette256().length === 256 && palette256()[1] === "#cd0000", palette256().length);
+		check("colours resolve palette, truecolor and defaults", colorCss(196, "#fff") === "#ff0000" && colorCss((1 << 24) | 0x102030, "#fff") === "#102030" && colorCss(-1, "#abcdef") === "#abcdef", [colorCss(196, "#fff"), colorCss(-1, "#abc")]);
+	}
+
+	{ // frame application
+		const s = vtScreen({ cols: 20, rows: 4 });
+		s.write("stale");
+		const applied = applyRenderFrame(s, { revision: 1, frame: { type: "snapshot", info: { cols: 20, rows: 4 }, screen: "fresh" } });
+		check("a snapshot resets the screen and replays it", applied && vtRows(s)[0] === "fresh", vtRows(s)[0]);
+		applyRenderFrame(s, { revision: 2, frame: { type: "output", data: " +more" } });
+		check("an output frame appends at the cursor", vtRows(s)[0] === "fresh +more", vtRows(s)[0]);
+		check("an unknown frame type changes nothing", applyRenderFrame(s, { revision: 3, frame: { type: "ack" } }) === false, null);
+		const resized = vtScreen({ cols: 20, rows: 4 });
+		applyRenderFrame(resized, { revision: 1, frame: { type: "snapshot", info: { cols: 10, rows: 2 }, screen: "x" } });
+		check("a snapshot adopts the Host grid size", resized.cols === 10 && resized.rows === 2, [resized.cols, resized.rows]);
+	}
+
+	{ // tab registration and process lifecycle
+		const t = (key) => key;
+		const def = terminalDefinition(t);
+		check("terminal tab is multi-instance and kept mounted", def.kind === TERM_TAB_KIND && def.multiple === true && def.keepMounted === true && def.title() === "terminal.title", def);
+		check("a client without the terminal service cannot install", canInstallTerminalTab({}) === false && canInstallTerminalTab({ webTerminals: { view() {} } }) === false, null);
+		const registered = [];
+		const slotRegistrations = [];
+		const closeHandlers = new Map();
+		const holds = [];
+		let opened = null;
+		const tabListeners = new Set();
+		const ctx = {
+			webTerminals: {
+				view(sessionId, key, contentId, terminalId, shellPath) {
+					opened = { sessionId, key, contentId, terminalId, shellPath };
+					return { state: { phase: "idle" }, acknowledge() {}, resize() {}, write() {}, mount() {} };
+				},
+				retainTabs(tabs) { holds.push(tabs.map((tab) => `${tab.kind}:${tab.tabId ?? tab.id}`)); },
+				close(sessionId, key) { opened = { closed: `${sessionId}/${key}` }; },
+			},
+			sidebarRightTabs: { register(definition) { registered.push(definition); return () => {}; } },
+			slots: {
+				inject(name, factory) { const dispose = factory(); slotRegistrations.push({ name, dispose }); return () => dispose?.(); },
+				register(options) { slotRegistrations.push({ options }); return () => {}; },
+			},
+			sidebarRight: {
+				registerCloseHandler(kind, handler) { closeHandlers.set(kind, handler); return () => closeHandlers.delete(kind); },
+				tabDomain: { occurrence: (sessionId, { id }) => ({ navigation: { getSnapshot: () => ({ address: `addr:${sessionId}:${id}`, params: undefined }) } }) },
+				openTabs: {
+					getSnapshot: () => [{ sessionId: "s1", tabId: "dock-1", contentId: "c1", kind: TERM_TAB_KIND }, { sessionId: "s1", tabId: "dock-2", contentId: "c2", kind: "terminal" }],
+					subscribe(listener) { tabListeners.add(listener); return () => tabListeners.delete(listener); },
+				},
+			},
+			effects: [],
+			effect(fn) { const cleanup = fn(); if (typeof cleanup === "function") ctx.effects.push(cleanup); return () => {}; },
+		};
+		check("the terminal tab installs when the service is present", canInstallTerminalTab(ctx) === true, null);
+		const dispose = installTerminalTab(ctx, t);
+		check("the terminal tab type is registered once", registered.length === 1 && registered[0].kind === TERM_TAB_KIND, registered.map((d) => d.kind));
+		check("the body and title seats are registered", slotRegistrations.filter((entry) => entry.options?.name?.startsWith("sidebar.right.pane.tab")).length === 2, slotRegistrations.length);
+		check("a close handler releases the terminal process", closeHandlers.has(TERM_TAB_KIND), [...closeHandlers.keys()]);
+		check("window holds cover both terminal kinds", holds.at(-1).join(",") === `${TERM_TAB_KIND}:dock-1,terminal:dock-2`, holds.at(-1));
+		const injected = slotRegistrations.find((entry) => entry.options?.inject)?.options.inject("s1");
+		const modelView = injected.view("dock-1");
+		check("the body resolves a view for its own tab", modelView.state.phase === "idle" && opened.sessionId === "s1" && opened.key === "dock-1" && opened.contentId === "addr:s1:dock-1", opened);
+		check("the body exposes the terminal state as a keyed hook", typeof injected.keyedHooks.terminal("dock-1") === "object", Object.keys(injected));
+		closeHandlers.get(TERM_TAB_KIND)("s1", { id: "dock-1", contentId: "c1" });
+		check("closing the tab closes the Host terminal", opened.closed === "s1/dock-1", opened);
+		tabListeners.forEach((listener) => listener());
+		check("hold changes are recomputed from the open tabs", holds.length >= 2, holds.length);
+		dispose();
+		// Cordis runs effect cleanups on plugin unload; the hold hand-back lives there.
+		for (const cleanup of ctx.effects) cleanup();
+		check("disposing hands the hold set back to the product's terminals", holds.at(-1).join(",") === "terminal:dock-2", holds.at(-1));
+	}
+}
+
+// --- Built-in terminal body: frames, input and teardown against a DOM shim --------
+{
+	class ShimEl {
+		constructor(tag) {
+			this.tagName = tag;
+			this.children = [];
+			this.style = {};
+			this.dataset = {};
+			this.attrs = {};
+			this.listeners = new Map();
+			this.className = "";
+			this._html = "";
+			this.textContent = "";
+			this.clientWidth = 640;
+			this.clientHeight = 216;
+		}
+		appendChild(child) { this.children.push(child); child.parent = this; return child; }
+		remove() { if (this.parent) this.parent.children = this.parent.children.filter((entry) => entry !== this); }
+		setAttribute(key, value) { this.attrs[key] = String(value); }
+		getAttribute(key) { return this.attrs[key] ?? null; }
+		removeAttribute(key) { delete this.attrs[key]; }
+		addEventListener(type, fn) { const list = this.listeners.get(type) ?? []; list.push(fn); this.listeners.set(type, list); }
+		removeEventListener(type, fn) { this.listeners.set(type, (this.listeners.get(type) ?? []).filter((other) => other !== fn)); }
+		dispatch(type, event) { for (const fn of this.listeners.get(type) ?? []) fn(event); }
+		getBoundingClientRect() { return { width: 78.3, height: 16, top: 0, left: 0 }; }
+		focus() { this.focused = true; }
+		querySelector() { return null; }
+		querySelectorAll() { return []; }
+		blur() {}
+		get classList() {
+			const self = this;
+			return {
+				add(name) { self.className = `${self.className} ${name}`.trim(); },
+				remove(name) { self.className = self.className.split(" ").filter((cls) => cls !== name).join(" "); },
+				contains(name) { return self.className.split(" ").includes(name); },
+			};
+		}
+		set innerHTML(value) { this._html = String(value); }
+		get innerHTML() { return this._html; }
+	}
+
+	const bodyGlobals = { document: globalThis.document, requestAnimationFrame: globalThis.requestAnimationFrame, cancelAnimationFrame: globalThis.cancelAnimationFrame, ResizeObserver: globalThis.ResizeObserver, performance: globalThis.performance };
+	const frames = [];
+	globalThis.document = {
+		createElement(tag) { return new ShimEl(tag); },
+		defaultView: { getComputedStyle: () => ({ lineHeight: "16" }) },
+	};
+	globalThis.requestAnimationFrame = (fn) => { frames.push(fn); return frames.length; };
+	globalThis.cancelAnimationFrame = () => {};
+	globalThis.ResizeObserver = class { observe() {} disconnect() {} };
+	try {
+		const { TerminalBody } = await import("./src/client/vt/body.js");
+		const written = [];
+		const acks = [];
+		const state = { phase: "connected", writable: true, info: { cols: 80, rows: 24, state: "running" }, environment: { scrollback: 100 }, render: undefined };
+		const model = {
+			acknowledge(revision) { acks.push(revision); },
+			resize() {},
+			write(data, typed) { written.push([data, typed]); },
+			mount() { return () => {}; },
+		};
+		const draw = createHookRenderer(TerminalBody, {
+			useTabInfo: () => ({ tab: { id: "t1", visible: true } }),
+			useTerminal: () => state,
+			useTheme: (select) => select(null),
+			view: () => model,
+			t: (key) => key,
+		}, { effects: true });
+		const findHost = (node) => {
+			if (!node || typeof node !== "object") return null;
+			if (node.props?.className === "ce-term") return node;
+			for (const child of node.children ?? []) {
+				const found = findHost(child);
+				if (found) return found;
+			}
+			return null;
+		};
+		let tree = draw();
+		const hostProps = findHost(tree);
+		check("terminal body renders an engine host", Boolean(hostProps) && typeof hostProps.props.ref === "object", null);
+		const host = new ShimEl("div");
+		hostProps.props.ref.current = host;
+		draw.flushEffects();
+		check("the engine builds rows, a cursor, a measurer and a hidden input", host.children.length === 4 && host.children.some((child) => child.className === "ce-term-input"), host.children.map((child) => child.className));
+		const rowsEl = host.children.find((child) => child.className === "ce-term-rows");
+		const painted = () => (rowsEl?.children ?? []).map((child) => child.innerHTML);
+
+		state.render = { revision: 7, frame: { type: "output", data: "hello\r\nworld" } };
+		tree = draw();
+		draw.flushEffects();
+		for (const fn of frames.splice(0)) fn();
+		check("an output frame reaches the painted rows", painted()[0]?.includes("hello") && painted()[1]?.includes("world"), painted().slice(0, 2));
+		check("each frame is acknowledged to the Host", acks.at(-1) === 7, acks);
+		state.render = { revision: 8, frame: { type: "output", data: "\b\u001b[K\u001b[K\u001b[K\u001b[K\u001b[K" } };
+		tree = draw();
+		draw.flushEffects();
+		for (const fn of frames.splice(0)) fn();
+		check("erasing repaints the row without the deleted text", !painted()[1]?.includes("world"), painted()[1]);
+
+		const input = host.children.find((child) => child.className === "ce-term-input");
+		input.dispatch("keydown", { key: "ArrowUp", preventDefault() {} });
+		input.dispatch("keydown", { key: "c", ctrlKey: true, preventDefault() {} });
+		check("arrow and control keys are sent as VT bytes", written.some(([data]) => data === "\u001b[A") && written.some(([data]) => data === "\u0003"), written);
+		input.value = "中";
+		input.dispatch("input", {});
+		check("composed characters come from the textarea input event", written.some(([data]) => data === "中") && input.value === "", written);
+		input.dispatch("paste", { clipboardData: { getData: () => "a\nb" }, preventDefault() {} });
+		check("a paste is newline-normalised before it reaches the shell", written.at(-1)[0] === "a\rb", written.at(-1));
+		check("a visible writable terminal takes keyboard focus", input.focused === true, input.focused);
+
+		draw.unmount();
+		check("unmount removes every engine element", host.children.length === 0, host.children.length);
+	} finally {
+		Object.assign(globalThis, bodyGlobals);
+	}
+}
+
+// --- RPC: .proto parsing, protobuf codec, panel helpers -------------------------------
+{
+	const { parseProto, listMethods } = await import("./lib/host/proto.js");
+	const { encodeMessage, decodeMessage, sampleMessage } = await import("./lib/host/protobuf.js");
+	const { parseTarget, STATUS_NAMES } = await import("./lib/host/grpc.js");
+	const { parseJsonText, methodArrows, groupMethods } = await import("./src/client/rpc.js");
+
+	const proto = `
+syntax = "proto3";
+package demo.v1;
+
+// A greeter.
+message HelloRequest {
+  string name = 1;
+  int32 age = 2;
+  repeated string tags = 3;
+  bool vip = 4;
+  map<string, int32> scores = 5;
+  Color color = 6;
+  Address address = 7;
+  repeated int32 lucky = 8;
+
+  message Address {
+    string city = 1;
+  }
+}
+
+enum Color { RED = 0; GREEN = 1; BLUE = 2; }
+
+service Greeter {
+  rpc SayHello (HelloRequest) returns (HelloReply);
+  rpc Stream (HelloRequest) returns (stream HelloReply);
+  rpc Upload (stream HelloRequest) returns (HelloReply);
+  rpc Chat (stream HelloRequest) returns (stream HelloReply);
+}
+
+message HelloReply { string message = 1; int32 count = 2; }
+`;
+	const schema = parseProto(proto);
+	check("proto parser reads the package", schema.package === "demo.v1", schema.package);
+	check("proto parser registers top-level and nested messages", Boolean(schema.messages["demo.v1.HelloRequest"]) && Boolean(schema.messages["demo.v1.HelloRequest.Address"]), Object.keys(schema.messages));
+	check("proto parser registers enums", schema.enums["demo.v1.Color"]?.values?.GREEN === 1, schema.enums["demo.v1.Color"]);
+	check("proto parser keeps field numbers and repeated flags", (() => {
+		const fields = schema.messages["demo.v1.HelloRequest"].fields;
+		return fields.name.number === 1 && fields.tags.repeated === true && fields.lucky.repeated === true && fields.scores.map === true;
+	})(), schema.messages["demo.v1.HelloRequest"].fields);
+	check("proto parser resolves a nested message field type", schema.messages["demo.v1.HelloRequest"].fields.address.type === "demo.v1.HelloRequest.Address", schema.messages["demo.v1.HelloRequest"].fields.address);
+
+	const methods = listMethods(schema);
+	check("method list carries full paths and stream flags", (() => {
+		const unary = methods.find((m) => m.name === "SayHello");
+		const bidi = methods.find((m) => m.name === "Chat");
+		const server = methods.find((m) => m.name === "Stream");
+		const client = methods.find((m) => m.name === "Upload");
+		return unary.path === "/demo.v1.Greeter/SayHello" && !unary.serverStreaming && !unary.clientStreaming
+			&& bidi.clientStreaming && bidi.serverStreaming
+			&& server.serverStreaming && !server.clientStreaming
+			&& client.clientStreaming && !client.serverStreaming;
+	})(), methods);
+
+	// Round-trip every scalar shape the schema carries.
+	const payload = {
+		name: "ada",
+		age: -7,
+		tags: ["x", "y"],
+		vip: true,
+		scores: { alpha: 1, beta: 2 },
+		color: "BLUE",
+		address: { city: "Paris" },
+		lucky: [1, 2, 300],
+	};
+	const encoded = encodeMessage(schema, "demo.v1.HelloRequest", payload);
+	const decoded = decodeMessage(schema, "demo.v1.HelloRequest", encoded);
+	check("protobuf round-trips strings, ints, bools and repeats", decoded.name === "ada" && decoded.age === -7 && decoded.vip === true && decoded.tags.join(",") === "x,y", decoded);
+	check("protobuf round-trips packed repeated scalars", decoded.lucky.join(",") === "1,2,300", decoded.lucky);
+	check("protobuf round-trips maps", decoded.scores?.alpha === 1 && decoded.scores?.beta === 2, decoded.scores);
+	check("protobuf round-trips nested messages", decoded.address?.city === "Paris", decoded.address);
+	check("protobuf encodes an enum name to its number and back", decoded.color === "BLUE", decoded.color);
+	check("protobuf skips an unknown trailing field instead of throwing", (() => {
+		// Field 99, varint 5: tag = 99<<3|0 = 792 → varint 0x98 0x06
+		const extra = Buffer.from([0x98, 0x06, 0x05]);
+		const withUnknown = Buffer.concat([encoded, extra]);
+		const out = decodeMessage(schema, "demo.v1.HelloRequest", withUnknown);
+		return out.name === "ada";
+	})(), null);
+	// A type declared in an imported file only becomes resolvable after the
+	// merge pass; the panel depends on it for every multi-file proto layout.
+	{
+		const { resolveSchemaTypes } = await import("./lib/host/proto.js");
+		const common = parseProto('syntax = "proto3"; package common; message Money { int64 cents = 1; }');
+		const main = parseProto('syntax = "proto3"; package shop; message Order { string id = 1; Money total = 2; }');
+		const merged = resolveSchemaTypes({ package: "shop", messages: { ...common.messages, ...main.messages }, enums: {}, services: {} });
+		check("cross-file field types resolve after the merge pass", merged.messages["shop.Order"].fields.total.type === "common.Money", merged.messages["shop.Order"].fields.total.type);
+	}
+
+	check("sampleMessage fills every field with its zero value", (() => {
+		const sample = sampleMessage(schema, "demo.v1.HelloReply");
+		return sample.message === "" && sample.count === 0;
+	})(), sampleMessage(schema, "demo.v1.HelloReply"));
+
+	// gRPC target parsing and status vocabulary.
+	check("parseTarget accepts grpc:// and grpcs://", (() => {
+		const a = parseTarget("grpc://localhost:50051");
+		const b = parseTarget("grpcs://api.example.test:443/svc");
+		return a.secure === false && a.authority === "localhost:50051" && b.secure === true && b.prefix === "/svc";
+	})(), null);
+	check("parseTarget rejects a non-gRPC scheme", (() => {
+		let threw = false;
+		try { parseTarget("http://localhost"); } catch { threw = true; }
+		return threw;
+	})(), null);
+	check("gRPC status names cover OK and UNAVAILABLE", STATUS_NAMES[0] === "OK" && STATUS_NAMES[14] === "UNAVAILABLE", STATUS_NAMES[14]);
+
+	// Panel helpers.
+	check("parseJsonText reports malformed JSON instead of throwing", (() => {
+		const ok = parseJsonText('{"a":1}');
+		const bad = parseJsonText("{oops");
+		return ok.value.a === 1 && ok.error === "" && bad.value === null && bad.error !== "";
+	})(), null);
+	check("parseJsonText treats an empty body as an empty object", parseJsonText("   ").value !== null, null);
+	check("methodArrows distinguishes the four streaming shapes", (() => {
+		return methodArrows({}) === "→" && methodArrows({ serverStreaming: true }) === "|→"
+			&& methodArrows({ clientStreaming: true }) === "→|" && methodArrows({ clientStreaming: true, serverStreaming: true }) === "↔";
+	})(), null);
+	check("groupMethods keeps declaration order inside each service", (() => {
+		const groups = groupMethods(methods);
+		return groups.length === 1 && groups[0].service === "demo.v1.Greeter" && groups[0].methods.length === 4;
+	})(), groupMethods(methods));
+}
+
+// --- DB panel helpers ------------------------------------------------------------------
+{
+	const { toCsv, tableSql, formatCell, truncateCell } = await import("./src/client/db.js");
+	check("toCsv quotes separators, quotes and newlines", toCsv(["a", "b"], [["x,y", 'he said "hi"'], ["line\nbreak", null]]) === 'a,b\n"x,y","he said ""hi"""\n"line\nbreak",', toCsv(["a", "b"], [["x,y", 'he said "hi"'], ["line\nbreak", null]]));
+	check("toCsv emits only the header for an empty result", toCsv(["a", "b"], []).split("\n").length === 1, null);
+	check("tableSql builds a paged ordered select", tableSql("users", { order: "id", dir: "desc", limit: 100, offset: 200, filter: "", columns: [] }).includes('ORDER BY "id" DESC LIMIT 100 OFFSET 200'), tableSql("users", { order: "id", dir: "desc", limit: 100, offset: 200, filter: "", columns: [] }));
+	check("tableSql escapes a double quote in the table name", tableSql('we"ird', { limit: 10, offset: 0, filter: "", columns: [] }).includes('"we""ird"'), null);
+	check("tableSql quotes identifiers with backticks for MySQL", tableSql("users", { driver: "mysql", order: "id", limit: 10, offset: 0, filter: "", columns: [] }) === "SELECT * FROM `users` ORDER BY `id` ASC LIMIT 10 OFFSET 0", tableSql("users", { driver: "mysql", order: "id", limit: 10, offset: 0, filter: "", columns: [] }));
+	check("tableSql adds a filter over the given columns", tableSql("t", { limit: 10, offset: 0, filter: "it's", columns: [{ name: "a" }, { name: "b" }] }).includes("it''s"), null);
+	check("formatCell distinguishes NULL from an empty string", formatCell(null) === "NULL" && formatCell("") === "", null);
+	check("truncateCell ellipsizes past the limit", truncateCell("x".repeat(200), 10) === `${"x".repeat(9)}…`, null);
 }
 
 // --- the generated bundle: registration + factory --------------------------------------

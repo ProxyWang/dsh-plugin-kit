@@ -16,6 +16,8 @@ const { ApiView } = await import("../src/client/apiclient.js");
 const { CodeBody } = await import("../src/client/code.js");
 const { TreePanel } = await import("../src/client/tree.js");
 const { SkillsView } = await import("../src/client/skills.js");
+const { DbView } = await import("../src/client/db.js");
+const { RpcView } = await import("../src/client/rpc.js");
 const { RequestFields } = await import("../src/client/requestfields.js");
 const { CSS } = await import("../src/client/styles.js");
 const { zh } = await import("../src/client/locale.js");
@@ -69,6 +71,65 @@ globalThis.fetch = async (route, options) => {
   case "fs.read": value = { kind: "text", content: code, mtimeMs: 1, size: code.length, truncated: false }; break;
   case "skills.list": value = { skills }; break;
   case "skills.read": value = { content: skillContent, path: body.path, truncated: false }; break;
+  case "db.drivers": value = [
+   { id: "sqlite", label: "SQLite", ready: true, note: "" },
+   { id: "mysql", label: "MySQL", ready: false, note: "mysql CLI not on PATH" },
+   { id: "postgres", label: "PostgreSQL", ready: false, note: "psql CLI not on PATH" },
+  ]; break;
+  case "db.connect": value = { id: "demo-conn", driver: "sqlite", label: "demo.sqlite" }; break;
+  case "db.schema": value = {
+   driver: "sqlite",
+   current: "main",
+   databases: [{ name: "main", tables: [
+    { name: "projects", kind: "table", indexes: [{ name: "projects_slug", unique: true, columns: ["slug"] }], columns: [
+     { name: "id", type: "INTEGER", nullable: false, primaryKey: true },
+     { name: "name", type: "TEXT", nullable: false, primaryKey: false },
+     { name: "slug", type: "TEXT", nullable: false, primaryKey: false },
+     { name: "status", type: "TEXT", nullable: true, primaryKey: false },
+     { name: "created_at", type: "TEXT", nullable: true, primaryKey: false },
+    ] },
+    { name: "members", kind: "table", indexes: [], columns: [
+     { name: "id", type: "INTEGER", nullable: false, primaryKey: true },
+     { name: "project_id", type: "INTEGER", nullable: false, primaryKey: false },
+     { name: "role", type: "TEXT", nullable: true, primaryKey: false },
+    ] },
+    { name: "active_projects", kind: "view", indexes: [], columns: [
+     { name: "id", type: "INTEGER", nullable: true, primaryKey: false },
+     { name: "name", type: "TEXT", nullable: true, primaryKey: false },
+    ] },
+   ] }],
+  }; break;
+  case "db.rows": value = {
+   columns: ["id", "name", "slug", "status", "created_at"],
+   rows: [
+    [1, "Demo Website", "demo-website", "active", "2026-08-02"],
+    [2, "Sample Service", "sample-service", "active", "2026-08-14"],
+    [3, "Legacy Import", "legacy-import", "archived", "2026-07-21"],
+    [4, "Design System", "design-system", "active", "2026-09-03"],
+    [5, "Docs Portal", "docs-portal", null, "2026-09-19"],
+   ],
+   total: 5, offset: 0, limit: 100,
+  }; break;
+  case "db.query": value = {
+   columns: ["status", "projects"],
+   rows: [["active", 3], ["archived", 1], ["(null)", 1]],
+   truncated: false, ms: 3,
+  }; break;
+  case "rpc.proto": value = {
+   files: ["proto/greeter.proto"],
+   package: "demo.v1",
+   methods: [
+    { service: "demo.v1.Greeter", name: "SayHello", path: "/demo.v1.Greeter/SayHello", request: "demo.v1.HelloRequest", response: "demo.v1.HelloReply", clientStreaming: false, serverStreaming: false, sample: { name: "", tags: [] } },
+    { service: "demo.v1.Greeter", name: "Watch", path: "/demo.v1.Greeter/Watch", request: "demo.v1.HelloRequest", response: "demo.v1.HelloReply", clientStreaming: false, serverStreaming: true, sample: { name: "", tags: [] } },
+    { service: "demo.v1.Greeter", name: "Chat", path: "/demo.v1.Greeter/Chat", request: "demo.v1.HelloRequest", response: "demo.v1.HelloReply", clientStreaming: true, serverStreaming: true, sample: { name: "", tags: [] } },
+   ],
+  }; break;
+  case "rpc.call": value = {
+   status: 0, statusName: "OK", message: "", ms: 12, truncated: false,
+   messages: [{ message: "hello ada", served: 1 }],
+   headers: { "content-type": "application/grpc" },
+   trailers: { "grpc-status": "0", "grpc-message": "" },
+  }; break;
   case "api.send": value = { status: 200, statusText: "OK", ms: 42, size: 174, headers: [["content-type", "application/json"]], text: JSON.stringify({ data: [{ id: 1, name: "Demo Website", status: "active" }, { id: 2, name: "Sample Service", status: "active" }], total: 2 }) }; break;
   default: throw new Error(`Fixture does not allow route: ${route}`);
  }
@@ -171,7 +232,12 @@ function serialize(node) {
   if (key === "style") value = Object.entries(value).map(([prop, val]) => `${prop.replace(/[A-Z]/g, (match) => "-" + match.toLowerCase())}:${typeof val === "number" && !["opacity", "zIndex", "flex", "fontWeight"].includes(prop) ? val + "px" : val}`).join(";");
   attrs += value === true ? ` ${key}` : ` ${key}="${escape(value)}"`;
  }
- return `<${type}${attrs}>${voids.has(type) ? "" : serialize(node.children) + `</${type}>`}`;
+ // A controlled <textarea> keeps its text in `value`, which an attribute
+ // cannot show; render it as content so the static preview matches the app.
+ const inner = type === "textarea" && node.props.value !== undefined
+ 	? escape(node.props.value)
+ 	: serialize(node.children);
+ return `<${type}${attrs}>${voids.has(type) ? "" : inner + `</${type}>`}`;
 }
 
 /** Minimal CDP client over the browser-level WebSocket (Node >= 22). */
@@ -227,7 +293,70 @@ async function launchChrome(chrome, profileDirectory) {
  return { child, endpoint };
 }
 
-const scenes = { workspace: await codePreview(), api: await apiPreview(), skills: await skillsPreview() };
+
+/** Database workbench: connect to the demo file, browse a table, run a query. */
+async function dbPreview() {
+ const draw = createHookRenderer(DbView, { sessionId: "demo-session", useSessions: (select) => select({ byId: { "demo-session": { cwd: root } } }), t }, { effects: true });
+ let tree = draw();
+ draw.flushEffects();
+ await tick();
+ tree = draw();
+
+ const button = (label) => pick(tree, (node) => node.type === "button" && String(node.children?.[0] ?? "").includes(label));
+
+ button(t("db.connect")).props.onClick();
+ tree = draw();
+ pick(tree, (node) => node.props.className === "ce-input" && node.props.placeholder === "/path/to/app.sqlite").props.onChange({ target: { value: "/demo/demo.sqlite" } });
+ tree = draw();
+ pick(tree, (node) => node.type === "button" && node.props.className?.includes("ce-sk-primary") && node.children?.[0] === t("db.connectAction")).props.onClick();
+ await tick();
+ draw.flushEffects();
+ tree = draw();
+
+ // Open the projects table, then run a GROUP BY in a second tab.
+ const row = pick(tree, (node) => node.props.className?.startsWith("cedb-table-row"));
+ row.props.onClick();
+ await tick();
+ draw.flushEffects();
+ tree = draw();
+
+ button(t("db.newQuery")).props.onClick();
+ tree = draw();
+ pick(tree, (node) => node.props.className === "cedb-sql").props.onChange({ target: { value: "SELECT status, COUNT(*) AS projects\nFROM projects\nGROUP BY status\nORDER BY projects DESC;" } });
+ tree = draw();
+ pick(tree, (node) => node.type === "button" && node.props.className?.includes("cedb-run")).props.onClick();
+ await tick();
+ draw.flushEffects();
+ tree = draw();
+ // The result grid is what makes this readable; the schema tree stays open
+ // beside it (the table row is expanded by the click above).
+ return tree;
+}
+
+/** RPC workbench: load the demo proto, pick a unary method, invoke it. */
+async function rpcPreview() {
+ const draw = createHookRenderer(RpcView, { sessionId: "demo-session", useSessions: (select) => select({ byId: { "demo-session": { cwd: root } } }), t }, { effects: true });
+ let tree = draw();
+ draw.flushEffects();
+ await tick();
+ tree = draw();
+ pick(tree, (node) => node.props.className === "ce-input cerpc-input" && node.props.placeholder === "grpc://host:50051").props.onChange({ target: { value: "grpc://api.example.test:443" } });
+ tree = draw();
+ pick(tree, (node) => node.props.className === "ce-input cerpc-input" && node.props.placeholder === "proto/hello.proto").props.onChange({ target: { value: "proto/greeter.proto" } });
+ tree = draw();
+ pick(tree, (node) => node.type === "button" && node.children?.[0] === t("rpc.load")).props.onClick();
+ await tick();
+ draw.flushEffects();
+ tree = draw();
+ pick(tree, (node) => node.props.className === "cedb-sql cerpc-json").props.onChange({ target: { value: '{\n  "name": "ada",\n  "tags": ["demo"]\n}' } });
+ tree = draw();
+ pick(tree, (node) => node.type === "button" && String(node.children?.[0] ?? "").includes(t("rpc.invoke"))).props.onClick();
+ await tick();
+ draw.flushEffects();
+ return draw();
+}
+
+const scenes = { workspace: await codePreview(), api: await apiPreview(), skills: await skillsPreview(), db: await dbPreview(), rpc: await rpcPreview() };
 // Fixture rendering stubs setTimeout; real timers are needed for CDP below.
 globalThis.setTimeout = nativeSetTimeout;
 if (typeof WebSocket !== "function") throw Error("This script needs Node >= 22 (global WebSocket). Run it with a newer Node, e.g. the DSH bundled runtime.");

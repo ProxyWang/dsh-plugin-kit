@@ -69,6 +69,8 @@ var API_TAB_ID = "dsh-plugin-kit/api";
 var API_TAB_KIND = "code-api";
 var DB_TAB_ID = "dsh-plugin-kit/db";
 var DB_TAB_KIND = "code-db";
+var RPC_TAB_ID = "dsh-plugin-kit/rpc";
+var RPC_TAB_KIND = "code-rpc";
 var ROW = 22;
 
 // src/client/locale.js
@@ -186,17 +188,27 @@ var zh = {
   "command.wrap": "切换自动换行",
   "command.toggleRail": "显示或隐藏侧栏",
   "command.refresh": "刷新工作区",
-  "command.terminal": "新建终端",
+  "command.terminal": "外部终端",
   "command.replace": "查找并替换",
   "command.replaceUnavailable": "当前视图不支持替换",
   "command.problems": "问题面板",
   "command.reopenTab": "重新打开已关闭的编辑器",
   "command.closeAllTabs": "关闭全部编辑器标签",
-  "toolbar.terminal": "新建终端",
-  "toolbar.terminalHint": "新建终端，有空间时在旁侧分栏打开；命令在当前会话目录运行",
+  "toolbar.terminal": "外部终端",
+  "terminal.title": "终端",
+  "terminal.guide": "插件自带的终端：DSH 提供 shell 与数据流，屏幕由插件渲染",
+  "terminal.connecting": "正在连接终端…",
+  "terminal.failed": "终端连接失败",
+  "toolbar.terminal": "终端",
+  "toolbar.terminalHint": "打开插件自带终端，在会话目录启动 shell",
+  "command.terminal": "终端（插件渲染）",
+  "command.externalTerminal": "在系统终端中打开",
+  "toolbar.externalTerminal": "外部终端",
+  "toolbar.externalTerminalHint": "在系统终端（iTerm/Terminal 等）中打开当前会话目录",
+  "toolbar.terminalHint": "在系统终端（iTerm/Terminal 等）中打开当前会话目录",
   "terminal.fail.noSession": "没有当前会话，无法打开终端",
-  "terminal.fail.unavailable": "当前环境没有提供终端",
-  "terminal.fail.failed": "打开终端失败",
+  "terminal.fail.unavailable": "当前环境无法打开系统终端",
+  "terminal.fail.failed": "打开系统终端失败",
   "toolbar.files": "资源管理器",
   "toolbar.changes": "变更",
   refresh: "刷新",
@@ -347,12 +359,12 @@ var zh = {
   "api.label": "接口",
   "db.label": "数据库",
   "dbGuide.title": "数据库",
-  "dbGuide.description": "本地 SQLite / MySQL / PostgreSQL 查询工作台",
+  "dbGuide.description": "本地 SQLite / MySQL / PostgreSQL 查询与表浏览工作台",
   "db.connect": "新建连接",
-  "db.disconnect": "断开",
+  "db.disconnect": "断开连接",
   "db.newConnection": "新建数据库连接",
   "db.driver": "驱动",
-  "db.path": "文件路径",
+  "db.path": "数据库文件",
   "db.host": "主机",
   "db.port": "端口",
   "db.user": "用户名",
@@ -360,14 +372,51 @@ var zh = {
   "db.database": "数据库",
   "db.connectAction": "连接",
   "db.connections": "连接",
-  "db.noConnections": "暂无连接，点击「新建连接」开始",
+  "db.noConnections": "暂无连接。点「新建连接」打开一个本地库：SQLite 只需要文件路径，MySQL / PostgreSQL 需要本机装有对应命令行客户端。",
+  "db.objects": "对象",
+  "db.search": "筛选表名…",
+  "db.notLoaded": "未加载",
   "db.tables": "表",
-  "db.noTables": "无表",
-  "db.sqlPlaceholder": "输入 SQL 语句… (⌘/Ctrl+Enter 执行)",
-  "db.run": "执行",
+  "db.views": "视图",
+  "db.columns": "列",
+  "db.rows": "行",
+  "db.affected": "行受影响",
   "db.truncated": "结果已截断",
-  "db.noRows": "无结果行",
-  "db.runHint": "输入 SQL 后按 ⌘/Ctrl+Enter 或点击「执行」",
+  "db.noRows": "没有数据",
+  "db.row": "行",
+  "db.newQuery": "新建查询",
+  "db.queryTab": "查询",
+  "db.sqlPlaceholder": "输入 SQL…（⌘/Ctrl+Enter 执行）",
+  "db.run": "执行",
+  "db.runHint": "执行后结果会显示在这里。",
+  "db.history": "历史",
+  "db.export": "导出 CSV",
+  "db.refresh": "刷新结构",
+  "db.filterRows": "在该表的任意列中搜索…",
+  "db.sqlForTable": "生成 SQL",
+  "db.noConnection": "请先选择一个连接",
+  "db.welcome": "选择一个表，或新建一个查询",
+  "db.welcomeHint": "左侧列出当前连接里的库、表和列。点击表名浏览数据（支持排序、筛选与分页），双击表名直接生成一条 SELECT。",
+  "rpc.label": "RPC",
+  "rpcGuide.title": "RPC 调试",
+  "rpcGuide.description": "用工作区里的 .proto 调用 gRPC 服务（含流式）",
+  "rpc.address": "服务地址",
+  "rpc.proto": ".proto 文件",
+  "rpc.load": "加载",
+  "rpc.protoRequired": "请先填写 .proto 路径",
+  "rpc.noMethods": "还没有解析出方法。填写 .proto 路径后点「加载」。",
+  "rpc.request": "请求消息",
+  "rpc.response": "响应",
+  "rpc.metadata": "元数据",
+  "rpc.noMetadata": "没有元数据。点 ＋ 添加（如 authorization）。",
+  "rpc.messages": "条消息",
+  "rpc.invoke": "调用",
+  "rpc.timeout": "超时",
+  "rpc.insecureTls": "跳过证书校验",
+  "rpc.trailers": "Trailers",
+  "rpc.emptyResponse": "调用成功，但没有返回消息",
+  "rpc.welcome": "选择一个方法并发起调用",
+  "rpc.welcomeHint": "填写 grpc:// 或 grpcs:// 地址与工作区内的 .proto 路径，加载后从左侧选择方法。请求体是该消息的 JSON 形式，⌘/Ctrl+Enter 直接调用。",
   "apiGuide.title": "接口调试",
   "apiGuide.description": "curl 一键导入、编辑方法/URL/请求头/Body、发送并查看响应（Postman 基础能力）",
   "api.send": "发送",
@@ -826,17 +875,27 @@ var en = {
   "command.wrap": "Toggle Word Wrap",
   "command.toggleRail": "Toggle Side Panel",
   "command.refresh": "Refresh Workspace",
-  "command.terminal": "New Terminal",
+  "command.terminal": "External Terminal",
   "command.replace": "Find and Replace",
   "command.replaceUnavailable": "Replace is unavailable in the current view",
   "command.problems": "Toggle Problems",
   "command.reopenTab": "Reopen Closed Editor",
   "command.closeAllTabs": "Close All Editors",
-  "toolbar.terminal": "New Terminal",
-  "toolbar.terminalHint": "Open a new terminal, in a split pane beside the workspace when there is room; commands run in the session directory",
+  "toolbar.terminal": "External Terminal",
+  "terminal.title": "Terminal",
+  "terminal.guide": "The plugin’s own terminal: DSH runs the shell and the stream, the plugin paints the screen",
+  "terminal.connecting": "Connecting to the terminal…",
+  "terminal.failed": "The terminal could not connect",
+  "toolbar.terminal": "Terminal",
+  "toolbar.terminalHint": "Open the plugin’s terminal, running a shell in the session directory",
+  "command.terminal": "Terminal (plugin-rendered)",
+  "command.externalTerminal": "Open in System Terminal",
+  "toolbar.externalTerminal": "External Terminal",
+  "toolbar.externalTerminalHint": "Open the session directory in the system terminal (iTerm/Terminal, …)",
+  "toolbar.terminalHint": "Open the session directory in the system terminal (iTerm/Terminal, …)",
   "terminal.fail.noSession": "No session is on screen to open a terminal",
-  "terminal.fail.unavailable": "This environment provides no terminal",
-  "terminal.fail.failed": "Could not open the terminal",
+  "terminal.fail.unavailable": "This environment cannot open a system terminal",
+  "terminal.fail.failed": "Could not open the system terminal",
   "toolbar.files": "Explorer",
   "toolbar.changes": "Changes",
   refresh: "Refresh",
@@ -987,12 +1046,12 @@ var en = {
   "api.label": "API",
   "db.label": "Database",
   "dbGuide.title": "Database",
-  "dbGuide.description": "Local SQLite / MySQL / PostgreSQL query workbench",
+  "dbGuide.description": "Local SQLite / MySQL / PostgreSQL workbench: browse tables and run SQL",
   "db.connect": "New connection",
   "db.disconnect": "Disconnect",
   "db.newConnection": "New database connection",
   "db.driver": "Driver",
-  "db.path": "File path",
+  "db.path": "Database file",
   "db.host": "Host",
   "db.port": "Port",
   "db.user": "User",
@@ -1000,14 +1059,51 @@ var en = {
   "db.database": "Database",
   "db.connectAction": "Connect",
   "db.connections": "Connections",
-  "db.noConnections": 'No connections yet — click "New connection" to start',
-  "db.tables": "Tables",
-  "db.noTables": "No tables",
+  "db.noConnections": "No connections yet. Use “New connection”: SQLite needs only a file path; MySQL and PostgreSQL use the CLI client installed on this machine.",
+  "db.objects": "Objects",
+  "db.search": "Filter tables…",
+  "db.notLoaded": "not loaded",
+  "db.tables": "tables",
+  "db.views": "views",
+  "db.columns": "columns",
+  "db.rows": "rows",
+  "db.affected": "rows affected",
+  "db.truncated": "truncated",
+  "db.noRows": "No data",
+  "db.row": "row",
+  "db.newQuery": "New query",
+  "db.queryTab": "Query",
   "db.sqlPlaceholder": "Enter SQL… (⌘/Ctrl+Enter to run)",
   "db.run": "Run",
-  "db.truncated": "Results truncated",
-  "db.noRows": "No rows",
-  "db.runHint": "Enter SQL and press ⌘/Ctrl+Enter or click Run",
+  "db.runHint": "Results appear here after a statement runs.",
+  "db.history": "History",
+  "db.export": "Export CSV",
+  "db.refresh": "Reload schema",
+  "db.filterRows": "Search every column of this table…",
+  "db.sqlForTable": "Generate SQL",
+  "db.noConnection": "Pick a connection first",
+  "db.welcome": "Pick a table, or start a query",
+  "db.welcomeHint": "The rail lists databases, tables and columns. Click a table to browse it (sort, filter, page); double-click to generate a SELECT.",
+  "rpc.label": "RPC",
+  "rpcGuide.title": "RPC debugging",
+  "rpcGuide.description": "Call gRPC services from a workspace .proto (streaming included)",
+  "rpc.address": "Server address",
+  "rpc.proto": ".proto file",
+  "rpc.load": "Load",
+  "rpc.protoRequired": "Enter a .proto path first",
+  "rpc.noMethods": "No methods yet. Fill in the .proto path and press Load.",
+  "rpc.request": "Request message",
+  "rpc.response": "Response",
+  "rpc.metadata": "Metadata",
+  "rpc.noMetadata": "No metadata. Press + to add one (for example authorization).",
+  "rpc.messages": "messages",
+  "rpc.invoke": "Invoke",
+  "rpc.timeout": "Timeout",
+  "rpc.insecureTls": "Skip certificate check",
+  "rpc.trailers": "Trailers",
+  "rpc.emptyResponse": "The call succeeded but returned no message",
+  "rpc.welcome": "Pick a method and invoke it",
+  "rpc.welcomeHint": "Fill in a grpc:// or grpcs:// address and a workspace .proto path, then pick a method on the left. The body is that message as JSON; ⌘/Ctrl+Enter invokes.",
   "apiGuide.title": "API tester",
   "apiGuide.description": "One-click curl import, edit method/URL/headers/body, send and inspect responses (basic Postman)",
   "api.send": "Send",
@@ -1560,173 +1656,37 @@ var IconSearch = () => svg([h("circle", { key: "c", cx: 10.5, cy: 10.5, r: 6.5 }
 var IconTextSearch = () => svg([h("path", { key: "a", d: "M4 5h16" }), h("path", { key: "b", d: "M4 10h11" }), h("path", { key: "c2", d: "M4 15h8" }), h("path", { key: "d", d: "M18 14.5l2.5 2.5" })]);
 
 // src/client/terminal.js
-var TERMINAL_KIND = "terminal";
-var FOCUS_RETRY_MS = 120;
-var FOCUS_DEADLINE_MS = 3e3;
-function focusHostTerminal(doc = globalThis.document) {
-  try {
-    const screens = doc?.querySelectorAll?.("[data-sidebar-terminal]") ?? [];
-    for (let i = screens.length - 1; i >= 0; i--) {
-      const screen = screens[i];
-      if (screen?.isConnected === false) continue;
-      if (screen.closest?.('[aria-hidden="true"], [hidden], [inert]')) continue;
-      const xterm = screen.querySelector?.(".xterm");
-      if (!xterm) continue;
-      const textarea = xterm.querySelector?.("textarea");
-      if (!textarea || textarea.disabled) continue;
-      textarea.focus({ preventScroll: true });
-      return doc.activeElement === textarea;
-    }
-  } catch {
-  }
-  return false;
+var OPEN_DEBOUNCE_MS = 900;
+function externalTerminalAvailable(desktop = globalThis.dshDesktop) {
+  return Boolean(desktop);
 }
-function scheduleTerminalFocus({
-  doc = globalThis.document,
-  setTimer = (fn, ms) => setTimeout(fn, ms),
-  clearTimer = (id) => clearTimeout(id),
-  now = () => Date.now()
+function createTerminalEntry({
+  call = api,
+  desktop = globalThis.dshDesktop,
+  now = () => Date.now(),
+  debounceMs = OPEN_DEBOUNCE_MS
 } = {}) {
-  const deadline = now() + FOCUS_DEADLINE_MS;
-  let timer = null;
-  let done = false;
-  const attempt = () => {
-    timer = null;
-    if (done) return;
-    if (focusHostTerminal(doc)) {
-      done = true;
-      return;
-    }
-    if (now() >= deadline) {
-      done = true;
-      return;
-    }
-    timer = setTimer(attempt, FOCUS_RETRY_MS);
-  };
-  timer = setTimer(attempt, FOCUS_RETRY_MS);
-  return () => {
-    done = true;
-    if (timer !== null) clearTimer(timer);
-  };
-}
-var REPAINT_SETTLE_MS = 160;
-function refreshHostTerminalScreen(screen, { doc = globalThis.document, FE = globalThis.FocusEvent, Event = globalThis.Event } = {}) {
-  try {
-    if (!screen || screen.isConnected === false) return false;
-    if (screen.closest?.('[aria-hidden="true"], [hidden], [inert]')) return false;
-    const textarea = screen.querySelector?.(".xterm textarea");
-    if (!textarea) return false;
-    const Ctor = typeof FE === "function" ? FE : Event;
-    if (typeof Ctor !== "function") return false;
-    const hadFocus = doc?.activeElement === textarea;
-    textarea.dispatchEvent(new Ctor("blur"));
-    if (hadFocus) textarea.focus?.({ preventScroll: true });
-    return true;
-  } catch {
-    return false;
-  }
-}
-function installTerminalRefreshGuard({
-  doc = globalThis.document,
-  setTimer = (fn, ms) => setTimeout(fn, ms),
-  clearTimer = (id) => clearTimeout(id),
-  IO = globalThis.IntersectionObserver,
-  MO = globalThis.MutationObserver,
-  settleMs = REPAINT_SETTLE_MS
-} = {}) {
-  if (typeof doc?.querySelectorAll !== "function") return () => {
-  };
-  let timer = null;
-  const pending = /* @__PURE__ */ new Set();
-  const flush = () => {
-    timer = null;
-    for (const screen of pending) refreshHostTerminalScreen(screen, { doc });
-    pending.clear();
-  };
-  const schedule = (screen) => {
-    if (!screen) return;
-    pending.add(screen);
-    if (timer !== null) clearTimer(timer);
-    timer = setTimer(flush, settleMs);
-  };
-  const visibleScreens = () => {
-    try {
-      return [...doc.querySelectorAll("[data-sidebar-terminal]")].filter((s) => s?.isConnected !== false && !s.closest?.('[aria-hidden="true"], [hidden], [inert]'));
-    } catch {
-      return [];
-    }
-  };
-  const settled = /* @__PURE__ */ new WeakSet();
-  let io = null;
-  const observed = /* @__PURE__ */ new WeakSet();
-  const observeAll = () => {
-    if (!io) return;
-    for (const screen of visibleScreens()) {
-      if (observed.has(screen)) continue;
-      observed.add(screen);
-      io.observe(screen);
-    }
-  };
-  if (typeof IO === "function") {
-    io = new IO((entries) => {
-      for (const entry of entries) {
-        const target = entry.target;
-        if (!settled.has(target)) {
-          settled.add(target);
-          if (entry.isIntersecting) continue;
-        }
-        if (entry.isIntersecting) schedule(target);
-      }
-    }, { threshold: 0 });
-    observeAll();
-  }
-  let mo = null;
-  if (typeof MO === "function" && doc.body) {
-    mo = new MO(() => observeAll());
-    mo.observe(doc.body, { childList: true, subtree: true });
-  }
-  return () => {
-    if (timer !== null) clearTimer(timer);
-    timer = null;
-    pending.clear();
-    io?.disconnect();
-    mo?.disconnect();
-  };
-}
-function terminalKindRegistered(tabs) {
-  try {
-    const entries = typeof tabs?.entries === "function" ? tabs.entries() : [];
-    return (entries ?? []).some((def) => String(def?.kind ?? "") === TERMINAL_KIND);
-  } catch {
-    return false;
-  }
-}
-function createTerminalEntry({ sidebarRight, sidebarRightTabs } = {}) {
-  const available = () => Boolean(sidebarRight && sidebarRightTabs) && terminalKindRegistered(sidebarRightTabs);
-  const currentSession = () => {
-    try {
-      return sidebarRight?.mounted?.getSnapshot?.();
-    } catch {
-      return void 0;
-    }
-  };
-  const open = () => {
+  let openedAt = Number.NEGATIVE_INFINITY;
+  const available = () => externalTerminalAvailable(desktop);
+  const open = async (cwd) => {
     if (!available()) return { ok: false, reason: "unavailable" };
-    const sessionId = currentSession();
-    if (!sessionId) return { ok: false, reason: "noSession" };
+    if (typeof cwd !== "string" || cwd === "") return { ok: false, reason: "noSession" };
+    const at = now();
+    if (at - openedAt < debounceMs) return { ok: false, reason: "busy" };
+    openedAt = at;
     try {
-      sidebarRight.openTab(TERMINAL_KIND, { preferNewPane: true });
-    } catch {
-      return { ok: false, reason: "failed" };
+      const res = await call("terminal.open", { cwd });
+      if (res && res.ok) return { ok: true, value: res.value };
+      return { ok: false, reason: "failed", error: String(res?.error ?? "") };
+    } catch (error) {
+      return { ok: false, reason: "failed", error: String(error?.message ?? error) };
     }
-    scheduleTerminalFocus();
-    return { ok: true, sessionId };
   };
   return { available, open };
 }
 var inertTerminalEntry = {
   available: () => false,
-  open: () => ({ ok: false, reason: "unavailable" })
+  open: async () => ({ ok: false, reason: "unavailable" })
 };
 
 // src/client/dismiss.js
@@ -5936,8 +5896,9 @@ function addTabPath(list, path, cap = 15) {
   return next;
 }
 function CodeBody(props) {
-  const { useTabInfo, sessionId, useSessions, t, terminal } = props;
+  const { useTabInfo, sessionId, useSessions, t, terminal, openBuiltinTerminal, builtinTerminal } = props;
   const terminalEntry = terminal ?? inertTerminalEntry;
+  const builtinAvailable = () => Boolean(builtinTerminal?.()) && typeof openBuiltinTerminal === "function";
   const tabInfo = useTabInfo ? useTabInfo() : null;
   const tab = tabInfo?.tab;
   const cwd = useSessions ? useSessions((sessions) => sessionId ? sessions.byId[sessionId]?.cwd : void 0) : void 0;
@@ -7480,15 +7441,23 @@ function CodeBody(props) {
     }
     return best;
   }, [symbols, cursor]);
-  const openTerminal = useCallback(() => {
-    const res = terminalEntry.open();
+  const openBuiltin = useCallback(() => {
+    if (builtinAvailable() && openBuiltinTerminal()) {
+      say("");
+      return true;
+    }
+    return false;
+  }, [say, openBuiltinTerminal, builtinTerminal]);
+  const openTerminal = useCallback(async () => {
+    const res = await terminalEntry.open(cwd);
     if (res.ok) {
       say("");
       return;
     }
+    if (res.reason === "busy") return;
     const key = res.reason === "noSession" ? "terminal.fail.noSession" : res.reason === "unavailable" ? "terminal.fail.unavailable" : "terminal.fail.failed";
-    say(t(key), "error");
-  }, [say, t, terminalEntry]);
+    say(res.error ? `${t(key)}: ${res.error}` : t(key), "error");
+  }, [say, t, terminalEntry, cwd]);
   const commands = useMemo(() => [
     { id: "files", icon: "▱", label: t("command.files"), run: () => {
       setMode("files");
@@ -7550,8 +7519,11 @@ function CodeBody(props) {
       }
       say(t(next ? "editor.formatOn" : "editor.formatOff"));
     } },
-    ...terminalEntry.available() ? [{ id: "terminal", icon: "‣", label: t("command.terminal"), run: openTerminal }] : []
-  ], [t, refreshGit, openSearch, openPalette, toggleWrap, say, loadFile, dismissPanels, openTerminal, terminalEntry, editing, toggleProblems, reopenClosedTab, closeTabs, tabs, liveOn, cwd, formatOnSave, openCompare, openTasks]);
+    ...builtinAvailable() ? [{ id: "terminal", icon: "‣", label: t("command.terminal"), run: () => {
+      if (!openBuiltin()) void openTerminal();
+    } }] : [],
+    ...terminalEntry.available() ? [{ id: "terminal-external", icon: "↗", label: t("command.externalTerminal"), run: () => void openTerminal() }] : []
+  ], [t, refreshGit, openSearch, openPalette, toggleWrap, say, loadFile, dismissPanels, openTerminal, openBuiltin, terminalEntry, builtinTerminal, openBuiltinTerminal, editing, toggleProblems, reopenClosedTab, closeTabs, tabs, liveOn, cwd, formatOnSave, openCompare, openTasks]);
   const startRailDrag = useCallback((event) => {
     event.preventDefault();
     const startX = event.clientX;
@@ -7681,9 +7653,19 @@ function CodeBody(props) {
       h("span", { className: "ce-spacer" }),
       !railVisible ? h("button", { type: "button", className: "ce-tool", title: `${t("quickopen.placeholder")} (⌘P / Ctrl+P)`, onClick: () => palette ? closePalette() : openPalette() }, h(IconSearch)) : null,
       !railVisible ? h("button", { type: "button", className: "ce-tool ce-workspace-search", title: `${t(mode === "changes" ? "search.changesHint" : "search.workspaceHint")} (⇧⌘F / Ctrl+Shift+F)`, "aria-label": t(mode === "changes" ? "search.changesHint" : "search.workspaceHint"), onClick: openSearch }, h(IconTextSearch), h("span", null, t(mode === "changes" ? "search.changesAction" : "changes.searchWorkspace"))) : null,
-      // The host terminal sits with the tool icons: the command centre
-      // trigger already reads as ">_", which would double the glyph.
-      terminalEntry.available() ? h("button", { type: "button", className: "ce-tool", title: t("toolbar.terminalHint"), "aria-label": t("toolbar.terminal"), onClick: openTerminal }, h(IconTerminal)) : null,
+      // The terminal sits with the tool icons: the command centre trigger
+      // already reads as ">_", which would double the glyph. The built-in
+      // tab is preferred; the system terminal is the fallback and its own
+      // command entry.
+      builtinAvailable() || terminalEntry.available() ? h("button", {
+        type: "button",
+        className: "ce-tool",
+        title: builtinAvailable() ? t("toolbar.terminalHint") : t("toolbar.externalTerminalHint"),
+        "aria-label": builtinAvailable() ? t("toolbar.terminal") : t("toolbar.externalTerminal"),
+        onClick: () => {
+          if (!openBuiltin()) void openTerminal();
+        }
+      }, h(IconTerminal)) : null,
       h("button", { type: "button", className: "ce-tool", title: `${statusTitle}`, onClick: () => {
         refreshGit();
         setTreeKey((k) => k + 1);
@@ -8625,42 +8607,141 @@ var CSS2 = `
 .ce-edit-find-input{width:160px;height:24px;padding:0 6px;font-size:12px;background:var(--dsw-alias-bg-base,#181818);color:var(--dsw-alias-label-primary,#eee);border:.5px solid var(--dsw-alias-border-l1,#333);border-radius:4px;outline:none}
 .ce-edit-find-count{font-size:11px;color:var(--dsw-alias-label-tertiary,#889);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;min-width:40px;text-align:center}
 
-/* Database panel */
-.ceb-db-root{display:flex;flex-direction:column;height:100%;overflow:hidden}
-.ceb-db-toolbar{flex:none;display:flex;align-items:center;gap:8px;padding:6px 10px;border-bottom:.5px solid var(--dsw-alias-border-l1,#333);background:var(--dsw-alias-bg-layer-1,#1d2126)}
-.ceb-db-title{font-weight:600;font-size:13px;color:var(--dsw-alias-label-primary,#eee)}
-.ceb-db-conn{font-size:12px;color:var(--dsw-alias-label-secondary,#aab);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.ceb-db-connect{position:absolute;top:40px;left:10px;right:10px;z-index:10;background:var(--dsw-alias-bg-layer-1,#1d2126);border:.5px solid var(--dsw-alias-border-l2,#454a52);border-radius:8px;padding:12px;box-shadow:0 8px 24px rgba(0,0,0,.4);display:flex;flex-direction:column;gap:8px}
-.ceb-db-connect h3{margin:0;font-size:14px;color:var(--dsw-alias-label-primary,#eee)}
-.ceb-db-connect label{display:flex;flex-direction:column;gap:2px;font-size:12px;color:var(--dsw-alias-label-secondary,#aab)}
-.ceb-db-connect .ce-input,.ceb-db-connect .ce-sk-scope{width:100%}
-.ceb-db-connect-actions{display:flex;gap:6px;justify-content:flex-end;margin-top:4px}
-.ceb-db-body{flex:1;min-height:0;display:flex;overflow:hidden}
-.ceb-db-rail{flex:none;width:200px;border-right:.5px solid var(--dsw-alias-border-l1,#333);overflow-y:auto;padding:6px 0}
-.ceb-db-section{padding:4px 10px;font-size:11px;font-weight:600;color:var(--dsw-alias-label-tertiary,#777);text-transform:uppercase;letter-spacing:.5px}
-.ceb-db-empty{padding:4px 10px;font-size:12px;color:var(--dsw-alias-label-tertiary,#667)}
-.ceb-db-conn-row{display:flex;align-items:center;gap:6px;width:100%;padding:4px 10px;border:0;background:transparent;color:var(--dsw-alias-label-secondary,#ccc);font-size:12px;cursor:pointer;text-align:left}
-.ceb-db-conn-row:hover{background:var(--dsw-alias-interactive-bg-hover,#2a2e35)}
-.ceb-db-conn-active{background:var(--ce-accent-soft);color:var(--ce-fg)}
-.ceb-db-driver{font-size:10px;padding:1px 4px;border-radius:3px;background:var(--dsw-alias-bg-layer-2,#2a2e35);color:var(--dsw-alias-label-tertiary,#889)}
-.ceb-db-label{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.ceb-db-table{display:flex;align-items:center;justify-content:space-between;padding:2px 10px}
-.ceb-db-table-name{border:0;background:transparent;color:var(--dsw-alias-label-secondary,#ccc);font-size:12px;cursor:pointer;padding:2px 4px;border-radius:3px}
-.ceb-db-table-name:hover{background:var(--dsw-alias-interactive-bg-hover,#2a2e35)}
-.ceb-db-table-active{background:var(--ce-accent-soft);color:var(--ce-fg)}
-.ceb-db-col-count{font-size:10px;color:var(--dsw-alias-label-tertiary,#667)}
-.ceb-db-main{flex:1;min-width:0;display:flex;flex-direction:column;overflow:hidden}
-.ceb-db-editor-wrap{flex:none;display:flex;align-items:flex-start;gap:6px;padding:6px 10px;border-bottom:.5px solid var(--dsw-alias-border-l1,#333)}
-.ceb-db-sql{flex:1;min-height:60px;max-height:180px;resize:vertical;border:.5px solid var(--dsw-alias-border-l1,#333);border-radius:6px;padding:6px 8px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;line-height:1.5;background:var(--dsw-alias-bg-base,#181818);color:var(--dsw-alias-label-primary,#ddd);outline:none}
-.ceb-db-run{flex:none;align-self:flex-start}
-.ceb-db-result{flex:1;min-height:0;overflow:auto;padding:6px 10px}
-.ceb-db-result-meta{font-size:11px;color:var(--dsw-alias-label-tertiary,#889);margin-bottom:4px;display:flex;gap:8px}
-.ceb-db-error{color:var(--dsw-alias-state-error-primary,#f85149);font-size:12px;white-space:pre-wrap}
-.ceb-db-grid{width:100%;border-collapse:collapse;font-size:12px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
-.ceb-db-grid th{text-align:left;padding:4px 8px;border-bottom:1px solid var(--dsw-alias-border-l1,#333);color:var(--dsw-alias-label-secondary,#aab);font-weight:600;position:sticky;top:0;background:var(--dsw-alias-bg-layer-1,#1d2126)}
-.ceb-db-grid td{padding:3px 8px;border-bottom:.5px solid var(--dsw-alias-border-l1,#222);color:var(--dsw-alias-label-primary,#ddd);max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.ceb-db-grid tr:hover td{background:var(--dsw-alias-interactive-bg-hover,#2a2e35)}
-.ceb-db-result-empty{display:flex;align-items:center;justify-content:center;color:var(--dsw-alias-label-tertiary,#667);font-size:13px}
+/* Database workbench */
+.cedb-root{display:flex;flex-direction:column;height:100%;overflow:hidden;position:relative}
+.cedb-toolbar{flex:none;display:flex;align-items:center;gap:6px;padding:6px 10px;border-bottom:.5px solid var(--dsw-alias-border-l1,#333);background:var(--dsw-alias-bg-layer-1,#1d2126)}
+.cedb-chip{font-size:11px;padding:1px 7px;border-radius:9px;background:var(--dsw-alias-bg-layer-2,#2a2e35);color:var(--dsw-alias-label-tertiary,#99a);white-space:nowrap}
+.cedb-chip-warn{background:color-mix(in srgb,var(--dsw-alias-state-warn-primary,#e3b341) 22%,transparent);color:var(--dsw-alias-state-warn-primary,#e3b341)}
+.cedb-notice{font-size:11px;color:var(--dsw-alias-state-error-primary,#f85149);max-width:40%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cedb-body{flex:1;min-height:0;display:flex;overflow:hidden}
+.cedb-rail{flex:none;width:240px;min-width:160px;display:flex;flex-direction:column;border-right:.5px solid var(--dsw-alias-border-l1,#333);overflow-y:auto;overflow-x:hidden;background:var(--dsw-alias-bg-layer-1,#181b1f)}
+.cedb-rail-head{flex:none;padding:6px 10px 4px;font-size:11px;font-weight:600;letter-spacing:.4px;text-transform:uppercase;color:var(--dsw-alias-label-tertiary,#778);position:sticky;top:0;background:var(--dsw-alias-bg-layer-1,#181b1f);z-index:2}
+.cedb-rail-head-split{display:flex;flex-direction:column;gap:4px;padding-bottom:6px}
+.cedb-rail-title{display:block}
+.cedb-filter{height:24px;font-size:12px;width:100%}
+.cedb-empty{padding:6px 12px 10px;font-size:12px;color:var(--dsw-alias-label-tertiary,#667);line-height:1.5}
+.cedb-conn{display:flex;align-items:center;gap:2px;padding:2px 6px 2px 10px;border-left:2px solid transparent}
+.cedb-conn-on{border-left-color:var(--dsw-alias-button-info-fill,#58a6ff);background:color-mix(in srgb,var(--dsw-alias-button-info-fill,#58a6ff) 10%,transparent)}
+.cedb-conn-main{flex:1;min-width:0;display:flex;align-items:center;gap:6px;padding:3px 2px;border:0;background:transparent;color:var(--dsw-alias-label-primary,#dde);font-size:12px;text-align:left;cursor:pointer}
+.cedb-conn-label{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cedb-driver{flex:none;font-size:9px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;padding:1px 4px;border-radius:3px;background:var(--dsw-alias-bg-layer-2,#2a2e35);color:var(--dsw-alias-label-tertiary,#889)}
+.cedb-driver-sqlite{color:#4ea1ff}.cedb-driver-mysql{color:#e8a13a}.cedb-driver-postgres{color:#6fb3ff}
+.cedb-db,.cedb-table{padding:0}
+.cedb-db-name{padding:8px 10px 2px;font-size:11px;font-weight:700;color:var(--dsw-alias-label-secondary,#aab);display:flex;align-items:center;gap:6px}
+.cedb-db-hint{font-weight:400;font-size:10px;color:var(--dsw-alias-label-tertiary,#667)}
+.cedb-table-row{display:flex;align-items:center;gap:6px;width:100%;padding:3px 10px 3px 14px;border:0;background:transparent;color:var(--dsw-alias-label-secondary,#ccd);font-size:12px;text-align:left;cursor:pointer}
+.cedb-table-row:hover{background:var(--dsw-alias-interactive-bg-hover,#2a2e35)}
+.cedb-table-on{background:color-mix(in srgb,var(--dsw-alias-button-info-fill,#58a6ff) 16%,transparent);color:var(--dsw-alias-label-primary,#fff)}
+.cedb-kind{flex:none;font-size:10px;color:var(--dsw-alias-label-tertiary,#889)}
+.cedb-table-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.cedb-cols{margin:0;padding:0 0 4px 30px;list-style:none}
+.cedb-col{display:flex;align-items:center;gap:6px;padding:1px 0;font-size:11px;color:var(--dsw-alias-label-tertiary,#99a);font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.cedb-col-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-secondary,#bcc)}
+.cedb-col-type{flex:none;font-size:10px;opacity:.75;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cedb-pk,.cedb-nn{flex:none;font-size:9px;font-weight:700;padding:0 3px;border-radius:2px}
+.cedb-pk{color:#e3b341;background:color-mix(in srgb,#e3b341 18%,transparent)}
+.cedb-nn{color:#8b949e;background:color-mix(in srgb,#8b949e 16%,transparent)}
+.cedb-main{flex:1;min-width:0;display:flex;flex-direction:column;overflow:hidden}
+.cedb-tabs{flex:none;display:flex;align-items:stretch;gap:1px;padding:0 6px;overflow-x:auto;border-bottom:.5px solid var(--dsw-alias-border-l1,#333);background:var(--dsw-alias-bg-layer-1,#181b1f);scrollbar-width:thin}
+.cedb-tab{display:flex;align-items:center;gap:2px;border-bottom:2px solid transparent;max-width:200px}
+.cedb-tab-on{border-bottom-color:var(--dsw-alias-button-info-fill,#58a6ff);background:var(--dsw-alias-bg-base,#141618)}
+.cedb-tab-label{display:flex;align-items:center;gap:5px;padding:7px 4px 6px 8px;border:0;background:transparent;color:var(--dsw-alias-label-secondary,#aab);font-size:12px;cursor:pointer;max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cedb-tab-on .cedb-tab-label{color:var(--dsw-alias-label-primary,#eef)}
+.cedb-tab-kind{font-size:10px;opacity:.7}
+.cedb-tab-close{border:0;background:transparent;color:var(--dsw-alias-label-tertiary,#778);font-size:11px;cursor:pointer;padding:2px 4px;border-radius:3px}
+.cedb-tab-close:hover{background:var(--dsw-alias-interactive-bg-hover,#2a2e35);color:var(--dsw-alias-label-primary,#fff)}
+.cedb-tab-add{border:0;background:transparent;color:var(--dsw-alias-label-tertiary,#889);font-size:14px;cursor:pointer;padding:0 8px}
+.cedb-tabbody{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden}
+.cedb-editor{flex:none;display:flex;flex-direction:column;border-bottom:.5px solid var(--dsw-alias-border-l1,#333)}
+.cedb-editor-bar{display:flex;align-items:center;gap:6px;padding:6px 10px 4px}
+.cedb-conn-select{height:26px;font-size:12px;max-width:240px;background:var(--dsw-alias-bg-layer-2,#22262c);color:var(--dsw-alias-label-primary,#dde);border:.5px solid var(--dsw-alias-border-l1,#333);border-radius:5px;padding:0 6px}
+.cedb-run{flex:none}
+.cedb-kbd{font-size:10px;color:var(--dsw-alias-label-tertiary,#667);font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.cedb-sql{min-height:88px;max-height:34vh;resize:vertical;margin:0 10px 8px;padding:8px 10px;border:.5px solid var(--dsw-alias-border-l1,#333);border-radius:6px;background:var(--dsw-alias-bg-base,#141618);color:var(--dsw-alias-label-primary,#dde);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;line-height:1.5;outline:none;tab-size:2}
+.cedb-sql:focus{border-color:var(--dsw-alias-button-info-fill,#58a6ff)}
+.cedb-result-head{flex:none;display:flex;align-items:center;gap:6px;padding:4px 10px;font-size:11px;color:var(--dsw-alias-label-tertiary,#889);min-height:24px}
+.cedb-result-hint{font-size:11px;color:var(--dsw-alias-label-tertiary,#667)}
+.cedb-tablebar{flex:none;display:flex;align-items:center;gap:6px;padding:6px 10px;border-bottom:.5px solid var(--dsw-alias-border-l1,#333)}
+.cedb-tablebar-name{font-size:12px;font-weight:600;color:var(--dsw-alias-label-primary,#dde);font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.cedb-tablebar-filter{max-width:220px;height:26px;font-size:12px}
+.cedb-grid-wrap{flex:1;min-height:0;overflow:auto;padding:0 10px 10px}
+.cedb-grid{width:100%;border-collapse:collapse;font-size:12px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.cedb-grid th{position:sticky;top:0;z-index:1;text-align:left;padding:5px 8px;background:var(--dsw-alias-bg-layer-1,#1d2126);border-bottom:1px solid var(--dsw-alias-border-l1,#39414a);color:var(--dsw-alias-label-secondary,#aab);font-weight:600;white-space:nowrap}
+.cedb-grid-sortable{cursor:pointer}
+.cedb-grid-sortable:hover{color:var(--dsw-alias-label-primary,#fff)}
+.cedb-grid-sorted{color:var(--dsw-alias-button-info-fill,#58a6ff)}
+.cedb-grid-gutter{color:var(--dsw-alias-label-tertiary,#667);text-align:right;padding-right:8px !important;user-select:none;white-space:nowrap;background:var(--dsw-alias-bg-layer-1,#1d2126)}
+.cedb-grid-td{padding:3px 8px;border-bottom:.5px solid var(--dsw-alias-border-l1,#2a2e35);color:var(--dsw-alias-label-primary,#dde);max-width:340px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}
+.cedb-grid tr:hover td{background:var(--dsw-alias-interactive-bg-hover,#23272d)}
+.cedb-null{color:var(--dsw-alias-label-tertiary,#667);font-style:italic}
+.cedb-pager{flex:none;display:flex;align-items:center;justify-content:flex-end;gap:8px;padding:4px 12px;border-top:.5px solid var(--dsw-alias-border-l1,#333);font-size:11px;color:var(--dsw-alias-label-tertiary,#889)}
+.cedb-pager-text{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.cedb-placeholder{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:24px;text-align:center}
+.cedb-placeholder-title{font-size:14px;font-weight:600;color:var(--dsw-alias-label-secondary,#aab)}
+.cedb-placeholder-hint{font-size:12px;color:var(--dsw-alias-label-tertiary,#667);max-width:320px;line-height:1.6}
+.cedb-placeholder-small{flex:1;display:flex;align-items:center;justify-content:center;padding:20px;font-size:12px;color:var(--dsw-alias-label-tertiary,#667)}
+.cedb-error{margin:6px 10px;padding:6px 10px;border-radius:6px;font-size:12px;white-space:pre-wrap;color:var(--dsw-alias-state-error-primary,#f85149);background:color-mix(in srgb,var(--dsw-alias-state-error-primary,#f85149) 12%,transparent)}
+.cedb-pad{padding:6px 10px}
+.cedb-dialog{position:absolute;top:52px;left:50%;transform:translateX(-50%);width:min(420px,calc(100% - 32px));z-index:20;display:flex;flex-direction:column;gap:8px;padding:14px;border-radius:10px;background:var(--dsw-alias-bg-layer-1,#1d2126);border:.5px solid var(--dsw-alias-border-l2,#454a52);box-shadow:0 16px 48px rgba(0,0,0,.45)}
+.cedb-dialog-title{margin:0;font-size:14px;color:var(--dsw-alias-label-primary,#eef)}
+.cedb-field{display:flex;flex-direction:column;gap:3px;font-size:11px;color:var(--dsw-alias-label-secondary,#99a)}
+.cedb-field-row{display:flex;gap:8px}
+.cedb-field-row .cedb-field{flex:1}
+.cedb-field-narrow{flex:0 0 90px !important}
+.cedb-dialog-actions{display:flex;justify-content:flex-end;gap:6px;margin-top:4px}
+.cedb-history{position:absolute;right:10px;top:44px;bottom:10px;width:min(380px,60%);z-index:15;display:flex;flex-direction:column;border-radius:8px;overflow:hidden;background:var(--dsw-alias-bg-layer-1,#1d2126);border:.5px solid var(--dsw-alias-border-l2,#454a52);box-shadow:0 12px 32px rgba(0,0,0,.4)}
+.cedb-history-head{flex:none;display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border-bottom:.5px solid var(--dsw-alias-border-l1,#333);font-size:12px;font-weight:600;color:var(--dsw-alias-label-secondary,#aab)}
+.cedb-history-row{display:flex;align-items:center;gap:8px;padding:6px 10px;border:0;border-bottom:.5px solid var(--dsw-alias-border-l1,#2a2e35);background:transparent;color:var(--dsw-alias-label-secondary,#ccd);font-size:11px;text-align:left;cursor:pointer;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.cedb-history-row:hover{background:var(--dsw-alias-interactive-bg-hover,#2a2e35)}
+.cedb-history-sql{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cedb-history-ms{flex:none;color:var(--dsw-alias-label-tertiary,#778)}
+.cedb-cell-detail{position:absolute;right:20px;bottom:20px;width:min(520px,calc(100% - 40px));max-height:50%;z-index:20;display:flex;flex-direction:column;border-radius:8px;overflow:hidden;background:var(--dsw-alias-bg-overlay,#232729);border:.5px solid var(--dsw-alias-border-l2,#454a52);box-shadow:0 16px 40px rgba(0,0,0,.45)}
+.cedb-cell-head{flex:none;display:flex;align-items:center;justify-content:space-between;padding:6px 10px;border-bottom:.5px solid var(--dsw-alias-border-l1,#333);font-size:12px;color:var(--dsw-alias-label-secondary,#aab)}
+.cedb-cell-title{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.cedb-cell-body{flex:1;min-height:0;overflow:auto;margin:0;padding:10px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;line-height:1.6;white-space:pre-wrap;word-break:break-all;color:var(--dsw-alias-label-primary,#dde)}
+/* RPC (gRPC) workbench */
+.cerpc-root{display:flex;flex-direction:column;height:100%;overflow:hidden}
+.cerpc-toolbar{flex:none;display:flex;align-items:flex-end;gap:8px;padding:8px 10px;border-bottom:.5px solid var(--dsw-alias-border-l1,#333);background:var(--dsw-alias-bg-layer-1,#1d2126);flex-wrap:wrap}
+.cerpc-field{flex:1 1 200px;min-width:140px;display:flex;flex-direction:column;gap:3px}
+.cerpc-label{font-size:10px;letter-spacing:.3px;text-transform:uppercase;color:var(--dsw-alias-label-tertiary,#778)}
+.cerpc-input{height:26px;font-size:12px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.cerpc-body{flex:1;min-height:0;display:flex;overflow:hidden}
+.cerpc-rail{flex:none;width:230px;min-width:150px;display:flex;flex-direction:column;gap:2px;overflow-y:auto;border-right:.5px solid var(--dsw-alias-border-l1,#333);background:var(--dsw-alias-bg-layer-1,#181b1f);padding:6px 0}
+.cerpc-service{padding:0 0 4px}
+.cerpc-service-name{padding:6px 10px 2px;font-size:11px;font-weight:700;color:var(--dsw-alias-label-secondary,#aab);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cerpc-method{display:flex;align-items:center;gap:6px;width:100%;padding:3px 10px 3px 16px;border:0;background:transparent;color:var(--dsw-alias-label-secondary,#ccd);font-size:12px;text-align:left;cursor:pointer}
+.cerpc-method:hover{background:var(--dsw-alias-interactive-bg-hover,#2a2e35)}
+.cerpc-method-on{background:color-mix(in srgb,var(--dsw-alias-button-info-fill,#58a6ff) 16%,transparent);color:var(--dsw-alias-label-primary,#fff)}
+.cerpc-arrow{flex:none;font-size:10px;color:var(--dsw-alias-label-tertiary,#778);font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.cerpc-method-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.cerpc-files{margin-top:auto;padding:8px 10px;border-top:.5px solid var(--dsw-alias-border-l1,#2a2e35)}
+.cerpc-file{font-size:10px;color:var(--dsw-alias-label-tertiary,#667);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cerpc-main{flex:1;min-width:0;display:flex;flex-direction:column;overflow:hidden}
+.cerpc-pane{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden}
+.cerpc-response{border-top:.5px solid var(--dsw-alias-border-l1,#333);background:var(--dsw-alias-bg-base,#141618)}
+.cerpc-pane-head{flex:none;display:flex;align-items:center;gap:6px;padding:5px 10px;font-size:11px;color:var(--dsw-alias-label-tertiary,#889);min-height:26px;flex-wrap:wrap}
+.cerpc-pane-title{font-weight:600;color:var(--dsw-alias-label-secondary,#aab)}
+.cerpc-inline{display:flex;align-items:center;gap:4px;font-size:11px;cursor:pointer}
+.cerpc-timeout{width:70px;height:22px;font-size:11px;padding:0 4px}
+.cerpc-json{min-height:70px;max-height:26vh}
+.cerpc-json-bad{border-color:var(--dsw-alias-state-error-primary,#f85149) !important}
+.cerpc-json-error{padding:0 10px 6px;font-size:11px;color:var(--dsw-alias-state-error-primary,#f85149);font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.cerpc-meta-head{flex:none;display:flex;align-items:center;gap:8px;padding:4px 10px}
+.cerpc-meta-empty{padding:0 10px 6px;font-size:11px;color:var(--dsw-alias-label-tertiary,#667)}
+.cerpc-meta-list{flex:none;display:flex;flex-direction:column;gap:3px;padding:0 10px 4px;max-height:24vh;overflow:auto}
+.cerpc-meta-row{display:flex;align-items:center;gap:5px}
+.cerpc-meta-name{flex:0 0 150px;height:24px;font-size:11px}
+.cerpc-meta-value{flex:1;height:24px;font-size:11px}
+.cerpc-actions{flex:none;display:flex;align-items:center;gap:8px;padding:6px 10px 10px}
+.cerpc-status-msg{font-size:11px;color:var(--dsw-alias-state-warn-primary,#e3b341);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:40%}
+.cerpc-result{flex:1;min-height:0;overflow:auto;padding:4px 10px 10px;display:flex;flex-direction:column;gap:8px}
+.cerpc-message{border:.5px solid var(--dsw-alias-border-l1,#333);border-radius:6px;overflow:hidden}
+.cerpc-message-head{padding:2px 8px;font-size:10px;color:var(--dsw-alias-label-tertiary,#778);background:var(--dsw-alias-bg-layer-1,#1d2126);border-bottom:.5px solid var(--dsw-alias-border-l1,#2a2e35)}
+.cerpc-message-body{margin:0;padding:8px 10px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;line-height:1.55;white-space:pre-wrap;word-break:break-word;color:var(--dsw-alias-label-primary,#dde)}
+.cerpc-trailers{border-top:.5px solid var(--dsw-alias-border-l1,#2a2e35);padding-top:6px;display:flex;flex-direction:column;gap:2px}
+.cerpc-trailer{display:flex;gap:8px;font-size:11px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.cerpc-trailer-name{flex:none;color:var(--dsw-alias-label-tertiary,#778);min-width:110px}
+.cerpc-trailer-value{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-secondary,#bcc)}
 .ce-gline-find{color:var(--dsw-alias-state-warn-primary,#e3b341)}
 .ce-line-changed{background:color-mix(in srgb,var(--dsw-alias-state-success-primary,#3fb950) 20%,transparent);box-shadow:inset 3px 0 0 0 var(--dsw-alias-state-success-primary,#3fb950)}
 .ce-gline-changed{color:var(--dsw-alias-state-success-primary,#3fb950);font-weight:700;background:color-mix(in srgb,var(--dsw-alias-state-success-primary,#3fb950) 14%,transparent)}
@@ -9159,6 +9240,24 @@ var CSS2 = `
 .cet-row:focus-within .cet-act,.cet-copy-path:focus-visible{opacity:1}
 .cet-copy-path{display:inline-flex;align-items:center;justify-content:center;min-width:24px;min-height:24px;padding:4px}
 @media(hover:none){.cet-copy-path{opacity:1}}
+
+/* ---------------- built-in terminal: our own emulator, our own paint ---------------- */
+.ce-term-shell{position:relative;flex:1;min-height:0;min-width:0;display:flex}
+.ce-term{position:relative;flex:1;min-height:0;min-width:0;overflow:hidden;box-sizing:border-box;padding:8px;background:var(--dsw-alias-bg-base,#1e1e1e);color:var(--dsw-alias-label-primary,#d4d4d4);cursor:text}
+.ce-term-rows{position:relative;white-space:pre;letter-spacing:0;font-kerning:none;font-variant-ligatures:none;tab-size:8}
+.ce-term-row{white-space:pre;overflow:hidden;overflow-wrap:normal}
+.ce-term-row span{white-space:pre}
+.ce-term-measure{position:absolute;top:0;left:-9999px;visibility:hidden;white-space:pre;display:inline-block}
+.ce-term-cursor{position:absolute;top:8px;left:8px;pointer-events:none;box-sizing:border-box}
+.ce-term-cursor-block{background:var(--dsw-alias-label-primary,#d4d4d4);mix-blend-mode:difference}
+.ce-term-cursor-underline{border-bottom:2px solid var(--dsw-alias-label-primary,#d4d4d4)}
+.ce-term-cursor-bar{border-left:2px solid var(--dsw-alias-label-primary,#d4d4d4)}
+.ce-term-focused .ce-term-cursor-blink{animation:ce-term-blink 1.06s step-end infinite}
+@keyframes ce-term-blink{50%{opacity:0}}
+.ce-term-input{position:absolute;left:-9999px;top:0;width:1px;height:1px;opacity:0;border:0;padding:0;margin:0;resize:none;overflow:hidden}
+.ce-term-status{position:absolute;left:8px;bottom:6px;right:8px;font-size:11.5px;color:var(--dsw-alias-label-secondary,#999);pointer-events:none}
+.ce-term-status-error{color:var(--dsw-alias-state-error-primary,#f85149)}
+.ce-term-title{display:inline-flex;align-items:center;gap:4px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
 `;
 
 // src/client/register.js
@@ -9192,6 +9291,14 @@ var dbDefinition = (t) => ({
   priority: "extension",
   keepMounted: true,
   title: () => t("db.label"),
+  guide: []
+});
+var rpcDefinition = (t) => ({
+  id: RPC_TAB_ID,
+  kind: RPC_TAB_KIND,
+  priority: "extension",
+  keepMounted: true,
+  title: () => t("rpc.label"),
   guide: []
 });
 function insertStyles() {
@@ -12232,6 +12339,8 @@ function ApiTitle({ useTabInfo }) {
 }
 
 // src/client/db.js
+var PAGE_SIZE = 100;
+var HISTORY_CAP = 40;
 function formatCell(value) {
   if (value === null) return "NULL";
   if (value === void 0) return "";
@@ -12239,209 +12348,894 @@ function formatCell(value) {
   return String(value);
 }
 function truncateCell(value, max = 120) {
-  const s = formatCell(value);
-  return s.length > max ? s.slice(0, max - 1) + "…" : s;
+  const text = formatCell(value);
+  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+}
+function toCsv(columns, rows) {
+  const quote = (value) => {
+    const text = value === null || value === void 0 ? "" : String(value);
+    return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+  };
+  const lines2 = [columns.map(quote).join(",")];
+  for (const row of rows) lines2.push(row.map(quote).join(","));
+  return lines2.join("\n");
+}
+function tableSql(table, { order, dir, limit, offset, filter, columns, driver }) {
+  const q = (name) => driver === "mysql" ? `\`${String(name).replace(/`/g, "``")}\`` : `"${String(name).replace(/"/g, '""')}"`;
+  const quote = q(table);
+  const where = filter && filter.trim() && columns?.length ? ` WHERE (${columns.map((column) => `CAST(${q(column.name)} AS TEXT) LIKE '%${filter.trim().replace(/'/g, "''")}%'`).join(" OR ")})` : "";
+  const sorting = order ? ` ORDER BY ${q(order)} ${dir === "desc" ? "DESC" : "ASC"}` : "";
+  return `SELECT * FROM ${quote}${where}${sorting} LIMIT ${limit} OFFSET ${offset}`;
+}
+function countOf(schema) {
+  let tables = 0;
+  let views = 0;
+  for (const database of schema?.databases ?? []) {
+    for (const entry of database.tables ?? []) {
+      if (entry.kind === "view") views++;
+      else tables++;
+    }
+  }
+  return { tables, views };
 }
 function DbView({ t, useTabInfo, sessionId, useSessions }) {
   const cwd = useSessions ? useSessions((sessions) => sessionId ? sessions.byId[sessionId]?.cwd : void 0) : void 0;
-  const hostTab = useTabInfo ? useTabInfo()?.tab : null;
   const [drivers, setDrivers] = useState([]);
   const [connections, setConnections] = useState([]);
-  const [activeConn, setActiveConn] = useState(null);
+  const [activeConn, setActiveConn] = useState("");
   const [schema, setSchema] = useState(null);
-  const [sql, setSql] = useState("");
-  const [result, setResult] = useState(null);
-  const [running, setRunning] = useState(false);
-  const [connectForm, setConnectForm] = useState({ driver: "sqlite", path: "", host: "localhost", port: "", user: "", password: "", database: "" });
+  const [schemaBusy, setSchemaBusy] = useState(false);
+  const [schemaError, setSchemaError] = useState("");
+  const [filter, setFilter] = useState("");
+  const [expanded, setExpanded] = useState(() => /* @__PURE__ */ new Set());
+  const [tabs, setTabs] = useState([]);
+  const [activeTabId, setActiveTabId] = useState("");
+  const [history, setHistory] = useState([]);
   const [connectOpen, setConnectOpen] = useState(false);
+  const [form, setForm] = useState({ driver: "sqlite", path: "", host: "localhost", port: "", user: "", password: "", database: "" });
+  const [cellDetail, setCellDetail] = useState(null);
+  const [notice, setNotice] = useState("");
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const detailRef = useDismissLayer({ open: Boolean(cellDetail), onDismiss: () => setCellDetail(null) });
   const connectRef = useDismissLayer({ open: connectOpen, onDismiss: () => setConnectOpen(false) });
-  const [selectedTable, setSelectedTable] = useState(null);
-  const sqlRef = useRef(null);
   useEffect(() => {
     api("db.drivers", {}).then((res) => {
-      if (res.ok) setDrivers(res.value);
-    });
-    api("db.connections", {}).then((res) => {
-      if (res.ok) setConnections(res.value);
+      if (!res.ok) return;
+      setDrivers(res.value ?? []);
+      const first = (res.value ?? []).find((driver) => driver.ready);
+      if (first) setForm((current) => ({ ...current, driver: first.id }));
     });
   }, []);
-  useEffect(() => {
-    if (!activeConn) {
+  const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? null;
+  const patchTab = useCallback((id, patch) => {
+    setTabs((current) => current.map((tab) => tab.id === id ? { ...tab, ...typeof patch === "function" ? patch(tab) : patch } : tab));
+  }, []);
+  const openTab = useCallback((tab) => {
+    const existing = tabs.find((entry) => entry.key === tab.key);
+    if (existing) {
+      setActiveTabId(existing.id);
+      return;
+    }
+    setTabs((current) => [...current, tab]);
+    setActiveTabId(tab.id);
+  }, [tabs]);
+  const closeTab = useCallback((id) => {
+    setTabs((current) => {
+      const index = current.findIndex((tab) => tab.id === id);
+      const next = current.filter((tab) => tab.id !== id);
+      if (id === activeTabId) setActiveTabId(next[Math.max(0, index - 1)]?.id ?? next[0]?.id ?? "");
+      return next;
+    });
+  }, [activeTabId]);
+  const refreshSchema = useCallback(async (id = activeConn) => {
+    if (!id) {
       setSchema(null);
       return;
     }
-    api("db.list", { id: activeConn }).then((res) => {
-      if (res.ok) setSchema(res.value);
-      else setSchema({ databases: [], tables: [], error: res.error });
-    });
+    setSchemaBusy(true);
+    setSchemaError("");
+    const res = await api("db.schema", { id });
+    setSchemaBusy(false);
+    if (res.ok) setSchema(res.value);
+    else {
+      setSchema(null);
+      setSchemaError(res.error);
+    }
   }, [activeConn]);
   const doConnect = useCallback(async () => {
-    const f = connectForm;
-    const params = { driver: f.driver };
-    if (f.driver === "sqlite") params.path = f.path;
+    const params = { driver: form.driver };
+    if (form.driver === "sqlite") params.path = form.path.trim();
     else {
-      params.host = f.host;
-      params.port = f.port ? Number(f.port) : void 0;
-      params.user = f.user;
-      params.password = f.password;
-      params.database = f.database;
+      params.host = form.host.trim();
+      params.port = form.port ? Number(form.port) : void 0;
+      params.user = form.user;
+      params.password = form.password;
+      params.database = form.database.trim();
     }
     const res = await api("db.connect", params);
-    if (res.ok) {
-      setConnections((prev) => [...prev, res.value]);
-      setActiveConn(res.value.id);
-      setConnectOpen(false);
+    if (!res.ok) {
+      setNotice(res.error);
+      return;
     }
-  }, [connectForm]);
+    setConnections((current) => [...current.filter((entry) => entry.id !== res.value.id), res.value]);
+    setActiveConn(res.value.id);
+    setConnectOpen(false);
+    setNotice("");
+    await refreshSchema(res.value.id);
+  }, [form, refreshSchema]);
   const doDisconnect = useCallback(async (id) => {
     await api("db.disconnect", { id });
-    setConnections((prev) => prev.filter((c) => c.id !== id));
+    setConnections((current) => current.filter((entry) => entry.id !== id));
+    setTabs((current) => current.filter((tab) => tab.conn !== id));
     if (activeConn === id) {
-      setActiveConn(null);
+      setActiveConn("");
       setSchema(null);
-      setResult(null);
     }
   }, [activeConn]);
-  const runQuery = useCallback(async () => {
-    if (!activeConn || !sql.trim() || running) return;
-    setRunning(true);
-    setResult(null);
-    const res = await api("db.query", { id: activeConn, sql: sql.trim(), limit: 1e3 });
-    setRunning(false);
-    if (res.ok) setResult(res.value);
-    else setResult({ error: res.error });
-  }, [activeConn, sql, running]);
-  const selectTable = useCallback((name) => {
-    setSelectedTable(name);
-    setSql(`SELECT * FROM "${name}" LIMIT 100`);
-  }, []);
-  const onKeyDown = useCallback((e) => {
-    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-      e.preventDefault();
-      runQuery();
+  const fetchRows = useCallback(async (tab) => {
+    patchTab(tab.id, { loading: true, error: "" });
+    const res = await api("db.rows", {
+      id: tab.conn,
+      table: tab.table,
+      database: tab.database,
+      limit: PAGE_SIZE,
+      offset: tab.offset,
+      order: tab.order,
+      dir: tab.dir,
+      filter: tab.filter
+    });
+    if (!res.ok) {
+      patchTab(tab.id, { loading: false, error: res.error });
+      return;
     }
-  }, [runQuery]);
+    patchTab(tab.id, { loading: false, result: res.value, error: "" });
+  }, [patchTab]);
+  const loadRows = useCallback((tabId, override) => {
+    const tab = tabs.find((entry) => entry.id === tabId);
+    if (!tab || tab.kind !== "table") return;
+    return fetchRows({ ...tab, ...override });
+  }, [tabs, fetchRows]);
+  const openTable = useCallback((connectionId, database, entry) => {
+    const key = `table:${connectionId}:${database}:${entry.name}`;
+    openTab({
+      id: `tab-${Date.now()}-${Math.round(Math.random() * 1e6)}`,
+      key,
+      kind: "table",
+      title: entry.name,
+      conn: connectionId,
+      database,
+      table: entry.name,
+      columns: entry.columns ?? [],
+      offset: 0,
+      order: "",
+      dir: "asc",
+      filter: "",
+      loading: false,
+      error: "",
+      result: null
+    });
+  }, [openTab]);
+  const fetched = useRef(/* @__PURE__ */ new Set());
+  useEffect(() => {
+    const target = tabs.find((tab) => tab.kind === "table" && !tab.result && !tab.loading && !fetched.current.has(tab.id));
+    if (!target) return;
+    fetched.current.add(target.id);
+    void fetchRows(target);
+  }, [tabs, fetchRows]);
+  const sortBy = useCallback((id, column) => {
+    const target = tabs.find((tab) => tab.id === id);
+    if (!target) return;
+    const dir = target.order === column && target.dir === "asc" ? "desc" : "asc";
+    patchTab(id, { order: column, dir, offset: 0 });
+    void loadRows(id, { order: column, dir, offset: 0 });
+  }, [tabs, patchTab, loadRows]);
+  const openQueryTab = useCallback((sql = "") => {
+    const id = `tab-${Date.now()}-${Math.round(Math.random() * 1e6)}`;
+    openTab({
+      id,
+      key: `query:${id}`,
+      kind: "query",
+      title: t("db.queryTab"),
+      sql,
+      conn: activeConn,
+      loading: false,
+      error: "",
+      result: null,
+      ms: 0
+    });
+    return id;
+  }, [openTab, activeConn, t]);
+  const runQuery = useCallback(async (id) => {
+    const tab = tabs.find((entry) => entry.id === id);
+    if (!tab || tab.kind !== "query") return;
+    const sql = String(tab.sql ?? "").trim();
+    if (sql === "") return;
+    const conn = tab.conn || activeConn;
+    if (!conn) {
+      patchTab(id, { error: t("db.noConnection"), result: null });
+      return;
+    }
+    patchTab(id, { loading: true, error: "" });
+    const started = Date.now();
+    const res = await api("db.query", { id: conn, sql, limit: 5e3 });
+    const ms = Date.now() - started;
+    if (!res.ok) {
+      patchTab(id, { loading: false, error: res.error, result: null });
+      return;
+    }
+    patchTab(id, { loading: false, result: res.value, error: "", ms });
+    setHistory((current) => [{ sql, at: Date.now(), ms, ok: !res.value.error }, ...current.filter((entry) => entry.sql !== sql)].slice(0, HISTORY_CAP));
+    if (/^\s*(create|drop|alter)\b/i.test(sql)) void refreshSchema(conn);
+  }, [tabs, activeConn, patchTab, refreshSchema, t]);
+  const exportResult = useCallback((result, name) => {
+    if (!result?.columns?.length) return;
+    const csv = toCsv(result.columns, result.rows ?? []);
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `${name || "result"}.csv`;
+    anchor.click();
+    setTimeout(() => URL.revokeObjectURL(url), 4e3);
+  }, []);
+  const tree = useMemo(() => {
+    const needle = filter.trim().toLowerCase();
+    const databases = (schema?.databases ?? []).map((database) => {
+      const entries = (database.tables ?? []).filter((entry) => !needle || entry.name.toLowerCase().includes(needle));
+      return { ...database, tables: entries };
+    });
+    return needle ? databases.filter((database) => database.tables.length > 0) : databases;
+  }, [schema, filter]);
+  const counts = countOf(schema);
+  const toggleTable = (key) => {
+    setExpanded((current) => {
+      const next = new Set(current);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+  const onKeyDown = useCallback((event) => {
+    if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+      event.preventDefault();
+      if (activeTab?.kind === "query") void runQuery(activeTab.id);
+    }
+  }, [activeTab, runQuery]);
   if (!cwd) {
     return h("div", { className: "ce-root" }, h("div", { className: "ce-empty" }, t("editor.noSession")));
   }
   return h(
     "div",
-    { className: "ce-root ceb-db-root", onKeyDown },
+    { className: "ce-root cedb-root", onKeyDown },
+    // ---- toolbar -------------------------------------------------------------------
     h(
       "div",
-      { className: "ceb-db-toolbar" },
-      h("span", { className: "ceb-db-title" }, t("db.label")),
-      h("button", { type: "button", className: "ce-sk-btn", onClick: () => setConnectOpen(true) }, t("db.connect")),
-      activeConn ? h("span", { className: "ceb-db-conn" }, connections.find((c) => c.id === activeConn)?.label ?? activeConn.slice(0, 8)) : null,
-      activeConn ? h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost", onClick: () => doDisconnect(activeConn) }, t("db.disconnect")) : null
+      { className: "cedb-toolbar" },
+      h("button", { type: "button", className: "ce-sk-btn ce-sk-primary", onClick: () => setConnectOpen(true) }, `＋ ${t("db.connect")}`),
+      h("button", { type: "button", className: "ce-sk-btn", onClick: () => openQueryTab("") }, t("db.newQuery")),
+      activeConn ? h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost", title: t("db.refresh"), onClick: () => void refreshSchema() }, "⟳") : null,
+      h("span", { className: "ce-spacer" }),
+      schema ? h("span", { className: "cedb-chip" }, `${counts.tables} ${t("db.tables")}`) : null,
+      schema ? h("span", { className: "cedb-chip" }, `${counts.views} ${t("db.views")}`) : null,
+      notice ? h("span", { className: "cedb-notice" }, notice) : null
     ),
-    connectOpen ? h(
-      "div",
-      { className: "ceb-db-connect", ref: connectRef },
-      h("h3", null, t("db.newConnection")),
-      h(
-        "label",
-        null,
-        t("db.driver"),
-        h(
-          "select",
-          { className: "ce-sk-scope", value: connectForm.driver, onChange: (e) => setConnectForm({ ...connectForm, driver: e.target.value }) },
-          drivers.map((d) => h("option", { key: d.id, value: d.id, disabled: !d.ready }, `${d.label}${d.note ? ` (${d.note})` : ""}`))
-        )
-      ),
-      connectForm.driver === "sqlite" ? h("label", null, t("db.path"), h("input", { className: "ce-input", value: connectForm.path, placeholder: "/path/to/database.sqlite", onChange: (e) => setConnectForm({ ...connectForm, path: e.target.value }) })) : h(
-        Fragment,
-        null,
-        h("label", null, t("db.host"), h("input", { className: "ce-input", value: connectForm.host, onChange: (e) => setConnectForm({ ...connectForm, host: e.target.value }) })),
-        h("label", null, t("db.port"), h("input", { className: "ce-input", type: "number", value: connectForm.port, placeholder: connectForm.driver === "mysql" ? "3306" : "5432", onChange: (e) => setConnectForm({ ...connectForm, port: e.target.value }) })),
-        h("label", null, t("db.user"), h("input", { className: "ce-input", value: connectForm.user, onChange: (e) => setConnectForm({ ...connectForm, user: e.target.value }) })),
-        h("label", null, t("db.password"), h("input", { className: "ce-input", type: "password", value: connectForm.password, onChange: (e) => setConnectForm({ ...connectForm, password: e.target.value }) })),
-        h("label", null, t("db.database"), h("input", { className: "ce-input", value: connectForm.database, onChange: (e) => setConnectForm({ ...connectForm, database: e.target.value }) }))
-      ),
-      h(
-        "div",
-        { className: "ceb-db-connect-actions" },
-        h("button", { type: "button", className: "ce-sk-btn ce-sk-primary", onClick: doConnect }, t("db.connectAction")),
-        h("button", { type: "button", className: "ce-sk-btn", onClick: () => setConnectOpen(false) }, t("editor.cancel"))
-      )
-    ) : null,
     h(
       "div",
-      { className: "ceb-db-body" },
+      { className: "cedb-body" },
+      // ---- rail ------------------------------------------------------------------
       h(
-        "div",
-        { className: "ceb-db-rail ce-scroll" },
-        h("div", { className: "ceb-db-section" }, t("db.connections")),
-        connections.length === 0 ? h("div", { className: "ceb-db-empty" }, t("db.noConnections")) : connections.map((c) => h("button", {
-          key: c.id,
-          type: "button",
-          className: `ceb-db-conn-row${c.id === activeConn ? " ceb-db-conn-active" : ""}`,
-          onClick: () => setActiveConn(c.id)
-        }, h("span", { className: "ceb-db-driver" }, c.driver), h("span", { className: "ceb-db-label" }, c.label))),
+        "aside",
+        { className: "cedb-rail" },
+        h(
+          "div",
+          { className: "cedb-rail-head" },
+          h("span", { className: "cedb-rail-title" }, t("db.connections"))
+        ),
+        connections.length === 0 ? h("div", { className: "cedb-empty" }, t("db.noConnections")) : connections.map((connection) => h(
+          "div",
+          { key: connection.id, className: `cedb-conn${connection.id === activeConn ? " cedb-conn-on" : ""}` },
+          h(
+            "button",
+            {
+              type: "button",
+              className: "cedb-conn-main",
+              title: connection.path || connection.label,
+              onClick: () => {
+                setActiveConn(connection.id);
+                void refreshSchema(connection.id);
+              }
+            },
+            h("span", { className: `cedb-driver cedb-driver-${connection.driver}` }, connection.driver),
+            h("span", { className: "cedb-conn-label" }, connection.label)
+          ),
+          h("button", { type: "button", className: "ce-tool ce-tiny", title: t("db.disconnect"), onClick: () => void doDisconnect(connection.id) }, "✕")
+        )),
         schema ? h(
           Fragment,
           null,
-          h("div", { className: "ceb-db-section" }, t("db.tables")),
-          schema.tables?.length === 0 ? h("div", { className: "ceb-db-empty" }, t("db.noTables")) : schema.tables?.map((tbl) => h(
+          h(
             "div",
-            { key: tbl.name, className: "ceb-db-table" },
-            h("button", {
-              type: "button",
-              className: `ceb-db-table-name${selectedTable === tbl.name ? " ceb-db-table-active" : ""}`,
-              onClick: () => selectTable(tbl.name)
-            }, tbl.name),
-            h("span", { className: "ceb-db-col-count" }, `${tbl.columns?.length ?? 0} cols`)
+            { className: "cedb-rail-head cedb-rail-head-split" },
+            h("span", { className: "cedb-rail-title" }, t("db.objects")),
+            h("input", {
+              className: "ce-input cedb-filter",
+              placeholder: t("db.search"),
+              value: filter,
+              onChange: (event) => setFilter(event.target.value)
+            })
+          ),
+          schemaBusy ? h("div", { className: "cedb-empty" }, t("loading")) : null,
+          schemaError ? h("div", { className: "cedb-error cedb-pad" }, schemaError) : null,
+          tree.map((database) => h(
+            "div",
+            { key: database.name, className: "cedb-db" },
+            h("div", { className: "cedb-db-name" }, database.name, database.tables.length === 0 ? h("span", { className: "cedb-db-hint" }, t("db.notLoaded")) : null),
+            database.tables.map((entry) => {
+              const key = `${database.name}:${entry.name}`;
+              const open = expanded.has(key);
+              return h(
+                "div",
+                { key, className: "cedb-table" },
+                h(
+                  "button",
+                  {
+                    type: "button",
+                    className: `cedb-table-row${activeTab?.key === `table:${activeConn}:${database.name}:${entry.name}` ? " cedb-table-on" : ""}`,
+                    title: `${entry.name} · ${entry.columns?.length ?? 0} ${t("db.columns")}`,
+                    onClick: () => {
+                      toggleTable(key);
+                      openTable(activeConn, database.name, entry);
+                    },
+                    onDoubleClick: () => openQueryTab(`SELECT * FROM "${entry.name.replace(/"/g, '""')}" LIMIT 100;`)
+                  },
+                  h("span", { className: `cedb-kind cedb-kind-${entry.kind}` }, entry.kind === "view" ? "◇" : "▤"),
+                  h("span", { className: "cedb-table-name" }, entry.name)
+                ),
+                open && entry.columns?.length ? h("ul", { className: "cedb-cols" }, entry.columns.map((column) => h(
+                  "li",
+                  { key: column.name, className: "cedb-col" },
+                  h("span", { className: "cedb-col-name" }, column.name),
+                  h("span", { className: "cedb-col-type" }, column.type),
+                  column.primaryKey ? h("span", { className: "cedb-pk" }, "PK") : null,
+                  column.nullable === false ? h("span", { className: "cedb-nn" }, "NN") : null
+                ))) : null
+              );
+            })
           ))
         ) : null
       ),
+      // ---- main ------------------------------------------------------------------
       h(
-        "div",
-        { className: "ceb-db-main" },
+        "section",
+        { className: "cedb-main" },
         h(
           "div",
-          { className: "ceb-db-editor-wrap" },
-          h("textarea", {
-            ref: sqlRef,
-            className: "ceb-db-sql",
-            value: sql,
-            placeholder: t("db.sqlPlaceholder"),
-            spellcheck: false,
-            onChange: (e) => setSql(e.target.value)
-          }),
-          h("button", {
-            type: "button",
-            className: "ce-sk-btn ce-sk-primary ceb-db-run",
-            disabled: !activeConn || !sql.trim() || running,
-            onClick: runQuery
-          }, running ? t("loading") : t("db.run"))
+          { className: "cedb-tabs", role: "tablist" },
+          tabs.map((tab) => h(
+            "div",
+            { key: tab.id, className: `cedb-tab${tab.id === activeTabId ? " cedb-tab-on" : ""}` },
+            h(
+              "button",
+              { type: "button", className: "cedb-tab-label", role: "tab", "aria-selected": tab.id === activeTabId, onClick: () => setActiveTabId(tab.id), title: tab.kind === "table" ? `${tab.table} · ${tab.database}` : tab.sql },
+              h("span", { className: "cedb-tab-kind" }, tab.kind === "table" ? "▤" : "⌘"),
+              tab.title
+            ),
+            h("button", { type: "button", className: "cedb-tab-close", title: t("close"), onClick: () => closeTab(tab.id) }, "✕")
+          )),
+          h("button", { type: "button", className: "cedb-tab-add", title: t("db.newQuery"), onClick: () => openQueryTab("") }, "＋")
         ),
-        result ? h(
+        activeTab === null ? h(
           "div",
-          { className: "ceb-db-result ce-scroll" },
-          result.error ? h("div", { className: "ceb-db-error" }, result.error) : h(
+          { className: "cedb-placeholder" },
+          h("div", { className: "cedb-placeholder-title" }, t("db.welcome")),
+          h("div", { className: "cedb-placeholder-hint" }, t("db.welcomeHint"))
+        ) : h(
+          "div",
+          { className: "cedb-tabbody" },
+          // ---- query tab ----
+          activeTab.kind === "query" ? h(
             Fragment,
             null,
             h(
               "div",
-              { className: "ceb-db-result-meta" },
-              result.ms !== void 0 ? `${result.ms} ms` : null,
-              result.truncated ? t("db.truncated") : null,
-              result.changes !== void 0 ? `${result.changes} rows affected` : null,
-              !result.columns?.length && !result.rows?.length && result.changes === void 0 ? t("db.noRows") : null
+              { className: "cedb-editor" },
+              h(
+                "div",
+                { className: "cedb-editor-bar" },
+                h("select", {
+                  className: "cedb-conn-select",
+                  value: activeTab.conn || activeConn,
+                  onChange: (event) => patchTab(activeTab.id, { conn: event.target.value }),
+                  "aria-label": t("db.connections")
+                }, connections.map((connection) => h("option", { key: connection.id, value: connection.id }, `${connection.driver} · ${connection.label}`))),
+                h("button", {
+                  type: "button",
+                  className: "ce-sk-btn ce-sk-primary cedb-run",
+                  disabled: activeTab.loading || !String(activeTab.sql ?? "").trim(),
+                  onClick: () => void runQuery(activeTab.id)
+                }, activeTab.loading ? t("loading") : `▶ ${t("db.run")}`),
+                h("button", { type: "button", className: "ce-sk-btn", title: t("db.history"), onClick: () => setHistoryOpen((v) => !v) }, t("db.history")),
+                h("span", { className: "ce-spacer" }),
+                h("span", { className: "cedb-kbd" }, "⌘/Ctrl+Enter")
+              ),
+              h("textarea", {
+                className: "cedb-sql",
+                value: activeTab.sql ?? "",
+                placeholder: t("db.sqlPlaceholder"),
+                spellCheck: false,
+                onChange: (event) => patchTab(activeTab.id, { sql: event.target.value })
+              })
             ),
-            result.columns?.length > 0 ? h(
-              "table",
-              { className: "ceb-db-grid" },
-              h("thead", null, h("tr", null, result.columns.map((col, i) => h("th", { key: i }, col)))),
-              h("tbody", null, result.rows?.map((row, ri) => h("tr", { key: ri }, row.map((cell, ci) => h("td", { key: ci, title: formatCell(cell) }, truncateCell(cell))))))
-            ) : null
+            h(
+              "div",
+              { className: "cedb-result-head" },
+              activeTab.result ? h(
+                Fragment,
+                null,
+                h("span", { className: "cedb-chip" }, `${activeTab.result.rows?.length ?? 0} ${t("db.rows")}`),
+                h("span", { className: "cedb-chip" }, `${activeTab.ms || activeTab.result.ms || 0} ms`),
+                activeTab.result.truncated ? h("span", { className: "cedb-chip cedb-chip-warn" }, t("db.truncated")) : null,
+                activeTab.result.changes !== void 0 ? h("span", { className: "cedb-chip" }, `${activeTab.result.changes} ${t("db.affected")}`) : null,
+                activeTab.result.columns?.length ? h("button", { type: "button", className: "ce-tool ce-tiny", title: t("db.export"), onClick: () => exportResult(activeTab.result, activeTab.title) }, "⤓ CSV") : null
+              ) : h("span", { className: "cedb-result-hint" }, t("db.runHint"))
+            ),
+            activeTab.error ? h("div", { className: "cedb-error" }, activeTab.error) : null,
+            activeTab.result ? h(ResultGrid, { t, result: activeTab.result, onCell: setCellDetail }) : h("div", { className: "cedb-placeholder-small" }, t("db.runHint"))
+          ) : h(
+            Fragment,
+            null,
+            h(
+              "div",
+              { className: "cedb-tablebar" },
+              h("span", { className: "cedb-tablebar-name" }, `${activeTab.database}.${activeTab.table}`),
+              h("input", {
+                className: "ce-input cedb-tablebar-filter",
+                placeholder: t("db.filterRows"),
+                value: activeTab.filter,
+                onChange: (event) => patchTab(activeTab.id, { filter: event.target.value, offset: 0 }),
+                onKeyDown: (event) => {
+                  if (event.key === "Enter") void loadRows(activeTab.id, { filter: event.currentTarget.value, offset: 0 });
+                }
+              }),
+              h("button", { type: "button", className: "ce-sk-btn", disabled: activeTab.loading, onClick: () => void loadRows(activeTab.id) }, activeTab.loading ? t("loading") : "⟳"),
+              h("button", { type: "button", className: "ce-sk-btn", title: t("db.sqlForTable"), onClick: () => openQueryTab(`${tableSql(activeTab.table, { ...activeTab, limit: PAGE_SIZE, driver: connections.find((entry) => entry.id === activeTab.conn)?.driver }).replace(/;\s*$/, "")};`) }, "SQL"),
+              h("span", { className: "ce-spacer" }),
+              activeTab.result ? h("button", { type: "button", className: "ce-tool ce-tiny", title: t("db.export"), onClick: () => exportResult(activeTab.result, activeTab.table) }, "⤓ CSV") : null
+            ),
+            activeTab.error ? h("div", { className: "cedb-error" }, activeTab.error) : null,
+            activeTab.result ? h(ResultGrid, { t, result: activeTab.result, onCell: setCellDetail, onSort: (column) => sortBy(activeTab.id, column), order: activeTab.order, dir: activeTab.dir }) : h("div", { className: "cedb-placeholder-small" }, activeTab.loading ? t("loading") : t("db.noRows")),
+            h(
+              "div",
+              { className: "cedb-pager" },
+              h("button", {
+                type: "button",
+                className: "ce-tool ce-tiny",
+                disabled: activeTab.offset === 0 || activeTab.loading,
+                onClick: () => {
+                  const offset = Math.max(0, activeTab.offset - PAGE_SIZE);
+                  patchTab(activeTab.id, { offset });
+                  void loadRows(activeTab.id, { offset });
+                }
+              }, "←"),
+              h(
+                "span",
+                { className: "cedb-pager-text" },
+                `${activeTab.offset + 1}–${Math.min(activeTab.offset + PAGE_SIZE, activeTab.result?.total ?? 0)} / ${activeTab.result?.total ?? 0}`
+              ),
+              h("button", {
+                type: "button",
+                className: "ce-tool ce-tiny",
+                disabled: activeTab.loading || activeTab.offset + PAGE_SIZE >= (activeTab.result?.total ?? 0),
+                onClick: () => {
+                  const offset = activeTab.offset + PAGE_SIZE;
+                  patchTab(activeTab.id, { offset });
+                  void loadRows(activeTab.id, { offset });
+                }
+              }, "→")
+            )
           )
-        ) : h("div", { className: "ceb-db-empty ceb-db-result-empty" }, t("db.runHint"))
+        )
+      )
+    ),
+    // ---- connect dialog ---------------------------------------------------------------
+    connectOpen ? h(
+      "div",
+      { className: "cedb-dialog", ref: connectRef, role: "dialog", "aria-label": t("db.newConnection") },
+      h("h3", { className: "cedb-dialog-title" }, t("db.newConnection")),
+      h(
+        "label",
+        { className: "cedb-field" },
+        t("db.driver"),
+        h("select", {
+          className: "ce-input",
+          value: form.driver,
+          onChange: (event) => setForm({ ...form, driver: event.target.value })
+        }, drivers.map((driver) => h("option", { key: driver.id, value: driver.id, disabled: !driver.ready }, `${driver.label}${driver.ready ? "" : ` — ${driver.note}`}`)))
+      ),
+      form.driver === "sqlite" ? h(
+        "label",
+        { className: "cedb-field" },
+        t("db.path"),
+        h("input", { className: "ce-input", value: form.path, placeholder: "/path/to/app.sqlite", onChange: (event) => setForm({ ...form, path: event.target.value }) })
+      ) : h(
+        Fragment,
+        null,
+        h(
+          "div",
+          { className: "cedb-field-row" },
+          h("label", { className: "cedb-field" }, t("db.host"), h("input", { className: "ce-input", value: form.host, onChange: (event) => setForm({ ...form, host: event.target.value }) })),
+          h("label", { className: "cedb-field cedb-field-narrow" }, t("db.port"), h("input", { className: "ce-input", type: "number", value: form.port, placeholder: form.driver === "mysql" ? "3306" : "5432", onChange: (event) => setForm({ ...form, port: event.target.value }) }))
+        ),
+        h("label", { className: "cedb-field" }, t("db.database"), h("input", { className: "ce-input", value: form.database, onChange: (event) => setForm({ ...form, database: event.target.value }) })),
+        h(
+          "div",
+          { className: "cedb-field-row" },
+          h("label", { className: "cedb-field" }, t("db.user"), h("input", { className: "ce-input", value: form.user, onChange: (event) => setForm({ ...form, user: event.target.value }) })),
+          h("label", { className: "cedb-field" }, t("db.password"), h("input", { className: "ce-input", type: "password", value: form.password, onChange: (event) => setForm({ ...form, password: event.target.value }) }))
+        )
+      ),
+      h(
+        "div",
+        { className: "cedb-dialog-actions" },
+        h("button", { type: "button", className: "ce-sk-btn ce-sk-primary", onClick: () => void doConnect() }, t("db.connectAction")),
+        h("button", { type: "button", className: "ce-sk-btn", onClick: () => setConnectOpen(false) }, t("editor.cancel"))
+      )
+    ) : null,
+    // ---- history drawer ---------------------------------------------------------------
+    historyOpen && history.length > 0 ? h(
+      "div",
+      { className: "cedb-history" },
+      h(
+        "div",
+        { className: "cedb-history-head" },
+        h("span", null, t("db.history")),
+        h("button", { type: "button", className: "ce-tool ce-tiny", onClick: () => setHistoryOpen(false) }, "✕")
+      ),
+      history.map((entry, index) => h(
+        "button",
+        {
+          key: `${entry.at}-${index}`,
+          type: "button",
+          className: "cedb-history-row",
+          title: entry.sql,
+          onClick: () => {
+            const id = openQueryTab(entry.sql);
+            setHistoryOpen(false);
+            setActiveTabId(id);
+          }
+        },
+        h("span", { className: "cedb-history-sql" }, entry.sql.slice(0, 120)),
+        h("span", { className: "cedb-history-ms" }, `${entry.ms} ms`)
+      ))
+    ) : null,
+    // ---- cell detail ------------------------------------------------------------------
+    cellDetail ? h(
+      "div",
+      { className: "cedb-cell-detail", ref: detailRef, role: "dialog", "aria-label": cellDetail.title },
+      h(
+        "div",
+        { className: "cedb-cell-head" },
+        h("span", { className: "cedb-cell-title" }, cellDetail.title),
+        h("button", { type: "button", className: "ce-tool ce-tiny", title: t("close"), onClick: () => setCellDetail(null) }, "✕")
+      ),
+      h("pre", { className: "cedb-cell-body" }, formatCell(cellDetail.value))
+    ) : null
+  );
+}
+function DbTitle() {
+  return null;
+}
+function ResultGrid({ t, result, onCell, onSort, order, dir }) {
+  const columns = result.columns ?? [];
+  const rows = result.rows ?? [];
+  if (columns.length === 0) return h("div", { className: "cedb-placeholder-small" }, t("db.noRows"));
+  return h(
+    "div",
+    { className: "cedb-grid-wrap" },
+    h(
+      "table",
+      { className: "cedb-grid" },
+      h(
+        "thead",
+        null,
+        h(
+          "tr",
+          null,
+          h("th", { className: "cedb-grid-gutter" }, "#"),
+          columns.map((column, index) => h("th", {
+            key: `${column}-${index}`,
+            className: `cedb-grid-th${onSort ? " cedb-grid-sortable" : ""}${order === column ? " cedb-grid-sorted" : ""}`,
+            onClick: onSort ? () => onSort(column) : void 0,
+            title: column
+          }, column, order === column ? dir === "desc" ? " ↓" : " ↑" : ""))
+        )
+      ),
+      h(
+        "tbody",
+        null,
+        rows.map((row, rowIndex) => h(
+          "tr",
+          { key: rowIndex },
+          h("td", { className: "cedb-grid-gutter" }, rowIndex + 1),
+          row.map((cell, cellIndex) => h("td", {
+            key: cellIndex,
+            className: `cedb-grid-td${cell === null ? " cedb-null" : ""}`,
+            title: formatCell(cell),
+            onClick: () => onCell?.({ title: `${columns[cellIndex]} · ${t("db.row")} ${rowIndex + 1}`, value: cell })
+          }, truncateCell(cell)))
+        ))
       )
     )
   );
 }
-function DbTitle({ useTabInfo }) {
+
+// src/client/rpc.js
+function parseJsonText(text) {
+  const trimmed = String(text ?? "").trim();
+  if (trimmed === "") return { value: {}, error: "" };
+  try {
+    return { value: JSON.parse(trimmed), error: "" };
+  } catch (error) {
+    return { value: null, error: String(error?.message ?? error) };
+  }
+}
+function methodArrows(method) {
+  if (method?.clientStreaming && method?.serverStreaming) return "↔";
+  if (method?.clientStreaming) return "→|";
+  if (method?.serverStreaming) return "|→";
+  return "→";
+}
+function groupMethods(methods) {
+  const groups = /* @__PURE__ */ new Map();
+  for (const method of methods ?? []) {
+    if (!groups.has(method.service)) groups.set(method.service, []);
+    groups.get(method.service).push(method);
+  }
+  return [...groups.entries()].map(([service, entries]) => ({ service, methods: entries }));
+}
+function RpcView({ t, useTabInfo, sessionId, useSessions }) {
+  const cwd = useSessions ? useSessions((sessions) => sessionId ? sessions.byId[sessionId]?.cwd : void 0) : void 0;
+  const [address, setAddress] = useState("");
+  const [protoPath, setProtoPath] = useState("");
+  const [methods, setMethods] = useState([]);
+  const [protoError, setProtoError] = useState("");
+  const [protoFiles, setProtoFiles] = useState([]);
+  const [protoBusy, setProtoBusy] = useState(false);
+  const [selected, setSelected] = useState("");
+  const [requestText, setRequestText] = useState("{}");
+  const [metadata, setMetadata] = useState([]);
+  const [response, setResponse] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [timeoutMs, setTimeoutMs] = useState(3e4);
+  const [insecureTls, setInsecureTls] = useState(false);
+  const selectedMethod = useMemo(() => methods.find((method) => method.path === selected) ?? null, [methods, selected]);
+  const groups = useMemo(() => groupMethods(methods), [methods]);
+  const request = useMemo(() => parseJsonText(requestText), [requestText]);
+  const loadProto = useCallback(async () => {
+    const path = protoPath.trim();
+    if (path === "") {
+      setProtoError(t("rpc.protoRequired"));
+      return;
+    }
+    setProtoBusy(true);
+    setProtoError("");
+    const res = await api("rpc.proto", { cwd, path });
+    setProtoBusy(false);
+    if (!res.ok) {
+      setProtoError(res.error);
+      setMethods([]);
+      return;
+    }
+    if (res.value?.error) {
+      setProtoError(res.value.error);
+      setMethods([]);
+      return;
+    }
+    setMethods(res.value.methods ?? []);
+    setProtoFiles(res.value.files ?? []);
+    const first = res.value.methods?.[0];
+    if (first) {
+      setSelected(first.path);
+      setRequestText(JSON.stringify(first.sample ?? {}, null, 2));
+    }
+  }, [cwd, protoPath, t]);
+  const chooseMethod = useCallback((method) => {
+    setSelected(method.path);
+    if (requestText.trim() === "{}" || requestText.trim() === "") setRequestText(JSON.stringify(method.sample ?? {}, null, 2));
+  }, [requestText]);
+  const invoke = useCallback(async () => {
+    if (!selectedMethod || busy) return;
+    if (request.error) return;
+    setBusy(true);
+    setResponse(null);
+    const meta = {};
+    for (const row of metadata) {
+      const name = String(row.name ?? "").trim();
+      if (name !== "" && row.enabled !== false) meta[name] = String(row.value ?? "");
+    }
+    const res = await api("rpc.call", {
+      cwd,
+      proto: protoPath.trim(),
+      method: selectedMethod.path,
+      url: address.trim(),
+      messages: [request.value],
+      metadata: meta,
+      timeoutMs,
+      insecureTls
+    });
+    setBusy(false);
+    setResponse(res.ok ? res.value : { error: res.error });
+  }, [busy, cwd, protoPath, selectedMethod, address, request, metadata, timeoutMs, insecureTls]);
+  const onKeyDown = useCallback((event) => {
+    if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+      event.preventDefault();
+      void invoke();
+    }
+  }, [invoke]);
+  if (!cwd) {
+    return h("div", { className: "ce-root" }, h("div", { className: "ce-empty" }, t("editor.noSession")));
+  }
+  const okStatus = response && !response.error && response.status === 0;
+  return h(
+    "div",
+    { className: "ce-root cerpc-root", onKeyDown },
+    // ---- toolbar ---------------------------------------------------------------------
+    h(
+      "div",
+      { className: "cerpc-toolbar" },
+      h(
+        "label",
+        { className: "cerpc-field" },
+        h("span", { className: "cerpc-label" }, t("rpc.address")),
+        h("input", { className: "ce-input cerpc-input", value: address, spellCheck: false, placeholder: "grpc://host:50051", onChange: (event) => setAddress(event.target.value) })
+      ),
+      h(
+        "label",
+        { className: "cerpc-field" },
+        h("span", { className: "cerpc-label" }, t("rpc.proto")),
+        h("input", { className: "ce-input cerpc-input", value: protoPath, spellCheck: false, placeholder: "proto/hello.proto", onChange: (event) => setProtoPath(event.target.value) })
+      ),
+      h("button", { type: "button", className: "ce-sk-btn", disabled: protoBusy, onClick: () => void loadProto() }, protoBusy ? t("loading") : t("rpc.load"))
+    ),
+    protoError ? h("div", { className: "cedb-error" }, protoError) : null,
+    h(
+      "div",
+      { className: "cerpc-body" },
+      // ---- method rail ------------------------------------------------------------
+      h(
+        "aside",
+        { className: "cerpc-rail" },
+        methods.length === 0 ? h("div", { className: "cedb-empty" }, t("rpc.noMethods")) : groups.map((group) => h(
+          "div",
+          { key: group.service, className: "cerpc-service" },
+          h("div", { className: "cerpc-service-name", title: group.service }, group.service.split(".").pop()),
+          group.methods.map((method) => h(
+            "button",
+            {
+              key: method.path,
+              type: "button",
+              className: `cerpc-method${method.path === selected ? " cerpc-method-on" : ""}`,
+              title: `${method.request} → ${method.response}`,
+              onClick: () => chooseMethod(method)
+            },
+            h("span", { className: "cerpc-arrow" }, methodArrows(method)),
+            h("span", { className: "cerpc-method-name" }, method.name)
+          ))
+        )),
+        protoFiles.length > 0 ? h("div", { className: "cerpc-files" }, protoFiles.map((file) => h("div", { key: file, className: "cerpc-file" }, file))) : null
+      ),
+      // ---- request / response -----------------------------------------------------
+      h(
+        "section",
+        { className: "cerpc-main" },
+        h(
+          "div",
+          { className: "cerpc-pane" },
+          h(
+            "div",
+            { className: "cerpc-pane-head" },
+            h("span", { className: "cerpc-pane-title" }, t("rpc.request")),
+            selectedMethod ? h("span", { className: "cedb-chip" }, selectedMethod.request) : null,
+            h("span", { className: "ce-spacer" }),
+            h(
+              "label",
+              { className: "cerpc-inline" },
+              h("input", { type: "checkbox", checked: insecureTls, onChange: (event) => setInsecureTls(event.target.checked) }),
+              t("rpc.insecureTls")
+            ),
+            h("input", {
+              className: "ce-input cerpc-timeout",
+              type: "number",
+              value: timeoutMs,
+              "aria-label": t("rpc.timeout"),
+              onChange: (event) => setTimeoutMs(Number(event.target.value) || 3e4)
+            }),
+            h("span", { className: "cedb-kbd" }, "ms")
+          ),
+          h("textarea", {
+            className: `cedb-sql cerpc-json${request.error ? " cerpc-json-bad" : ""}`,
+            value: requestText,
+            spellCheck: false,
+            onChange: (event) => setRequestText(event.target.value)
+          }),
+          request.error ? h("div", { className: "cerpc-json-error" }, request.error) : null,
+          h(
+            "div",
+            { className: "cerpc-meta-head" },
+            h("span", { className: "cerpc-pane-title" }, t("rpc.metadata")),
+            h("button", { type: "button", className: "ce-tool ce-tiny", onClick: () => setMetadata((current) => [...current, { name: "", value: "", enabled: true }]) }, "＋")
+          ),
+          metadata.length === 0 ? h("div", { className: "cerpc-meta-empty" }, t("rpc.noMetadata")) : h("div", { className: "cerpc-meta-list" }, metadata.map((row, index) => h(
+            "div",
+            { key: index, className: "cerpc-meta-row" },
+            h("input", { type: "checkbox", checked: row.enabled !== false, onChange: (event) => setMetadata((cur) => cur.map((entry, i) => i === index ? { ...entry, enabled: event.target.checked } : entry)) }),
+            h("input", { className: "ce-input cerpc-meta-name", value: row.name, placeholder: "authorization", spellCheck: false, onChange: (event) => setMetadata((cur) => cur.map((entry, i) => i === index ? { ...entry, name: event.target.value } : entry)) }),
+            h("input", { className: "ce-input cerpc-meta-value", value: row.value, placeholder: "Bearer …", spellCheck: false, onChange: (event) => setMetadata((cur) => cur.map((entry, i) => i === index ? { ...entry, value: event.target.value } : entry)) }),
+            h("button", { type: "button", className: "ce-tool ce-tiny", title: t("close"), onClick: () => setMetadata((cur) => cur.filter((_, i) => i !== index)) }, "✕")
+          ))),
+          h(
+            "div",
+            { className: "cerpc-actions" },
+            h("button", {
+              type: "button",
+              className: "ce-sk-btn ce-sk-primary",
+              disabled: busy || !selectedMethod || Boolean(request.error),
+              onClick: () => void invoke()
+            }, busy ? t("loading") : `▶ ${t("rpc.invoke")}`),
+            h("span", { className: "cedb-kbd" }, "⌘/Ctrl+Enter")
+          )
+        ),
+        // ---- response ---------------------------------------------------------
+        h(
+          "div",
+          { className: "cerpc-pane cerpc-response" },
+          h(
+            "div",
+            { className: "cerpc-pane-head" },
+            h("span", { className: "cerpc-pane-title" }, t("rpc.response")),
+            response && !response.error ? h(
+              Fragment,
+              null,
+              h("span", { className: `cedb-chip${okStatus ? "" : " cedb-chip-warn"}` }, `${response.status} ${response.statusName}`),
+              response.message ? h("span", { className: "cerpc-status-msg" }, response.message) : null,
+              h("span", { className: "cedb-chip" }, `${response.ms} ms`),
+              h("span", { className: "cedb-chip" }, `${response.messages?.length ?? 0} ${t("rpc.messages")}`),
+              response.truncated ? h("span", { className: "cedb-chip cedb-chip-warn" }, t("db.truncated")) : null
+            ) : null
+          ),
+          response?.error ? h("div", { className: "cedb-error" }, response.error) : response ? h(
+            "div",
+            { className: "cerpc-result" },
+            (response.messages ?? []).map((message, index) => h(
+              "div",
+              { key: index, className: "cerpc-message" },
+              h("div", { className: "cerpc-message-head" }, `#${index + 1}`),
+              h("pre", { className: "cerpc-message-body" }, JSON.stringify(message, null, 2))
+            )),
+            (response.messages ?? []).length === 0 ? h("div", { className: "cedb-placeholder-small" }, t("rpc.emptyResponse")) : null,
+            Object.keys(response.trailers ?? {}).length > 0 ? h(
+              "div",
+              { className: "cerpc-trailers" },
+              h("div", { className: "cerpc-pane-title" }, t("rpc.trailers")),
+              Object.entries(response.trailers).map(([name, value]) => h(
+                "div",
+                { key: name, className: "cerpc-trailer" },
+                h("span", { className: "cerpc-trailer-name" }, name),
+                h("span", { className: "cerpc-trailer-value" }, value)
+              ))
+            ) : null
+          ) : h(
+            "div",
+            { className: "cedb-placeholder" },
+            h("div", { className: "cedb-placeholder-title" }, t("rpc.welcome")),
+            h("div", { className: "cedb-placeholder-hint" }, t("rpc.welcomeHint"))
+          )
+        )
+      )
+    )
+  );
+}
+function RpcTitle() {
   return null;
 }
 
@@ -12510,7 +13304,7 @@ function makeBrowserOpener(sidebarRight, now = Date.now) {
 
 // src/client/lefttools.js
 var LEFT_TOOL_PREFIX = "dsh-plugin-kit/workspace/";
-var LEFT_TOOL_HIDDEN_KINDS = ["terminal"];
+var LEFT_TOOL_HIDDEN_KINDS = [];
 function isHiddenLeftToolKind(kind) {
   return LEFT_TOOL_HIDDEN_KINDS.includes(String(kind));
 }
@@ -12518,10 +13312,19 @@ var OWN_TOOLS = [
   { kind: TAB_KIND, label: "guide.title", description: "guide.description", glyph: "code" },
   { kind: API_TAB_KIND, label: "apiGuide.title", description: "apiGuide.description", glyph: "api" },
   { kind: SKILLS_TAB_KIND, label: "skillsGuide.title", description: "skillsGuide.description", glyph: "skills" },
-  { kind: DB_TAB_KIND, label: "dbGuide.title", description: "dbGuide.description", glyph: "db" }
+  { kind: DB_TAB_KIND, label: "dbGuide.title", description: "dbGuide.description", glyph: "db" },
+  { kind: RPC_TAB_KIND, label: "rpcGuide.title", description: "rpcGuide.description", glyph: "rpc" }
 ];
 function ToolGlyph({ size = 16, glyph = "code" }) {
   if (glyph === "code") return h(IconCode, { size });
+  if (glyph === "rpc") return h(
+    "svg",
+    { viewBox: "0 0 24 24", width: size, height: size, fill: "none", stroke: "currentColor", strokeWidth: 1.7, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true },
+    h("path", { key: "a", d: "M4 7h16M4 17h16" }),
+    h("circle", { key: "b", cx: 8, cy: 7, r: 2 }),
+    h("circle", { key: "c", cx: 16, cy: 17, r: 2 }),
+    h("path", { key: "d", d: "M10 7h4a2 2 0 0 1 2 2v6" })
+  );
   if (glyph === "db") return h(
     "svg",
     { viewBox: "0 0 24 24", width: size, height: size, fill: "none", stroke: "currentColor", strokeWidth: 1.7, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true },
@@ -13471,6 +14274,1695 @@ function BrowserIcon({ size = 18 }) {
   return h("svg", { viewBox: "0 0 24 24", width: size, height: size, fill: "none", stroke: "currentColor", strokeWidth: 1.6, "aria-hidden": true }, h("circle", { cx: 12, cy: 12, r: 9 }), h("path", { d: "M3 12h18M12 3c5 5 5 13 0 18-5-5-5-13 0-18Z" }));
 }
 
+// src/client/vt/width.js
+var WIDE = [
+  4352,
+  4447,
+  // Hangul Jamo init. consonants
+  11904,
+  12350,
+  // CJK radicals, Kangxi, CJK symbols (before 0x303f)
+  12353,
+  13311,
+  // Hiragana .. CJK compatibility
+  13312,
+  19903,
+  // CJK extension A
+  19968,
+  40959,
+  // CJK unified ideographs
+  40960,
+  42191,
+  // Yi
+  43360,
+  43391,
+  // Hangul Jamo extended-A
+  44032,
+  55203,
+  // Hangul syllables
+  63744,
+  64255,
+  // CJK compatibility ideographs
+  65040,
+  65049,
+  // vertical forms
+  65072,
+  65135,
+  // CJK compatibility forms
+  65280,
+  65376,
+  // full-width forms
+  65504,
+  65510,
+  // full-width signs
+  94176,
+  94180,
+  94208,
+  100343,
+  // Tangut
+  100352,
+  101589,
+  110592,
+  111355,
+  // Kana supplement/extended
+  126980,
+  126980,
+  // mahjong red dragon
+  127183,
+  127183,
+  // joker
+  127374,
+  127374,
+  127377,
+  127386,
+  127488,
+  127776,
+  // enclosed ideographs, emoji
+  127789,
+  127797,
+  127799,
+  127868,
+  127870,
+  127891,
+  127904,
+  127946,
+  127951,
+  127955,
+  127968,
+  127984,
+  127988,
+  127988,
+  127992,
+  128062,
+  128064,
+  128064,
+  128066,
+  128252,
+  128255,
+  128317,
+  128331,
+  128334,
+  128336,
+  128359,
+  128378,
+  128378,
+  128405,
+  128406,
+  128420,
+  128420,
+  128507,
+  128591,
+  128640,
+  128709,
+  128716,
+  128716,
+  128720,
+  128722,
+  128725,
+  128727,
+  128747,
+  128748,
+  128756,
+  128764,
+  128992,
+  129003,
+  129292,
+  129338,
+  129340,
+  129349,
+  129351,
+  129535,
+  129648,
+  129652,
+  129656,
+  129658,
+  129664,
+  129670,
+  129680,
+  129704,
+  129712,
+  129718,
+  129728,
+  129730,
+  129744,
+  129750,
+  131072,
+  196605,
+  // CJK extension B and beyond
+  196608,
+  262141
+];
+var ZERO = [
+  768,
+  879,
+  // combining diacritics
+  1155,
+  1161,
+  1425,
+  1469,
+  1552,
+  1562,
+  1611,
+  1631,
+  2304,
+  2306,
+  2364,
+  2364,
+  2369,
+  2376,
+  2385,
+  2391,
+  3633,
+  3633,
+  3636,
+  3642,
+  3655,
+  3662,
+  6832,
+  6911,
+  // combining diacritical marks extended
+  7616,
+  7679,
+  // combining diacritical marks supplement
+  8203,
+  8207,
+  // zero width space .. RTL mark
+  8232,
+  8238,
+  // line/paragraph separators, bidi controls
+  8400,
+  8432,
+  // combining marks for symbols
+  65024,
+  65039,
+  // variation selectors
+  65056,
+  65071,
+  // combining half marks
+  65279,
+  65279,
+  // zero width no-break space
+  917760,
+  917999
+  // variation selectors supplement
+];
+function inRanges(code, table) {
+  let low = 0;
+  let high = table.length / 2 - 1;
+  while (low <= high) {
+    const mid = low + high >> 1;
+    const start = table[mid * 2];
+    const end = table[mid * 2 + 1];
+    if (code < start) high = mid - 1;
+    else if (code > end) low = mid + 1;
+    else return true;
+  }
+  return false;
+}
+function cellWidth(code) {
+  if (code < 32 || code >= 127 && code < 160) return 1;
+  if (code >= 55296 && code <= 57343) return 1;
+  if (code < 768) return 1;
+  if (inRanges(code, ZERO)) return 0;
+  if (inRanges(code, WIDE)) return 2;
+  return 1;
+}
+
+// src/client/vt/screen.js
+var FLAG = { bold: 1, dim: 2, italic: 4, underline: 8, blink: 16, inverse: 32, invisible: 64, strike: 128 };
+var DEFAULT_ATTR = { fg: -1, bg: -1, fl: 0, link: null };
+var TRUECOLOR = 1 << 24;
+var DEC_GRAPHICS = {
+  "`": "◆",
+  a: "▒",
+  b: "␉",
+  c: "␌",
+  d: "␍",
+  e: "␊",
+  f: "°",
+  g: "±",
+  h: "␤",
+  i: "␋",
+  j: "┘",
+  k: "┐",
+  l: "┌",
+  m: "└",
+  n: "┼",
+  o: "⎺",
+  p: "⎻",
+  q: "─",
+  r: "⎼",
+  s: "⎽",
+  t: "├",
+  u: "┤",
+  v: "┴",
+  w: "┬",
+  x: "│",
+  y: "≤",
+  z: "≥",
+  "{": "π",
+  "|": "≠",
+  "}": "£",
+  "~": "·"
+};
+function blankLine(cols) {
+  return { cells: new Array(cols).fill(void 0), wrapped: false, version: 1 };
+}
+var Buffer2 = class {
+  constructor(cols, rows, scrollback) {
+    this.cols = cols;
+    this.rows = rows;
+    this.scrollback = scrollback;
+    this.lines = [];
+    for (let i = 0; i < rows; i++) this.lines.push(blankLine(cols));
+  }
+  /** Grow/shrink the grid, keeping the bottom `rows` rows on screen. */
+  resize(cols, rows) {
+    for (const line of this.lines) {
+      if (line.cells.length !== cols) line.cells.length = cols;
+      line.version++;
+    }
+    while (this.lines.length < rows) this.lines.push(blankLine(cols));
+    while (this.lines.length > rows + this.scrollback) this.lines.shift();
+    this.cols = cols;
+    this.rows = rows;
+  }
+};
+function createScreen({ cols = 80, rows = 24, scrollback = 1e3 } = {}) {
+  const primary = new Buffer2(cols, rows, scrollback);
+  const alternate = new Buffer2(cols, rows, 0);
+  let buffer = primary;
+  let alt = false;
+  let x = 0;
+  let y = 0;
+  let saved = { x: 0, y: 0, attrs: { ...DEFAULT_ATTR }, origin: false };
+  let attrs = { ...DEFAULT_ATTR };
+  let scrollTop = 0;
+  let scrollBottom = rows - 1;
+  let tabs = defaultTabs(cols);
+  let modes = {
+    wrap: true,
+    origin: false,
+    insert: false,
+    cursor: true,
+    appCursor: false,
+    alt: false,
+    bracketedPaste: false,
+    mouse: "off",
+    echo: true
+  };
+  let cursorStyle = "block";
+  let cursorBlink = true;
+  let title = "";
+  let bell = 0;
+  let dirtyAll = true;
+  let charsetG0 = "ascii";
+  const listeners = { title: [], bell: [] };
+  let state = "ground";
+  let params = "";
+  let prefix = "";
+  let intermediate = "";
+  let osc = "";
+  let dcsSkip = false;
+  function defaultTabs(width) {
+    const stops = /* @__PURE__ */ new Set();
+    for (let i = 8; i < width; i += 8) stops.add(i);
+    return stops;
+  }
+  const absRow = (row = y) => buffer.lines.length - buffer.rows + row;
+  function lineAt(row) {
+    const index = absRow(row);
+    if (index < 0) return null;
+    return buffer.lines[index] ?? null;
+  }
+  function touch(row) {
+    const line = lineAt(row);
+    if (line) line.version++;
+  }
+  function touchAll() {
+    dirtyAll = true;
+    for (const line of buffer.lines) line.version++;
+  }
+  function blankCell() {
+    return attrs.bg === -1 && attrs.fl === 0 ? void 0 : { c: " ", fg: -1, bg: attrs.bg, fl: attrs.fl & FLAG.underline ? 0 : 0, w: 1, link: null };
+  }
+  function put(codePoint, text) {
+    const width = cellWidth(codePoint);
+    const line = lineAt();
+    if (!line) return;
+    if (width === 0) {
+      const col = Math.max(0, x - 1);
+      const cell = line.cells[col];
+      if (cell) {
+        cell.c = cell.c + text;
+        line.version++;
+      }
+      return;
+    }
+    if (modes.wrap && x + width > buffer.cols) {
+      line.wrapped = true;
+      x = 0;
+      indexDown();
+    }
+    if (x + width > buffer.cols) x = buffer.cols - width;
+    if (modes.insert) insertCells(width);
+    const target = lineAt();
+    if (!target) return;
+    if (width === 2 && x + 1 < buffer.cols) {
+      target.cells[x + 1] = { c: "", fg: attrs.fg, bg: attrs.bg, fl: attrs.fl, w: 0, link: attrs.link };
+    }
+    target.cells[x] = { c: text, fg: attrs.fg, bg: attrs.bg, fl: attrs.fl, w: width, link: attrs.link };
+    target.version++;
+    x += width;
+  }
+  function indexDown() {
+    if (y === scrollBottom) scrollUp(1);
+    else y = Math.min(buffer.rows - 1, y + 1);
+  }
+  function indexUp() {
+    if (y === scrollTop) scrollDown(1);
+    else y = Math.max(0, y - 1);
+  }
+  function scrollUp(count2) {
+    const top = absRow(scrollTop);
+    const bottom = absRow(scrollBottom);
+    if (top < 0 || bottom >= buffer.lines.length) return;
+    const whole = scrollTop === 0 && scrollBottom === buffer.rows - 1;
+    for (let i = 0; i < count2; i++) {
+      if (whole) buffer.lines.push(blankLine(buffer.cols));
+      else buffer.lines.splice(top, 0, blankLine(buffer.cols));
+      if (!whole) buffer.lines.splice(bottom + 1, 1);
+      while (buffer.lines.length > buffer.rows + buffer.scrollback) buffer.lines.shift();
+    }
+    dirtyAll = true;
+  }
+  function scrollDown(count2) {
+    const top = absRow(scrollTop);
+    const bottom = absRow(scrollBottom);
+    if (top < 0 || bottom >= buffer.lines.length) return;
+    for (let i = 0; i < count2; i++) {
+      buffer.lines.splice(bottom, 1);
+      buffer.lines.splice(top, 0, blankLine(buffer.cols));
+    }
+    dirtyAll = true;
+  }
+  function carriageReturn() {
+    x = 0;
+  }
+  function lineFeed() {
+    indexDown();
+    if (modes.echo) {
+    }
+  }
+  function eraseCells(row, from, to) {
+    const line = lineAt(row);
+    if (!line) return;
+    const blank = blankCell();
+    for (let col = Math.max(0, from); col < Math.min(buffer.cols, to); col++) line.cells[col] = blank;
+    line.version++;
+  }
+  function eraseInLine(mode) {
+    if (mode === 0) eraseCells(y, x, buffer.cols);
+    else if (mode === 1) eraseCells(y, 0, x + 1);
+    else eraseCells(y, 0, buffer.cols);
+  }
+  function eraseInDisplay(mode) {
+    if (mode === 0) {
+      eraseCells(y, x, buffer.cols);
+      for (let row = y + 1; row < buffer.rows; row++) eraseCells(row, 0, buffer.cols);
+    } else if (mode === 1) {
+      for (let row = 0; row < y; row++) eraseCells(row, 0, buffer.cols);
+      eraseCells(y, 0, x + 1);
+    } else if (mode === 2) {
+      for (let row = 0; row < buffer.rows; row++) eraseCells(row, 0, buffer.cols);
+    } else if (mode === 3) {
+      const keep = Math.max(0, buffer.lines.length - buffer.rows);
+      buffer.lines.splice(0, keep);
+      dirtyAll = true;
+    }
+  }
+  function insertCells(count2) {
+    const line = lineAt();
+    if (!line) return;
+    const head = line.cells.slice(0, x);
+    const rest = line.cells.slice(x, Math.max(0, buffer.cols - count2));
+    line.cells = head.concat(new Array(count2).fill(void 0), rest).slice(0, buffer.cols);
+    while (line.cells.length < buffer.cols) line.cells.push(void 0);
+    line.version++;
+  }
+  function deleteCells(count2) {
+    const line = lineAt();
+    if (!line) return;
+    const head = line.cells.slice(0, x);
+    const rest = line.cells.slice(x + count2);
+    line.cells = head.concat(rest, new Array(count2).fill(void 0)).slice(0, buffer.cols);
+    while (line.cells.length < buffer.cols) line.cells.push(void 0);
+    line.version++;
+  }
+  function enterAlternate(clear) {
+    if (!alt) {
+      alt = true;
+      modes.alt = true;
+      buffer = alternate;
+      if (clear) alternate.lines = Array.from({ length: alternate.rows }, () => blankLine(alternate.cols));
+      dirtyAll = true;
+    } else if (clear) {
+      alternate.lines = Array.from({ length: alternate.rows }, () => blankLine(alternate.cols));
+      dirtyAll = true;
+    }
+  }
+  function leaveAlternate() {
+    if (!alt) return;
+    alt = false;
+    modes.alt = false;
+    buffer = primary;
+    scrollTop = 0;
+    scrollBottom = primary.rows - 1;
+    dirtyAll = true;
+  }
+  function setColor(target, params2, index) {
+    const kind = Number(params2[index + 1]);
+    if (kind === 5) {
+      const n = Number(params2[index + 2]);
+      if (Number.isFinite(n) && n >= 0 && n < 256) {
+        attrs[target] = n;
+        return 3;
+      }
+      return 2;
+    }
+    if (kind === 2) {
+      const r = Number(params2[index + 2]);
+      const g = Number(params2[index + 3]);
+      const b = Number(params2[index + 4]);
+      if ([r, g, b].every((value) => Number.isFinite(value))) {
+        attrs[target] = TRUECOLOR | clamp(r) << 16 | clamp(g) << 8 | clamp(b);
+        return 5;
+      }
+      return 4;
+    }
+    return 1;
+  }
+  function clamp(value) {
+    return Math.max(0, Math.min(255, Math.trunc(value)));
+  }
+  function applySgr(list2) {
+    for (let i = 0; i < list2.length; i++) {
+      const code = list2[i];
+      switch (code) {
+        case 0:
+          attrs = { ...DEFAULT_ATTR };
+          break;
+        case 1:
+          attrs.fl |= FLAG.bold;
+          break;
+        case 2:
+          attrs.fl |= FLAG.dim;
+          break;
+        case 3:
+          attrs.fl |= FLAG.italic;
+          break;
+        case 4:
+          attrs.fl |= FLAG.underline;
+          break;
+        case 5:
+        case 6:
+          attrs.fl |= FLAG.blink;
+          break;
+        case 7:
+          attrs.fl |= FLAG.inverse;
+          break;
+        case 8:
+          attrs.fl |= FLAG.invisible;
+          break;
+        case 9:
+          attrs.fl |= FLAG.strike;
+          break;
+        case 21:
+        case 22:
+          attrs.fl &= ~(FLAG.bold | FLAG.dim);
+          break;
+        case 23:
+          attrs.fl &= ~FLAG.italic;
+          break;
+        case 24:
+          attrs.fl &= ~FLAG.underline;
+          break;
+        case 25:
+          attrs.fl &= ~FLAG.blink;
+          break;
+        case 27:
+          attrs.fl &= ~FLAG.inverse;
+          break;
+        case 28:
+          attrs.fl &= ~FLAG.invisible;
+          break;
+        case 29:
+          attrs.fl &= ~FLAG.strike;
+          break;
+        case 38:
+          i += setColor("fg", list2, i);
+          break;
+        case 48:
+          i += setColor("bg", list2, i);
+          break;
+        case 39:
+          attrs.fg = -1;
+          break;
+        case 49:
+          attrs.bg = -1;
+          break;
+        default:
+          if (code >= 30 && code <= 37) attrs.fg = code - 30;
+          else if (code >= 40 && code <= 47) attrs.bg = code - 40;
+          else if (code >= 90 && code <= 97) attrs.fg = code - 90 + 8;
+          else if (code >= 100 && code <= 107) attrs.bg = code - 100 + 8;
+          break;
+      }
+    }
+  }
+  function count(paramIndex = 0, fallback = 1) {
+    const value = Number(Number.isFinite(list[paramIndex]) ? list[paramIndex] : fallback);
+    return value === 0 ? fallback : value;
+  }
+  let list = [];
+  function csi(final) {
+    const params0 = list[0];
+    switch (final) {
+      case "@":
+        insertCells(count());
+        break;
+      case "A":
+        y = Math.max(scrollTop, y - count());
+        break;
+      case "B":
+        y = Math.min(scrollBottom, y + count());
+        break;
+      case "C":
+        x = Math.min(buffer.cols - 1, x + count());
+        break;
+      case "D":
+        x = Math.max(0, x - count());
+        break;
+      case "E":
+        x = 0;
+        y = Math.min(scrollBottom, y + count());
+        break;
+      case "F":
+        x = 0;
+        y = Math.max(scrollTop, y - count());
+        break;
+      case "G":
+      case "`":
+        x = clampCol(count() - 1);
+        break;
+      case "H":
+      case "f":
+        y = clampRow((Number.isFinite(list[0]) ? list[0] : 1) - 1 + (modes.origin ? scrollTop : 0));
+        x = clampCol((Number.isFinite(list[1]) ? list[1] : 1) - 1);
+        break;
+      case "I":
+        for (let i = 0; i < count(); i++) x = nextTab(x);
+        break;
+      case "J":
+        eraseInDisplay(Number.isFinite(params0) ? params0 : 0);
+        break;
+      case "K":
+        eraseInLine(Number.isFinite(params0) ? params0 : 0);
+        break;
+      case "L":
+        scrollDownAt(count());
+        break;
+      case "M":
+        scrollUpAt(count());
+        break;
+      case "P":
+        deleteCells(count());
+        break;
+      case "S":
+        scrollUp(count());
+        break;
+      case "T":
+        scrollDown(count());
+        break;
+      case "X":
+        eraseCells(y, x, x + count());
+        break;
+      case "Z":
+        for (let i = 0; i < count(); i++) x = previousTab(x);
+        break;
+      case "a":
+        x = clampCol(x + count());
+        break;
+      case "b": {
+        const line = lineAt();
+        const previous = line?.cells[x - 1];
+        if (previous) for (let i = 0; i < count(); i++) put(previous.c.codePointAt(0) ?? 32, previous.c);
+        break;
+      }
+      case "d":
+        y = clampRow(count() - 1);
+        break;
+      case "e":
+        y = Math.min(scrollBottom, y + count());
+        break;
+      case "g":
+        if (Number.isFinite(params0) && params0 === 3) tabs.clear();
+        else tabs.delete(x);
+        break;
+      case "h":
+        setModes(true);
+        break;
+      case "l":
+        setModes(false);
+        break;
+      case "m":
+        applySgr(list.length === 0 ? [0] : list);
+        break;
+      case "n":
+        break;
+      // status reports are answered by the host side, not us
+      case "q":
+        cursorStyle = ["block", "block", "block", "underline", "underline", "bar", "bar"][Number.isFinite(params0) ? params0 : 0] ?? "block";
+        break;
+      case "r": {
+        const top = (Number.isFinite(list[0]) ? list[0] : 1) - 1;
+        const bottom = (Number.isFinite(list[1]) ? list[1] : buffer.rows) - 1;
+        if (top < bottom && bottom < buffer.rows) {
+          scrollTop = Math.max(0, top);
+          scrollBottom = bottom;
+          y = modes.origin ? scrollTop : 0;
+          x = 0;
+        }
+        break;
+      }
+      case "s":
+        saved = { x, y, attrs: { ...attrs }, origin: modes.origin };
+        break;
+      case "u":
+        x = saved.x;
+        y = saved.y;
+        attrs = { ...saved.attrs };
+        break;
+      case "t":
+        break;
+      // window manipulation: ignored on purpose
+      default:
+        break;
+    }
+  }
+  function scrollDownAt(countLines2) {
+    const top = absRow(y);
+    const bottom = absRow(scrollBottom);
+    if (top < 0 || bottom >= buffer.lines.length) return;
+    for (let i = 0; i < countLines2; i++) {
+      buffer.lines.splice(bottom, 1);
+      buffer.lines.splice(top, 0, blankLine(buffer.cols));
+    }
+    dirtyAll = true;
+  }
+  function scrollUpAt(countLines2) {
+    const top = absRow(y);
+    const bottom = absRow(scrollBottom);
+    if (top < 0 || bottom >= buffer.lines.length) return;
+    for (let i = 0; i < countLines2; i++) {
+      buffer.lines.splice(top, 1);
+      buffer.lines.splice(bottom, 0, blankLine(buffer.cols));
+    }
+    dirtyAll = true;
+  }
+  function setModes(on) {
+    const isPrivate = prefix === "?";
+    for (const value of list) {
+      if (!isPrivate) continue;
+      switch (value) {
+        case 1:
+          modes.appCursor = on;
+          break;
+        case 6:
+          modes.origin = on;
+          y = on ? scrollTop : 0;
+          x = 0;
+          break;
+        case 7:
+          modes.wrap = on;
+          break;
+        case 4:
+          modes.insert = on;
+          break;
+        case 25:
+          modes.cursor = on;
+          break;
+        case 47:
+        case 1047:
+          if (on) enterAlternate(false);
+          else leaveAlternate();
+          break;
+        case 1049:
+          if (on) {
+            saved = { x, y, attrs: { ...attrs }, origin: modes.origin };
+            enterAlternate(true);
+            x = 0;
+            y = 0;
+          } else {
+            leaveAlternate();
+            x = saved.x;
+            y = saved.y;
+          }
+          break;
+        case 1e3:
+        case 1002:
+        case 1003:
+          modes.mouse = on ? String(value) : "off";
+          break;
+        case 2004:
+          modes.bracketedPaste = on;
+          break;
+        default:
+          break;
+      }
+    }
+  }
+  function clampCol(value) {
+    return Math.max(0, Math.min(buffer.cols - 1, value));
+  }
+  function clampRow(value) {
+    return Math.max(0, Math.min(buffer.rows - 1, value));
+  }
+  function nextTab(from) {
+    for (let col = from + 1; col < buffer.cols; col++) if (tabs.has(col)) return col;
+    return buffer.cols - 1;
+  }
+  function previousTab(from) {
+    for (let col = from - 1; col >= 0; col--) if (tabs.has(col)) return col;
+    return 0;
+  }
+  function escape2(final) {
+    switch (final) {
+      case "D":
+        indexDown();
+        break;
+      case "E":
+        x = 0;
+        indexDown();
+        break;
+      case "M":
+        indexUp();
+        break;
+      case "7":
+        saved = { x, y, attrs: { ...attrs }, origin: modes.origin };
+        break;
+      case "8":
+        x = saved.x;
+        y = saved.y;
+        attrs = { ...saved.attrs };
+        break;
+      case "c":
+        reset();
+        break;
+      case "H":
+        tabs.add(x);
+        break;
+      default:
+        break;
+    }
+  }
+  function reset() {
+    alt = false;
+    modes.alt = false;
+    buffer = primary;
+    primary.lines = Array.from({ length: primary.rows }, () => blankLine(primary.cols));
+    alternate.lines = Array.from({ length: alternate.rows }, () => blankLine(alternate.cols));
+    x = 0;
+    y = 0;
+    attrs = { ...DEFAULT_ATTR };
+    scrollTop = 0;
+    scrollBottom = primary.rows - 1;
+    tabs = defaultTabs(primary.cols);
+    modes = { ...modes, wrap: true, origin: false, insert: false, cursor: true, appCursor: false, bracketedPaste: false, mouse: "off" };
+    dirtyAll = true;
+  }
+  function dispatchOsc(payload) {
+    const semicolon = payload.indexOf(";");
+    const command = semicolon === -1 ? payload : payload.slice(0, semicolon);
+    const body = semicolon === -1 ? "" : payload.slice(semicolon + 1);
+    if (command === "0" || command === "2") {
+      title = body;
+      for (const listener of listeners.title) listener(title);
+    }
+  }
+  function write(data) {
+    if (typeof data !== "string" || data === "") return;
+    const length = data.length;
+    let i = 0;
+    while (i < length) {
+      if (state === "ground") {
+        let end = i;
+        while (end < length) {
+          const code2 = data.charCodeAt(end);
+          if (code2 < 32 || code2 === 127 || code2 === 27) break;
+          end++;
+        }
+        if (end > i) {
+          writeText(data.slice(i, end), end - i === 0);
+          i = end;
+          continue;
+        }
+        const ch = data[i];
+        const code = data.charCodeAt(i);
+        i++;
+        if (code === 27) {
+          state = "escape";
+          intermediate = "";
+          continue;
+        }
+        if (code === 13) {
+          carriageReturn();
+          continue;
+        }
+        if (code === 10 || code === 11 || code === 12) {
+          lineFeed();
+          continue;
+        }
+        if (code === 8) {
+          x = Math.max(0, x - 1);
+          continue;
+        }
+        if (code === 9) {
+          x = nextTab(x);
+          continue;
+        }
+        if (code === 7) {
+          bell++;
+          for (const listener of listeners.bell) listener();
+          continue;
+        }
+        void ch;
+        continue;
+      }
+      if (state === "escape") {
+        const ch = data[i++];
+        if (ch === "[") {
+          state = "csi";
+          params = "";
+          prefix = "";
+          intermediate = "";
+          continue;
+        }
+        if (ch === "]") {
+          state = "osc";
+          osc = "";
+          continue;
+        }
+        if (ch === "P" || ch === "^" || ch === "_") {
+          state = "dcs";
+          dcsSkip = true;
+          continue;
+        }
+        if (ch === "(" || ch === ")" || ch === "*" || ch === "+") {
+          state = "charset";
+          intermediate = ch;
+          continue;
+        }
+        if (ch === "#") {
+          state = "hash";
+          continue;
+        }
+        state = "ground";
+        escape2(ch);
+        continue;
+      }
+      if (state === "charset") {
+        const ch = data[i++];
+        state = "ground";
+        if (intermediate === "(") charsetG0 = ch === "0" ? "dec" : "ascii";
+        continue;
+      }
+      if (state === "hash") {
+        i++;
+        state = "ground";
+        continue;
+      }
+      if (state === "csi") {
+        const ch = data[i++];
+        const code = ch.charCodeAt(0);
+        if (code >= 48 && code <= 59) {
+          params += ch;
+          continue;
+        }
+        if (code >= 60 && code <= 63) {
+          prefix = ch;
+          continue;
+        }
+        if (code >= 32 && code <= 47) {
+          intermediate += ch;
+          continue;
+        }
+        if (code >= 64 && code <= 126) {
+          state = "ground";
+          list = parseParams(params);
+          csi(ch);
+          params = "";
+          prefix = "";
+          intermediate = "";
+          continue;
+        }
+        state = "ground";
+        continue;
+      }
+      if (state === "osc") {
+        const ch = data[i++];
+        if (ch === "\x07") {
+          state = "ground";
+          dispatchOsc(osc);
+          osc = "";
+          continue;
+        }
+        if (ch === "\x1B") {
+          state = "oscEsc";
+          continue;
+        }
+        osc += ch;
+        if (osc.length > 4096) {
+          state = "ground";
+          osc = "";
+        }
+        continue;
+      }
+      if (state === "oscEsc") {
+        const ch = data[i++];
+        state = "ground";
+        if (ch === "\\") dispatchOsc(osc);
+        osc = "";
+        continue;
+      }
+      if (state === "dcs") {
+        const ch = data[i++];
+        if (ch === "\x1B") {
+          state = "dcsEsc";
+          continue;
+        }
+        continue;
+      }
+      if (state === "dcsEsc") {
+        const ch = data[i++];
+        state = "ground";
+        void ch;
+        dcsSkip = false;
+        continue;
+      }
+    }
+  }
+  function parseParams(raw) {
+    if (raw === "") return [];
+    const out = [];
+    for (const part of raw.replace(/[:]/gu, ";").split(";")) {
+      out.push(part === "" ? Number.NaN : Number(part));
+    }
+    return out;
+  }
+  function writeText(text, _unused) {
+    if (charsetG0 === "dec") {
+      for (const ch of text) {
+        const mapped = DEC_GRAPHICS[ch];
+        if (mapped) put(mapped.codePointAt(0), mapped);
+        else put(ch.codePointAt(0), ch);
+      }
+      return;
+    }
+    for (const ch of text) {
+      const code = ch.codePointAt(0);
+      if (code === void 0) continue;
+      if (code < 32) continue;
+      put(code, ch);
+    }
+  }
+  function viewport() {
+    const start = Math.max(0, buffer.lines.length - buffer.rows);
+    return buffer.lines.slice(start, start + buffer.rows);
+  }
+  function viewportAt(offset = 0) {
+    const maxOffset = buffer === primary ? Math.max(0, buffer.lines.length - buffer.rows) : 0;
+    const fromBottom = Math.min(Math.max(0, offset), maxOffset);
+    const start = Math.max(0, buffer.lines.length - buffer.rows - fromBottom);
+    if (fromBottom === 0) return viewport();
+    return buffer.lines.slice(start, start + buffer.rows);
+  }
+  return {
+    write,
+    reset,
+    resize(cols2, rows2) {
+      if (cols2 === buffer.cols && rows2 === buffer.rows) return false;
+      primary.resize(cols2, rows2);
+      alternate.resize(cols2, rows2);
+      scrollTop = 0;
+      scrollBottom = rows2 - 1;
+      tabs = defaultTabs(cols2);
+      x = clampCol(x);
+      y = clampRow(y);
+      dirtyAll = true;
+      return true;
+    },
+    viewport,
+    viewportAt,
+    get cols() {
+      return buffer.cols;
+    },
+    get rows() {
+      return buffer.rows;
+    },
+    get alt() {
+      return alt;
+    },
+    get title() {
+      return title;
+    },
+    get bellCount() {
+      return bell;
+    },
+    get modes() {
+      return { ...modes };
+    },
+    get cursor() {
+      return { x, y, visible: modes.cursor, style: cursorStyle, blink: cursorBlink };
+    },
+    get attrs() {
+      return { ...attrs };
+    },
+    get scrollbackRows() {
+      return buffer === primary ? Math.max(0, buffer.lines.length - buffer.rows) : 0;
+    },
+    get dirtyAll() {
+      return dirtyAll;
+    },
+    clearDirty() {
+      dirtyAll = false;
+    },
+    onTitle(listener) {
+      listeners.title.push(listener);
+      return () => {
+        const i = listeners.title.indexOf(listener);
+        if (i >= 0) listeners.title.splice(i, 1);
+      };
+    },
+    onBell(listener) {
+      listeners.bell.push(listener);
+      return () => {
+        const i = listeners.bell.indexOf(listener);
+        if (i >= 0) listeners.bell.splice(i, 1);
+      };
+    }
+  };
+}
+
+// src/client/vt/render.js
+var TRUECOLOR2 = 1 << 24;
+var FLAG2 = { bold: 1, dim: 2, italic: 4, underline: 8, blink: 16, inverse: 32, invisible: 64, strike: 128 };
+var BASE16 = [
+  "#000000",
+  "#cd0000",
+  "#00cd00",
+  "#cdcd00",
+  "#0000ee",
+  "#cd00cd",
+  "#00cdcd",
+  "#e5e5e5",
+  "#7f7f7f",
+  "#ff0000",
+  "#00ff00",
+  "#ffff00",
+  "#5c5cff",
+  "#ff00ff",
+  "#00ffff",
+  "#ffffff"
+];
+var paletteCache = null;
+function palette256() {
+  if (paletteCache) return paletteCache;
+  const colors = BASE16.slice();
+  const steps = [0, 95, 135, 175, 215, 255];
+  for (let r = 0; r < 6; r++) {
+    for (let g = 0; g < 6; g++) {
+      for (let b = 0; b < 6; b++) colors.push(rgbHex(steps[r], steps[g], steps[b]));
+    }
+  }
+  for (let i = 0; i < 24; i++) {
+    const level = 8 + i * 10;
+    colors.push(rgbHex(level, level, level));
+  }
+  paletteCache = colors;
+  return colors;
+}
+function rgbHex(r, g, b) {
+  return `#${[r, g, b].map((value) => value.toString(16).padStart(2, "0")).join("")}`;
+}
+function colorCss(value, fallback) {
+  if (value === -1 || value === void 0 || value === null) return fallback;
+  if (value & TRUECOLOR2) {
+    const rgb = value & 16777215;
+    return rgbHex(rgb >> 16 & 255, rgb >> 8 & 255, rgb & 255);
+  }
+  return palette256()[value] ?? fallback;
+}
+function escapeHtml(text) {
+  if (text === "&") return "&amp;";
+  if (text === "<") return "&lt;";
+  if (text === ">") return "&gt;";
+  if (text === '"') return "&quot;";
+  if (text === "'") return "&#39;";
+  return text;
+}
+function signature(cell, theme) {
+  const inverse = (cell.fl & FLAG2.inverse) !== 0;
+  const fg = colorCss(inverse ? cell.bg : cell.fg, inverse ? theme.bg : theme.fg);
+  const bg = colorCss(inverse ? cell.fg : cell.bg, inverse ? theme.fg : theme.bg);
+  const parts = [];
+  if (cell.fl & FLAG2.bold) parts.push("font-weight:600");
+  if (cell.fl & FLAG2.dim) parts.push("opacity:.65");
+  if (cell.fl & FLAG2.italic) parts.push("font-style:italic");
+  if (cell.fl & FLAG2.underline) parts.push("text-decoration:underline");
+  if (cell.fl & FLAG2.strike) parts.push("text-decoration:line-through");
+  if (cell.fl & FLAG2.invisible) parts.push("visibility:hidden");
+  if (cell.bg !== -1 || inverse) parts.push(`background:${bg}`);
+  parts.push(`color:${fg}`);
+  return parts.join(";");
+}
+function rowHtml(line, theme) {
+  const cells = line?.cells ?? [];
+  let html = "";
+  let run = "";
+  let runStyle = null;
+  let pendingBlanks = 0;
+  const flushBlanks = () => {
+    if (pendingBlanks > 0 && runStyle !== null) run += " ".repeat(pendingBlanks);
+    pendingBlanks = 0;
+  };
+  const flush = () => {
+    if (run !== "") html += `<span style="${runStyle}">${run}</span>`;
+    run = "";
+    pendingBlanks = 0;
+  };
+  for (let i = 0; i < cells.length; i++) {
+    const cell = cells[i];
+    if (!cell) {
+      pendingBlanks++;
+      continue;
+    }
+    if (cell.w === 0) continue;
+    const style = signature(cell, theme);
+    if (style !== runStyle) {
+      flush();
+      runStyle = style;
+    }
+    flushBlanks();
+    run += escapeHtml(cell.c);
+  }
+  flush();
+  return html;
+}
+function createRenderer({ container, doc = globalThis.document, theme = () => ({ fg: "#d4d4d4", bg: "#1e1e1e" }), font = () => ({ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontSize: 13 }) } = {}) {
+  const rowsEl = doc.createElement("div");
+  rowsEl.className = "ce-term-rows";
+  const cursorEl = doc.createElement("div");
+  cursorEl.className = "ce-term-cursor";
+  const measureEl = doc.createElement("span");
+  measureEl.className = "ce-term-measure";
+  measureEl.textContent = "MMMMMMMMMM";
+  container.appendChild(rowsEl);
+  container.appendChild(cursorEl);
+  container.appendChild(measureEl);
+  let cellWidth2 = 8;
+  let rowHeight = 16;
+  let rowEls = [];
+  const versions = [];
+  let themeValue = theme();
+  let lastCursor = null;
+  function measure() {
+    const { fontFamily, fontSize } = font();
+    const css = `${fontSize}px ${fontFamily}`;
+    measureEl.style.font = css;
+    rowsEl.style.font = css;
+    rowsEl.style.fontKerning = "none";
+    const width = measureEl.getBoundingClientRect().width / 10;
+    if (width > 0) cellWidth2 = width;
+    const style2 = doc.defaultView?.getComputedStyle?.(rowsEl);
+    const lineHeight = style2 ? Number.parseFloat(style2.lineHeight) : Number.NaN;
+    rowHeight = Number.isFinite(lineHeight) && lineHeight > 0 ? lineHeight : Math.ceil(font().fontSize * 1.2);
+    for (const el of rowEls) {
+      el.style.height = `${rowHeight}px`;
+      el.style.lineHeight = `${rowHeight}px`;
+    }
+    return { cellWidth: cellWidth2, rowHeight };
+  }
+  function ensureRows(count) {
+    while (rowEls.length < count) {
+      const el = doc.createElement("div");
+      el.className = "ce-term-row";
+      el.style.height = `${rowHeight}px`;
+      el.style.lineHeight = `${rowHeight}px`;
+      rowsEl.appendChild(el);
+      rowEls.push(el);
+      versions.push(-1);
+    }
+    while (rowEls.length > count) {
+      const el = rowEls.pop();
+      el.remove();
+      versions.pop();
+    }
+  }
+  function paint(screen, { offset = 0 } = {}) {
+    themeValue = theme();
+    const lines2 = screen.viewportAt(offset);
+    ensureRows(lines2.length);
+    for (let i = 0; i < lines2.length; i++) {
+      const line = lines2[i];
+      const version = line?.version ?? 0;
+      if (versions[i] === version) continue;
+      versions[i] = version;
+      rowEls[i].innerHTML = rowHtml(line, themeValue);
+    }
+    const cursor = screen.cursor;
+    const show = cursor.visible && offset === 0;
+    cursorEl.style.display = show ? "block" : "none";
+    if (show) {
+      const style = cursor.style === "bar" ? "ce-term-cursor-bar" : cursor.style === "underline" ? "ce-term-cursor-underline" : "ce-term-cursor-block";
+      if (lastCursor !== style) {
+        cursorEl.className = `ce-term-cursor ${style}${cursor.blink ? " ce-term-cursor-blink" : ""}`;
+        lastCursor = style;
+      }
+      cursorEl.style.transform = `translate(${cursor.x * cellWidth2}px, ${cursor.y * rowHeight}px)`;
+      cursorEl.style.width = `${cellWidth2}px`;
+      cursorEl.style.height = `${rowHeight}px`;
+    }
+  }
+  function invalidate() {
+    for (let i = 0; i < versions.length; i++) versions[i] = -1;
+  }
+  return {
+    measure,
+    paint,
+    invalidate,
+    get cellWidth() {
+      return cellWidth2;
+    },
+    get rowHeight() {
+      return rowHeight;
+    },
+    /** Size in device pixels consumed by the current grid. */
+    gridSize(cols, rows) {
+      return { width: cols * cellWidth2, height: rows * rowHeight };
+    },
+    dispose() {
+      rowsEl.remove();
+      cursorEl.remove();
+      measureEl.remove();
+      rowEls = [];
+      versions.length = 0;
+    }
+  };
+}
+
+// src/client/vt/keys.js
+function modifierFor(event) {
+  let value = 1;
+  if (event.shiftKey) value += 1;
+  if (event.altKey) value += 2;
+  if (event.ctrlKey) value += 4;
+  if (event.metaKey) value += 8;
+  return value;
+}
+var CURSOR_KEYS = {
+  ArrowUp: ["A", "A"],
+  ArrowDown: ["B", "B"],
+  ArrowRight: ["C", "C"],
+  ArrowLeft: ["D", "D"],
+  Home: ["H", "H"],
+  End: ["F", "F"]
+};
+var TILDE_KEYS = {
+  Insert: 2,
+  Delete: 3,
+  PageUp: 5,
+  PageDown: 6,
+  F5: 15,
+  F6: 17,
+  F7: 18,
+  F8: 19,
+  F9: 20,
+  F10: 21,
+  F11: 23,
+  F12: 24
+};
+var SS3_KEYS = { F1: "P", F2: "Q", F3: "R", F4: "S" };
+function keyToBytes(event, modes = {}) {
+  const { key, ctrlKey, altKey, metaKey, shiftKey } = event;
+  if (key === void 0) return null;
+  const modified = modifierFor(event) !== 1;
+  if (ctrlKey && !altKey && !metaKey && key.length === 1) {
+    const upper = key.toUpperCase();
+    if (upper >= "A" && upper <= "Z") return String.fromCharCode(upper.charCodeAt(0) - 64);
+    if (key === " ") return "\0";
+    if (key === "[") return "\x1B";
+    if (key === "\\") return "";
+    if (key === "]") return "";
+    if (key === "^") return "";
+    if (key === "_" || key === "-") return "";
+    if (key === "?") return "";
+    if (key === "@") return "\0";
+    return null;
+  }
+  if (key === "Enter") return altKey ? "\x1B\r" : "\r";
+  if (key === "Tab") return shiftKey ? "\x1B[Z" : "	";
+  if (key === "Backspace") return ctrlKey ? "\b" : "";
+  if (key === "Escape") return "\x1B";
+  if (key === " ") return ctrlKey ? "\0" : null;
+  const cursor = CURSOR_KEYS[key];
+  if (cursor) {
+    const [final, ss32] = cursor;
+    if (!modified && modes.appCursor) return `\x1BO${ss32}`;
+    if (!modified) return `\x1B[${final}`;
+    return `\x1B[1;${modifierFor(event)}${final}`;
+  }
+  const tilde = TILDE_KEYS[key];
+  if (tilde !== void 0) {
+    return modified ? `\x1B[${tilde};${modifierFor(event)}~` : `\x1B[${tilde}~`;
+  }
+  const ss3 = SS3_KEYS[key];
+  if (ss3) {
+    return modified ? `\x1B[1;${modifierFor(event)}${ss3}` : `\x1BO${ss3}`;
+  }
+  return null;
+}
+function pasteToBytes(text, bracketed) {
+  if (typeof text !== "string" || text === "") return "";
+  const normalised = text.replace(/\r\n/gu, "\r").replace(/\n/gu, "\r");
+  return bracketed ? `\x1B[200~${normalised}\x1B[201~` : normalised;
+}
+
+// src/client/vt/body.js
+function applyRenderFrame(screen, render) {
+  const payload = render?.frame;
+  if (!payload) return false;
+  if (payload.type === "snapshot") {
+    screen.reset();
+    const info = payload.info ?? {};
+    if (Number.isFinite(info.cols) && Number.isFinite(info.rows)) screen.resize(info.cols, info.rows);
+    screen.write(typeof payload.screen === "string" ? payload.screen : "");
+    return true;
+  }
+  if (payload.type === "output") {
+    screen.write(typeof payload.data === "string" ? payload.data : "");
+    return true;
+  }
+  return false;
+}
+var DEFAULT_THEME = {
+  fg: "#d4d4d4",
+  bg: "#1e1e1e",
+  fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+  fontSize: 13
+};
+function themeOf(snapshot) {
+  if (!snapshot || typeof snapshot !== "object") return DEFAULT_THEME;
+  const family = snapshot.fontFamilies?.terminal ?? DEFAULT_THEME.fontFamily;
+  const size = snapshot.fontSizes?.terminal ?? DEFAULT_THEME.fontSize;
+  return {
+    fg: DEFAULT_THEME.fg,
+    bg: DEFAULT_THEME.bg,
+    fontFamily: family === "" ? DEFAULT_THEME.fontFamily : `${family}, ${DEFAULT_THEME.fontFamily}`,
+    fontSize: Number.isFinite(size) ? size : DEFAULT_THEME.fontSize
+  };
+}
+function TerminalBody({ useTabInfo, useTerminal, useTheme, view, t }) {
+  const { tab } = useTabInfo();
+  const model = view(tab.id);
+  const state = useTerminal(tab.id);
+  const themeSnapshot = useTheme ? useTheme((value) => value) : null;
+  const theme = themeOf(themeSnapshot);
+  const hostRef = useRef(null);
+  const engine = useRef(null);
+  const [engineReady, setEngineReady] = useState(0);
+  const latest = useRef({ state, writable: false, theme });
+  latest.current = { state, writable: Boolean(state?.writable), theme };
+  useEffect(() => model.mount(), [model]);
+  useEffect(() => {
+    const host = hostRef.current;
+    if (!host || typeof document === "undefined") return void 0;
+    const screen = createScreen({
+      cols: 80,
+      rows: 24,
+      scrollback: latest.current.state?.environment?.scrollback ?? 1e3
+    });
+    const renderer = createRenderer({
+      container: host,
+      theme: () => latest.current.theme,
+      font: () => latest.current.theme
+    });
+    renderer.measure();
+    const input = document.createElement("textarea");
+    input.className = "ce-term-input";
+    input.setAttribute("aria-label", t("terminal.title"));
+    input.autocapitalize = "off";
+    input.autocomplete = "off";
+    input.spellcheck = false;
+    host.appendChild(input);
+    let frame = 0;
+    let offset = 0;
+    let dirty = true;
+    const paint = () => {
+      frame = 0;
+      if (!dirty) return;
+      dirty = false;
+      renderer.paint(screen, { offset });
+    };
+    const schedule = () => {
+      dirty = true;
+      if (frame === 0) frame = requestAnimationFrame(paint);
+    };
+    const fit = () => {
+      const width = host.clientWidth;
+      const height = host.clientHeight;
+      if (width <= 0 || height <= 0) return;
+      const cols = Math.max(2, Math.floor(width / renderer.cellWidth));
+      const rows = Math.max(1, Math.floor(height / renderer.rowHeight));
+      const changed = screen.resize(cols, rows);
+      renderer.measure();
+      renderer.invalidate();
+      schedule();
+      const info = latest.current.state?.info;
+      if (changed && latest.current.writable && (info === void 0 || info.cols !== cols || info.rows !== rows)) {
+        model.resize(cols, rows);
+      }
+    };
+    const onKeyDown = (event) => {
+      if (event.isComposing || event.keyCode === 229) return;
+      if (!latest.current.writable) return;
+      const bytes = keyToBytes(event, screen.modes);
+      if (bytes === null) return;
+      event.preventDefault();
+      model.write(bytes, true);
+      if (offset !== 0) {
+        offset = 0;
+        schedule();
+      }
+    };
+    const onInput = () => {
+      if (!latest.current.writable) {
+        input.value = "";
+        return;
+      }
+      const text = input.value;
+      if (text === "") return;
+      input.value = "";
+      model.write(text, true);
+      if (offset !== 0) {
+        offset = 0;
+        schedule();
+      }
+    };
+    const onPaste = (event) => {
+      if (!latest.current.writable) return;
+      const text = event.clipboardData?.getData("text") ?? "";
+      if (text === "") return;
+      event.preventDefault();
+      model.write(pasteToBytes(text, screen.modes.bracketedPaste), true);
+      if (offset !== 0) {
+        offset = 0;
+        schedule();
+      }
+    };
+    const onWheel = (event) => {
+      const step = event.deltaMode === 1 ? 1 : 3;
+      const next = offset + (event.deltaY > 0 ? -step : step);
+      const clamped = Math.max(0, next);
+      if (clamped === offset) return;
+      event.preventDefault();
+      offset = clamped;
+      schedule();
+    };
+    const onFocus = () => host.classList.add("ce-term-focused");
+    const onBlur = () => host.classList.remove("ce-term-focused");
+    const onPointerDown = () => {
+      input.focus({ preventScroll: true });
+    };
+    input.addEventListener("keydown", onKeyDown);
+    input.addEventListener("input", onInput);
+    input.addEventListener("paste", onPaste);
+    input.addEventListener("focus", onFocus);
+    input.addEventListener("blur", onBlur);
+    host.addEventListener("wheel", onWheel, { passive: false });
+    host.addEventListener("pointerdown", onPointerDown);
+    const observer = new ResizeObserver(fit);
+    observer.observe(host);
+    fit();
+    schedule();
+    engine.current = {
+      screen,
+      renderer,
+      input,
+      fit,
+      schedule,
+      resetOffset() {
+        offset = 0;
+      },
+      /** Apply one render frame and acknowledge it to the Host immediately. */
+      apply(render) {
+        if (!render) return;
+        const snapshot = render.frame?.type === "snapshot";
+        applyRenderFrame(screen, render);
+        if (snapshot) renderer.invalidate();
+        offset = 0;
+        schedule();
+        model.acknowledge(render.revision);
+      },
+      measure: () => renderer.measure(),
+      dispose() {
+        observer.disconnect();
+        if (frame !== 0) cancelAnimationFrame(frame);
+        input.removeEventListener("keydown", onKeyDown);
+        input.removeEventListener("input", onInput);
+        input.removeEventListener("paste", onPaste);
+        input.removeEventListener("focus", onFocus);
+        input.removeEventListener("blur", onBlur);
+        host.removeEventListener("wheel", onWheel);
+        host.removeEventListener("pointerdown", onPointerDown);
+        input.remove();
+        renderer.dispose();
+      }
+    };
+    setEngineReady((value) => value + 1);
+    return () => {
+      engine.current?.dispose();
+      engine.current = void 0;
+    };
+  }, [model]);
+  useEffect(() => {
+    const current = engine.current;
+    if (!current) return;
+    const rows = current.screen.rows;
+    current.measure();
+    current.renderer.invalidate();
+    current.fit();
+    void rows;
+  }, [theme.fontFamily, theme.fontSize, engineReady]);
+  useEffect(() => {
+    engine.current?.apply(state?.render);
+  }, [state?.render, engineReady]);
+  useEffect(() => {
+    if (!state?.writable || tab.visible === false) return;
+    const input = engine.current?.input;
+    input?.focus({ preventScroll: true });
+  }, [state?.writable, tab.visible, engineReady]);
+  const failed = state?.phase === "failed" || state?.issue !== void 0;
+  return h(
+    "div",
+    { className: "ce-term-shell" },
+    h("div", { className: "ce-term", ref: hostRef, "data-ce-terminal": "" }),
+    state?.info === void 0 && !failed ? h("div", { className: "ce-term-status", role: "status" }, t("terminal.connecting")) : null,
+    failed ? h("div", { className: "ce-term-status ce-term-status-error", role: "alert" }, state?.error ?? t("terminal.failed")) : null
+  );
+}
+
+// src/client/termtab.js
+var TERM_TAB_ID = "dsh-plugin-kit/terminal";
+var TERM_TAB_KIND = "kit-terminal";
+var HELD_KINDS = [TERM_TAB_KIND, "terminal"];
+function terminalDefinition(t) {
+  return {
+    id: TERM_TAB_ID,
+    kind: TERM_TAB_KIND,
+    priority: "extension",
+    multiple: true,
+    keepMounted: true,
+    title: () => t("terminal.title"),
+    guide: [{ id: "new", order: 20, title: () => t("terminal.title"), description: () => t("terminal.guide") }]
+  };
+}
+function TerminalTitle({ useTabInfo, t }) {
+  const info = useTabInfo ? useTabInfo() : null;
+  return h("span", { className: "ce-term-title" }, `>_ ${info?.tab?.title ?? (t ? t("terminal.title") : "Terminal")}`);
+}
+function canInstallTerminalTab(ctx) {
+  try {
+    return typeof ctx?.webTerminals?.view === "function" && typeof ctx.webTerminals.retainTabs === "function" && typeof ctx?.sidebarRightTabs?.register === "function" && typeof ctx?.sidebarRight?.registerCloseHandler === "function";
+  } catch {
+    return false;
+  }
+}
+function installTerminalTab(ctx, t) {
+  if (!canInstallTerminalTab(ctx)) return () => {
+  };
+  const occurrenceOf = (sessionId, key) => ctx.sidebarRight.tabDomain.occurrence(sessionId, { id: key });
+  const paramsOf = (sessionId, key) => occurrenceOf(sessionId, key).navigation.getSnapshot().params;
+  const terminalIdOf = (sessionId, key) => {
+    const params = paramsOf(sessionId, key);
+    return params !== void 0 && "terminalId" in params ? params.terminalId : void 0;
+  };
+  const viewFor = (sessionId, key) => {
+    const navigation = occurrenceOf(sessionId, key).navigation.getSnapshot();
+    const params = navigation.params;
+    const shellPath = params !== void 0 && "shellPath" in params ? params.shellPath : void 0;
+    return ctx.webTerminals.view(sessionId, key, navigation.address, void 0, shellPath);
+  };
+  const theme = ctx.theme === void 0 ? void 0 : {
+    getSnapshot: () => ctx.theme.getTheme(),
+    subscribe: (listener) => ctx.on("theme/change", listener)
+  };
+  const injectBody = (sessionId) => ({
+    view: (key) => viewFor(sessionId, key),
+    keyedHooks: { terminal: (key) => viewFor(sessionId, key).state },
+    ...theme === void 0 ? {} : { hooks: { theme } }
+  });
+  const disposers = [];
+  disposers.push(ctx.sidebarRightTabs.register(terminalDefinition(t)));
+  disposers.push(ctx.slots.inject("sidebar.right.pane.tab", () => ctx.slots.register({
+    name: "sidebar.right.pane.tab",
+    key: TERM_TAB_ID,
+    locale: NS,
+    inject: injectBody
+  }, TerminalBody)));
+  disposers.push(ctx.slots.inject("sidebar.right.pane.tab.title", () => ctx.slots.register({
+    name: "sidebar.right.pane.tab.title",
+    key: TERM_TAB_ID,
+    locale: NS
+  }, TerminalTitle)));
+  disposers.push(ctx.sidebarRight.registerCloseHandler(TERM_TAB_KIND, (sessionId, tab) => {
+    ctx.webTerminals.close(sessionId, tab.id, tab.contentId, terminalIdOf(sessionId, tab.id));
+  }));
+  ctx.effect(() => {
+    const held = () => ctx.sidebarRight.openTabs.getSnapshot().filter((tab) => HELD_KINDS.includes(tab.kind));
+    const sync = () => ctx.webTerminals.retainTabs(held());
+    const off = ctx.sidebarRight.openTabs.subscribe(sync);
+    sync();
+    return () => {
+      off();
+      ctx.webTerminals.retainTabs(ctx.sidebarRight.openTabs.getSnapshot().filter((tab) => tab.kind === "terminal"));
+    };
+  }, "code-explorer: terminal holds");
+  return () => {
+    for (const dispose of disposers) dispose();
+  };
+}
+
 // src/client/rightbarwidth.js
 var WIDTH_KEY = "dsh-kit.rightbar-width";
 var MIN_WIDTH = 300;
@@ -13644,13 +16136,31 @@ var index_default = {
     safe("right sidebar width", () => installRightbarWidth({ layout: ctx.layout }));
     const bound = ctx.locale.bind(NS);
     safe("dictionaries", () => ctx.locale.register(NS, { zh, en }));
-    const terminal = createTerminalEntry({ sidebarRight: ctx.sidebarRight, sidebarRightTabs: ctx.sidebarRightTabs });
-    safe("terminal refresh guard", () => installTerminalRefreshGuard());
+    let builtinTerminal = false;
+    ctx.inject(["webTerminals"], (terminalCtx) => {
+      terminalCtx.effect(() => {
+        const dispose = installTerminalTab(terminalCtx, bound);
+        builtinTerminal = true;
+        return () => {
+          builtinTerminal = false;
+          dispose();
+        };
+      }, "code-explorer: terminal tab");
+    });
+    const terminal = createTerminalEntry();
+    const openBuiltinTerminal = () => {
+      try {
+        ctx.sidebarRight.openTab(TERM_TAB_KIND, { preferNewPane: true });
+        return true;
+      } catch {
+        return false;
+      }
+    };
     ctx.inject(["workspaces"], (browserCtx) => {
       browserCtx.effect(() => installBrowser(browserCtx, bound), "toolbox: enhanced browser");
     });
     safe("tab type", () => ctx.sidebarRightTabs.register(definition(bound)));
-    const Bound = (props) => h(CodeBody, { ...props, t: props.t ?? bound, terminal });
+    const Bound = (props) => h(CodeBody, { ...props, t: props.t ?? bound, terminal, openBuiltinTerminal, builtinTerminal: () => builtinTerminal });
     safe("tab body", () => ctx.slots.inject("sidebar.right.pane.tab", () => ctx.slots.register({
       name: "sidebar.right.pane.tab",
       key: TAB_ID,
@@ -13696,6 +16206,17 @@ var index_default = {
       name: "sidebar.right.pane.tab.title",
       key: DB_TAB_ID
     }, DbTitle)));
+    safe("rpc tab type", () => ctx.sidebarRightTabs.register(rpcDefinition(bound)));
+    const RpcBound = (props) => h(RpcView, { ...props, t: props.t ?? bound });
+    safe("rpc tab body", () => ctx.slots.inject("sidebar.right.pane.tab", () => ctx.slots.register({
+      name: "sidebar.right.pane.tab",
+      key: RPC_TAB_ID,
+      locale: NS
+    }, RpcBound)));
+    safe("rpc tab title", () => ctx.slots.inject("sidebar.right.pane.tab.title", () => ctx.slots.register({
+      name: "sidebar.right.pane.tab.title",
+      key: RPC_TAB_ID
+    }, RpcTitle)));
     safe("call diff rows", () => ctx.slots.inject("tool.call.toolview", function* () {
       const bridge = {
         t: bound,

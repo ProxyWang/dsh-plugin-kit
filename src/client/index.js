@@ -1,18 +1,20 @@
 /* ---------------- module descriptor ---------------- */
 
 import { h } from "./react.js";
-import { NS, TAB_ID, TAB_KIND, SKILLS_TAB_ID, SKILLS_TAB_KIND, API_TAB_ID, API_TAB_KIND, DB_TAB_ID, DB_TAB_KIND } from "./constants.js";
+import { NS, TAB_ID, TAB_KIND, SKILLS_TAB_ID, SKILLS_TAB_KIND, API_TAB_ID, API_TAB_KIND, DB_TAB_ID, DB_TAB_KIND, RPC_TAB_ID, RPC_TAB_KIND } from "./constants.js";
 import { en, zh } from "./locale.js";
 import { CodeBody, CodeTitle } from "./code.js";
-import { definition, insertStyles, skillsDefinition, apiDefinition, dbDefinition } from "./register.js";
+import { definition, insertStyles, skillsDefinition, apiDefinition, dbDefinition, rpcDefinition } from "./register.js";
 import { CallDiffRow } from "./calldiff.js";
 import { SkillsTabBody, SkillsTitle } from "./skills.js";
 import { ApiView, ApiTitle } from "./apiclient.js";
 import { DbView, DbTitle } from "./db.js";
+import { RpcView, RpcTitle } from "./rpc.js";
 import { installLeftTools, WorkspaceGuide } from "./lefttools.js";
 import { registerToolCloseGuard } from "./closeguard.js";
 import { installBrowser } from "./browserregister.js";
-import { createTerminalEntry, installTerminalRefreshGuard, installTerminalRefreshNudge } from "./terminal.js";
+import { createTerminalEntry } from "./terminal.js";
+import { installTerminalTab, TERM_TAB_KIND } from "./termtab.js";
 import { installRightbarWidth } from "./rightbarwidth.js";
 import { pruneOrphanKeys } from "./orphans.js";
 
@@ -49,26 +51,37 @@ export default {
 		safe("right sidebar width", () => installRightbarWidth({ layout: ctx.layout }));
 		const bound = ctx.locale.bind(NS);
 		safe("dictionaries", () => ctx.locale.register(NS, { zh, en }));
-		// The host owns interactive terminals; the workspace only opens one
-		// beside itself, so availability is a registry probe rather than a
-		// capability this plugin implements.
-		const terminal = createTerminalEntry({ sidebarRight: ctx.sidebarRight, sidebarRightTabs: ctx.sidebarRightTabs });
-		// The host xterm DOM renderer can drop incremental repaints while a
-		// terminal pane slides in / hides / resizes, leaving erased glyphs on
-		// screen though the buffer is correct. Repay full refreshes at those
-		// lifecycle moments via the textarea's blur handler (no PTY resize).
-		safe("terminal refresh guard", () => installTerminalRefreshGuard());
-		// zsh powerlevel10k redraws the whole prompt+line on every keystroke;
-		// if the host drops a refresh between rapid output frames, stale glyphs
-		// persist until the next lifecycle event. A periodic blur while the
-		// terminal holds focus catches mid-typing stale rows (500ms interval,
-		// only while focused, negligible cost).
-		safe("terminal refresh nudge", () => installTerminalRefreshNudge());
+		// The workspace's terminal is this plugin's own emulator over DSH's
+		// terminal service: the Host spawns the shell and streams frames, the
+		// plugin owns the screen and its paint schedule. A composition without
+		// the terminal controller simply does not get the tab.
+		let builtinTerminal = false;
+		ctx.inject(["webTerminals"], (terminalCtx) => {
+			terminalCtx.effect(() => {
+				const dispose = installTerminalTab(terminalCtx, bound);
+				builtinTerminal = true;
+				return () => {
+					builtinTerminal = false;
+					dispose();
+				};
+			}, "code-explorer: terminal tab");
+		});
+		// The system terminal stays available for the work a native window does
+		// better; the Host owns the platform probe and the detached launch.
+		const terminal = createTerminalEntry();
+		const openBuiltinTerminal = () => {
+			try {
+				ctx.sidebarRight.openTab(TERM_TAB_KIND, { preferNewPane: true });
+				return true;
+			} catch {
+				return false;
+			}
+		};
 		ctx.inject(["workspaces"], (browserCtx) => {
 			browserCtx.effect(() => installBrowser(browserCtx, bound), "toolbox: enhanced browser");
 		});
 		safe("tab type", () => ctx.sidebarRightTabs.register(definition(bound)));
-		const Bound = (props) => h(CodeBody, { ...props, t: props.t ?? bound, terminal });
+		const Bound = (props) => h(CodeBody, { ...props, t: props.t ?? bound, terminal, openBuiltinTerminal, builtinTerminal: () => builtinTerminal });
 		safe("tab body", () => ctx.slots.inject("sidebar.right.pane.tab", () => ctx.slots.register({
 			name: "sidebar.right.pane.tab",
 			key: TAB_ID,
@@ -117,6 +130,18 @@ export default {
 			name: "sidebar.right.pane.tab.title",
 			key: DB_TAB_ID,
 		}, DbTitle)));
+		// Top-level "RPC" tab: gRPC calls driven by a .proto in the workspace.
+		safe("rpc tab type", () => ctx.sidebarRightTabs.register(rpcDefinition(bound)));
+		const RpcBound = (props) => h(RpcView, { ...props, t: props.t ?? bound });
+		safe("rpc tab body", () => ctx.slots.inject("sidebar.right.pane.tab", () => ctx.slots.register({
+			name: "sidebar.right.pane.tab",
+			key: RPC_TAB_ID,
+			locale: NS,
+		}, RpcBound)));
+		safe("rpc tab title", () => ctx.slots.inject("sidebar.right.pane.tab.title", () => ctx.slots.register({
+			name: "sidebar.right.pane.tab.title",
+			key: RPC_TAB_ID,
+		}, RpcTitle)));
 		// Compact chat rows for edit/write: clicking one opens this call's diff in
 		// the side panel. Negative priority so unloading restores the stock rows.
 		safe("call diff rows", () => ctx.slots.inject("tool.call.toolview", function* () {

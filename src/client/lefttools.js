@@ -2,20 +2,20 @@
  * PanelRow selects a main key; the synchronous panelInfo subscriber routes our
  * keys back to Conversation before opening a right-side page. No DOM patching. */
 import { h, useEffect, useState } from "./react.js";
-import { NS, TAB_KIND, API_TAB_KIND, SKILLS_TAB_KIND, DB_TAB_KIND } from "./constants.js";
+import { NS, TAB_KIND, API_TAB_KIND, SKILLS_TAB_KIND, DB_TAB_KIND, RPC_TAB_KIND } from "./constants.js";
 import { IconCode } from "./icons.js";
 import { collectBoxes, makeBrowserOpener } from "./launcher.js";
 
 export const LEFT_TOOL_PREFIX = "dsh-plugin-kit/workspace/";
 /**
  * Host tool kinds the left navigation no longer lists, because Dev Workspace
- * carries the entry itself. The terminal row opened a tab in the current pane
- * with toggle-close semantics; the workspace entry opens a new instance and
- * asks the pane to split, which is the shape people expect while editing code.
- * The global Control+backquote shortcut is untouched, so the terminal stays
- * reachable without opening the workspace first.
+ * carries the entry itself. Empty on purpose: the workspace now opens the
+ * operating system's terminal, so it no longer stands in for the product's
+ * embedded terminal — hiding that row would leave the embedded terminal with
+ * only its keyboard shortcut. Each kind fold-in also needs a workspace entry
+ * of the same capability before it may be listed here.
  */
-export const LEFT_TOOL_HIDDEN_KINDS = ["terminal"];
+export const LEFT_TOOL_HIDDEN_KINDS = [];
 
 /** Whether a host kind is folded into the workspace instead of the left rail. */
 export function isHiddenLeftToolKind(kind) {
@@ -27,10 +27,17 @@ const OWN_TOOLS = [
 	{ kind: API_TAB_KIND, label: "apiGuide.title", description: "apiGuide.description", glyph: "api" },
 	{ kind: SKILLS_TAB_KIND, label: "skillsGuide.title", description: "skillsGuide.description", glyph: "skills" },
 	{ kind: DB_TAB_KIND, label: "dbGuide.title", description: "dbGuide.description", glyph: "db" },
+	{ kind: RPC_TAB_KIND, label: "rpcGuide.title", description: "rpcGuide.description", glyph: "rpc" },
 ];
 
 export function ToolGlyph({ size = 16, glyph = "code" }) {
 	if (glyph === "code") return h(IconCode, { size });
+	if (glyph === "rpc") return h("svg", { viewBox: "0 0 24 24", width: size, height: size, fill: "none", stroke: "currentColor", strokeWidth: 1.7, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true },
+		h("path", { key: "a", d: "M4 7h16M4 17h16" }),
+		h("circle", { key: "b", cx: 8, cy: 7, r: 2 }),
+		h("circle", { key: "c", cx: 16, cy: 17, r: 2 }),
+		h("path", { key: "d", d: "M10 7h4a2 2 0 0 1 2 2v6" }),
+	);
 	if (glyph === "db") return h("svg", { viewBox: "0 0 24 24", width: size, height: size, fill: "none", stroke: "currentColor", strokeWidth: 1.7, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true },
 		h("ellipse", { key: "t", cx: 12, cy: 5, rx: 8, ry: 3 }),
 		h("path", { key: "m", d: "M4 5v6c0 1.66 3.58 3 8 3s8-1.34 8-3V5" }),

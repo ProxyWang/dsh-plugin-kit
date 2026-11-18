@@ -870,129 +870,161 @@ if (hasNpm) {
 
 for (const cleanup of cleanups) cleanup();
 
-// --- database driver: SQLite in-memory via node:sqlite ---------------------------------
+// --- database drivers: SQLite through node:sqlite ---------------------------------------
 {
-	const { connect, disconnect, listObjects, query, listConnections, closeAll } = await import("./lib/host/db.js");
-	// Check if node:sqlite is available (Node ≥ 22.5 / Electron with Node 24).
+	const db = await import("./lib/host/db.js");
 	let sqliteAvailable = false;
 	try { await import("node:sqlite"); sqliteAvailable = true; } catch {}
 	if (sqliteAvailable) {
-		const conn = await connect({ driver: "sqlite", path: ":memory:" });
-		check("db.connect returns an id and driver", typeof conn.id === "string" && conn.driver === "sqlite", conn);
-		check("db.connections lists the new connection", listConnections().some((c) => c.id === conn.id), null);
-		await query(conn.id, "CREATE TABLE users(id INTEGER PRIMARY KEY, name TEXT, age INTEGER)");
-		await query(conn.id, "INSERT INTO users VALUES(1,'Alice',30),(2,'Bob',25)");
-		const list = await listObjects(conn.id);
-		check("db.list finds the created table", list.tables.some((t) => t.name === "users"), list.tables.map((t) => t.name));
-		check("db.list reports column names and types", list.tables.find((t) => t.name === "users").columns.some((c) => c.name === "name" && c.type === "TEXT"), list.tables.find((t) => t.name === "users").columns);
-		const res = await query(conn.id, "SELECT * FROM users ORDER BY id");
-		check("db.query returns columns and rows", res.columns.length === 3 && res.rows.length === 2 && res.rows[0][1] === "Alice", res);
-		check("db.query reports ms timing", typeof res.ms === "number" && res.ms >= 0, res.ms);
-		const ins = await query(conn.id, "INSERT INTO users VALUES(3,'Carol',28)");
-		check("db.query INSERT returns changes count", ins.changes === 1, ins);
-		const limited = await query(conn.id, "SELECT * FROM users", 1);
-		check("db.query respects limit and sets truncated", limited.rows.length === 1 && limited.truncated === true, limited);
-		disconnect(conn.id);
-		check("db.disconnect removes the connection", !listConnections().some((c) => c.id === conn.id), null);
-		closeAll();
+		const file = `${cwd}-db.sqlite`;
+		rmSync(file, { force: true });
+		const conn = await db.connect({ driver: "sqlite", path: file });
+		check("db.connect opens an SQLite file and returns its id", typeof conn.id === "string" && conn.driver === "sqlite", conn);
+		check("db.connections lists the open connection", db.listConnections().some((entry) => entry.id === conn.id), null);
+		await db.query(conn.id, "CREATE TABLE users(id INTEGER PRIMARY KEY, name TEXT NOT NULL, age INTEGER)");
+		await db.query(conn.id, "CREATE INDEX users_name ON users(name)");
+		await db.query(conn.id, "INSERT INTO users(name, age) VALUES('Alice', 30), ('Bob', 25), ('Carol', 28)");
+
+		const schema = await db.schema(conn.id);
+		const table = schema.databases[0].tables.find((entry) => entry.name === "users");
+		check("db.schema lists the table with its columns", Boolean(table) && table.columns.length === 3, table?.columns?.map((c) => c.name));
+		check("db.schema marks the primary key and NOT NULL", table.columns.find((c) => c.name === "id").primaryKey === true && table.columns.find((c) => c.name === "name").nullable === false, table.columns);
+		check("db.schema lists the index", table.indexes.some((index) => index.name === "users_name" && index.columns.includes("name")), table.indexes);
+
+		const page = await db.rows(conn.id, "users", { limit: 2, offset: 0, order: "id", dir: "asc" });
+		check("db.rows pages a table with the total", page.rows.length === 2 && page.total === 3 && page.columns.includes("name"), page);
+		const second = await db.rows(conn.id, "users", { limit: 2, offset: 2, order: "id", dir: "asc" });
+		check("db.rows returns the following page", second.rows.length === 1 && second.rows[0][1] === "Carol", second.rows);
+		const desc = await db.rows(conn.id, "users", { limit: 1, offset: 0, order: "id", dir: "desc" });
+		check("db.rows honours descending order", desc.rows[0][1] === "Carol", desc.rows);
+		const filtered = await db.rows(conn.id, "users", { limit: 10, offset: 0, filter: "li" });
+		check("db.rows filters across every column and counts the match", filtered.total === 1 && filtered.rows[0][1] === "Alice", filtered);
+		const injected = await db.rows(conn.id, "users", { limit: 10, offset: 0, filter: "O'Reilly" });
+		check("db.rows treats a quote in the filter as data", injected.total === 0, injected.total);
+
+		const read = await db.query(conn.id, "SELECT name FROM users ORDER BY id");
+		check("db.query returns columns and rows", read.columns[0] === "name" && read.rows.length === 3 && read.rows[0][0] === "Alice", read);
+		const written = await db.query(conn.id, "UPDATE users SET age = age + 1");
+		check("db.query reports the affected row count", written.changes === 3, written);
+		const capped = await db.query(conn.id, "SELECT * FROM users", 1);
+		check("db.query truncates at the limit and says so", capped.rows.length === 1 && capped.truncated === true, capped);
+		check("db.query refuses an empty statement", await db.query(conn.id, "   ").then(() => false, () => true), null);
+
+		// The same operations through the HTTP dispatcher the panel uses.
+		const drivers = await call("db.drivers", {});
+		check("db.drivers answers over the private API", drivers.ok && drivers.value.some((driver) => driver.id === "sqlite" && driver.ready), drivers.value);
+		const viaApi = await call("db.connect", { driver: "sqlite", path: file });
+		check("db.connect answers over the private API", viaApi.ok && typeof viaApi.value.id === "string", viaApi.value);
+		const apiSchema = await call("db.schema", { id: viaApi.value.id });
+		check("db.schema answers over the private API", apiSchema.ok && apiSchema.value.databases[0].tables.some((entry) => entry.name === "users"), apiSchema.value?.databases?.[0]?.tables?.map((t) => t.name));
+		const apiRows = await call("db.rows", { id: viaApi.value.id, table: "users", limit: 2, offset: 0 });
+		check("db.rows answers over the private API", apiRows.ok && apiRows.value.rows.length === 2 && apiRows.value.total === 3, apiRows.value);
+		const apiQuery = await call("db.query", { id: viaApi.value.id, sql: "SELECT COUNT(*) FROM users" });
+		check("db.query answers over the private API", apiQuery.ok && apiQuery.value.rows[0][0] === 3, apiQuery.value);
+		await call("db.disconnect", { id: viaApi.value.id });
+
+		db.disconnect(conn.id);
+		check("db.disconnect closes the connection", !db.listConnections().some((entry) => entry.id === conn.id), null);
+		check("a closed connection refuses further queries", await db.query(conn.id, "SELECT 1").then(() => false, () => true), null);
+		rmSync(file, { force: true });
 	} else {
 		console.log("  skip  db SQLite tests (node:sqlite unavailable on this Node version)");
-		skipped += 7;
+		skipped += 13;
 	}
 }
 
-// --- vault service: secret persistence for the API workbench ---------------------------
+// --- psql CSV parsing (NULL vs empty, embedded separators) ------------------------------
 {
-	const { createVaultService } = await import("./lib/host/vault.js");
-	let stored;
-	const fakeStorageDomain = {
-		async open(spec) {
-			stored = structuredClone(spec.global.initial);
-			return { global: { get: () => stored, async set(next) { stored = structuredClone(next); } }, async close() {} };
-		},
-	};
-	const vault = createVaultService(fakeStorageDomain);
-	const set1 = await vault.execute({ action: "set", entries: [{ key: "auth.token", value: "sk-secret-123" }] });
-	check("vault.set mints an id and stores the secret", typeof set1.ids["auth.token"] === "string" && set1.revision === 1, set1);
-	const got = await vault.execute({ action: "get", ids: [set1.ids["auth.token"]] });
-	check("vault.get returns the stored plaintext", got.values[set1.ids["auth.token"]] === "sk-secret-123", got.values);
-	const set2 = await vault.execute({ action: "set", entries: [{ key: "env.var", value: "DB_PASS=secret" }] });
-	check("vault.set mints a second independent id", set2.ids["env.var"] !== set1.ids["auth.token"], set2.ids);
-	const reSet = await vault.execute({ action: "set", entries: [{ key: "auth.token", id: set1.ids["auth.token"], value: "sk-updated" }] });
-	check("vault.set with existing id updates in place", reSet.ids["auth.token"] === set1.ids["auth.token"], reSet.ids);
-	const gotUpdated = await vault.execute({ action: "get", ids: [set1.ids["auth.token"]] });
-	check("vault.get returns the updated value", gotUpdated.values[set1.ids["auth.token"]] === "sk-updated", gotUpdated.values);
-	const del = await vault.execute({ action: "delete", ids: [set1.ids["auth.token"]] });
-	check("vault.delete removes the entry", !Object.hasOwn(stored.secrets, set1.ids["auth.token"]), null);
-	const gotAfterDel = await vault.execute({ action: "get", ids: [set1.ids["auth.token"]] });
-	check("vault.get after delete returns nothing for that id", !Object.hasOwn(gotAfterDel.values, set1.ids["auth.token"]), gotAfterDel.values);
-	await vault.close();
-	await assert.rejects(vault.execute({ action: "get", ids: [] }), /closed/, "vault refuses after close");
+	const { parseCsv } = await import("./lib/host/db.js");
+	const parsed = parseCsv('id,name,note\n1,"a,b","line\nbreak"\n2,"say ""hi""",\\N\n');
+	check("parseCsv keeps a quoted comma in one cell", parsed[1][1] === "a,b", parsed[1]);
+	check("parseCsv keeps an embedded newline in one cell", parsed[1][2] === "line\nbreak", parsed[1][2]);
+	check("parseCsv unescapes doubled quotes", parsed[2][1] === 'say "hi"', parsed[2][1]);
+	check("parseCsv maps the NULL marker to null", parsed[2][2] === null, parsed[2][2]);
+	check("parseCsv drops the trailing newline row", parsed.length === 3, parsed.length);
 }
 
-// --- toolbox agent tools: api_request, git_review, skills_manage -----------------------
+// --- RPC: proto route and a real gRPC round trip ----------------------------------------
 {
-	const { createToolboxTools } = await import("./lib/host/tools.js");
-	const { routes } = await import("./lib/host/routes.js");
-	const { dbRoutes } = await import("./lib/host/db.js");
-	const tools = createToolboxTools({ routes, dbRoutes });
-	check("toolbox exposes three agent tools", tools.length === 3 && tools.map((t) => t.name).sort().join() === "api_request,git_review,skills_manage", tools.map((t) => t.name));
-	// git_review status on the test fixture.
-	const gitTool = tools.find((t) => t.name === "git_review");
-	const statusRes = JSON.parse((await gitTool.execute({ action: "status", cwd })).data);
-	check("git_review status returns branch and file lists", typeof statusRes.branch === "string" && Array.isArray(statusRes.working), statusRes);
-	const diffRes = JSON.parse((await gitTool.execute({ action: "diff", cwd, path: "main.go", scope: "working" })).data);
-	check("git_review diff returns diff text or empty for clean file", typeof diffRes.diff === "string", diffRes.diff?.slice(0, 60));
-	const branchesRes = JSON.parse((await gitTool.execute({ action: "branches", cwd })).data);
-	check("git_review branches returns a list", Array.isArray(branchesRes.branches), branchesRes);
-	// skills_manage list on the test fixture.
-	const skillsTool = tools.find((t) => t.name === "skills_manage");
-	const skillsRes = JSON.parse((await skillsTool.execute({ action: "list", cwd })).data);
-	check("skills_manage list returns skill entries", Array.isArray(skillsRes.skills), skillsRes);
-	// api_request with a mock fetch (no real network).
-	const apiTool = tools.find((t) => t.name === "api_request");
-	const origFetch = globalThis.fetch;
-	globalThis.fetch = async () => {
-		const bodyText = '{"ok":true}';
-		const encoded = new TextEncoder().encode(bodyText);
-		return {
-			status: 200, statusText: "OK",
-			headers: { entries: () => [["content-type", "application/json"]], get: () => "application/json" },
-			body: { getReader: () => { let sent = false; return { read: async () => { if (sent) return { done: true }; sent = true; return { done: false, value: encoded }; } }; } },
-			arrayBuffer: async () => encoded.buffer,
-		};
-	};
+	const protoDir = `${cwd}-rpc`;
+	rmSync(protoDir, { recursive: true, force: true });
+	mkdirSync(protoDir, { recursive: true });
+	writeFileSync(`${protoDir}/hello.proto`, `syntax = "proto3";
+package hello;
+
+message HelloRequest { string greeting = 1; int32 times = 2; }
+message HelloReply { string message = 1; int32 served = 2; }
+
+service HelloService {
+  rpc SayHello (HelloRequest) returns (HelloReply);
+}
+`);
+	// A second file importing the first: the request type lives across files.
+	writeFileSync(`${protoDir}/common.proto`, 'syntax = "proto3";\npackage common;\nmessage Money { int64 cents = 1; }\n');
+	writeFileSync(`${protoDir}/order.proto`, 'syntax = "proto3";\npackage shop;\nimport "common.proto";\nmessage Order { string id = 1; common.Money total = 2; }\nservice Orders { rpc Get (Order) returns (Order); }\n');
+	const imported = await call("rpc.proto", { cwd: protoDir, path: "order.proto" });
+	check("rpc.proto follows an import and lists its file", imported.ok && imported.value.files.includes("common.proto"), imported.value?.files ?? imported.error);
+	check("rpc.proto resolves a type declared in the imported file", imported.ok && imported.value.methods[0].sample?.total?.cents === 0, imported.value?.methods?.[0]?.sample);
+	rmSync(`${protoDir}/common.proto`, { force: true });
+	rmSync(`${protoDir}/order.proto`, { force: true });
+
+	const loaded = await call("rpc.proto", { cwd: protoDir, path: "hello.proto" });
+	check("rpc.proto lists the service methods", loaded.ok && loaded.value.methods.length === 1, loaded.value?.methods ?? loaded.error);
+	check("rpc.proto carries a ready-to-edit sample body", loaded.ok && loaded.value.methods[0].sample?.greeting === "", loaded.value?.methods?.[0]?.sample);
+	const missing = await call("rpc.proto", { cwd: protoDir, path: "nope.proto" });
+	check("rpc.proto reports a missing file instead of throwing", missing.ok === false || Boolean(missing.value?.error), missing);
+
+	// A minimal in-process gRPC server: HTTP/2 plus the framing convention.
+	const http2 = await import("node:http2");
+	const { readFile: readTextFile } = await import("node:fs/promises");
+	const { encodeMessage, decodeMessage } = await import("./lib/host/protobuf.js");
+	const { parseProto } = await import("./lib/host/proto.js");
+	const schema = parseProto(await readTextFile(`${protoDir}/hello.proto`, "utf8"));
+	const server = http2.createServer();
+	server.on("stream", (stream, headers) => {
+		if (headers[":path"] !== "/hello.HelloService/SayHello") {
+			stream.respond({ ":status": 200, "content-type": "application/grpc" }, { waitForTrailers: true });
+			stream.on("wantTrailers", () => stream.sendTrailers({ "grpc-status": "12", "grpc-message": "unimplemented" }));
+			stream.end();
+			return;
+		}
+		const chunks = [];
+		stream.on("data", (chunk) => chunks.push(chunk));
+		stream.on("end", () => {
+			const body = Buffer.concat(chunks);
+			const payload = body.subarray(5, 5 + body.readUInt32BE(1));
+			const request = decodeMessage(schema, "hello.HelloRequest", payload);
+			const times = Math.max(1, Number(request.times) || 1);
+			const reply = encodeMessage(schema, "hello.HelloReply", { message: `hi ${request.greeting}`, served: times });
+			const frame = Buffer.alloc(5);
+			frame[0] = 0;
+			frame.writeUInt32BE(reply.length, 1);
+			stream.respond({ ":status": 200, "content-type": "application/grpc" }, { waitForTrailers: true });
+			stream.on("wantTrailers", () => stream.sendTrailers({ "grpc-status": "0", "grpc-message": "" }));
+			stream.write(Buffer.concat([frame, reply]));
+			stream.end();
+		});
+	});
+	const port = await new Promise((resolvePromise) => server.listen(0, "127.0.0.1", () => resolvePromise(server.address().port)));
 	try {
-		const apiRes = JSON.parse((await apiTool.execute({ method: "GET", url: "https://example.test/api" })).data);
-		check("api_request returns status and body", apiRes.status === 200 && apiRes.body === '{"ok":true}', apiRes);
-	} finally { globalThis.fetch = origFetch; }
-}
-
-// --- .bru collection runner -----------------------------------------------------------
-{
-	const { runCollection } = await import("./lib/host/runner.js");
-	const rdir = "/tmp/ce-runner-test";
-	rmSync(rdir, { recursive: true, force: true });
-	mkdirSync(rdir, { recursive: true });
-	writeFileSync(join(rdir, "01-get.bru"), "meta {\n  name: get users\n}\n\nget {\n  url: https://api.example.test/users\n}\n\nheaders {\n  Accept: application/json\n}\n");
-	writeFileSync(join(rdir, "02-post.bru"), "meta {\n  name: create user\n}\n\npost {\n  url: https://api.example.test/users\n}\n\nheaders {\n  Content-Type: application/json\n}\n\nbody:json {\n  {\"name\":\"{{userName}}\"}\n}\n\nextract {\n  userId: $.id\n}\n");
-	writeFileSync(join(rdir, "not-a-bru.txt"), "ignored");
-	writeFileSync(join(rdir, ".hidden.bru"), "meta { name: hidden }\nget { url: https://x }\n");
-	const sentRequests = [];
-	const mockSend = async (resolved) => {
-		sentRequests.push(resolved);
-		if (resolved.url.includes("/users") && resolved.method === "GET") return { status: 200, text: '[{"id":1}]', headers: [], ms: 5 };
-		if (resolved.method === "POST") return { status: 201, text: '{"id":42}', headers: [], ms: 8 };
-		return { status: 404, text: "", headers: [], ms: 1 };
-	};
-	const envStore = { envs: [{ id: "e1", name: "Test", vars: [{ name: "userName", value: "Alice", enabled: true }] }], activeId: "e1" };
-	const result = await runCollection("/tmp", "ce-runner-test", envStore, mockSend);
-	check("runner executes .bru files in sorted order", result.results.length === 2 && result.results[0].name === "get users" && result.results[1].name === "create user", result.results.map((r) => r.name));
-	check("runner skips non-.bru and hidden files", sentRequests.length === 2, sentRequests.length);
-	check("runner resolves {{var}} from env store", sentRequests[1].body.includes("Alice"), sentRequests[1].body);
-	check("runner reports status and timing per request", result.results.every((r) => r.status > 0 && r.ms >= 0), result.results.map((r) => ({ s: r.status, ms: r.ms })));
-	check("runner reports total time", typeof result.totalMs === "number" && result.totalMs >= 0, result.totalMs);
-	rmSync(rdir, { recursive: true, force: true });
+		const reply = await call("rpc.call", {
+			cwd: protoDir,
+			proto: "hello.proto",
+			method: "/hello.HelloService/SayHello",
+			url: `grpc://127.0.0.1:${port}`,
+			messages: [{ greeting: "ada", times: 2 }],
+		});
+		check("rpc.call reaches a real gRPC server", reply.ok && reply.value.status === 0 && reply.value.statusName === "OK", reply.value ?? reply.error);
+		check("rpc.call decodes the protobuf reply", reply.ok && reply.value.messages?.[0]?.message === "hi ada" && reply.value.messages[0].served === 2, reply.value?.messages);
+		check("rpc.call reports timing and trailers", reply.ok && typeof reply.value.ms === "number" && reply.value.trailers["grpc-status"] === "0", reply.value?.trailers);
+		const unknown = await call("rpc.call", { cwd: protoDir, proto: "hello.proto", method: "/hello.Missing/Nope", url: `grpc://127.0.0.1:${port}` });
+		check("rpc.call refuses an unknown method", unknown.ok && Boolean(unknown.value.error), unknown.value);
+		const down = await call("rpc.call", { cwd: protoDir, proto: "hello.proto", method: "/hello.HelloService/SayHello", url: "grpc://127.0.0.1:1" });
+		check("rpc.call surfaces a connection failure as an error", down.ok && Boolean(down.value.error), down.value);
+	} finally {
+		await new Promise((resolvePromise) => server.close(resolvePromise));
+		rmSync(protoDir, { recursive: true, force: true });
+	}
 }
 
 console.log(`\n${pass} passed, ${fail} failed${skipped ? `, ${skipped} skipped` : ""}`);

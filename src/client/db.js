@@ -1,10 +1,19 @@
-/* ---------------- Database panel: connection manager, schema browser, SQL editor, result grid ----------------
+/* ---------------- Database workbench: connections, schema, table pages, SQL ----------------
  *
- * A lightweight local-DB workbench inspired by dbx (https://github.com/t8y2/dbx).
- * SQLite is built-in (node:sqlite on Node ≥ 22.5); MySQL and PostgreSQL use
- * their CLI clients when present. The UI follows the same task-oriented layout
- * as the API tester: left rail for connections + schema tree, centre for the
- * SQL editor, bottom for the result grid.
+ * Three things a local database tool has to do, and this panel does them in
+ * one surface (the shape dbx/DataGrip use):
+ *
+ * 1. **Browse** — a connection list and a schema tree (databases → tables and
+ *    views → columns), with a filter box that narrows the tree by name.
+ * 2. **Page a table** — clicking a table opens a grid tab with server-side
+ *    ordering and filtering, a fixed page size, and a footer that pages
+ *    through the total; no SELECT * ever runs unbounded.
+ * 3. **Query** — any number of SQL tabs, each with its own editor, result,
+ *    timing, truncation flag, and a shared history the panel can recall.
+ *
+ * Everything is client state over three host routes (`db.schema`, `db.rows`,
+ * `db.query`), so the panel keeps its tabs and history across a connection
+ * swap in the same session.
  */
 
 import { Fragment, h, useCallback, useEffect, useMemo, useRef, useState } from "./react.js";
@@ -12,19 +21,19 @@ import { api } from "./api.js";
 import { useDismissLayer } from "./dismiss.js";
 import { DB_TAB_KIND, DB_TAB_ID } from "./constants.js";
 
-const TAB_KIND = DB_TAB_KIND;
-const TAB_ID = DB_TAB_ID;
-
 export const dbDefinition = (t) => ({
-	id: TAB_ID,
-	kind: TAB_KIND,
+	id: DB_TAB_ID,
+	kind: DB_TAB_KIND,
 	priority: "extension",
 	keepMounted: true,
 	title: () => t("db.label"),
 	guide: [],
 });
 
-/** Pure: format a cell value for display in the result grid. */
+const PAGE_SIZE = 100;
+const HISTORY_CAP = 40;
+
+/** Pure: format a cell for the grid (NULL is visibly distinct from ''. */
 export function formatCell(value) {
 	if (value === null) return "NULL";
 	if (value === undefined) return "";
@@ -32,187 +41,554 @@ export function formatCell(value) {
 	return String(value);
 }
 
-/** Pure: truncate a long cell for the grid preview. */
+/** Pure: shorten a cell for the grid preview, keeping the full value for the title. */
 export function truncateCell(value, max = 120) {
-	const s = formatCell(value);
-	return s.length > max ? s.slice(0, max - 1) + "…" : s;
+	const text = formatCell(value);
+	return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+}
+
+/** Pure: one CSV document from a result (RFC 4180 quoting). */
+export function toCsv(columns, rows) {
+	const quote = (value) => {
+		const text = value === null || value === undefined ? "" : String(value);
+		return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+	};
+	const lines = [columns.map(quote).join(",")];
+	for (const row of rows) lines.push(row.map(quote).join(","));
+	return lines.join("\n");
+}
+
+/** Pure: the SQL a table tab runs for the current page/order/filter. */
+export function tableSql(table, { order, dir, limit, offset, filter, columns, driver }) {
+	// MySQL only accepts backticks (unless ANSI_QUOTES is on), so the generated
+	// SELECT has to use the driver's own identifier quoting to be runnable.
+	const q = (name) => (driver === "mysql"
+		? `\`${String(name).replace(/`/g, "``")}\``
+		: `"${String(name).replace(/"/g, '""')}"`);
+	const quote = q(table);
+	const where = filter && filter.trim() && columns?.length
+		? ` WHERE (${columns.map((column) => `CAST(${q(column.name)} AS TEXT) LIKE '%${filter.trim().replace(/'/g, "''")}%'`).join(" OR ")})`
+		: "";
+	const sorting = order ? ` ORDER BY ${q(order)} ${dir === "desc" ? "DESC" : "ASC"}` : "";
+	return `SELECT * FROM ${quote}${where}${sorting} LIMIT ${limit} OFFSET ${offset}`;
+}
+
+/** Count rows and messages for the header chips. */
+function countOf(schema) {
+	let tables = 0;
+	let views = 0;
+	for (const database of schema?.databases ?? []) {
+		for (const entry of database.tables ?? []) {
+			if (entry.kind === "view") views++;
+			else tables++;
+		}
+	}
+	return { tables, views };
 }
 
 export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 	const cwd = useSessions ? useSessions((sessions) => (sessionId ? sessions.byId[sessionId]?.cwd : void 0)) : void 0;
-	const hostTab = useTabInfo ? useTabInfo()?.tab : null;
 
 	const [drivers, setDrivers] = useState([]);
 	const [connections, setConnections] = useState([]);
-	const [activeConn, setActiveConn] = useState(null); // connection id
-	const [schema, setSchema] = useState(null); // {databases, tables}
-	const [sql, setSql] = useState("");
-	const [result, setResult] = useState(null); // {columns, rows, truncated, ms, error}
-	const [running, setRunning] = useState(false);
-	const [connectForm, setConnectForm] = useState({ driver: "sqlite", path: "", host: "localhost", port: "", user: "", password: "", database: "" });
+	const [activeConn, setActiveConn] = useState("");
+	const [schema, setSchema] = useState(null);
+	const [schemaBusy, setSchemaBusy] = useState(false);
+	const [schemaError, setSchemaError] = useState("");
+	const [filter, setFilter] = useState("");
+	const [expanded, setExpanded] = useState(() => new Set()); // table keys open in the tree
+	const [tabs, setTabs] = useState([]);
+	const [activeTabId, setActiveTabId] = useState("");
+	const [history, setHistory] = useState([]);
 	const [connectOpen, setConnectOpen] = useState(false);
+	const [form, setForm] = useState({ driver: "sqlite", path: "", host: "localhost", port: "", user: "", password: "", database: "" });
+	const [cellDetail, setCellDetail] = useState(null); // {title, value}
+	const [notice, setNotice] = useState("");
+	const [historyOpen, setHistoryOpen] = useState(false);
+	const detailRef = useDismissLayer({ open: Boolean(cellDetail), onDismiss: () => setCellDetail(null) });
 	const connectRef = useDismissLayer({ open: connectOpen, onDismiss: () => setConnectOpen(false) });
-	const [selectedTable, setSelectedTable] = useState(null);
-	const sqlRef = useRef(null);
 
-	// Load drivers and existing connections on mount.
 	useEffect(() => {
-		api("db.drivers", {}).then((res) => { if (res.ok) setDrivers(res.value); });
-		api("db.connections", {}).then((res) => { if (res.ok) setConnections(res.value); });
+		api("db.drivers", {}).then((res) => {
+			if (!res.ok) return;
+			setDrivers(res.value ?? []);
+			const first = (res.value ?? []).find((driver) => driver.ready);
+			if (first) setForm((current) => ({ ...current, driver: first.id }));
+		});
 	}, []);
 
-	// When the active connection changes, load its schema.
-	useEffect(() => {
-		if (!activeConn) { setSchema(null); return; }
-		api("db.list", { id: activeConn }).then((res) => {
-			if (res.ok) setSchema(res.value);
-			else setSchema({ databases: [], tables: [], error: res.error });
+	const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? null;
+
+	const patchTab = useCallback((id, patch) => {
+		setTabs((current) => current.map((tab) => (tab.id === id ? { ...tab, ...(typeof patch === "function" ? patch(tab) : patch) } : tab)));
+	}, []);
+
+	const openTab = useCallback((tab) => {
+		// Focus is decided OUTSIDE the updater: a state write inside it would run
+		// twice under React's double-invoked updaters and is a render side effect.
+		const existing = tabs.find((entry) => entry.key === tab.key);
+		if (existing) {
+			setActiveTabId(existing.id);
+			return;
+		}
+		setTabs((current) => [...current, tab]);
+		setActiveTabId(tab.id);
+	}, [tabs]);
+
+	const closeTab = useCallback((id) => {
+		setTabs((current) => {
+			const index = current.findIndex((tab) => tab.id === id);
+			const next = current.filter((tab) => tab.id !== id);
+			if (id === activeTabId) setActiveTabId(next[Math.max(0, index - 1)]?.id ?? next[0]?.id ?? "");
+			return next;
 		});
+	}, [activeTabId]);
+
+	// --- connections ----------------------------------------------------------------------
+
+	const refreshSchema = useCallback(async (id = activeConn) => {
+		if (!id) { setSchema(null); return; }
+		setSchemaBusy(true);
+		setSchemaError("");
+		const res = await api("db.schema", { id });
+		setSchemaBusy(false);
+		if (res.ok) setSchema(res.value);
+		else { setSchema(null); setSchemaError(res.error); }
 	}, [activeConn]);
 
 	const doConnect = useCallback(async () => {
-		const f = connectForm;
-		const params = { driver: f.driver };
-		if (f.driver === "sqlite") params.path = f.path;
+		const params = { driver: form.driver };
+		if (form.driver === "sqlite") params.path = form.path.trim();
 		else {
-			params.host = f.host;
-			params.port = f.port ? Number(f.port) : void 0;
-			params.user = f.user;
-			params.password = f.password;
-			params.database = f.database;
+			params.host = form.host.trim();
+			params.port = form.port ? Number(form.port) : undefined;
+			params.user = form.user;
+			params.password = form.password;
+			params.database = form.database.trim();
 		}
 		const res = await api("db.connect", params);
-		if (res.ok) {
-			setConnections((prev) => [...prev, res.value]);
-			setActiveConn(res.value.id);
-			setConnectOpen(false);
-		}
-	}, [connectForm]);
+		if (!res.ok) { setNotice(res.error); return; }
+		setConnections((current) => [...current.filter((entry) => entry.id !== res.value.id), res.value]);
+		setActiveConn(res.value.id);
+		setConnectOpen(false);
+		setNotice("");
+		await refreshSchema(res.value.id);
+	}, [form, refreshSchema]);
 
 	const doDisconnect = useCallback(async (id) => {
 		await api("db.disconnect", { id });
-		setConnections((prev) => prev.filter((c) => c.id !== id));
-		if (activeConn === id) { setActiveConn(null); setSchema(null); setResult(null); }
+		setConnections((current) => current.filter((entry) => entry.id !== id));
+		// Tabs bound to this connection could only fail on their next request.
+		setTabs((current) => current.filter((tab) => tab.conn !== id));
+		if (activeConn === id) { setActiveConn(""); setSchema(null); }
 	}, [activeConn]);
 
-	const runQuery = useCallback(async () => {
-		if (!activeConn || !sql.trim() || running) return;
-		setRunning(true);
-		setResult(null);
-		const res = await api("db.query", { id: activeConn, sql: sql.trim(), limit: 1000 });
-		setRunning(false);
-		if (res.ok) setResult(res.value);
-		else setResult({ error: res.error });
-	}, [activeConn, sql, running]);
+	// --- table pages ----------------------------------------------------------------------
 
-	const selectTable = useCallback((name) => {
-		setSelectedTable(name);
-		setSql(`SELECT * FROM "${name}" LIMIT 100`);
+	const fetchRows = useCallback(async (tab) => {
+		patchTab(tab.id, { loading: true, error: "" });
+		const res = await api("db.rows", {
+			id: tab.conn,
+			table: tab.table,
+			database: tab.database,
+			limit: PAGE_SIZE,
+			offset: tab.offset,
+			order: tab.order,
+			dir: tab.dir,
+			filter: tab.filter,
+		});
+		if (!res.ok) { patchTab(tab.id, { loading: false, error: res.error }); return; }
+		patchTab(tab.id, { loading: false, result: res.value, error: "" });
+	}, [patchTab]);
+
+	/**
+	 * Load one table page. `override` carries the new offset/order/filter so the
+	 * request uses the values the user just picked instead of the state the
+	 * closure was created with (React has not re-rendered yet at call time).
+	 */
+	const loadRows = useCallback((tabId, override) => {
+		const tab = tabs.find((entry) => entry.id === tabId);
+		if (!tab || tab.kind !== "table") return;
+		return fetchRows({ ...tab, ...override });
+	}, [tabs, fetchRows]);
+
+	const openTable = useCallback((connectionId, database, entry) => {
+		const key = `table:${connectionId}:${database}:${entry.name}`;
+		openTab({
+			id: `tab-${Date.now()}-${Math.round(Math.random() * 1e6)}`,
+			key,
+			kind: "table",
+			title: entry.name,
+			conn: connectionId,
+			database,
+			table: entry.name,
+			columns: entry.columns ?? [],
+			offset: 0,
+			order: "",
+			dir: "asc",
+			filter: "",
+			loading: false,
+			error: "",
+			result: null,
+		});
+	}, [openTab]);
+
+	// A freshly-opened table tab fetches its first page exactly once.
+	const fetched = useRef(new Set());
+	useEffect(() => {
+		const target = tabs.find((tab) => tab.kind === "table" && !tab.result && !tab.loading && !fetched.current.has(tab.id));
+		if (!target) return;
+		fetched.current.add(target.id);
+		void fetchRows(target);
+	}, [tabs, fetchRows]);
+
+	const sortBy = useCallback((id, column) => {
+		const target = tabs.find((tab) => tab.id === id);
+		if (!target) return;
+		const dir = target.order === column && target.dir === "asc" ? "desc" : "asc";
+		patchTab(id, { order: column, dir, offset: 0 });
+		void loadRows(id, { order: column, dir, offset: 0 });
+	}, [tabs, patchTab, loadRows]);
+
+	// --- SQL tabs -------------------------------------------------------------------------
+
+	const openQueryTab = useCallback((sql = "") => {
+		const id = `tab-${Date.now()}-${Math.round(Math.random() * 1e6)}`;
+		openTab({
+			id,
+			key: `query:${id}`,
+			kind: "query",
+			title: t("db.queryTab"),
+			sql,
+			conn: activeConn,
+			loading: false,
+			error: "",
+			result: null,
+			ms: 0,
+		});
+		return id;
+	}, [openTab, activeConn, t]);
+
+	const runQuery = useCallback(async (id) => {
+		const tab = tabs.find((entry) => entry.id === id);
+		if (!tab || tab.kind !== "query") return;
+		const sql = String(tab.sql ?? "").trim();
+		if (sql === "") return;
+		const conn = tab.conn || activeConn;
+		if (!conn) { patchTab(id, { error: t("db.noConnection"), result: null }); return; }
+		patchTab(id, { loading: true, error: "" });
+		const started = Date.now();
+		const res = await api("db.query", { id: conn, sql, limit: 5000 });
+		const ms = Date.now() - started;
+		if (!res.ok) { patchTab(id, { loading: false, error: res.error, result: null }); return; }
+		patchTab(id, { loading: false, result: res.value, error: "", ms });
+		setHistory((current) => [{ sql, at: Date.now(), ms, ok: !res.value.error }, ...current.filter((entry) => entry.sql !== sql)].slice(0, HISTORY_CAP));
+		// A statement that changes the schema (CREATE/DROP/ALTER) refreshes the tree.
+		if (/^\s*(create|drop|alter)\b/i.test(sql)) void refreshSchema(conn);
+	}, [tabs, activeConn, patchTab, refreshSchema, t]);
+
+	const exportResult = useCallback((result, name) => {
+		if (!result?.columns?.length) return;
+		const csv = toCsv(result.columns, result.rows ?? []);
+		const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+		const url = URL.createObjectURL(blob);
+		const anchor = document.createElement("a");
+		anchor.href = url;
+		anchor.download = `${name || "result"}.csv`;
+		anchor.click();
+		setTimeout(() => URL.revokeObjectURL(url), 4000);
 	}, []);
 
-	// Keyboard: Cmd/Ctrl+Enter runs the query.
-	const onKeyDown = useCallback((e) => {
-		if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-			e.preventDefault();
-			runQuery();
+	// --- tree ----------------------------------------------------------------------------
+
+	const tree = useMemo(() => {
+		const needle = filter.trim().toLowerCase();
+		const databases = (schema?.databases ?? []).map((database) => {
+			const entries = (database.tables ?? []).filter((entry) => !needle || entry.name.toLowerCase().includes(needle));
+			return { ...database, tables: entries };
+		});
+		return needle ? databases.filter((database) => database.tables.length > 0) : databases;
+	}, [schema, filter]);
+
+	const counts = countOf(schema);
+
+	const toggleTable = (key) => {
+		setExpanded((current) => {
+			const next = new Set(current);
+			if (next.has(key)) next.delete(key);
+			else next.add(key);
+			return next;
+		});
+	};
+
+	const onKeyDown = useCallback((event) => {
+		if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+			event.preventDefault();
+			if (activeTab?.kind === "query") void runQuery(activeTab.id);
 		}
-	}, [runQuery]);
+	}, [activeTab, runQuery]);
 
 	if (!cwd) {
 		return h("div", { className: "ce-root" }, h("div", { className: "ce-empty" }, t("editor.noSession")));
 	}
 
-	return h("div", { className: "ce-root ceb-db-root", onKeyDown },
-		h("div", { className: "ceb-db-toolbar" },
-			h("span", { className: "ceb-db-title" }, t("db.label")),
-			h("button", { type: "button", className: "ce-sk-btn", onClick: () => setConnectOpen(true) }, t("db.connect")),
-			activeConn ? h("span", { className: "ceb-db-conn" }, connections.find((c) => c.id === activeConn)?.label ?? activeConn.slice(0, 8)) : null,
-			activeConn ? h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost", onClick: () => doDisconnect(activeConn) }, t("db.disconnect")) : null,
+	return h("div", { className: "ce-root cedb-root", onKeyDown },
+		// ---- toolbar -------------------------------------------------------------------
+		h("div", { className: "cedb-toolbar" },
+			h("button", { type: "button", className: "ce-sk-btn ce-sk-primary", onClick: () => setConnectOpen(true) }, `＋ ${t("db.connect")}`),
+			h("button", { type: "button", className: "ce-sk-btn", onClick: () => openQueryTab("") }, t("db.newQuery")),
+			activeConn ? h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost", title: t("db.refresh"), onClick: () => void refreshSchema() }, "⟳") : null,
+			h("span", { className: "ce-spacer" }),
+			schema ? h("span", { className: "cedb-chip" }, `${counts.tables} ${t("db.tables")}`) : null,
+			schema ? h("span", { className: "cedb-chip" }, `${counts.views} ${t("db.views")}`) : null,
+			notice ? h("span", { className: "cedb-notice" }, notice) : null,
 		),
-		connectOpen ? h("div", { className: "ceb-db-connect", ref: connectRef },
-			h("h3", null, t("db.newConnection")),
-			h("label", null, t("db.driver"),
-				h("select", { className: "ce-sk-scope", value: connectForm.driver, onChange: (e) => setConnectForm({ ...connectForm, driver: e.target.value }) },
-					drivers.map((d) => h("option", { key: d.id, value: d.id, disabled: !d.ready }, `${d.label}${d.note ? ` (${d.note})` : ""}`)),
+		h("div", { className: "cedb-body" },
+			// ---- rail ------------------------------------------------------------------
+			h("aside", { className: "cedb-rail" },
+				h("div", { className: "cedb-rail-head" },
+					h("span", { className: "cedb-rail-title" }, t("db.connections")),
 				),
-			),
-			connectForm.driver === "sqlite"
-				? h("label", null, t("db.path"), h("input", { className: "ce-input", value: connectForm.path, placeholder: "/path/to/database.sqlite", onChange: (e) => setConnectForm({ ...connectForm, path: e.target.value }) }))
-				: h(Fragment, null,
-					h("label", null, t("db.host"), h("input", { className: "ce-input", value: connectForm.host, onChange: (e) => setConnectForm({ ...connectForm, host: e.target.value }) })),
-					h("label", null, t("db.port"), h("input", { className: "ce-input", type: "number", value: connectForm.port, placeholder: connectForm.driver === "mysql" ? "3306" : "5432", onChange: (e) => setConnectForm({ ...connectForm, port: e.target.value }) })),
-					h("label", null, t("db.user"), h("input", { className: "ce-input", value: connectForm.user, onChange: (e) => setConnectForm({ ...connectForm, user: e.target.value }) })),
-					h("label", null, t("db.password"), h("input", { className: "ce-input", type: "password", value: connectForm.password, onChange: (e) => setConnectForm({ ...connectForm, password: e.target.value }) })),
-					h("label", null, t("db.database"), h("input", { className: "ce-input", value: connectForm.database, onChange: (e) => setConnectForm({ ...connectForm, database: e.target.value }) })),
-				),
-			h("div", { className: "ceb-db-connect-actions" },
-				h("button", { type: "button", className: "ce-sk-btn ce-sk-primary", onClick: doConnect }, t("db.connectAction")),
-				h("button", { type: "button", className: "ce-sk-btn", onClick: () => setConnectOpen(false) }, t("editor.cancel")),
-			),
-		) : null,
-		h("div", { className: "ceb-db-body" },
-			h("div", { className: "ceb-db-rail ce-scroll" },
-				h("div", { className: "ceb-db-section" }, t("db.connections")),
 				connections.length === 0
-					? h("div", { className: "ceb-db-empty" }, t("db.noConnections"))
-					: connections.map((c) => h("button", {
-						key: c.id,
-						type: "button",
-						className: `ceb-db-conn-row${c.id === activeConn ? " ceb-db-conn-active" : ""}`,
-						onClick: () => setActiveConn(c.id),
-					}, h("span", { className: "ceb-db-driver" }, c.driver), h("span", { className: "ceb-db-label" }, c.label))),
+					? h("div", { className: "cedb-empty" }, t("db.noConnections"))
+					: connections.map((connection) => h("div", { key: connection.id, className: `cedb-conn${connection.id === activeConn ? " cedb-conn-on" : ""}` },
+						h("button", {
+							type: "button",
+							className: "cedb-conn-main",
+							title: connection.path || connection.label,
+							onClick: () => { setActiveConn(connection.id); void refreshSchema(connection.id); },
+						},
+						h("span", { className: `cedb-driver cedb-driver-${connection.driver}` }, connection.driver),
+						h("span", { className: "cedb-conn-label" }, connection.label)),
+						h("button", { type: "button", className: "ce-tool ce-tiny", title: t("db.disconnect"), onClick: () => void doDisconnect(connection.id) }, "✕"),
+					)),
 				schema ? h(Fragment, null,
-					h("div", { className: "ceb-db-section" }, t("db.tables")),
-					schema.tables?.length === 0
-						? h("div", { className: "ceb-db-empty" }, t("db.noTables"))
-						: schema.tables?.map((tbl) => h("div", { key: tbl.name, className: "ceb-db-table" },
-							h("button", {
-								type: "button",
-								className: `ceb-db-table-name${selectedTable === tbl.name ? " ceb-db-table-active" : ""}`,
-								onClick: () => selectTable(tbl.name),
-							}, tbl.name),
-							h("span", { className: "ceb-db-col-count" }, `${tbl.columns?.length ?? 0} cols`),
-						)),
+					h("div", { className: "cedb-rail-head cedb-rail-head-split" },
+						h("span", { className: "cedb-rail-title" }, t("db.objects")),
+						h("input", {
+							className: "ce-input cedb-filter",
+							placeholder: t("db.search"),
+							value: filter,
+							onChange: (event) => setFilter(event.target.value),
+						}),
+					),
+					schemaBusy ? h("div", { className: "cedb-empty" }, t("loading")) : null,
+					schemaError ? h("div", { className: "cedb-error cedb-pad" }, schemaError) : null,
+					tree.map((database) => h("div", { key: database.name, className: "cedb-db" },
+						h("div", { className: "cedb-db-name" }, database.name, database.tables.length === 0 ? h("span", { className: "cedb-db-hint" }, t("db.notLoaded")) : null),
+						database.tables.map((entry) => {
+							const key = `${database.name}:${entry.name}`;
+							const open = expanded.has(key);
+							return h("div", { key, className: "cedb-table" },
+								h("button", {
+									type: "button",
+									className: `cedb-table-row${activeTab?.key === `table:${activeConn}:${database.name}:${entry.name}` ? " cedb-table-on" : ""}`,
+									title: `${entry.name} · ${entry.columns?.length ?? 0} ${t("db.columns")}`,
+									onClick: () => { toggleTable(key); openTable(activeConn, database.name, entry); },
+									onDoubleClick: () => openQueryTab(`SELECT * FROM "${entry.name.replace(/"/g, '""')}" LIMIT 100;`),
+								},
+								h("span", { className: `cedb-kind cedb-kind-${entry.kind}` }, entry.kind === "view" ? "◇" : "▤"),
+								h("span", { className: "cedb-table-name" }, entry.name)),
+								open && entry.columns?.length
+									? h("ul", { className: "cedb-cols" }, entry.columns.map((column) => h("li", { key: column.name, className: "cedb-col" },
+										h("span", { className: "cedb-col-name" }, column.name),
+										h("span", { className: "cedb-col-type" }, column.type),
+										column.primaryKey ? h("span", { className: "cedb-pk" }, "PK") : null,
+										column.nullable === false ? h("span", { className: "cedb-nn" }, "NN") : null,
+									)))
+									: null,
+							);
+						}),
+					)),
 				) : null,
 			),
-			h("div", { className: "ceb-db-main" },
-				h("div", { className: "ceb-db-editor-wrap" },
-					h("textarea", {
-						ref: sqlRef,
-						className: "ceb-db-sql",
-						value: sql,
-						placeholder: t("db.sqlPlaceholder"),
-						spellcheck: false,
-						onChange: (e) => setSql(e.target.value),
-					}),
-					h("button", {
-						type: "button",
-						className: "ce-sk-btn ce-sk-primary ceb-db-run",
-						disabled: !activeConn || !sql.trim() || running,
-						onClick: runQuery,
-					}, running ? t("loading") : t("db.run")),
+			// ---- main ------------------------------------------------------------------
+			h("section", { className: "cedb-main" },
+				h("div", { className: "cedb-tabs", role: "tablist" },
+					tabs.map((tab) => h("div", { key: tab.id, className: `cedb-tab${tab.id === activeTabId ? " cedb-tab-on" : ""}` },
+						h("button", { type: "button", className: "cedb-tab-label", role: "tab", "aria-selected": tab.id === activeTabId, onClick: () => setActiveTabId(tab.id), title: tab.kind === "table" ? `${tab.table} · ${tab.database}` : tab.sql },
+							h("span", { className: "cedb-tab-kind" }, tab.kind === "table" ? "▤" : "⌘"),
+							tab.title),
+						h("button", { type: "button", className: "cedb-tab-close", title: t("close"), onClick: () => closeTab(tab.id) }, "✕"),
+					)),
+					h("button", { type: "button", className: "cedb-tab-add", title: t("db.newQuery"), onClick: () => openQueryTab("") }, "＋"),
 				),
-				result ? h("div", { className: "ceb-db-result ce-scroll" },
-					result.error
-						? h("div", { className: "ceb-db-error" }, result.error)
-						: h(Fragment, null,
-							h("div", { className: "ceb-db-result-meta" },
-								result.ms !== void 0 ? `${result.ms} ms` : null,
-								result.truncated ? t("db.truncated") : null,
-								result.changes !== void 0 ? `${result.changes} rows affected` : null,
-								!result.columns?.length && !result.rows?.length && result.changes === void 0 ? t("db.noRows") : null,
+				activeTab === null
+					? h("div", { className: "cedb-placeholder" },
+						h("div", { className: "cedb-placeholder-title" }, t("db.welcome")),
+						h("div", { className: "cedb-placeholder-hint" }, t("db.welcomeHint")))
+					: h("div", { className: "cedb-tabbody" },
+						// ---- query tab ----
+						activeTab.kind === "query"
+							? h(Fragment, null,
+								h("div", { className: "cedb-editor" },
+									h("div", { className: "cedb-editor-bar" },
+										h("select", {
+											className: "cedb-conn-select",
+											value: activeTab.conn || activeConn,
+											onChange: (event) => patchTab(activeTab.id, { conn: event.target.value }),
+											"aria-label": t("db.connections"),
+										}, connections.map((connection) => h("option", { key: connection.id, value: connection.id }, `${connection.driver} · ${connection.label}`))),
+										h("button", {
+											type: "button",
+											className: "ce-sk-btn ce-sk-primary cedb-run",
+											disabled: activeTab.loading || !String(activeTab.sql ?? "").trim(),
+											onClick: () => void runQuery(activeTab.id),
+										}, activeTab.loading ? t("loading") : `▶ ${t("db.run")}`),
+										h("button", { type: "button", className: "ce-sk-btn", title: t("db.history"), onClick: () => setHistoryOpen((v) => !v) }, t("db.history")),
+										h("span", { className: "ce-spacer" }),
+										h("span", { className: "cedb-kbd" }, "⌘/Ctrl+Enter"),
+									),
+									h("textarea", {
+										className: "cedb-sql",
+										value: activeTab.sql ?? "",
+										placeholder: t("db.sqlPlaceholder"),
+										spellCheck: false,
+										onChange: (event) => patchTab(activeTab.id, { sql: event.target.value }),
+									}),
+								),
+								h("div", { className: "cedb-result-head" },
+									activeTab.result
+										? h(Fragment, null,
+											h("span", { className: "cedb-chip" }, `${activeTab.result.rows?.length ?? 0} ${t("db.rows")}`),
+											h("span", { className: "cedb-chip" }, `${activeTab.ms || activeTab.result.ms || 0} ms`),
+											activeTab.result.truncated ? h("span", { className: "cedb-chip cedb-chip-warn" }, t("db.truncated")) : null,
+											activeTab.result.changes !== undefined ? h("span", { className: "cedb-chip" }, `${activeTab.result.changes} ${t("db.affected")}`) : null,
+											activeTab.result.columns?.length ? h("button", { type: "button", className: "ce-tool ce-tiny", title: t("db.export"), onClick: () => exportResult(activeTab.result, activeTab.title) }, "⤓ CSV") : null,
+										)
+										: h("span", { className: "cedb-result-hint" }, t("db.runHint")),
+								),
+								activeTab.error ? h("div", { className: "cedb-error" }, activeTab.error) : null,
+								activeTab.result
+									? h(ResultGrid, { t, result: activeTab.result, onCell: setCellDetail })
+									: h("div", { className: "cedb-placeholder-small" }, t("db.runHint")),
+							)
+							// ---- table tab ----
+							: h(Fragment, null,
+								h("div", { className: "cedb-tablebar" },
+									h("span", { className: "cedb-tablebar-name" }, `${activeTab.database}.${activeTab.table}`),
+									h("input", {
+										className: "ce-input cedb-tablebar-filter",
+										placeholder: t("db.filterRows"),
+										value: activeTab.filter,
+										onChange: (event) => patchTab(activeTab.id, { filter: event.target.value, offset: 0 }),
+										onKeyDown: (event) => { if (event.key === "Enter") void loadRows(activeTab.id, { filter: event.currentTarget.value, offset: 0 }); },
+									}),
+									h("button", { type: "button", className: "ce-sk-btn", disabled: activeTab.loading, onClick: () => void loadRows(activeTab.id) }, activeTab.loading ? t("loading") : "⟳"),
+									h("button", { type: "button", className: "ce-sk-btn", title: t("db.sqlForTable"), onClick: () => openQueryTab(`${tableSql(activeTab.table, { ...activeTab, limit: PAGE_SIZE, driver: connections.find((entry) => entry.id === activeTab.conn)?.driver }).replace(/;\s*$/, "")};`) }, "SQL"),
+									h("span", { className: "ce-spacer" }),
+									activeTab.result ? h("button", { type: "button", className: "ce-tool ce-tiny", title: t("db.export"), onClick: () => exportResult(activeTab.result, activeTab.table) }, "⤓ CSV") : null,
+								),
+								activeTab.error ? h("div", { className: "cedb-error" }, activeTab.error) : null,
+								activeTab.result
+									? h(ResultGrid, { t, result: activeTab.result, onCell: setCellDetail, onSort: (column) => sortBy(activeTab.id, column), order: activeTab.order, dir: activeTab.dir })
+									: h("div", { className: "cedb-placeholder-small" }, activeTab.loading ? t("loading") : t("db.noRows")),
+								h("div", { className: "cedb-pager" },
+									h("button", {
+										type: "button",
+										className: "ce-tool ce-tiny",
+										disabled: activeTab.offset === 0 || activeTab.loading,
+										onClick: () => { const offset = Math.max(0, activeTab.offset - PAGE_SIZE); patchTab(activeTab.id, { offset }); void loadRows(activeTab.id, { offset }); },
+									}, "←"),
+									h("span", { className: "cedb-pager-text" },
+										`${activeTab.offset + 1}–${Math.min(activeTab.offset + PAGE_SIZE, activeTab.result?.total ?? 0)} / ${activeTab.result?.total ?? 0}`),
+									h("button", {
+										type: "button",
+										className: "ce-tool ce-tiny",
+										disabled: activeTab.loading || activeTab.offset + PAGE_SIZE >= (activeTab.result?.total ?? 0),
+										onClick: () => { const offset = activeTab.offset + PAGE_SIZE; patchTab(activeTab.id, { offset }); void loadRows(activeTab.id, { offset }); },
+									}, "→"),
+								),
 							),
-							result.columns?.length > 0 ? h("table", { className: "ceb-db-grid" },
-								h("thead", null, h("tr", null, result.columns.map((col, i) => h("th", { key: i }, col)))),
-								h("tbody", null, result.rows?.map((row, ri) => h("tr", { key: ri }, row.map((cell, ci) => h("td", { key: ci, title: formatCell(cell) }, truncateCell(cell)))))),
-							) : null,
-						),
-				) : h("div", { className: "ceb-db-empty ceb-db-result-empty" }, t("db.runHint")),
+					),
 			),
 		),
+		// ---- connect dialog ---------------------------------------------------------------
+		connectOpen
+			? h("div", { className: "cedb-dialog", ref: connectRef, role: "dialog", "aria-label": t("db.newConnection") },
+				h("h3", { className: "cedb-dialog-title" }, t("db.newConnection")),
+				h("label", { className: "cedb-field" }, t("db.driver"),
+					h("select", {
+						className: "ce-input",
+						value: form.driver,
+						onChange: (event) => setForm({ ...form, driver: event.target.value }),
+					}, drivers.map((driver) => h("option", { key: driver.id, value: driver.id, disabled: !driver.ready }, `${driver.label}${driver.ready ? "" : ` — ${driver.note}`}`)))),
+				form.driver === "sqlite"
+					? h("label", { className: "cedb-field" }, t("db.path"),
+						h("input", { className: "ce-input", value: form.path, placeholder: "/path/to/app.sqlite", onChange: (event) => setForm({ ...form, path: event.target.value }) }))
+					: h(Fragment, null,
+						h("div", { className: "cedb-field-row" },
+							h("label", { className: "cedb-field" }, t("db.host"), h("input", { className: "ce-input", value: form.host, onChange: (event) => setForm({ ...form, host: event.target.value }) })),
+							h("label", { className: "cedb-field cedb-field-narrow" }, t("db.port"), h("input", { className: "ce-input", type: "number", value: form.port, placeholder: form.driver === "mysql" ? "3306" : "5432", onChange: (event) => setForm({ ...form, port: event.target.value }) })),
+						),
+						h("label", { className: "cedb-field" }, t("db.database"), h("input", { className: "ce-input", value: form.database, onChange: (event) => setForm({ ...form, database: event.target.value }) })),
+						h("div", { className: "cedb-field-row" },
+							h("label", { className: "cedb-field" }, t("db.user"), h("input", { className: "ce-input", value: form.user, onChange: (event) => setForm({ ...form, user: event.target.value }) })),
+							h("label", { className: "cedb-field" }, t("db.password"), h("input", { className: "ce-input", type: "password", value: form.password, onChange: (event) => setForm({ ...form, password: event.target.value }) })),
+						)),
+				h("div", { className: "cedb-dialog-actions" },
+					h("button", { type: "button", className: "ce-sk-btn ce-sk-primary", onClick: () => void doConnect() }, t("db.connectAction")),
+					h("button", { type: "button", className: "ce-sk-btn", onClick: () => setConnectOpen(false) }, t("editor.cancel")),
+				),
+			)
+			: null,
+		// ---- history drawer ---------------------------------------------------------------
+		historyOpen && history.length > 0
+			? h("div", { className: "cedb-history" },
+				h("div", { className: "cedb-history-head" },
+					h("span", null, t("db.history")),
+					h("button", { type: "button", className: "ce-tool ce-tiny", onClick: () => setHistoryOpen(false) }, "✕")),
+				history.map((entry, index) => h("button", {
+					key: `${entry.at}-${index}`,
+					type: "button",
+					className: "cedb-history-row",
+					title: entry.sql,
+					onClick: () => { const id = openQueryTab(entry.sql); setHistoryOpen(false); setActiveTabId(id); },
+				},
+				h("span", { className: "cedb-history-sql" }, entry.sql.slice(0, 120)),
+				h("span", { className: "cedb-history-ms" }, `${entry.ms} ms`))))
+			: null,
+		// ---- cell detail ------------------------------------------------------------------
+		cellDetail
+			? h("div", { className: "cedb-cell-detail", ref: detailRef, role: "dialog", "aria-label": cellDetail.title },
+				h("div", { className: "cedb-cell-head" },
+					h("span", { className: "cedb-cell-title" }, cellDetail.title),
+					h("button", { type: "button", className: "ce-tool ce-tiny", title: t("close"), onClick: () => setCellDetail(null) }, "✕")),
+				h("pre", { className: "cedb-cell-body" }, formatCell(cellDetail.value)))
+			: null,
 	);
 }
 
-export function DbTitle({ useTabInfo }) {
+/** The tab title is the fixed database label; open tabs carry their own names. */
+export function DbTitle() {
 	return null;
+}
+
+/** The result grid: sticky header, sortable columns, row numbers, cell inspection. */
+function ResultGrid({ t, result, onCell, onSort, order, dir }) {
+	const columns = result.columns ?? [];
+	const rows = result.rows ?? [];
+	if (columns.length === 0) return h("div", { className: "cedb-placeholder-small" }, t("db.noRows"));
+	return h("div", { className: "cedb-grid-wrap" },
+		h("table", { className: "cedb-grid" },
+			h("thead", null,
+				h("tr", null,
+					h("th", { className: "cedb-grid-gutter" }, "#"),
+					columns.map((column, index) => h("th", {
+						key: `${column}-${index}`,
+						className: `cedb-grid-th${onSort ? " cedb-grid-sortable" : ""}${order === column ? " cedb-grid-sorted" : ""}`,
+						onClick: onSort ? () => onSort(column) : undefined,
+						title: column,
+					}, column, order === column ? (dir === "desc" ? " ↓" : " ↑") : "")))),
+			h("tbody", null,
+				rows.map((row, rowIndex) => h("tr", { key: rowIndex },
+					h("td", { className: "cedb-grid-gutter" }, rowIndex + 1),
+					row.map((cell, cellIndex) => h("td", {
+						key: cellIndex,
+						className: `cedb-grid-td${cell === null ? " cedb-null" : ""}`,
+						title: formatCell(cell),
+						onClick: () => onCell?.({ title: `${columns[cellIndex]} · ${t("db.row")} ${rowIndex + 1}`, value: cell }),
+					}, truncateCell(cell)))))),
+		),
+	);
 }

@@ -1,0 +1,262 @@
+/* ---------------- RPC workbench: gRPC over a .proto, Bruno-style ----------------
+ *
+ * The API panel speaks HTTP; this one speaks gRPC. Shape, after Bruno's gRPC
+ * request tab (and the way every gRPC client lays out):
+ *
+ *   [server address] [.proto path] [Load]
+ *   rail: services → methods        main: request JSON, metadata, Invoke
+ *                                    response: status, messages, headers, trailers
+ *
+ * The host does the protocol work (`rpc.proto` parses the file and lists the
+ * methods, `rpc.call` frames the request over HTTP/2 and decodes the reply),
+ * so this component owns state and layout only.
+ */
+
+import { Fragment, h, useCallback, useEffect, useMemo, useState } from "./react.js";
+import { api } from "./api.js";
+import { RPC_TAB_ID, RPC_TAB_KIND } from "./constants.js";
+
+export const rpcDefinition = (t) => ({
+	id: RPC_TAB_ID,
+	kind: RPC_TAB_KIND,
+	priority: "extension",
+	keepMounted: true,
+	title: () => t("rpc.label"),
+	guide: [],
+});
+
+/** Pure: pretty-print a JSON text, or return the reason it cannot be parsed. */
+export function parseJsonText(text) {
+	const trimmed = String(text ?? "").trim();
+	if (trimmed === "") return { value: {}, error: "" };
+	try {
+		return { value: JSON.parse(trimmed), error: "" };
+	} catch (error) {
+		return { value: null, error: String(error?.message ?? error) };
+	}
+}
+
+/** Pure: the stream arrow shown next to a method (`→` server, `↔` bidi, …). */
+export function methodArrows(method) {
+	if (method?.clientStreaming && method?.serverStreaming) return "↔";
+	if (method?.clientStreaming) return "→|";
+	if (method?.serverStreaming) return "|→";
+	return "→";
+}
+
+/** Pure: group a flat method list by service, preserving declaration order. */
+export function groupMethods(methods) {
+	const groups = new Map();
+	for (const method of methods ?? []) {
+		if (!groups.has(method.service)) groups.set(method.service, []);
+		groups.get(method.service).push(method);
+	}
+	return [...groups.entries()].map(([service, entries]) => ({ service, methods: entries }));
+}
+
+export function RpcView({ t, useTabInfo, sessionId, useSessions }) {
+	const cwd = useSessions ? useSessions((sessions) => (sessionId ? sessions.byId[sessionId]?.cwd : void 0)) : void 0;
+
+	const [address, setAddress] = useState("");
+	const [protoPath, setProtoPath] = useState("");
+	const [methods, setMethods] = useState([]);
+	const [protoError, setProtoError] = useState("");
+	const [protoFiles, setProtoFiles] = useState([]);
+	const [protoBusy, setProtoBusy] = useState(false);
+	const [selected, setSelected] = useState(""); // method path
+	const [requestText, setRequestText] = useState("{}");
+	const [metadata, setMetadata] = useState([]);
+	const [response, setResponse] = useState(null);
+	const [busy, setBusy] = useState(false);
+	const [timeoutMs, setTimeoutMs] = useState(30000);
+	const [insecureTls, setInsecureTls] = useState(false);
+
+	const selectedMethod = useMemo(() => methods.find((method) => method.path === selected) ?? null, [methods, selected]);
+	const groups = useMemo(() => groupMethods(methods), [methods]);
+	const request = useMemo(() => parseJsonText(requestText), [requestText]);
+
+	const loadProto = useCallback(async () => {
+		const path = protoPath.trim();
+		if (path === "") { setProtoError(t("rpc.protoRequired")); return; }
+		setProtoBusy(true);
+		setProtoError("");
+		const res = await api("rpc.proto", { cwd, path });
+		setProtoBusy(false);
+		if (!res.ok) { setProtoError(res.error); setMethods([]); return; }
+		if (res.value?.error) { setProtoError(res.value.error); setMethods([]); return; }
+		setMethods(res.value.methods ?? []);
+		setProtoFiles(res.value.files ?? []);
+		const first = res.value.methods?.[0];
+		if (first) {
+			setSelected(first.path);
+			// Seed the editor with the request message's zero value: a gRPC call
+			// with an empty body is a protocol error, so a skeleton is required.
+			setRequestText(JSON.stringify(first.sample ?? {}, null, 2));
+		}
+	}, [cwd, protoPath, t]);
+
+	const chooseMethod = useCallback((method) => {
+		setSelected(method.path);
+		if (requestText.trim() === "{}" || requestText.trim() === "") setRequestText(JSON.stringify(method.sample ?? {}, null, 2));
+	}, [requestText]);
+
+	const invoke = useCallback(async () => {
+		if (!selectedMethod || busy) return;
+		if (request.error) return;
+		setBusy(true);
+		setResponse(null);
+		const meta = {};
+		for (const row of metadata) {
+			const name = String(row.name ?? "").trim();
+			if (name !== "" && row.enabled !== false) meta[name] = String(row.value ?? "");
+		}
+		const res = await api("rpc.call", {
+			cwd,
+			proto: protoPath.trim(),
+			method: selectedMethod.path,
+			url: address.trim(),
+			messages: [request.value],
+			metadata: meta,
+			timeoutMs,
+			insecureTls,
+		});
+		setBusy(false);
+		setResponse(res.ok ? res.value : { error: res.error });
+	}, [busy, cwd, protoPath, selectedMethod, address, request, metadata, timeoutMs, insecureTls]);
+
+	const onKeyDown = useCallback((event) => {
+		if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+			event.preventDefault();
+			void invoke();
+		}
+	}, [invoke]);
+
+	if (!cwd) {
+		return h("div", { className: "ce-root" }, h("div", { className: "ce-empty" }, t("editor.noSession")));
+	}
+
+	const okStatus = response && !response.error && response.status === 0;
+
+	return h("div", { className: "ce-root cerpc-root", onKeyDown },
+		// ---- toolbar ---------------------------------------------------------------------
+		h("div", { className: "cerpc-toolbar" },
+			h("label", { className: "cerpc-field" },
+				h("span", { className: "cerpc-label" }, t("rpc.address")),
+				h("input", { className: "ce-input cerpc-input", value: address, spellCheck: false, placeholder: "grpc://host:50051", onChange: (event) => setAddress(event.target.value) })),
+			h("label", { className: "cerpc-field" },
+				h("span", { className: "cerpc-label" }, t("rpc.proto")),
+				h("input", { className: "ce-input cerpc-input", value: protoPath, spellCheck: false, placeholder: "proto/hello.proto", onChange: (event) => setProtoPath(event.target.value) })),
+			h("button", { type: "button", className: "ce-sk-btn", disabled: protoBusy, onClick: () => void loadProto() }, protoBusy ? t("loading") : t("rpc.load")),
+		),
+		protoError ? h("div", { className: "cedb-error" }, protoError) : null,
+		h("div", { className: "cerpc-body" },
+			// ---- method rail ------------------------------------------------------------
+			h("aside", { className: "cerpc-rail" },
+				methods.length === 0
+					? h("div", { className: "cedb-empty" }, t("rpc.noMethods"))
+					: groups.map((group) => h("div", { key: group.service, className: "cerpc-service" },
+						h("div", { className: "cerpc-service-name", title: group.service }, group.service.split(".").pop()),
+						group.methods.map((method) => h("button", {
+							key: method.path,
+							type: "button",
+							className: `cerpc-method${method.path === selected ? " cerpc-method-on" : ""}`,
+							title: `${method.request} → ${method.response}`,
+							onClick: () => chooseMethod(method),
+						},
+						h("span", { className: "cerpc-arrow" }, methodArrows(method)),
+						h("span", { className: "cerpc-method-name" }, method.name))),
+					)),
+				protoFiles.length > 0
+					? h("div", { className: "cerpc-files" }, protoFiles.map((file) => h("div", { key: file, className: "cerpc-file" }, file)))
+					: null,
+			),
+			// ---- request / response -----------------------------------------------------
+			h("section", { className: "cerpc-main" },
+				h("div", { className: "cerpc-pane" },
+					h("div", { className: "cerpc-pane-head" },
+						h("span", { className: "cerpc-pane-title" }, t("rpc.request")),
+						selectedMethod ? h("span", { className: "cedb-chip" }, selectedMethod.request) : null,
+						h("span", { className: "ce-spacer" }),
+						h("label", { className: "cerpc-inline" },
+							h("input", { type: "checkbox", checked: insecureTls, onChange: (event) => setInsecureTls(event.target.checked) }),
+							t("rpc.insecureTls")),
+						h("input", {
+							className: "ce-input cerpc-timeout",
+							type: "number",
+							value: timeoutMs,
+							"aria-label": t("rpc.timeout"),
+							onChange: (event) => setTimeoutMs(Number(event.target.value) || 30000),
+						}),
+						h("span", { className: "cedb-kbd" }, "ms"),
+					),
+					h("textarea", {
+						className: `cedb-sql cerpc-json${request.error ? " cerpc-json-bad" : ""}`,
+						value: requestText,
+						spellCheck: false,
+						onChange: (event) => setRequestText(event.target.value),
+					}),
+					request.error ? h("div", { className: "cerpc-json-error" }, request.error) : null,
+					h("div", { className: "cerpc-meta-head" },
+						h("span", { className: "cerpc-pane-title" }, t("rpc.metadata")),
+						h("button", { type: "button", className: "ce-tool ce-tiny", onClick: () => setMetadata((current) => [...current, { name: "", value: "", enabled: true }]) }, "＋"),
+					),
+					metadata.length === 0
+						? h("div", { className: "cerpc-meta-empty" }, t("rpc.noMetadata"))
+						: h("div", { className: "cerpc-meta-list" }, metadata.map((row, index) => h("div", { key: index, className: "cerpc-meta-row" },
+							h("input", { type: "checkbox", checked: row.enabled !== false, onChange: (event) => setMetadata((cur) => cur.map((entry, i) => (i === index ? { ...entry, enabled: event.target.checked } : entry))) }),
+							h("input", { className: "ce-input cerpc-meta-name", value: row.name, placeholder: "authorization", spellCheck: false, onChange: (event) => setMetadata((cur) => cur.map((entry, i) => (i === index ? { ...entry, name: event.target.value } : entry))) }),
+							h("input", { className: "ce-input cerpc-meta-value", value: row.value, placeholder: "Bearer …", spellCheck: false, onChange: (event) => setMetadata((cur) => cur.map((entry, i) => (i === index ? { ...entry, value: event.target.value } : entry))) }),
+							h("button", { type: "button", className: "ce-tool ce-tiny", title: t("close"), onClick: () => setMetadata((cur) => cur.filter((_, i) => i !== index)) }, "✕"),
+						))),
+					h("div", { className: "cerpc-actions" },
+						h("button", {
+							type: "button",
+							className: "ce-sk-btn ce-sk-primary",
+							disabled: busy || !selectedMethod || Boolean(request.error),
+							onClick: () => void invoke(),
+						}, busy ? t("loading") : `▶ ${t("rpc.invoke")}`),
+						h("span", { className: "cedb-kbd" }, "⌘/Ctrl+Enter"),
+					),
+				),
+				// ---- response ---------------------------------------------------------
+				h("div", { className: "cerpc-pane cerpc-response" },
+					h("div", { className: "cerpc-pane-head" },
+						h("span", { className: "cerpc-pane-title" }, t("rpc.response")),
+						response && !response.error
+							? h(Fragment, null,
+								h("span", { className: `cedb-chip${okStatus ? "" : " cedb-chip-warn"}` }, `${response.status} ${response.statusName}`),
+								response.message ? h("span", { className: "cerpc-status-msg" }, response.message) : null,
+								h("span", { className: "cedb-chip" }, `${response.ms} ms`),
+								h("span", { className: "cedb-chip" }, `${response.messages?.length ?? 0} ${t("rpc.messages")}`),
+								response.truncated ? h("span", { className: "cedb-chip cedb-chip-warn" }, t("db.truncated")) : null)
+							: null,
+					),
+					response?.error
+						? h("div", { className: "cedb-error" }, response.error)
+						: response
+							? h("div", { className: "cerpc-result" },
+								(response.messages ?? []).map((message, index) => h("div", { key: index, className: "cerpc-message" },
+									h("div", { className: "cerpc-message-head" }, `#${index + 1}`),
+									h("pre", { className: "cerpc-message-body" }, JSON.stringify(message, null, 2)))),
+								(response.messages ?? []).length === 0 ? h("div", { className: "cedb-placeholder-small" }, t("rpc.emptyResponse")) : null,
+								Object.keys(response.trailers ?? {}).length > 0
+									? h("div", { className: "cerpc-trailers" },
+										h("div", { className: "cerpc-pane-title" }, t("rpc.trailers")),
+										Object.entries(response.trailers).map(([name, value]) => h("div", { key: name, className: "cerpc-trailer" },
+											h("span", { className: "cerpc-trailer-name" }, name),
+											h("span", { className: "cerpc-trailer-value" }, value))))
+									: null,
+							)
+							: h("div", { className: "cedb-placeholder" },
+								h("div", { className: "cedb-placeholder-title" }, t("rpc.welcome")),
+								h("div", { className: "cedb-placeholder-hint" }, t("rpc.welcomeHint"))),
+				),
+			),
+		),
+	);
+}
+
+/** The tab title is the fixed RPC label. */
+export function RpcTitle() {
+	return null;
+}

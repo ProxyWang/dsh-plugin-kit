@@ -33,6 +33,7 @@ import { createBrowserService, browserTool } from "./lib/host/browser.js";
 import { createVaultService } from "./lib/host/vault.js";
 import { dbRoutes, closeAll as closeAllDb } from "./lib/host/db.js";
 import { createToolboxTools } from "./lib/host/tools.js";
+import { setExternalTerminalApp } from "./lib/host/external-terminal.js";
 
 /** Plugin configuration schema. Fields are read at apply time; changes require
  *  a plugin restart (non-volatile). Users override via cordis.patch.yml. */
@@ -42,10 +43,13 @@ export const Config = {
 	lspIdleMs: { type: "number", default: 300_000, description: "Shut down idle LSP servers after this many milliseconds." },
 	apiTimeoutMs: { type: "number", default: 30_000, description: "Default timeout for API workbench requests (1000–120000 ms)." },
 	collectionDir: { type: "string", default: "", description: "Workspace-relative .bru collection directory for the API workbench." },
+	terminalApp: { type: "string", default: "", description: "Terminal application opened by the External Terminal action (macOS app name, e.g. iTerm or Warp; empty probes iTerm then Terminal)." },
 	dbDefaultDriver: { type: "string", default: "sqlite", description: "Default database driver for new connections (sqlite, mysql, postgres)." },
 };
 
 function apply(ctx, config) {
+	// Deployment preference for the External Terminal action; "" probes at open time.
+	setExternalTerminalApp(typeof config?.terminalApp === "string" ? config.terminalApp : "");
 	let browser;
 	let vault;
 	ctx.inject(["storageDomain"], (storageCtx) => {
@@ -77,7 +81,10 @@ function apply(ctx, config) {
 				path: API_PREFIX,
 				handler: async (req, res) => {
 					const route = (req.url ?? "/").split("?")[0].slice(API_PREFIX.length + 1);
-					if (req.method !== "POST" && !Object.hasOwn(routes, route) && route !== "browser.data" && route !== "vault" && !Object.hasOwn(dbRoutes, route)) {
+					// Three owners of the prefix: this package's route table, the two
+					// storage-backed endpoints, and the database driver table.
+					const known = Object.hasOwn(routes, route) || Object.hasOwn(dbRoutes, route) || route === "browser.data" || route === "vault";
+					if (!known) {
 						respondJson(res, 404, { ok: false, error: `unknown route: ${route}` });
 						return;
 					}

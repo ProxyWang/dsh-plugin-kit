@@ -43,10 +43,13 @@ export function addTabPath(list, path, cap = 15) {
 }
 
 export function CodeBody(props) {
-	const { useTabInfo, sessionId, useSessions, t, terminal } = props;
-	// The host owns interactive terminals; the workspace only opens one beside
-	// itself. Absent capability hides the entry instead of failing loudly.
+	const { useTabInfo, sessionId, useSessions, t, terminal, openBuiltinTerminal, builtinTerminal } = props;
+	// Two terminals, both optional: the plugin's own rendered tab when the
+	// terminal service is present, and the system terminal that the Host
+	// launches in the session directory. Each hides when its capability is
+	// absent instead of failing at click time.
 	const terminalEntry = terminal ?? inertTerminalEntry;
+	const builtinAvailable = () => Boolean(builtinTerminal?.()) && typeof openBuiltinTerminal === "function";
 	const tabInfo = useTabInfo ? useTabInfo() : null;
 	const tab = tabInfo?.tab;
 	const cwd = useSessions ? useSessions((sessions) => (sessionId ? sessions.byId[sessionId]?.cwd : undefined)) : undefined;
@@ -1734,18 +1737,28 @@ export function CodeBody(props) {
 		return best;
 	}, [symbols, cursor]);
 
-	// The host terminal opens beside the workspace in its own docked pane. A
-	// failure here is always a state problem (no Session on screen, or the host
-	// tab type went away), so it reports through the same banner as git errors.
-	const openTerminal = useCallback(() => {
-		const res = terminalEntry.open();
-		// A successful open is its own feedback (the column expands and focuses
-		// the new pane), but an earlier failure banner does not expire on its
-		// own, so clear it instead of leaving a stale contradiction.
+	// The built-in entry opens the plugin's own terminal tab: DSH runs the shell,
+	// the plugin paints the screen. A refused open (no session, or the kind went
+	// away with its plugin) falls back to the system terminal.
+	const openBuiltin = useCallback(() => {
+		if (builtinAvailable() && openBuiltinTerminal()) { say(""); return true; }
+		return false;
+	}, [say, openBuiltinTerminal, builtinTerminal]);
+
+	// The External Terminal entry launches the operating system's terminal in the
+	// Session directory, so a full-screen TUI runs in a native window instead of
+	// inside the Web UI's cell grid. Every failure mode has its own sentence:
+	// no Session on screen, a runtime without a shared desktop, a double-click
+	// inside the debounce window, or the Host naming the launchers it tried.
+	const openTerminal = useCallback(async () => {
+		const res = await terminalEntry.open(cwd);
+		// Success is its own feedback: the OS window appears in front. Clearing
+		// the banner matters because an earlier failure never expires on its own.
 		if (res.ok) { say(""); return; }
+		if (res.reason === "busy") return;
 		const key = res.reason === "noSession" ? "terminal.fail.noSession" : res.reason === "unavailable" ? "terminal.fail.unavailable" : "terminal.fail.failed";
-		say(t(key), "error");
-	}, [say, t, terminalEntry]);
+		say(res.error ? `${t(key)}: ${res.error}` : t(key), "error");
+	}, [say, t, terminalEntry, cwd]);
 
 	const commands = useMemo(() => [
 		{ id: "files", icon: "▱", label: t("command.files"), run: () => { setMode("files"); dismissPanels(); setRailVisible(true); setMobileView("files"); } },
@@ -1775,8 +1788,9 @@ export function CodeBody(props) {
 			try { localStorage.setItem("dsh.plugin-kit.format", next ? "on" : "off"); } catch { /* storage may be denied */ }
 			say(t(next ? "editor.formatOn" : "editor.formatOff"));
 		} },
-		...(terminalEntry.available() ? [{ id: "terminal", icon: "‣", label: t("command.terminal"), run: openTerminal }] : []),
-	], [t, refreshGit, openSearch, openPalette, toggleWrap, say, loadFile, dismissPanels, openTerminal, terminalEntry, editing, toggleProblems, reopenClosedTab, closeTabs, tabs, liveOn, cwd, formatOnSave, openCompare, openTasks]);
+		...(builtinAvailable() ? [{ id: "terminal", icon: "‣", label: t("command.terminal"), run: () => { if (!openBuiltin()) void openTerminal(); } }] : []),
+		...(terminalEntry.available() ? [{ id: "terminal-external", icon: "↗", label: t("command.externalTerminal"), run: () => void openTerminal() }] : []),
+	], [t, refreshGit, openSearch, openPalette, toggleWrap, say, loadFile, dismissPanels, openTerminal, openBuiltin, terminalEntry, builtinTerminal, openBuiltinTerminal, editing, toggleProblems, reopenClosedTab, closeTabs, tabs, liveOn, cwd, formatOnSave, openCompare, openTasks]);
 
 	const startRailDrag = useCallback((event) => {
 		event.preventDefault();
@@ -1884,10 +1898,18 @@ export function CodeBody(props) {
 			h("span", { className: "ce-spacer" }),
 			!railVisible ? h("button", { type: "button", className: "ce-tool", title: `${t("quickopen.placeholder")} (⌘P / Ctrl+P)`, onClick: () => palette ? closePalette() : openPalette() }, h(IconSearch)) : null,
 			!railVisible ? h("button", { type: "button", className: "ce-tool ce-workspace-search", title: `${t(mode === "changes" ? "search.changesHint" : "search.workspaceHint")} (⇧⌘F / Ctrl+Shift+F)`, "aria-label": t(mode === "changes" ? "search.changesHint" : "search.workspaceHint"), onClick: openSearch }, h(IconTextSearch), h("span", null, t(mode === "changes" ? "search.changesAction" : "changes.searchWorkspace"))) : null,
-			// The host terminal sits with the tool icons: the command centre
-			// trigger already reads as ">_", which would double the glyph.
-			terminalEntry.available()
-				? h("button", { type: "button", className: "ce-tool", title: t("toolbar.terminalHint"), "aria-label": t("toolbar.terminal"), onClick: openTerminal }, h(IconTerminal))
+			// The terminal sits with the tool icons: the command centre trigger
+			// already reads as ">_", which would double the glyph. The built-in
+			// tab is preferred; the system terminal is the fallback and its own
+			// command entry.
+			builtinAvailable() || terminalEntry.available()
+				? h("button", {
+					type: "button",
+					className: "ce-tool",
+					title: builtinAvailable() ? t("toolbar.terminalHint") : t("toolbar.externalTerminalHint"),
+					"aria-label": builtinAvailable() ? t("toolbar.terminal") : t("toolbar.externalTerminal"),
+					onClick: () => { if (!openBuiltin()) void openTerminal(); },
+				}, h(IconTerminal))
 				: null,
 			h("button", { type: "button", className: "ce-tool", title: `${statusTitle}`, onClick: () => { refreshGit(); setTreeKey((k) => k + 1); if (docRef.current) void loadFile(docRef.current.path, cursorRef.current?.line ?? 1, cursorRef.current?.col ?? 1); } }, h(IconRefresh)),
 			h("span", { className: `ce-dot ce-dot-${status.state}`, title: statusTitle }),
