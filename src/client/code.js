@@ -57,6 +57,7 @@ export function CodeBody(props) {
 	const [git, setGit] = useState(null);
 	const [cursor, setCursor] = useState(null); // {line, col, word}
 	const [diagnostics, setDiagnostics] = useState([]);
+	const [workspaceDiag, setWorkspaceDiag] = useState(null); // [{path, items}] from lsp.workspaceDiagnostics
 	const [overlay, setOverlay] = useState(null);
 	const [hover, setHover] = useState(null);
 	const [status, setStatus] = useState({ state: "off", message: "", progress: "" });
@@ -1305,12 +1306,18 @@ export function CodeBody(props) {
 		setCommandOpen(next);
 	}, [commandOpen, dismissPanels]);
 
-	// Problems panel (VS Code ⇧⌘M): the open file's diagnostics as a list.
+	// Problems panel (VS Code ⇧⌘M): workspace-wide diagnostics when available,
+	// falling back to the open file's list. Fetches the aggregate on toggle.
 	const toggleProblems = useCallback(() => {
 		const next = !problemsOpen;
 		dismissPanels();
 		setProblemsOpen(next);
-	}, [problemsOpen, dismissPanels]);
+		if (next && cwd) {
+			api("lsp.workspaceDiagnostics", { cwd }).then((res) => {
+				if (res.ok) setWorkspaceDiag(res.value.files ?? []);
+			}).catch(() => {});
+		}
+	}, [problemsOpen, dismissPanels, cwd]);
 
 	const onRootKeyDown = useCallback(
 		(event) => {
@@ -2277,7 +2284,8 @@ export function CodeBody(props) {
 					? h(ProblemsPanel, {
 						t,
 						diagnostics,
-						onPick: (item) => { setProblemsOpen(false); revealPosition(item.line, item.col, ""); },
+						workspaceFiles: workspaceDiag,
+						onPick: (item) => { setProblemsOpen(false); if (item._file && cwd) { const parts = item._file.split("/"); const path = parts.length >= 2 ? parts.slice(-2).join("/") : item._file; void openFile(path, item.line, item.col, true, { line: item.line, col: item.col, word: "" }); } else revealPosition(item.line, item.col, ""); },
 						onClose: () => setProblemsOpen(false),
 					})
 					: null,

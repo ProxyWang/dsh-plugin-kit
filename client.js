@@ -1607,16 +1607,18 @@ function scheduleTerminalFocus({
     if (timer !== null) clearTimer(timer);
   };
 }
-var REFRESH_SETTLE_MS = 180;
-function refreshHostTerminalScreen(screen, FE = globalThis.FocusEvent) {
+var REPAINT_SETTLE_MS = 160;
+function refreshHostTerminalScreen(screen, { doc = globalThis.document, FE = globalThis.FocusEvent, Event = globalThis.Event } = {}) {
   try {
     if (!screen || screen.isConnected === false) return false;
     if (screen.closest?.('[aria-hidden="true"], [hidden], [inert]')) return false;
     const textarea = screen.querySelector?.(".xterm textarea");
     if (!textarea) return false;
-    const EventCtor = typeof FE === "function" ? FE : globalThis.Event;
-    if (typeof EventCtor !== "function") return false;
-    textarea.dispatchEvent(new EventCtor("blur"));
+    const Ctor = typeof FE === "function" ? FE : Event;
+    if (typeof Ctor !== "function") return false;
+    const hadFocus = doc?.activeElement === textarea;
+    textarea.dispatchEvent(new Ctor("blur"));
+    if (hadFocus) textarea.focus?.({ preventScroll: true });
     return true;
   } catch {
     return false;
@@ -1624,11 +1626,11 @@ function refreshHostTerminalScreen(screen, FE = globalThis.FocusEvent) {
 }
 function installTerminalRefreshGuard({
   doc = globalThis.document,
-  view = globalThis.window,
   setTimer = (fn, ms) => setTimeout(fn, ms),
   clearTimer = (id) => clearTimeout(id),
   IO = globalThis.IntersectionObserver,
-  MO = globalThis.MutationObserver
+  MO = globalThis.MutationObserver,
+  settleMs = REPAINT_SETTLE_MS
 } = {}) {
   if (typeof doc?.querySelectorAll !== "function") return () => {
   };
@@ -1636,14 +1638,14 @@ function installTerminalRefreshGuard({
   const pending = /* @__PURE__ */ new Set();
   const flush = () => {
     timer = null;
-    for (const screen of pending) refreshHostTerminalScreen(screen);
+    for (const screen of pending) refreshHostTerminalScreen(screen, { doc });
     pending.clear();
   };
   const schedule = (screen) => {
     if (!screen) return;
     pending.add(screen);
     if (timer !== null) clearTimer(timer);
-    timer = setTimer(flush, REFRESH_SETTLE_MS);
+    timer = setTimer(flush, settleMs);
   };
   const visibleScreens = () => {
     try {
@@ -1652,6 +1654,7 @@ function installTerminalRefreshGuard({
       return [];
     }
   };
+  const settled = /* @__PURE__ */ new WeakSet();
   let io = null;
   const observed = /* @__PURE__ */ new WeakSet();
   const observeAll = () => {
@@ -1665,7 +1668,12 @@ function installTerminalRefreshGuard({
   if (typeof IO === "function") {
     io = new IO((entries) => {
       for (const entry of entries) {
-        if (entry.isIntersecting) schedule(entry.target);
+        const target = entry.target;
+        if (!settled.has(target)) {
+          settled.add(target);
+          if (entry.isIntersecting) continue;
+        }
+        if (entry.isIntersecting) schedule(target);
       }
     }, { threshold: 0 });
     observeAll();
@@ -1675,86 +1683,12 @@ function installTerminalRefreshGuard({
     mo = new MO(() => observeAll());
     mo.observe(doc.body, { childList: true, subtree: true });
   }
-  const onResize = () => {
-    for (const screen of visibleScreens()) schedule(screen);
-  };
-  if (typeof view?.addEventListener === "function") view.addEventListener("resize", onResize);
   return () => {
     if (timer !== null) clearTimer(timer);
     timer = null;
     pending.clear();
     io?.disconnect();
     mo?.disconnect();
-    try {
-      view?.removeEventListener?.("resize", onResize);
-    } catch {
-    }
-  };
-}
-var NUDGE_INTERVAL_MS = 500;
-function installTerminalRefreshNudge({
-  doc = globalThis.document,
-  setTimer = (fn, ms) => setTimeout(fn, ms),
-  clearTimer = (id) => clearTimeout(id),
-  intervalMs = NUDGE_INTERVAL_MS
-} = {}) {
-  if (typeof doc?.querySelectorAll !== "function") return () => {
-  };
-  let timer = null;
-  let running = false;
-  const tick = () => {
-    timer = null;
-    if (!running) return;
-    try {
-      const screens = doc.querySelectorAll("[data-sidebar-terminal]");
-      for (let i = screens.length - 1; i >= 0; i--) {
-        const screen = screens[i];
-        if (screen?.isConnected === false) continue;
-        if (screen.closest?.('[aria-hidden="true"], [hidden], [inert]')) continue;
-        const textarea = screen.querySelector?.(".xterm textarea");
-        if (textarea && doc.activeElement === textarea) {
-          refreshHostTerminalScreen(screen);
-          break;
-        }
-      }
-    } catch {
-    }
-    if (running) timer = setTimer(tick, intervalMs);
-  };
-  const onFocusIn = (event) => {
-    const target = event.target;
-    if (!target?.closest?.(".xterm")) return;
-    if (running) return;
-    running = true;
-    timer = setTimer(tick, intervalMs);
-  };
-  const onFocusOut = (event) => {
-    const related = event.relatedTarget;
-    if (related?.closest?.(".xterm")) return;
-    running = false;
-    if (timer !== null) {
-      clearTimer(timer);
-      timer = null;
-    }
-  };
-  if (typeof doc.addEventListener === "function") {
-    doc.addEventListener("focusin", onFocusIn, true);
-    doc.addEventListener("focusout", onFocusOut, true);
-  }
-  return () => {
-    running = false;
-    if (timer !== null) {
-      clearTimer(timer);
-      timer = null;
-    }
-    try {
-      doc.removeEventListener?.("focusin", onFocusIn, true);
-    } catch {
-    }
-    try {
-      doc.removeEventListener?.("focusout", onFocusOut, true);
-    } catch {
-    }
   };
 }
 function terminalKindRegistered(tabs) {
@@ -4670,13 +4604,21 @@ function problemSeverity(severity) {
   if (severity === 3) return { glyph: "ℹ", cls: "" };
   return { glyph: "·", cls: "" };
 }
-function ProblemsPanel({ t, diagnostics, onPick, onClose }) {
+function ProblemsPanel({ t, diagnostics, onPick, onClose, workspaceFiles }) {
   const panelRef = useDismissLayer({ onDismiss: onClose });
   const [filters, setFilters] = useState({ err: true, warn: true, info: true });
-  const all = useMemo(
-    () => [...diagnostics ?? []].sort((a, b) => (a.line ?? 0) - (b.line ?? 0) || (a.col ?? 0) - (b.col ?? 0)),
-    [diagnostics]
-  );
+  const all = useMemo(() => {
+    const items2 = [];
+    if (Array.isArray(workspaceFiles)) {
+      for (const file of workspaceFiles) {
+        const rel = file.path?.split("/").slice(-2).join("/") ?? file.path ?? "";
+        for (const item of file.items ?? []) items2.push({ ...item, _file: rel });
+      }
+    } else {
+      for (const item of diagnostics ?? []) items2.push({ ...item, _file: "" });
+    }
+    return items2.sort((a, b) => (a.line ?? 0) - (b.line ?? 0) || (a.col ?? 0) - (b.col ?? 0));
+  }, [diagnostics, workspaceFiles]);
   const bucketOf = (item) => item?.severity === 1 ? "err" : item?.severity === 2 ? "warn" : "info";
   const counts = useMemo(() => {
     const c = { err: 0, warn: 0, info: 0 };
@@ -4710,8 +4652,9 @@ function ProblemsPanel({ t, diagnostics, onPick, onClose }) {
         const sev = problemSeverity(item.severity);
         return h(
           "button",
-          { key: i, type: "button", className: "ce-loc", title: `${item.line}:${item.col}`, onClick: () => onPick(item) },
+          { key: i, type: "button", className: "ce-loc", title: `${item._file ? `${item._file}:` : ""}${item.line}:${item.col}`, onClick: () => onPick(item) },
           h("span", { className: `ce-problem-sev${sev.cls}` }, sev.glyph),
+          item._file ? h("span", { className: "ce-loc-path ce-loc-file" }, item._file) : null,
           h("span", { className: "ce-loc-path" }, `${item.line}:${item.col}`),
           h("span", { className: "ce-loc-snippet" }, `${item.source ? `${item.source}: ` : ""}${item.message ?? ""}`)
         );
@@ -5988,6 +5931,7 @@ function CodeBody(props) {
   const [git, setGit] = useState(null);
   const [cursor, setCursor] = useState(null);
   const [diagnostics, setDiagnostics] = useState([]);
+  const [workspaceDiag, setWorkspaceDiag] = useState(null);
   const [overlay, setOverlay] = useState(null);
   const [hover, setHover] = useState(null);
   const [status, setStatus] = useState({ state: "off", message: "", progress: "" });
@@ -7135,7 +7079,13 @@ function CodeBody(props) {
     const next = !problemsOpen;
     dismissPanels();
     setProblemsOpen(next);
-  }, [problemsOpen, dismissPanels]);
+    if (next && cwd) {
+      api("lsp.workspaceDiagnostics", { cwd }).then((res) => {
+        if (res.ok) setWorkspaceDiag(res.value.files ?? []);
+      }).catch(() => {
+      });
+    }
+  }, [problemsOpen, dismissPanels, cwd]);
   const onRootKeyDown = useCallback(
     (event) => {
       if ((event.metaKey || event.ctrlKey) && !event.altKey && event.code === "KeyF" && !event.shiftKey) {
@@ -8191,9 +8141,14 @@ function CodeBody(props) {
         problemsOpen ? h(ProblemsPanel, {
           t,
           diagnostics,
+          workspaceFiles: workspaceDiag,
           onPick: (item) => {
             setProblemsOpen(false);
-            revealPosition(item.line, item.col, "");
+            if (item._file && cwd) {
+              const parts = item._file.split("/");
+              const path = parts.length >= 2 ? parts.slice(-2).join("/") : item._file;
+              void openFile(path, item.line, item.col, true, { line: item.line, col: item.col, word: "" });
+            } else revealPosition(item.line, item.col, "");
           },
           onClose: () => setProblemsOpen(false)
         }) : null,
@@ -8341,6 +8296,7 @@ var CSS2 = `
 .ce-loc{display:flex;gap:8px;align-items:baseline;width:100%;text-align:left;border:0;background:transparent;color:inherit;font:inherit;padding:4px 10px;cursor:pointer;white-space:nowrap}
 .ce-loc:hover{background:var(--dsw-alias-interactive-bg-hover,#2b2b2b)}
 .ce-loc-path{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;color:var(--dsw-alias-brand-primary,#6cb2ff);flex:none}
+.ce-loc-file{color:var(--dsw-alias-label-tertiary,#777);max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ce-loc-snippet{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;color:var(--dsw-alias-label-secondary,#999);overflow:hidden;text-overflow:ellipsis}
 .ce-dline{display:flex;min-width:max-content;height:${ROW}px;line-height:${ROW}px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;white-space:pre;padding-right:24px}
 .ce-dline-add{background:color-mix(in srgb,var(--dsw-alias-state-success-primary,#3fb950) 14%,transparent)}
@@ -13660,7 +13616,6 @@ var index_default = {
     safe("dictionaries", () => ctx.locale.register(NS, { zh, en }));
     const terminal = createTerminalEntry({ sidebarRight: ctx.sidebarRight, sidebarRightTabs: ctx.sidebarRightTabs });
     safe("terminal refresh guard", () => installTerminalRefreshGuard());
-    safe("terminal refresh nudge", () => installTerminalRefreshNudge());
     ctx.inject(["workspaces"], (browserCtx) => {
       browserCtx.effect(() => installBrowser(browserCtx, bound), "toolbox: enhanced browser");
     });

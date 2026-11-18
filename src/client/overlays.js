@@ -631,13 +631,23 @@ export function problemSeverity(severity) {
  * position; clicking a row closes the panel and reveals the line. The header
  * carries VS Code's severity filters (errors / warnings / infos) with counts.
  */
-export function ProblemsPanel({ t, diagnostics, onPick, onClose }) {
+export function ProblemsPanel({ t, diagnostics, onPick, onClose, workspaceFiles }) {
 	const panelRef = useDismissLayer({ onDismiss: onClose });
 	const [filters, setFilters] = useState({ err: true, warn: true, info: true });
-	const all = useMemo(
-		() => [...(diagnostics ?? [])].sort((a, b) => (a.line ?? 0) - (b.line ?? 0) || (a.col ?? 0) - (b.col ?? 0)),
-		[diagnostics],
-	);
+	// Flatten workspace-wide diagnostics (from lsp.workspaceDiagnostics) into the
+	// same shape as the per-file list so the panel shows every open file's issues.
+	const all = useMemo(() => {
+		const items = [];
+		if (Array.isArray(workspaceFiles)) {
+			for (const file of workspaceFiles) {
+				const rel = file.path?.split("/").slice(-2).join("/") ?? file.path ?? "";
+				for (const item of file.items ?? []) items.push({ ...item, _file: rel });
+			}
+		} else {
+			for (const item of diagnostics ?? []) items.push({ ...item, _file: "" });
+		}
+		return items.sort((a, b) => (a.line ?? 0) - (b.line ?? 0) || (a.col ?? 0) - (b.col ?? 0));
+	}, [diagnostics, workspaceFiles]);
 	const bucketOf = (item) => (item?.severity === 1 ? "err" : item?.severity === 2 ? "warn" : "info");
 	const counts = useMemo(() => {
 		const c = { err: 0, warn: 0, info: 0 };
@@ -672,8 +682,9 @@ export function ProblemsPanel({ t, diagnostics, onPick, onClose }) {
 				const sev = problemSeverity(item.severity);
 				return h(
 					"button",
-					{ key: i, type: "button", className: "ce-loc", title: `${item.line}:${item.col}`, onClick: () => onPick(item) },
+					{ key: i, type: "button", className: "ce-loc", title: `${item._file ? `${item._file}:` : ""}${item.line}:${item.col}`, onClick: () => onPick(item) },
 					h("span", { className: `ce-problem-sev${sev.cls}` }, sev.glyph),
+					item._file ? h("span", { className: "ce-loc-path ce-loc-file" }, item._file) : null,
 					h("span", { className: "ce-loc-path" }, `${item.line}:${item.col}`),
 					h("span", { className: "ce-loc-snippet" }, `${item.source ? `${item.source}: ` : ""}${item.message ?? ""}`),
 				);

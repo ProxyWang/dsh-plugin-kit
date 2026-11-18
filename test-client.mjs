@@ -1462,8 +1462,10 @@ try {
 	check("⇧⌘M opens the problems panel carrying the file diagnostics", Boolean(problemsNode) && problemsNode.props.diagnostics.length === 1, null);
 	const { ProblemsPanel } = await import("./src/client/overlays.js");
 	let pickedProblem = null;
-	const problemRow = collect(ProblemsPanel({ t: (k) => k, diagnostics: problemsNode.props.diagnostics, onPick: (item) => { pickedProblem = item; }, onClose: () => {} })).find((n) => n.props.className === "ce-loc");
-	check("problem rows show severity, position and source message", problemRow.children[0].props.className.includes("ce-problem-err") && problemRow.children[1].children[0] === "2:1" && problemRow.children[2].children[0] === "gopls: undefined: beta", problemRow.children.map((c) => collect(c)));
+	const problemRow = collect(ProblemsPanel({ t: (k) => k, diagnostics: problemsNode.props.diagnostics, workspaceFiles: null, onPick: (item) => { pickedProblem = item; }, onClose: () => {} })).find((n) => n.props.className === "ce-loc");
+	// Children: [severity span, (null when no _file), position span, snippet span]
+	const nonNullChildren = problemRow.children.filter(Boolean);
+	check("problem rows show severity, position and source message", nonNullChildren[0].props.className.includes("ce-problem-err") && nonNullChildren[1].children[0] === "2:1" && nonNullChildren[2].children[0] === "gopls: undefined: beta", nonNullChildren.map((c) => collect(c)));
 	problemRow.props.onClick();
 	check("clicking a problem row picks its position", pickedProblem?.line === 2 && pickedProblem?.col === 1, pickedProblem);
 	problemsNode.props.onPick({ line: 2, col: 1 });
@@ -2848,11 +2850,19 @@ check("docAction reloads clean drafts, flags dirty ones, ignores others", docAct
 		renderHidden.unmount();
 	} finally { Object.assign(globalThis, hiddenGlobals); }
 
-	// Terminal refresh guard: dropped-refresh heal via synthetic textarea blur.
+	// Terminal refresh guard: repay the host's dropped repaints. The emulator
+	// buffer is right (the command runs), only the paint is stale, so the heal
+	// is one `blur` on the xterm textarea — DomRenderer.handleBlur repaints
+	// every row — with the keyboard handed straight back when it had it.
 	const { refreshHostTerminalScreen, installTerminalRefreshGuard } = await import("./src/client/terminal.js");
+	const FakeFocusEvent = class { constructor(type) { this.type = type; } };
 	const makeGuardScreen = ({ connected = true, hidden = false, withTa = true } = {}) => {
 		const events = [];
-		const textarea = { dispatchEvent(ev) { events.push(ev.type); return true; } };
+		const textarea = {
+			focused: 0,
+			dispatchEvent(ev) { events.push(ev.type); return true; },
+			focus() { textarea.focused++; },
+		};
 		const screen = {
 			isConnected: connected,
 			closest: (sel) => (hidden && /aria-hidden|hidden|inert/.test(sel) ? {} : null),
@@ -2860,19 +2870,24 @@ check("docAction reloads clean drafts, flags dirty ones, ignores others", docAct
 		};
 		return { screen, textarea, events };
 	};
-	const FakeFocusEvent = class { constructor(type) { this.type = type; } };
 	const gLive = makeGuardScreen();
-	check("refresh guard dispatches blur on a live terminal textarea", refreshHostTerminalScreen(gLive.screen, FakeFocusEvent) === true && gLive.events.join() === "blur", gLive.events);
+	check("terminal repaint dispatches blur on a live screen", refreshHostTerminalScreen(gLive.screen, { doc: { activeElement: null }, FE: FakeFocusEvent }) === true && gLive.events.join() === "blur", gLive.events);
+	check("terminal repaint leaves an unfocused terminal unfocused", gLive.textarea.focused === 0, gLive.textarea.focused);
+	const gFocused = makeGuardScreen();
+	refreshHostTerminalScreen(gFocused.screen, { doc: { activeElement: gFocused.textarea }, FE: FakeFocusEvent });
+	check("terminal repaint hands the keyboard straight back", gFocused.events.join() === "blur" && gFocused.textarea.focused === 1, [gFocused.events, gFocused.textarea.focused]);
 	const gHidden = makeGuardScreen({ hidden: true });
-	check("refresh guard skips hidden terminals", refreshHostTerminalScreen(gHidden.screen) === false && gHidden.events.length === 0, null);
+	check("terminal repaint skips hidden screens", refreshHostTerminalScreen(gHidden.screen, { FE: FakeFocusEvent }) === false && gHidden.events.length === 0, null);
 	const gDetached = makeGuardScreen({ connected: false });
-	check("refresh guard skips detached terminals", refreshHostTerminalScreen(gDetached.screen) === false, null);
+	check("terminal repaint skips detached screens", refreshHostTerminalScreen(gDetached.screen, { FE: FakeFocusEvent }) === false, null);
 	const gNoTa = makeGuardScreen({ withTa: false });
-	check("refresh guard skips terminals without a textarea", refreshHostTerminalScreen(gNoTa.screen) === false, null);
-	check("refresh guard survives a missing screen", refreshHostTerminalScreen(null) === false, null);
+	check("terminal repaint skips screens without an xterm", refreshHostTerminalScreen(gNoTa.screen, { FE: FakeFocusEvent }) === false, null);
+	check("terminal repaint survives a missing screen", refreshHostTerminalScreen(null, { FE: FakeFocusEvent }) === false, null);
+	const gFallback = makeGuardScreen();
+	check("terminal repaint falls back to a plain Event without FocusEvent", refreshHostTerminalScreen(gFallback.screen, { FE: undefined }) === true && gFallback.events.join() === "blur", gFallback.events);
 
-	// Guard lifecycle: IO entry schedules one delayed blur per burst; resize
-	// schedules visible screens; disposer removes everything.
+	// Guard lifecycle: only a real false→true transition repaints; a burst
+	// coalesces into one timer; screens mounted later join the observation.
 	{
 		const guardTimers = new Map(); let guardNextId = 1;
 		const gSetTimer = (fn) => { const id = guardNextId++; guardTimers.set(id, fn); return id; };
@@ -2886,90 +2901,43 @@ check("docAction reloads clean drafts, flags dirty ones, ignores others", docAct
 		const gScreenB = makeGuardScreen();
 		const gDoc = {
 			body: {},
+			activeElement: null,
 			querySelectorAll: (sel) => (sel === "[data-sidebar-terminal]" ? [gScreenA.screen, gScreenB.screen] : []),
 		};
-		const resizeListeners = [];
-		const gView = { addEventListener: (n, fn) => resizeListeners.push([n, fn]), removeEventListener: (n, fn) => { const i = resizeListeners.findIndex(([nn, ff]) => nn === n && ff === fn); if (i >= 0) resizeListeners.splice(i, 1); } };
 		const savedFO = globalThis.FocusEvent;
-		globalThis.FocusEvent = class { constructor(type) { this.type = type; } };
+		globalThis.FocusEvent = FakeFocusEvent;
 		try {
-			const dispose = installTerminalRefreshGuard({ doc: gDoc, view: gView, setTimer: gSetTimer, clearTimer: gClearTimer, IO: FakeIO, MO: FakeMO });
-			check("guard observes existing terminal screens", ioObserved.length === 2, ioObserved.length);
-			// IO burst: both become visible -> one timer, both blurred on flush.
+			const dispose = installTerminalRefreshGuard({ doc: gDoc, setTimer: gSetTimer, clearTimer: gClearTimer, IO: FakeIO, MO: FakeMO });
+			check("guard observes the terminal screens present at install", ioObserved.length === 2, ioObserved.length);
+			// The first report is a screen's current state, not a transition: the
+			// terminal just mounted and nothing was dropped yet.
+			ioCallback([{ isIntersecting: true, target: gScreenA.screen }, { isIntersecting: true, target: gScreenB.screen }]);
+			check("guard ignores the initial visible report", guardTimers.size === 0 && gScreenA.events.length === 0, guardTimers.size);
+			// Hidden then revealed: the dock slide-in / tab switch that drops paints.
+			ioCallback([{ isIntersecting: false, target: gScreenA.screen }, { isIntersecting: false, target: gScreenB.screen }]);
 			ioCallback([{ isIntersecting: true, target: gScreenA.screen }, { isIntersecting: true, target: gScreenB.screen }]);
 			ioCallback([{ isIntersecting: true, target: gScreenA.screen }]);
-			check("guard coalesces a visibility burst into one timer", guardTimers.size === 1, guardTimers.size);
+			check("guard coalesces a re-entry burst into one timer", guardTimers.size === 1, guardTimers.size);
 			fireGuardTimers();
-			check("guard repaints every screen in the burst", gScreenA.events.join() === "blur" && gScreenB.events.join() === "blur", [gScreenA.events, gScreenB.events]);
-			// Non-intersecting entries never schedule.
+			check("guard repaints every screen that re-entered", gScreenA.events.join() === "blur" && gScreenB.events.join() === "blur", [gScreenA.events, gScreenB.events]);
 			gScreenA.events.length = 0; gScreenB.events.length = 0;
 			ioCallback([{ isIntersecting: false, target: gScreenA.screen }]);
-			check("guard ignores off-viewport entries", guardTimers.size === 0, null);
-			// Resize schedules visible screens.
-			resizeListeners.find(([n]) => n === "resize")[1]();
-			fireGuardTimers();
-			check("guard repaints on window resize settle", gScreenA.events.length === 1 && gScreenB.events.length === 1, null);
-			// MutationObserver picks up newly mounted screens.
+			check("guard schedules nothing for an off-viewport report", guardTimers.size === 0 && gScreenA.events.length === 0, null);
+			// A screen mounted after install joins the observation.
 			const gScreenC = makeGuardScreen();
 			gDoc.querySelectorAll = () => [gScreenA.screen, gScreenB.screen, gScreenC.screen];
 			moCallback();
 			check("guard observes terminals mounted after install", ioObserved.includes(gScreenC.screen), ioObserved.length);
+			// Focused terminal keeps the keyboard across the repaint.
+			gDoc.activeElement = gScreenA.textarea;
+			ioCallback([{ isIntersecting: false, target: gScreenA.screen }]);
+			ioCallback([{ isIntersecting: true, target: gScreenA.screen }]);
+			fireGuardTimers();
+			check("guard repaints a focused terminal without losing the caret", gScreenA.events.join() === "blur" && gScreenA.textarea.focused === 1, [gScreenA.events, gScreenA.textarea.focused]);
 			dispose();
-			check("guard disposer clears timers, observers and listeners", guardTimers.size === 0 && ioObserved.length === 0 && resizeListeners.length === 0 && moCallback === null, null);
+			check("guard disposer clears timers and observers", guardTimers.size === 0 && ioObserved.length === 0 && moCallback === null, null);
 		} finally {
 			if (savedFO === undefined) delete globalThis.FocusEvent; else globalThis.FocusEvent = savedFO;
-		}
-	}
-
-	// Terminal refresh nudge: periodic blur while focused catches mid-typing stale rows.
-	const { installTerminalRefreshNudge } = await import("./src/client/terminal.js");
-	{
-		const nudgeTimers = new Map(); let nudgeNextId = 1;
-		const nSetTimer = (fn, ms) => { const id = nudgeNextId++; nudgeTimers.set(id, fn); return id; };
-		const nClearTimer = (id) => nudgeTimers.delete(id);
-		const fireNudgeTimers = () => { for (const [id, fn] of [...nudgeTimers]) { nudgeTimers.delete(id); fn(); } };
-		const focusListeners = [];
-		const nTextarea = { dispatchEvent(ev) { nEvents.push(ev.type); return true; }, closest: (sel) => (sel === ".xterm" ? {} : null) };
-		const nEvents = [];
-		const nScreen = {
-			isConnected: true,
-			closest: () => null,
-			querySelector: (sel) => (sel === ".xterm textarea" ? nTextarea : null),
-		};
-		const nDoc = {
-			activeElement: null,
-			querySelectorAll: () => [nScreen],
-			addEventListener: (n, fn, cap) => focusListeners.push([n, fn, cap]),
-			removeEventListener: (n, fn) => { const i = focusListeners.findIndex(([nn, ff]) => nn === n && ff === fn); if (i >= 0) focusListeners.splice(i, 1); },
-		};
-		const savedFE2 = globalThis.FocusEvent;
-		globalThis.FocusEvent = class { constructor(type) { this.type = type; } };
-		try {
-			const dispose = installTerminalRefreshNudge({ doc: nDoc, setTimer: nSetTimer, clearTimer: nClearTimer, intervalMs: 100 });
-			check("nudge installs focusin/focusout capture listeners", focusListeners.length === 2 && focusListeners.every(([, , cap]) => cap === true), focusListeners.length);
-			// Focus the terminal textarea -> nudge starts ticking.
-			nDoc.activeElement = nTextarea;
-			focusListeners.find(([n]) => n === "focusin")[1]({ target: nTextarea });
-			check("nudge starts timer on terminal focus", nudgeTimers.size === 1, nudgeTimers.size);
-			fireNudgeTimers();
-			check("nudge fires blur on the focused terminal screen", nEvents.join() === "blur", nEvents);
-			check("nudge reschedules after firing", nudgeTimers.size === 1, nudgeTimers.size);
-			// Focus leaves to a non-terminal element -> nudge stops.
-			nDoc.activeElement = {};
-			focusListeners.find(([n]) => n === "focusout")[1]({ target: nTextarea, relatedTarget: {} });
-			fireNudgeTimers();
-			check("nudge stops when focus leaves the terminal", nudgeTimers.size === 0 && nEvents.length === 1, nEvents.length);
-			// Focus moves within xterm (e.g. to another part) -> nudge continues.
-			nDoc.activeElement = nTextarea;
-			focusListeners.find(([n]) => n === "focusin")[1]({ target: nTextarea });
-			const xtermChild = { closest: (sel) => (sel === ".xterm" ? {} : null) };
-			focusListeners.find(([n]) => n === "focusout")[1]({ target: nTextarea, relatedTarget: xtermChild });
-			check("nudge keeps running when focus stays within xterm", nudgeTimers.size === 1, nudgeTimers.size);
-			dispose();
-			fireNudgeTimers();
-			check("nudge disposer clears timers and listeners", nudgeTimers.size === 0 && focusListeners.length === 0, null);
-		} finally {
-			if (savedFE2 === undefined) delete globalThis.FocusEvent; else globalThis.FocusEvent = savedFE2;
 		}
 	}
 }
