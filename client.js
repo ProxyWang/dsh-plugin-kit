@@ -512,6 +512,13 @@ var zh = {
   "watch.external": "「{path}」在磁盘上已被外部修改（可能来自终端或 Agent）",
   "watch.reloadDiscarding": "重新加载（放弃未保存）",
   "watch.keepEditing": "保持编辑",
+  "watch.compareDisk": "对比磁盘版本",
+  "watch.overwriteDraft": "以草稿覆盖磁盘",
+  "watch.overwriteConfirm": "确认覆盖？",
+  "watch.conflictTitle": "草稿 vs 磁盘 · {path}",
+  "watch.conflictIdentical": "内容一致",
+  "watch.conflictIdenticalHint": "草稿与磁盘内容一致（可能只是 mtime 变化），可直接保存。",
+  "editor.savedOverwrite": "已保存（覆盖了磁盘上的外部修改）",
   "watch.fileGone": "文件已从磁盘消失，编辑器保留当前内容",
   "watch.on": "实时刷新已开启：编辑器、文件树与 Git 状态会跟随磁盘变化",
   "watch.off": "实时刷新已关闭",
@@ -1120,6 +1127,13 @@ var en = {
   "watch.external": "“{path}” changed on disk (a terminal or the Agent may have edited it)",
   "watch.reloadDiscarding": "Reload (discard draft)",
   "watch.keepEditing": "Keep editing",
+  "watch.compareDisk": "Compare with disk",
+  "watch.overwriteDraft": "Overwrite disk with draft",
+  "watch.overwriteConfirm": "Confirm overwrite?",
+  "watch.conflictTitle": "Draft vs disk · {path}",
+  "watch.conflictIdentical": "Identical",
+  "watch.conflictIdenticalHint": "The draft matches the disk content (perhaps only mtime changed); saving is safe.",
+  "editor.savedOverwrite": "Saved (overwrote external disk changes)",
   "watch.fileGone": "The file disappeared from disk; the editor keeps its current content",
   "watch.on": "Live refresh on: editor, file tree and Git status follow disk changes",
   "watch.off": "Live refresh off",
@@ -5528,6 +5542,131 @@ function createWatchLoop({ poll, onChanges, onReset, onUnsupported, schedule = (
   };
 }
 
+// src/client/draftdiff.js
+function draftDiskDiff(oldText, newText, path = "") {
+  const a = splitLines(oldText);
+  const b = splitLines(newText);
+  if (oldText === newText) return { text: "", add: 0, del: 0, identical: true };
+  const ops = a.length * b.length > 4e6 ? coarseOps(a, b) : lcsOps(a, b);
+  let add = 0;
+  let del = 0;
+  for (const op of ops) {
+    if (op.kind === "add") add++;
+    else if (op.kind === "del") del++;
+  }
+  const name = path || "file";
+  const out = [`--- a/${name}`, `+++ b/${name}`];
+  const CTX = 3;
+  let i = 0;
+  while (i < ops.length) {
+    if (ops[i].kind === "ctx") {
+      i++;
+      continue;
+    }
+    let start = i;
+    let back = 0;
+    while (start > 0 && ops[start - 1].kind === "ctx" && back < CTX) {
+      start--;
+      back++;
+    }
+    let end = i;
+    let j = i;
+    while (j < ops.length) {
+      if (ops[j].kind !== "ctx") {
+        end = j + 1;
+        j++;
+        continue;
+      }
+      let run = 0;
+      let k = j;
+      while (k < ops.length && ops[k].kind === "ctx") {
+        run++;
+        k++;
+      }
+      if (k < ops.length && run <= CTX * 2) {
+        j = k;
+        continue;
+      }
+      end = Math.min(ops.length, j + CTX);
+      break;
+    }
+    if (end <= i) end = Math.min(ops.length, i + 1);
+    let oldLine = 1;
+    let newLine = 1;
+    for (let k = 0; k < start; k++) {
+      if (ops[k].kind !== "add") oldLine++;
+      if (ops[k].kind !== "del") newLine++;
+    }
+    let oldCount = 0;
+    let newCount = 0;
+    for (let k = start; k < end; k++) {
+      if (ops[k].kind !== "add") oldCount++;
+      if (ops[k].kind !== "del") newCount++;
+    }
+    out.push(`@@ -${oldLine},${oldCount} +${newLine},${newCount} @@`);
+    for (let k = start; k < end; k++) {
+      const op = ops[k];
+      out.push(op.kind === "add" ? `+${op.text}` : op.kind === "del" ? `-${op.text}` : ` ${op.text}`);
+    }
+    i = end;
+  }
+  return { text: out.join("\n"), add, del, identical: false };
+}
+function splitLines(text) {
+  const s = String(text ?? "");
+  if (s === "") return [];
+  const lines2 = s.split("\n");
+  if (lines2.length > 1 && lines2[lines2.length - 1] === "") lines2.pop();
+  return lines2;
+}
+function lcsOps(a, b) {
+  const n = a.length;
+  const m = b.length;
+  const dp = Array.from({ length: n + 1 }, () => new Uint32Array(m + 1));
+  for (let i2 = n - 1; i2 >= 0; i2--) {
+    for (let j2 = m - 1; j2 >= 0; j2--) {
+      dp[i2][j2] = a[i2] === b[j2] ? dp[i2 + 1][j2 + 1] + 1 : Math.max(dp[i2 + 1][j2], dp[i2][j2 + 1]);
+    }
+  }
+  const ops = [];
+  let i = 0;
+  let j = 0;
+  while (i < n && j < m) {
+    if (a[i] === b[j]) {
+      ops.push({ kind: "ctx", text: a[i] });
+      i++;
+      j++;
+    } else if (dp[i + 1][j] >= dp[i][j + 1]) {
+      ops.push({ kind: "del", text: a[i] });
+      i++;
+    } else {
+      ops.push({ kind: "add", text: b[j] });
+      j++;
+    }
+  }
+  while (i < n) {
+    ops.push({ kind: "del", text: a[i++] });
+  }
+  while (j < m) {
+    ops.push({ kind: "add", text: b[j++] });
+  }
+  return ops;
+}
+function coarseOps(a, b) {
+  const ops = [];
+  let p = 0;
+  while (p < a.length && p < b.length && a[p] === b[p]) {
+    ops.push({ kind: "ctx", text: a[p] });
+    p++;
+  }
+  let s = 0;
+  while (s < a.length - p && s < b.length - p && a[a.length - 1 - s] === b[b.length - 1 - s]) s++;
+  for (let i = p; i < a.length - s; i++) ops.push({ kind: "del", text: a[i] });
+  for (let j = p; j < b.length - s; j++) ops.push({ kind: "add", text: b[j] });
+  for (let k = a.length - s; k < a.length; k++) ops.push({ kind: "ctx", text: a[k] });
+  return ops;
+}
+
 // src/client/code.js
 var PREVIEW_RE = /\.(md|markdown|html?|svg)$/i;
 var MD_RE = /\.(md|markdown)$/i;
@@ -5559,6 +5698,8 @@ function CodeBody(props) {
   const [treeKey, setTreeKey] = useState(0);
   const [stale, setStale] = useState({ tick: 0, dirs: [] });
   const [externalConflict, setExternalConflict] = useState(null);
+  const [conflictDiff, setConflictDiff] = useState(null);
+  const [overwriteArm, setOverwriteArm] = useState(false);
   const [liveOn, setLiveOn] = useState(() => {
     try {
       return localStorage.getItem("dsh.plugin-kit.live") !== "off";
@@ -5628,6 +5769,9 @@ function CodeBody(props) {
   const searchTimer = useRef(null);
   const searchNonce = useRef(0);
   const symbolNonce = useRef(0);
+  const hoverTimer = useRef(null);
+  const hoverNonce = useRef(0);
+  const hoverAtRef = useRef(null);
   const codeRef = useRef(null);
   const mainRef = useRef(null);
   const histRef = useRef({ back: [], forward: [] });
@@ -6598,14 +6742,17 @@ function CodeBody(props) {
     setEditText(doc.raw);
     setEditing(true);
   }, [doc, say, t]);
-  const saveEdit = useCallback(() => {
+  const saveEdit = useCallback((opts) => {
     if (!doc || !editing) return;
     const useFormat = formatOnSave && LSP_RE.test(doc.path);
     const payload = { cwd, path: doc.path, content: editText };
-    if (typeof doc.mtimeMs === "number") payload.baseMtime = doc.mtimeMs;
+    if (typeof doc.mtimeMs === "number" && opts?.overwrite !== true) payload.baseMtime = doc.mtimeMs;
     api(useFormat ? "fs.formatDraft" : "fs.write", payload).then((res) => {
       if (!res.ok) {
-        say(/modified on disk/i.test(res.error ?? "") ? t("editor.conflict") : `${t("error")}: ${res.error}`, "error");
+        if (/modified on disk/i.test(res.error ?? "")) {
+          setExternalConflict({ path: doc.path });
+          say(t("editor.conflict"), "error");
+        } else say(`${t("error")}: ${res.error}`, "error");
         return;
       }
       const finalText = useFormat && typeof res.value.content === "string" ? res.value.content : editText;
@@ -6613,12 +6760,31 @@ function CodeBody(props) {
       if (lines2.length > 1 && lines2[lines2.length - 1] === "") lines2.pop();
       setDoc({ ...doc, lines: lines2, states: buildLineStates(lines2, langFor(doc.path)), raw: finalText, mtimeMs: res.value.mtimeMs ?? doc.mtimeMs });
       setEditing(false);
-      if (res.value.formatted) say(t("editor.savedFormatted"));
+      setExternalConflict(null);
+      setConflictDiff(null);
+      setOverwriteArm(false);
+      if (opts?.overwrite === true) say(t("editor.savedOverwrite"));
+      else if (res.value.formatted) say(t("editor.savedFormatted"));
       else if (useFormat) say(t("editor.formatSkipped"), "error");
       else say(t("editor.saved"));
     });
   }, [doc, editing, editText, cwd, say, t, formatOnSave]);
-  const cancelEdit = useCallback(() => setEditing(false), []);
+  const openConflictDiff = useCallback(async () => {
+    const d = docRef.current;
+    if (!d || !cwd) return;
+    setConflictDiff({ path: d.path, text: "", add: 0, del: 0, busy: true, error: "" });
+    const res = await api("fs.read", { cwd, path: d.path });
+    if (!res.ok || res.value.kind !== "text") {
+      setConflictDiff({ path: d.path, text: "", add: 0, del: 0, busy: false, error: res.ok ? t("binary") : String(res.error ?? "") });
+      return;
+    }
+    const built = draftDiskDiff(res.value.content, editText, d.path);
+    setConflictDiff({ path: d.path, ...built, busy: false, error: "" });
+  }, [cwd, editText, t]);
+  const cancelEdit = useCallback(() => {
+    setEditing(false);
+    setOverwriteArm(false);
+  }, []);
   const openDiffSource = useCallback((line) => {
     if (!diff || typeof diff.path !== "string" || diff.path === "") return;
     if (diff.scope === "commit" || diff.scope === "call") return;
@@ -6873,10 +7039,19 @@ function CodeBody(props) {
     },
     [doJump, openPeek, say, t, goBack, goForward, hover, overlay]
   );
+  const cancelHover = useCallback(() => {
+    hoverNonce.current++;
+    if (hoverTimer.current) {
+      clearTimeout(hoverTimer.current);
+      hoverTimer.current = null;
+    }
+    hoverAtRef.current = null;
+    setHover(null);
+  }, []);
   const onEditorClick = useCallback(
     (event) => {
       const target = event.target?.closest?.("[data-ce-l]");
-      setHover(null);
+      cancelHover();
       if (!target || !docRef.current) {
         closePeek();
         return;
@@ -6899,10 +7074,46 @@ function CodeBody(props) {
       }
       const mod = event.metaKey || event.ctrlKey;
       if (mod) void doJump("definition", at);
-      else void openPeek(word, at.line, at.col);
+      else setPeek(null);
     },
-    [doJump, openPeek, closePeek]
+    [doJump, closePeek, cancelHover]
   );
+  const onEditorMouseMove = useCallback((event) => {
+    const target = event.target?.closest?.("[data-ce-l]");
+    const d = docRef.current;
+    if (!target || !d || !LSP_RE.test(d.path) || editing || modeRef.current !== "code") {
+      if (hoverAtRef.current) cancelHover();
+      return;
+    }
+    if (target.classList?.contains("ce-kw")) {
+      if (hoverAtRef.current) cancelHover();
+      return;
+    }
+    const line = Number(target.dataset.ceL);
+    const col = Number(target.dataset.ceC);
+    const word = target.dataset.ceW || wordAt(d.lines[line - 1] ?? "", col)?.word || "";
+    if (!word) {
+      if (hoverAtRef.current) cancelHover();
+      return;
+    }
+    const prev = hoverAtRef.current;
+    if (prev && prev.line === line && prev.col === col) return;
+    hoverNonce.current++;
+    if (hoverTimer.current) clearTimeout(hoverTimer.current);
+    hoverAtRef.current = { line, col, word };
+    setHover(null);
+    const nonce = hoverNonce.current;
+    const path = d.path;
+    hoverTimer.current = setTimeout(() => {
+      hoverTimer.current = null;
+      api("lsp.request", { cwd, path, kind: "hover", line, col }).then((res) => {
+        if (hoverNonce.current !== nonce) return;
+        const text = res.ok ? String(res.value.hover ?? "") : "";
+        if (text.trim()) setHover({ x: col, y: line, text });
+      }).catch(() => {
+      });
+    }, 350);
+  }, [cwd, editing, cancelHover]);
   useEffect(() => {
     if (!cwd) {
       setGit(null);
@@ -6926,6 +7137,7 @@ function CodeBody(props) {
   useEffect(() => () => {
     if (noticeTimer.current) clearTimeout(noticeTimer.current);
     if (autoMarksTimer.current) clearTimeout(autoMarksTimer.current);
+    if (hoverTimer.current) clearTimeout(hoverTimer.current);
   }, []);
   useEffect(() => {
     const raf = requestAnimationFrame(() => {
@@ -7205,11 +7417,41 @@ function CodeBody(props) {
       "div",
       { className: "ce-banner ce-banner-warn" },
       h("span", { className: "ce-banner-text" }, t("watch.external", { path: externalConflict.path })),
+      h("button", { type: "button", className: "ce-tool ce-tiny", onClick: () => void openConflictDiff() }, t("watch.compareDisk")),
+      h("button", { type: "button", className: `ce-tool ce-tiny${overwriteArm ? " ce-tool-danger" : ""}`, onClick: () => {
+        if (overwriteArm) {
+          setOverwriteArm(false);
+          saveEdit({ overwrite: true });
+        } else setOverwriteArm(true);
+      } }, overwriteArm ? t("watch.overwriteConfirm") : t("watch.overwriteDraft")),
       h("button", { type: "button", className: "ce-tool ce-tiny", onClick: () => {
         setExternalConflict(null);
+        setConflictDiff(null);
+        setOverwriteArm(false);
         void backgroundReload(true);
       } }, t("watch.reloadDiscarding")),
-      h("button", { type: "button", className: "ce-tool ce-tiny", onClick: () => setExternalConflict(null) }, t("watch.keepEditing"))
+      h("button", { type: "button", className: "ce-tool ce-tiny", onClick: () => {
+        setExternalConflict(null);
+        setOverwriteArm(false);
+      } }, t("watch.keepEditing"))
+    ) : null,
+    conflictDiff ? h(
+      "div",
+      { className: "ce-conflict-diff" },
+      h(
+        "div",
+        { className: "ce-conflict-head" },
+        h("span", { className: "ce-conflict-title" }, t("watch.conflictTitle", { path: conflictDiff.path })),
+        conflictDiff.busy ? h("span", { className: "ce-conflict-meta" }, t("loading")) : null,
+        !conflictDiff.busy && !conflictDiff.error ? h("span", { className: "ce-conflict-meta" }, conflictDiff.identical ? t("watch.conflictIdentical") : `+${conflictDiff.add} −${conflictDiff.del}`) : null,
+        h("button", { type: "button", className: "ce-tool ce-tiny", title: t("close"), onClick: () => setConflictDiff(null) }, "✕")
+      ),
+      conflictDiff.error ? h("div", { className: "ce-note" }, conflictDiff.error) : conflictDiff.identical ? h("div", { className: "ce-note" }, t("watch.conflictIdenticalHint")) : h(DiffView, {
+        t,
+        diff: { path: conflictDiff.path, scope: "call", text: conflictDiff.text, gutter: false },
+        onClose: () => setConflictDiff(null),
+        canSource: false
+      })
     ) : null,
     h(
       "div",
@@ -7377,7 +7619,7 @@ function CodeBody(props) {
             doc.truncated ? h("span", { className: "ce-chip" }, t("truncated")) : null,
             doc && !diff && PREVIEW_RE.test(doc.path) ? h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost", title: t("editor.previewToggle"), onClick: () => setPreviewOn((v) => !v) }, previewOn ? t("editor.raw") : t("editor.preview")) : null,
             doc && !diff && !editing && !doc.image ? h("button", { type: "button", className: "ce-tool ce-tiny", title: t("editor.edit"), onClick: startEdit }, "✎") : null,
-            editing ? h("button", { type: "button", className: "ce-link", onClick: saveEdit }, t("editor.save")) : null,
+            editing ? h("button", { type: "button", className: "ce-link", onClick: () => saveEdit() }, t("editor.save")) : null,
             editing ? h("button", { type: "button", className: "ce-link", onClick: cancelEdit }, t("editor.cancel")) : null,
             editing && editText !== (doc?.raw ?? "") ? h("span", { className: "ce-chip ce-chip-warn" }, t("editor.dirty")) : null,
             doc && !diff && !doc.image ? h("button", { type: "button", className: `ce-tool ce-tiny${findOpen ? " ce-tool-on" : ""}`, title: `${t("editor.find")} (⌘F / Ctrl+F)`, onClick: () => setFindOpen((v) => !v) }, "⌕") : null,
@@ -7476,7 +7718,12 @@ function CodeBody(props) {
                   ref: codeRef,
                   onKeyDown,
                   onClick: onEditorClick,
-                  onScroll: (event) => setScroll(event.currentTarget.scrollTop),
+                  onMouseMove: onEditorMouseMove,
+                  onMouseLeave: cancelHover,
+                  onScroll: (event) => {
+                    setScroll(event.currentTarget.scrollTop);
+                    cancelHover();
+                  },
                   style: { outline: "none" }
                 },
                 wrapOn ? h(
@@ -7499,6 +7746,11 @@ function CodeBody(props) {
               onClick: () => jumpToLine(b.start)
             }, null))) : null,
             peek ? h(RefsPeek, { t, cwd, peek, scroll, totalLines: doc.lines.length, onPick: pickPeek, onClose: closePeek }) : null,
+            hover && !editing ? h("div", {
+              className: "ce-hover",
+              role: "tooltip",
+              style: { top: Math.max(4, hover.y * ROW - scroll + ROW + 4), left: 12 }
+            }, hover.text) : null,
             symPalette ? h(SymbolPalette, { t, symbols, onPick: (s) => {
               setSymPalette(null);
               revealPosition(s.line, s.col, s.name);
@@ -7764,6 +8016,11 @@ var CSS2 = `
 .ce-banner{flex:none;display:flex;align-items:center;gap:8px;margin:6px 10px 0;padding:6px 8px 6px 10px;border-radius:8px;background:color-mix(in srgb,var(--dsw-alias-state-error-primary,#f85149) 14%,transparent);border:.5px solid color-mix(in srgb,var(--dsw-alias-state-error-primary,#f85149) 40%,transparent);color:var(--dsw-alias-label-primary,#eee);font-size:12px}
 .ce-banner-warn{background:color-mix(in srgb,var(--dsw-alias-button-info-fill,#58a6ff) 14%,transparent);border-color:color-mix(in srgb,var(--dsw-alias-button-info-fill,#58a6ff) 45%,transparent)}
 .ce-banner-text{min-width:0;flex:1;white-space:pre-wrap;word-break:break-word}
+.ce-tool-danger{color:var(--dsw-alias-state-error-primary,#f85149);border-color:color-mix(in srgb,var(--dsw-alias-state-error-primary,#f85149) 45%,transparent)}
+.ce-conflict-diff{flex:none;display:flex;flex-direction:column;max-height:46%;margin:6px 10px 0;border:.5px solid var(--dsw-alias-border-l1,#333);border-radius:8px;overflow:auto;background:var(--dsw-alias-bg-layer-1,#1d2126)}
+.ce-conflict-head{flex:none;display:flex;align-items:center;gap:8px;padding:6px 10px;border-bottom:.5px solid var(--dsw-alias-border-l1,#333);background:var(--dsw-alias-bg-layer-2,#232729);position:sticky;top:0;z-index:2}
+.ce-conflict-title{flex:1;min-width:0;font-size:12px;font-weight:600;color:var(--dsw-alias-label-primary,#eee);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ce-conflict-meta{flex:none;font-size:11px;color:var(--dsw-alias-label-tertiary,#889);font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
 .ce-splitter{flex:none;width:5px;cursor:col-resize;background:transparent;border-right:.5px solid var(--dsw-alias-border-l1,#333)}
 .ce-splitter:hover{background:color-mix(in srgb,var(--dsw-alias-brand-primary,#59b7ff) 45%,transparent)}
 .ce-rail-tab{flex:none;width:16px;border:0;border-right:.5px solid var(--dsw-alias-border-l1,#333);background:var(--dsw-alias-bg-layer-1,#1d2126);color:var(--dsw-alias-label-tertiary,#889);cursor:pointer;font-size:10px;padding:0}

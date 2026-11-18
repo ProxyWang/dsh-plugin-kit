@@ -22,6 +22,7 @@ import { useGitActions } from "./usegit.js";
 import { useNavPersistence } from "./usepersistence.js";
 import { fileDragProps, hasFileDrag, readFileDrag, dragFilePath, reorderFileTabs } from "./filedrag.js";
 import { createWatchLoop, docAction, parentDirs } from "./watch.js";
+import { draftDiskDiff } from "./draftdiff.js";
 import { useDismissLayer } from "./dismiss.js";
 
 /** Files that open in rendered preview by default: markdown, html and svg. */
@@ -62,6 +63,8 @@ export function CodeBody(props) {
 	const [treeKey, setTreeKey] = useState(0);
 	const [stale, setStale] = useState({ tick: 0, dirs: [] }); // live-refresh tree invalidation
 	const [externalConflict, setExternalConflict] = useState(null); // {path} while a draft is open
+	const [conflictDiff, setConflictDiff] = useState(null); // {path,text,add,del,busy,error} draft-vs-disk view
+	const [overwriteArm, setOverwriteArm] = useState(false); // two-step "save over disk" confirmation
 	const [liveOn, setLiveOn] = useState(() => {
 		try { return localStorage.getItem("dsh.plugin-kit.live") !== "off"; } catch { return true; }
 	});
@@ -123,6 +126,9 @@ export function CodeBody(props) {
 	const searchTimer = useRef(null);
 	const searchNonce = useRef(0);
 	const symbolNonce = useRef(0);
+	const hoverTimer = useRef(null);
+	const hoverNonce = useRef(0);
+	const hoverAtRef = useRef(null); // {line,col,word} of the token under the pointer
 
 	const codeRef = useRef(null);
 	const mainRef = useRef(null);
@@ -1193,16 +1199,23 @@ export function CodeBody(props) {
 		setEditText(doc.raw);
 		setEditing(true);
 	}, [doc, say, t]);
-	const saveEdit = useCallback(() => {
+	const saveEdit = useCallback((opts) => {
 		if (!doc || !editing) return;
 		const useFormat = formatOnSave && LSP_RE.test(doc.path);
 		// baseMtime gives optimistic concurrency: the host refuses the write
-		// when the file changed on disk since we loaded it.
+		// when the file changed on disk since we loaded it. An explicit
+		// overwrite (two-step confirmed in the conflict banner) drops the
+		// guard — the user has seen both sides and chose the draft.
 		const payload = { cwd, path: doc.path, content: editText };
-		if (typeof doc.mtimeMs === "number") payload.baseMtime = doc.mtimeMs;
+		if (typeof doc.mtimeMs === "number" && opts?.overwrite !== true) payload.baseMtime = doc.mtimeMs;
 		api(useFormat ? "fs.formatDraft" : "fs.write", payload).then((res) => {
 			if (!res.ok) {
-				say(/modified on disk/i.test(res.error ?? "") ? t("editor.conflict") : `${t("error")}: ${res.error}`, "error");
+				if (/modified on disk/i.test(res.error ?? "")) {
+					// Keep-editing is no longer a dead end: surface the conflict
+					// banner with compare/overwrite paths instead of a toast loop.
+					setExternalConflict({ path: doc.path });
+					say(t("editor.conflict"), "error");
+				} else say(`${t("error")}: ${res.error}`, "error");
 				return;
 			}
 			// The formatter may have rewritten the draft; adopt the disk shape.
@@ -1211,12 +1224,29 @@ export function CodeBody(props) {
 			if (lines.length > 1 && lines[lines.length - 1] === "") lines.pop();
 			setDoc({ ...doc, lines, states: buildLineStates(lines, langFor(doc.path)), raw: finalText, mtimeMs: res.value.mtimeMs ?? doc.mtimeMs });
 			setEditing(false);
-			if (res.value.formatted) say(t("editor.savedFormatted"));
+			setExternalConflict(null);
+			setConflictDiff(null);
+			setOverwriteArm(false);
+			if (opts?.overwrite === true) say(t("editor.savedOverwrite"));
+			else if (res.value.formatted) say(t("editor.savedFormatted"));
 			else if (useFormat) say(t("editor.formatSkipped"), "error");
 			else say(t("editor.saved"));
 		});
 	}, [doc, editing, editText, cwd, say, t, formatOnSave]);
-	const cancelEdit = useCallback(() => setEditing(false), []);
+	/** Fetch the disk side and open the draft-vs-disk diff (conflict banner). */
+	const openConflictDiff = useCallback(async () => {
+		const d = docRef.current;
+		if (!d || !cwd) return;
+		setConflictDiff({ path: d.path, text: "", add: 0, del: 0, busy: true, error: "" });
+		const res = await api("fs.read", { cwd, path: d.path });
+		if (!res.ok || res.value.kind !== "text") {
+			setConflictDiff({ path: d.path, text: "", add: 0, del: 0, busy: false, error: res.ok ? t("binary") : String(res.error ?? "") });
+			return;
+		}
+		const built = draftDiskDiff(res.value.content, editText, d.path);
+		setConflictDiff({ path: d.path, ...built, busy: false, error: "" });
+	}, [cwd, editText, t]);
+	const cancelEdit = useCallback(() => { setEditing(false); setOverwriteArm(false); }, []);
 	// Switch an open working/branch diff to the whole-file source view with
 	// changed lines marked; the hunk view stays one toggle away.
 	const openDiffSource = useCallback((line) => {
@@ -1487,10 +1517,18 @@ export function CodeBody(props) {
 		[doJump, openPeek, say, t, goBack, goForward, hover, overlay],
 	);
 
+	/** Cancel any pending hover request and hide the tooltip. */
+	const cancelHover = useCallback(() => {
+		hoverNonce.current++;
+		if (hoverTimer.current) { clearTimeout(hoverTimer.current); hoverTimer.current = null; }
+		hoverAtRef.current = null;
+		setHover(null);
+	}, []);
+
 	const onEditorClick = useCallback(
 		(event) => {
 			const target = event.target?.closest?.("[data-ce-l]");
-			setHover(null);
+			cancelHover();
 			if (!target || !docRef.current) { closePeek(); return; }
 			const line = Number(target.dataset.ceL);
 			const col = Number(target.dataset.ceC);
@@ -1510,11 +1548,50 @@ export function CodeBody(props) {
 				return;
 			}
 			const mod = event.metaKey || event.ctrlKey;
+			// VS Code click model: plain click only places the cursor (selecting
+			// text to copy must not pop a panel or fire LSP requests); ⌘/Ctrl+click
+			// jumps to definition; the refs peek lives on ⇧F12 / hover / palette.
 			if (mod) void doJump("definition", at);
-			else void openPeek(word, at.line, at.col);
+			else setPeek(null);
 		},
-		[doJump, openPeek, closePeek],
+		[doJump, closePeek, cancelHover],
 	);
+
+	/**
+	 * VS Code-style mouse hover: resting on an LSP-backed identifier for 350 ms
+	 * asks the server for its hover document. Moving to another token restarts
+	 * the delay; leaving the code area cancels. A nonce drops late answers so a
+	 * slow response never paints over a newer position.
+	 */
+	const onEditorMouseMove = useCallback((event) => {
+		const target = event.target?.closest?.("[data-ce-l]");
+		const d = docRef.current;
+		if (!target || !d || !LSP_RE.test(d.path) || editing || modeRef.current !== "code") {
+			if (hoverAtRef.current) cancelHover();
+			return;
+		}
+		if (target.classList?.contains("ce-kw")) { if (hoverAtRef.current) cancelHover(); return; }
+		const line = Number(target.dataset.ceL);
+		const col = Number(target.dataset.ceC);
+		const word = target.dataset.ceW || wordAt(d.lines[line - 1] ?? "", col)?.word || "";
+		if (!word) { if (hoverAtRef.current) cancelHover(); return; }
+		const prev = hoverAtRef.current;
+		if (prev && prev.line === line && prev.col === col) return; // same token: keep timer/tooltip
+		hoverNonce.current++;
+		if (hoverTimer.current) clearTimeout(hoverTimer.current);
+		hoverAtRef.current = { line, col, word };
+		setHover(null);
+		const nonce = hoverNonce.current;
+		const path = d.path;
+		hoverTimer.current = setTimeout(() => {
+			hoverTimer.current = null;
+			api("lsp.request", { cwd, path, kind: "hover", line, col }).then((res) => {
+				if (hoverNonce.current !== nonce) return;
+				const text = res.ok ? String(res.value.hover ?? "") : "";
+				if (text.trim()) setHover({ x: col, y: line, text });
+			}).catch(() => {});
+		}, 350);
+	}, [cwd, editing, cancelHover]);
 
 	// session / cwd lifecycle
 	useEffect(() => {
@@ -1542,6 +1619,7 @@ export function CodeBody(props) {
 	useEffect(() => () => {
 		if (noticeTimer.current) clearTimeout(noticeTimer.current);
 		if (autoMarksTimer.current) clearTimeout(autoMarksTimer.current);
+		if (hoverTimer.current) clearTimeout(hoverTimer.current);
 	}, []);
 
 	// Keep the active tab visible in the (horizontally scrollable) strip.
@@ -1786,8 +1864,32 @@ export function CodeBody(props) {
 				"div",
 				{ className: "ce-banner ce-banner-warn" },
 				h("span", { className: "ce-banner-text" }, t("watch.external", { path: externalConflict.path })),
-				h("button", { type: "button", className: "ce-tool ce-tiny", onClick: () => { setExternalConflict(null); void backgroundReload(true); } }, t("watch.reloadDiscarding")),
-				h("button", { type: "button", className: "ce-tool ce-tiny", onClick: () => setExternalConflict(null) }, t("watch.keepEditing")),
+				h("button", { type: "button", className: "ce-tool ce-tiny", onClick: () => void openConflictDiff() }, t("watch.compareDisk")),
+				h("button", { type: "button", className: `ce-tool ce-tiny${overwriteArm ? " ce-tool-danger" : ""}`, onClick: () => { if (overwriteArm) { setOverwriteArm(false); saveEdit({ overwrite: true }); } else setOverwriteArm(true); } }, overwriteArm ? t("watch.overwriteConfirm") : t("watch.overwriteDraft")),
+				h("button", { type: "button", className: "ce-tool ce-tiny", onClick: () => { setExternalConflict(null); setConflictDiff(null); setOverwriteArm(false); void backgroundReload(true); } }, t("watch.reloadDiscarding")),
+				h("button", { type: "button", className: "ce-tool ce-tiny", onClick: () => { setExternalConflict(null); setOverwriteArm(false); } }, t("watch.keepEditing")),
+			)
+			: null,
+		conflictDiff
+			? h(
+				"div",
+				{ className: "ce-conflict-diff" },
+				h("div", { className: "ce-conflict-head" },
+					h("span", { className: "ce-conflict-title" }, t("watch.conflictTitle", { path: conflictDiff.path })),
+					conflictDiff.busy ? h("span", { className: "ce-conflict-meta" }, t("loading")) : null,
+					!conflictDiff.busy && !conflictDiff.error ? h("span", { className: "ce-conflict-meta" }, conflictDiff.identical ? t("watch.conflictIdentical") : `+${conflictDiff.add} −${conflictDiff.del}`) : null,
+					h("button", { type: "button", className: "ce-tool ce-tiny", title: t("close"), onClick: () => setConflictDiff(null) }, "✕"),
+				),
+				conflictDiff.error
+					? h("div", { className: "ce-note" }, conflictDiff.error)
+					: conflictDiff.identical
+						? h("div", { className: "ce-note" }, t("watch.conflictIdenticalHint"))
+						: h(DiffView, {
+							t,
+							diff: { path: conflictDiff.path, scope: "call", text: conflictDiff.text, gutter: false },
+							onClose: () => setConflictDiff(null),
+							canSource: false,
+						}),
 			)
 			: null,
 		h(
@@ -1952,7 +2054,7 @@ export function CodeBody(props) {
 								? h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost", title: t("editor.previewToggle"), onClick: () => setPreviewOn((v) => !v) }, previewOn ? t("editor.raw") : t("editor.preview"))
 								: null,
 							doc && !diff && !editing && !doc.image ? h("button", { type: "button", className: "ce-tool ce-tiny", title: t("editor.edit"), onClick: startEdit }, "✎") : null,
-							editing ? h("button", { type: "button", className: "ce-link", onClick: saveEdit }, t("editor.save")) : null,
+							editing ? h("button", { type: "button", className: "ce-link", onClick: () => saveEdit() }, t("editor.save")) : null,
 							editing ? h("button", { type: "button", className: "ce-link", onClick: cancelEdit }, t("editor.cancel")) : null,
 							editing && editText !== (doc?.raw ?? "") ? h("span", { className: "ce-chip ce-chip-warn" }, t("editor.dirty")) : null,
 							doc && !diff && !doc.image ? h("button", { type: "button", className: `ce-tool ce-tiny${findOpen ? " ce-tool-on" : ""}`, title: `${t("editor.find")} (⌘F / Ctrl+F)`, onClick: () => setFindOpen((v) => !v) }, "⌕") : null,
@@ -2038,7 +2140,9 @@ export function CodeBody(props) {
 									ref: codeRef,
 									onKeyDown,
 									onClick: onEditorClick,
-									onScroll: (event) => setScroll(event.currentTarget.scrollTop),
+									onMouseMove: onEditorMouseMove,
+									onMouseLeave: cancelHover,
+									onScroll: (event) => { setScroll(event.currentTarget.scrollTop); cancelHover(); },
 									style: { outline: "none" },
 								},
 								wrapOn
@@ -2063,6 +2167,13 @@ export function CodeBody(props) {
 								}, null)))
 								: null,
 							peek ? h(RefsPeek, { t, cwd, peek, scroll, totalLines: doc.lines.length, onPick: pickPeek, onClose: closePeek }) : null,
+							hover && !editing
+								? h("div", {
+									className: "ce-hover",
+									role: "tooltip",
+									style: { top: Math.max(4, hover.y * ROW - scroll + ROW + 4), left: 12 },
+								}, hover.text)
+								: null,
 							symPalette ? h(SymbolPalette, { t, symbols, onPick: (s) => { setSymPalette(null); revealPosition(s.line, s.col, s.name); }, onClose: () => setSymPalette(null) }) : null,
 							wsym ? h(WorkspaceSymbolPalette, {
 								t,

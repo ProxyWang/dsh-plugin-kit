@@ -8,6 +8,7 @@ register("./test-support/esm-react-hook.mjs", import.meta.url);
 
 const { buildLineStates, tokenizeLine, wordAt, langFor } = await import("./src/client/highlight.js");
 const { parseDiff } = await import("./src/client/diff.js");
+const { draftDiskDiff } = await import("./src/client/draftdiff.js");
 const sourceDescriptor = (await import("./src/client/index.js")).default;
 const ReactStub = (await import("./test-support/react-stub.mjs")).default;
 
@@ -1995,6 +1996,120 @@ check("docAction reloads clean drafts, flags dirty ones, ignores others", docAct
 		Object.assign(globalThis, liveGlobals);
 	}
 }
+{
+	// Conflict resolution: keep-editing must not be a dead end. The banner now
+	// offers compare-with-disk and a two-step overwrite; a refused save re-raises
+	// the banner instead of looping on a toast.
+	const conflictGlobals = { fetch: globalThis.fetch, requestAnimationFrame: globalThis.requestAnimationFrame, cancelAnimationFrame: globalThis.cancelAnimationFrame, setTimeout: globalThis.setTimeout, clearTimeout: globalThis.clearTimeout, window: globalThis.window, document: globalThis.document };
+	let diskContent = "alpha\nbeta\n";
+	let diskMtime = 1;
+	let refuseWrites = false;
+	const reqs = [];
+	let timers = [];
+	let seq = 500;
+	let baseline = false;
+	let raiseConflict = false;
+	let raised = false;
+	globalThis.fetch = async (url, options) => {
+		const body = JSON.parse(options?.body ?? "{}");
+		reqs.push({ url: String(url), body });
+		if (url.endsWith("/watch.poll")) {
+			seq++;
+			if (!baseline) { baseline = true; return { json: async () => ({ ok: true, value: { seq, baseline: true, supported: true } }) }; }
+			if (raiseConflict && !raised) { raised = true; return { json: async () => ({ ok: true, value: { seq, paths: ["main.go"], git: false } }) }; }
+			return { json: async () => ({ ok: true, value: { seq, paths: [], git: false } }) };
+		}
+		if (url.endsWith("/fs.read")) return { json: async () => ({ ok: true, value: { kind: "text", content: diskContent, mtimeMs: diskMtime } }) };
+		if (url.endsWith("/fs.write") || url.endsWith("/fs.formatDraft")) {
+			if (refuseWrites) return { json: async () => ({ ok: false, error: "file was modified on disk; reload before saving" }) };
+			diskContent = body.content; diskMtime += 1;
+			return { json: async () => ({ ok: true, value: { path: body.path, mtimeMs: diskMtime, size: body.content.length } }) };
+		}
+		if (url.endsWith("/fs.list")) return { json: async () => ({ ok: true, value: { entries: [{ name: "main.go", type: "file", size: 20 }], truncated: false } }) };
+		if (url.endsWith("/git.status")) return { json: async () => ({ ok: true, value: { repo: false } }) };
+		if (url.endsWith("/lsp.diagnostics")) return { json: async () => ({ ok: true, value: { items: [] } }) };
+		if (url.endsWith("/lsp.request")) return { json: async () => ({ ok: true, value: { symbols: [], targets: [] } }) };
+		if (url.endsWith("/lsp.status")) return { json: async () => ({ ok: true, value: { state: "ready", label: "gopls" } }) };
+		return { json: async () => ({ ok: true, value: {} }) };
+	};
+	globalThis.requestAnimationFrame = (fn) => { fn(); return 0; };
+	globalThis.cancelAnimationFrame = () => {};
+	globalThis.setTimeout = (fn, ms) => { timers.push({ fn, ms, fired: false }); return timers.length; };
+	globalThis.clearTimeout = (id) => { if (typeof id === "number" && timers[id - 1]) timers[id - 1].cancelled = true; };
+	globalThis.window = { innerWidth: 1200, innerHeight: 900 };
+	globalThis.document = { addEventListener() {}, removeEventListener() {} };
+	try {
+		const render = createHookRenderer(CodeBody, { sessionId: "conflict", useSessions: (select) => select({ byId: { conflict: { cwd: "/w" } } }), t: (k) => k }, { effects: true });
+		let tree = render();
+		render.flushEffects();
+		const fire = () => { const due = timers.filter((t) => !t.fired && !t.cancelled); due.forEach((t) => { t.fired = true; }); timers = timers.filter((t) => !t.fired && !t.cancelled); for (const t of due) t.fn(); };
+		const paint = () => { tree = render(); render.flushEffects(); };
+		const tick = async () => { for (let i = 0; i < 8; i++) { await new Promise((r) => setImmediate(r)); fire(); } paint(); };
+		const get = (test) => collect(tree).find(test);
+		const btn = (label) => get((n) => n.type === "button" && n.children?.[0] === label);
+		const ta = () => get((n) => n.type === "textarea" && typeof n.props.className === "string" && n.props.className.startsWith("ce-edit-ta"));
+		await tick();
+		get((n) => n.type === TreePanelCmp).props.onOpenFile("main.go", 1, 1);
+		await tick();
+		get((n) => n.type === "button" && n.props.title === "editor.edit").props.onClick(); paint();
+		ta().props.onChange({ target: { value: "alpha\nMY-DRAFT\n" } }); paint();
+		diskContent = "alpha\nDISK-CHANGE\n"; diskMtime = 2;
+		raiseConflict = true;
+		await tick();
+		check("conflict banner offers compare-with-disk", Boolean(btn("watch.compareDisk")), null);
+		check("conflict banner offers overwrite with two-step arming", Boolean(btn("watch.overwriteDraft")), null);
+		btn("watch.compareDisk").props.onClick();
+		await tick();
+		check("compare opens the draft-vs-disk diff panel", Boolean(get((n) => n.props.className === "ce-conflict-diff")), null);
+		check("compare diff shows both sides", collect(tree).some((n) => n.type === "span" && typeof n.children?.[0] === "string" && n.children[0].includes("MY-DRAFT")) || JSON.stringify(collect(tree).filter((n) => n.props.className === "ce-conflict-meta").map((n) => n.children)) .includes("+1"), null);
+		check("compare reads the disk without writing", reqs.some((r) => r.url.endsWith("/fs.read")) && !reqs.some((r) => r.url.endsWith("/fs.write")), null);
+		// Close the compare panel, then arm + confirm overwrite.
+		get((n) => n.props.className === "ce-conflict-head" && true) && collect(tree).find((n) => n.props.className === "ce-conflict-head").children.find((c) => c?.props?.title === "close").props.onClick(); paint();
+		btn("watch.overwriteDraft").props.onClick(); paint();
+		check("first overwrite click arms the confirmation", Boolean(btn("watch.overwriteConfirm")) && !reqs.some((r) => r.url.endsWith("/fs.write")), null);
+		btn("watch.overwriteConfirm").props.onClick();
+		await tick();
+		const overwriteWrite = reqs.find((r) => r.url.endsWith("/fs.write") || r.url.endsWith("/fs.formatDraft"));
+		check("confirmed overwrite writes the draft without baseMtime", Boolean(overwriteWrite) && overwriteWrite.body.baseMtime === undefined && overwriteWrite.body.content === "alpha\nMY-DRAFT\n", overwriteWrite?.body);
+		check("overwrite success clears banner and draft state", !btn("watch.compareDisk") && !ta(), null);
+		// A refused guarded save re-raises the banner (no dead-end toast loop).
+		get((n) => n.type === "button" && n.props.title === "editor.edit").props.onClick(); paint();
+		ta().props.onChange({ target: { value: "alpha\nSECOND-DRAFT\n" } }); paint();
+		refuseWrites = true;
+		get((n) => n.type === "button" && n.children?.[0] === "editor.save").props.onClick();
+		await tick();
+		check("a refused save re-raises the conflict banner with its exits", Boolean(btn("watch.compareDisk")) && Boolean(btn("watch.overwriteDraft")), null);
+		check("the refused save kept the draft in the editor", ta()?.props.value === "alpha\nSECOND-DRAFT\n", ta()?.props.value);
+		render.unmount();
+	} finally {
+		Object.assign(globalThis, conflictGlobals);
+	}
+}
+
+// --- draft vs disk diff (external-conflict compare path) ------------------------------
+{
+	const same = draftDiskDiff("a\nb\n", "a\nb\n", "f.go");
+	check("identical texts report identical with no diff rows", same.identical === true && same.text === "" && same.add === 0 && same.del === 0, same);
+	const one = draftDiskDiff("alpha\nbeta\ngamma\n", "alpha\nBETA\ngamma\n", "f.go");
+	check("single-line change counts one add and one del", one.add === 1 && one.del === 1 && !one.identical, one);
+	const rows = parseDiff(one.text);
+	check("draft diff parses as unified rows with a hunk header", rows.some((r) => r.kind === "hunk") && rows.some((r) => r.kind === "add" && r.text === "BETA") && rows.some((r) => r.kind === "del" && r.text === "beta"), rows.map((r) => r.kind));
+	check("draft diff keeps 3-line context around the change", rows.filter((r) => r.kind === "ctx").length === 2, rows.filter((r) => r.kind === "ctx").length);
+	const head = draftDiskDiff("x\n", "x\ny\n", "pkg/f.go");
+	check("draft diff header names the file", head.text.startsWith("--- a/pkg/f.go\n+++ b/pkg/f.go"), head.text.slice(0, 60));
+	const pureAdd = draftDiskDiff("", "new\n", "n.go");
+	check("empty disk side is a pure addition", pureAdd.add === 1 && pureAdd.del === 0, pureAdd);
+	const pureDel = draftDiskDiff("gone\n", "", "n.go");
+	check("empty draft side is a pure deletion", pureDel.add === 0 && pureDel.del === 1, pureDel);
+	// Two distant changes must become two hunks, not one giant block.
+	const far = draftDiskDiff(Array.from({ length: 30 }, (_, i) => `l${i}`).join("\n") + "\n", Array.from({ length: 30 }, (_, i) => (i === 2 ? "CHANGED-A" : i === 25 ? "CHANGED-B" : `l${i}`)).join("\n") + "\n", "f.go");
+	check("distant changes split into separate hunks", (far.text.match(/@@/g) ?? []).length === 4, far.text.match(/@@/g));
+	// Huge-pair fallback: common prefix/suffix trimmed, middle replaced.
+	const bigOld = Array.from({ length: 2500 }, (_, i) => `o${i}`).join("\n");
+	const bigNew = Array.from({ length: 2500 }, (_, i) => `n${i}`).join("\n");
+	const coarse = draftDiskDiff(bigOld, bigNew, "big.txt");
+	check("huge pairs fall back to a whole-replace diff without throwing", coarse.add === 2500 && coarse.del === 2500, [coarse.add, coarse.del]);
+}
 
 // --- M2 editor productivity: workspace symbol palette + format-on-save flow -----------
 {
@@ -2732,6 +2847,91 @@ check("docAction reloads clean drafts, flags dirty ones, ignores others", docAct
 		check("visible tabs still focus the editor on reveal jumps", codeFocusCalls === 1, codeFocusCalls);
 		renderHidden.unmount();
 	} finally { Object.assign(globalThis, hiddenGlobals); }
+}
+
+// --- hover tooltip + VS Code click model -----------------------------------------------
+{
+	const hoverGlobals = { fetch: globalThis.fetch, requestAnimationFrame: globalThis.requestAnimationFrame, cancelAnimationFrame: globalThis.cancelAnimationFrame, setTimeout: globalThis.setTimeout, clearTimeout: globalThis.clearTimeout, window: globalThis.window, document: globalThis.document };
+	const lspCalls = [];
+	let hoverAnswer = "func helper()";
+	let timers = [];
+	globalThis.fetch = async (url, options) => {
+		const body = JSON.parse(options?.body ?? "{}");
+		if (url.endsWith("/fs.read")) return { json: async () => ({ ok: true, value: { kind: "text", content: "package main\nfunc helper() {}\n", mtimeMs: 1 } }) };
+		if (url.endsWith("/lsp.request")) {
+			lspCalls.push(body);
+			if (body.kind === "hover") return { json: async () => ({ ok: true, value: { hover: hoverAnswer } }) };
+			return { json: async () => ({ ok: true, value: { symbols: [], targets: [] } }) };
+		}
+		if (url.endsWith("/lsp.diagnostics")) return { json: async () => ({ ok: true, value: { items: [] } }) };
+		if (url.endsWith("/lsp.status")) return { json: async () => ({ ok: true, value: { state: "ready", label: "gopls" } }) };
+		if (url.endsWith("/git.status")) return { json: async () => ({ ok: true, value: { repo: false } }) };
+		return { json: async () => ({ ok: true, value: {} }) };
+	};
+	globalThis.requestAnimationFrame = (fn) => { fn(); return 0; };
+	globalThis.cancelAnimationFrame = () => {};
+	globalThis.setTimeout = (fn, ms) => { timers.push({ fn, ms, fired: false }); return timers.length; };
+	globalThis.clearTimeout = (id) => { if (typeof id === "number" && timers[id - 1]) timers[id - 1].cancelled = true; };
+	globalThis.window = { innerWidth: 1200, innerHeight: 900 };
+	globalThis.document = { addEventListener() {}, removeEventListener() {} };
+	try {
+		const render = createHookRenderer(CodeBody, { sessionId: "hov", useSessions: (select) => select({ byId: { hov: { cwd: "/w" } } }), t: (k) => k }, { effects: true });
+		let tree = render();
+		render.flushEffects();
+		const fire350 = () => { const due = timers.filter((t) => !t.fired && !t.cancelled && t.ms === 350); due.forEach((t) => { t.fired = true; }); for (const t of due) t.fn(); };
+		const paint = () => { tree = render(); render.flushEffects(); };
+		const tick = async () => { for (let i = 0; i < 6; i++) await new Promise((r) => setImmediate(r)); paint(); };
+		const get = (test) => collect(tree).find(test);
+		const area = () => get((n) => typeof n.props.className === "string" && n.props.className.split(" ").includes("ce-code"));
+		await tick();
+		get((n) => n.type === TreePanelCmp).props.onOpenFile("main.go", 1, 1);
+		await tick();
+		const tokenTarget = { dataset: { ceL: "2", ceC: "6", ceW: "helper" }, classList: { contains: () => false }, closest: (sel) => (sel === "[data-ce-l]" ? tokenTarget : null) };
+		const kwTarget = { dataset: { ceL: "2", ceC: "1", ceW: "func" }, classList: { contains: (c) => c === "ce-kw" }, closest: (sel) => (sel === "[data-ce-l]" ? kwTarget : null) };
+		const callsBefore = lspCalls.length;
+		const hoverCalls = () => lspCalls.filter((c) => c.kind === "hover" && c.line === 2 && c.col === 6).length;
+		// Plain click places the cursor without any LSP request or peek.
+		area().props.onClick({ target: tokenTarget, metaKey: false, ctrlKey: false });
+		await tick();
+		check("plain click fires no LSP request", lspCalls.length === callsBefore, [lspCalls.length, callsBefore]);
+		check("plain click opens no refs peek", !get((n) => n.type.name === "RefsPeek"), null);
+		// Hover: resting on a token for 350ms asks for the hover document.
+		const hoverBefore = hoverCalls();
+		area().props.onMouseMove({ target: tokenTarget });
+		check("hover does not request before the delay", hoverCalls() === hoverBefore, [hoverCalls(), hoverBefore]);
+		fire350();
+		await tick();
+		check("hover requests after the 350ms rest", hoverCalls() === hoverBefore + 1, [hoverCalls(), hoverBefore]);
+		check("hover tooltip renders the server document", get((n) => n.props.className === "ce-hover")?.children[0] === "func helper()", get((n) => n.props.className === "ce-hover")?.children);
+		// Moving to another token restarts the delay and hides the old tooltip.
+		area().props.onMouseMove({ target: { dataset: { ceL: "2", ceC: "13", ceW: "other" }, classList: { contains: () => false }, closest: (sel) => (sel === "[data-ce-l]" ? { dataset: { ceL: "2", ceC: "13", ceW: "other" }, classList: { contains: () => false } } : null) } });
+		paint();
+		check("moving tokens hides the stale tooltip", !get((n) => n.props.className === "ce-hover"), null);
+		// Leaving the code area cancels a pending request.
+		area().props.onMouseMove({ target: tokenTarget });
+		area().props.onMouseLeave();
+		fire350();
+		await tick();
+		check("mouseleave cancels the pending hover request", !get((n) => n.props.className === "ce-hover"), null);
+		// Keywords never hover.
+		const hoverCount = lspCalls.filter((c) => c.kind === "hover").length;
+		area().props.onMouseMove({ target: kwTarget });
+		fire350();
+		await tick();
+		check("keywords are not hovered", lspCalls.filter((c) => c.kind === "hover").length === hoverCount, null);
+		// Empty hover answers render nothing.
+		hoverAnswer = "";
+		area().props.onMouseMove({ target: tokenTarget });
+		fire350();
+		await tick();
+		check("empty hover answer shows no tooltip", !get((n) => n.props.className === "ce-hover"), null);
+		// ⌘/Ctrl+click still jumps to definition.
+		const defBefore = lspCalls.filter((c) => c.kind === "definition").length;
+		area().props.onClick({ target: tokenTarget, metaKey: true, ctrlKey: false });
+		await tick();
+		check("cmd-click still jumps to definition", lspCalls.filter((c) => c.kind === "definition").length === defBefore + 1, null);
+		render.unmount();
+	} finally { Object.assign(globalThis, hoverGlobals); }
 }
 
 // --- the generated bundle: registration + factory --------------------------------------
