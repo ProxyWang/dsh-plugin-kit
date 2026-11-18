@@ -11,8 +11,9 @@ import { ApiView, ApiTitle } from "./apiclient.js";
 import { installLeftTools, WorkspaceGuide } from "./lefttools.js";
 import { registerToolCloseGuard } from "./closeguard.js";
 import { installBrowser } from "./browserregister.js";
-import { createTerminalEntry, installTerminalRefreshGuard } from "./terminal.js";
+import { createTerminalEntry, installTerminalRefreshGuard, installTerminalRefreshNudge } from "./terminal.js";
 import { installRightbarWidth } from "./rightbarwidth.js";
+import { pruneOrphanKeys } from "./orphans.js";
 
 export default {
 	inject: ["slots", "locale", "sidebarRightTabs", "sidebarRight", "layout"],
@@ -26,6 +27,21 @@ export default {
 			}
 		};
 		safe("styles", insertStyles);
+		// Prune localStorage keys for sessions that no longer exist. Runs once
+		// per activation; guarded so repeated mounts don't re-scan.
+		safe("orphan cleanup", () => {
+			ctx.inject(["sessions"], (sessionsCtx) => {
+				if (!sessionsCtx.sessions) return;
+				const live = new Set();
+				try {
+					const snap = sessionsCtx.sessions.getSnapshot?.();
+					if (snap && typeof snap === "object") {
+						for (const id of Object.keys(snap.byId ?? {})) live.add(id);
+					}
+				} catch { /* sessions unavailable: skip cleanup */ }
+				pruneOrphanKeys([...live]);
+			});
+		});
 		// The host opens the right column at 45% of the frame; this workspace is
 		// an editor, so the first opening takes the widest the frame allows and a
 		// manual drag stays the user's own width afterwards.
@@ -41,6 +57,12 @@ export default {
 		// screen though the buffer is correct. Repay full refreshes at those
 		// lifecycle moments via the textarea's blur handler (no PTY resize).
 		safe("terminal refresh guard", () => installTerminalRefreshGuard());
+		// zsh powerlevel10k redraws the whole prompt+line on every keystroke;
+		// if the host drops a refresh between rapid output frames, stale glyphs
+		// persist until the next lifecycle event. A periodic blur while the
+		// terminal holds focus catches mid-typing stale rows (500ms interval,
+		// only while focused, negligible cost).
+		safe("terminal refresh nudge", () => installTerminalRefreshNudge());
 		ctx.inject(["workspaces"], (browserCtx) => {
 			browserCtx.effect(() => installBrowser(browserCtx, bound), "toolbox: enhanced browser");
 		});

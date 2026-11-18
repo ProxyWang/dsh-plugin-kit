@@ -1641,6 +1641,72 @@ function installTerminalRefreshGuard({
     }
   };
 }
+var NUDGE_INTERVAL_MS = 500;
+function installTerminalRefreshNudge({
+  doc = globalThis.document,
+  setTimer = (fn, ms) => setTimeout(fn, ms),
+  clearTimer = (id) => clearTimeout(id),
+  intervalMs = NUDGE_INTERVAL_MS
+} = {}) {
+  if (typeof doc?.querySelectorAll !== "function") return () => {
+  };
+  let timer = null;
+  let running = false;
+  const tick = () => {
+    timer = null;
+    if (!running) return;
+    try {
+      const screens = doc.querySelectorAll("[data-sidebar-terminal]");
+      for (let i = screens.length - 1; i >= 0; i--) {
+        const screen = screens[i];
+        if (screen?.isConnected === false) continue;
+        if (screen.closest?.('[aria-hidden="true"], [hidden], [inert]')) continue;
+        const textarea = screen.querySelector?.(".xterm textarea");
+        if (textarea && doc.activeElement === textarea) {
+          refreshHostTerminalScreen(screen);
+          break;
+        }
+      }
+    } catch {
+    }
+    if (running) timer = setTimer(tick, intervalMs);
+  };
+  const onFocusIn = (event) => {
+    const target = event.target;
+    if (!target?.closest?.(".xterm")) return;
+    if (running) return;
+    running = true;
+    timer = setTimer(tick, intervalMs);
+  };
+  const onFocusOut = (event) => {
+    const related = event.relatedTarget;
+    if (related?.closest?.(".xterm")) return;
+    running = false;
+    if (timer !== null) {
+      clearTimer(timer);
+      timer = null;
+    }
+  };
+  if (typeof doc.addEventListener === "function") {
+    doc.addEventListener("focusin", onFocusIn, true);
+    doc.addEventListener("focusout", onFocusOut, true);
+  }
+  return () => {
+    running = false;
+    if (timer !== null) {
+      clearTimer(timer);
+      timer = null;
+    }
+    try {
+      doc.removeEventListener?.("focusin", onFocusIn, true);
+    } catch {
+    }
+    try {
+      doc.removeEventListener?.("focusout", onFocusOut, true);
+    } catch {
+    }
+  };
+}
 function terminalKindRegistered(tabs) {
   try {
     const entries = typeof tabs?.entries === "function" ? tabs.entries() : [];
@@ -13021,6 +13087,47 @@ function installRightbarWidth({
   };
 }
 
+// src/client/orphans.js
+var NAV_PREFIX = "dsh.plugin-kit.v1.";
+var BROWSER_PREFIX = "dsh.plugin-kit.browser.tabs.v2.";
+var CLEANED_FLAG = "dsh.plugin-kit.orphans.cleaned";
+function pruneOrphanKeys(liveSessionIds, storage = globalThis.localStorage) {
+  if (!storage || typeof storage.key !== "function") return 0;
+  try {
+    if (storage.getItem(CLEANED_FLAG) !== null) return 0;
+  } catch {
+    return 0;
+  }
+  const live = new Set(Array.isArray(liveSessionIds) ? liveSessionIds : []);
+  let removed = 0;
+  const toRemove = [];
+  for (let i = 0; i < storage.length; i++) {
+    const key = storage.key(i);
+    if (!key) continue;
+    if (key.startsWith(NAV_PREFIX)) {
+      const sid = key.slice(NAV_PREFIX.length);
+      if (!live.has(sid)) toRemove.push(key);
+    } else if (key.startsWith(BROWSER_PREFIX)) {
+      const rest = key.slice(BROWSER_PREFIX.length);
+      const dot = rest.indexOf(".");
+      const sid = dot >= 0 ? rest.slice(0, dot) : rest;
+      if (!live.has(sid)) toRemove.push(key);
+    }
+  }
+  for (const key of toRemove) {
+    try {
+      storage.removeItem(key);
+      removed++;
+    } catch {
+    }
+  }
+  try {
+    storage.setItem(CLEANED_FLAG, String(Date.now()));
+  } catch {
+  }
+  return removed;
+}
+
 // src/client/index.js
 var index_default = {
   inject: ["slots", "locale", "sidebarRightTabs", "sidebarRight", "layout"],
@@ -13033,11 +13140,26 @@ var index_default = {
       }
     };
     safe("styles", insertStyles);
+    safe("orphan cleanup", () => {
+      ctx.inject(["sessions"], (sessionsCtx) => {
+        if (!sessionsCtx.sessions) return;
+        const live = /* @__PURE__ */ new Set();
+        try {
+          const snap = sessionsCtx.sessions.getSnapshot?.();
+          if (snap && typeof snap === "object") {
+            for (const id of Object.keys(snap.byId ?? {})) live.add(id);
+          }
+        } catch {
+        }
+        pruneOrphanKeys([...live]);
+      });
+    });
     safe("right sidebar width", () => installRightbarWidth({ layout: ctx.layout }));
     const bound = ctx.locale.bind(NS);
     safe("dictionaries", () => ctx.locale.register(NS, { zh, en }));
     const terminal = createTerminalEntry({ sidebarRight: ctx.sidebarRight, sidebarRightTabs: ctx.sidebarRightTabs });
     safe("terminal refresh guard", () => installTerminalRefreshGuard());
+    safe("terminal refresh nudge", () => installTerminalRefreshNudge());
     ctx.inject(["workspaces"], (browserCtx) => {
       browserCtx.effect(() => installBrowser(browserCtx, bound), "toolbox: enhanced browser");
     });

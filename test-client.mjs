@@ -2920,6 +2920,58 @@ check("docAction reloads clean drafts, flags dirty ones, ignores others", docAct
 			if (savedFO === undefined) delete globalThis.FocusEvent; else globalThis.FocusEvent = savedFO;
 		}
 	}
+
+	// Terminal refresh nudge: periodic blur while focused catches mid-typing stale rows.
+	const { installTerminalRefreshNudge } = await import("./src/client/terminal.js");
+	{
+		const nudgeTimers = new Map(); let nudgeNextId = 1;
+		const nSetTimer = (fn, ms) => { const id = nudgeNextId++; nudgeTimers.set(id, fn); return id; };
+		const nClearTimer = (id) => nudgeTimers.delete(id);
+		const fireNudgeTimers = () => { for (const [id, fn] of [...nudgeTimers]) { nudgeTimers.delete(id); fn(); } };
+		const focusListeners = [];
+		const nTextarea = { dispatchEvent(ev) { nEvents.push(ev.type); return true; }, closest: (sel) => (sel === ".xterm" ? {} : null) };
+		const nEvents = [];
+		const nScreen = {
+			isConnected: true,
+			closest: () => null,
+			querySelector: (sel) => (sel === ".xterm textarea" ? nTextarea : null),
+		};
+		const nDoc = {
+			activeElement: null,
+			querySelectorAll: () => [nScreen],
+			addEventListener: (n, fn, cap) => focusListeners.push([n, fn, cap]),
+			removeEventListener: (n, fn) => { const i = focusListeners.findIndex(([nn, ff]) => nn === n && ff === fn); if (i >= 0) focusListeners.splice(i, 1); },
+		};
+		const savedFE2 = globalThis.FocusEvent;
+		globalThis.FocusEvent = class { constructor(type) { this.type = type; } };
+		try {
+			const dispose = installTerminalRefreshNudge({ doc: nDoc, setTimer: nSetTimer, clearTimer: nClearTimer, intervalMs: 100 });
+			check("nudge installs focusin/focusout capture listeners", focusListeners.length === 2 && focusListeners.every(([, , cap]) => cap === true), focusListeners.length);
+			// Focus the terminal textarea -> nudge starts ticking.
+			nDoc.activeElement = nTextarea;
+			focusListeners.find(([n]) => n === "focusin")[1]({ target: nTextarea });
+			check("nudge starts timer on terminal focus", nudgeTimers.size === 1, nudgeTimers.size);
+			fireNudgeTimers();
+			check("nudge fires blur on the focused terminal screen", nEvents.join() === "blur", nEvents);
+			check("nudge reschedules after firing", nudgeTimers.size === 1, nudgeTimers.size);
+			// Focus leaves to a non-terminal element -> nudge stops.
+			nDoc.activeElement = {};
+			focusListeners.find(([n]) => n === "focusout")[1]({ target: nTextarea, relatedTarget: {} });
+			fireNudgeTimers();
+			check("nudge stops when focus leaves the terminal", nudgeTimers.size === 0 && nEvents.length === 1, nEvents.length);
+			// Focus moves within xterm (e.g. to another part) -> nudge continues.
+			nDoc.activeElement = nTextarea;
+			focusListeners.find(([n]) => n === "focusin")[1]({ target: nTextarea });
+			const xtermChild = { closest: (sel) => (sel === ".xterm" ? {} : null) };
+			focusListeners.find(([n]) => n === "focusout")[1]({ target: nTextarea, relatedTarget: xtermChild });
+			check("nudge keeps running when focus stays within xterm", nudgeTimers.size === 1, nudgeTimers.size);
+			dispose();
+			fireNudgeTimers();
+			check("nudge disposer clears timers and listeners", nudgeTimers.size === 0 && focusListeners.length === 0, null);
+		} finally {
+			if (savedFE2 === undefined) delete globalThis.FocusEvent; else globalThis.FocusEvent = savedFE2;
+		}
+	}
 }
 
 // --- hover tooltip + VS Code click model -----------------------------------------------
@@ -3037,6 +3089,40 @@ check("docAction reloads clean drafts, flags dirty ones, ignores others", docAct
 	check("resolveSecrets substitutes known refs", resolved.auth.token === "real-token" && resolved.auth.pass === "keep" && resolved.envs[0].vars[0].value === "real-pass", resolved);
 	check("resolveSecrets unknown ref → empty string", resolveSecrets({ auth: { token: "secret:gone" } }, {}).auth.token === "", null);
 	check("resolveSecrets does not mutate input", (() => { const o = { auth: { token: "secret:x" } }; resolveSecrets(o, { x: "y" }); return o.auth.token; })() === "secret:x", null);
+}
+
+// --- localStorage orphan cleanup -------------------------------------------------------
+{
+	const { pruneOrphanKeys, resetOrphanCleanup } = await import("./src/client/orphans.js");
+	const fakeStorage = {
+		_data: {},
+		get length() { return Object.keys(this._data).length; },
+		key(i) { return Object.keys(this._data)[i] ?? null; },
+		getItem(k) { return Object.hasOwn(this._data, k) ? this._data[k] : null; },
+		setItem(k, v) { this._data[k] = String(v); },
+		removeItem(k) { delete this._data[k]; },
+	};
+	// Seed: two live sessions, one dead session, plus unrelated keys.
+	fakeStorage._data["dsh.plugin-kit.v1.session-A"] = '{"path":"a.go"}';
+	fakeStorage._data["dsh.plugin-kit.v1.session-B"] = '{"path":"b.go"}';
+	fakeStorage._data["dsh.plugin-kit.v1.session-DEAD"] = '{"path":"dead.go"}';
+	fakeStorage._data["dsh.plugin-kit.browser.tabs.v2.session-A.tab1"] = '{"tabs":[]}';
+	fakeStorage._data["dsh.plugin-kit.browser.tabs.v2.session-DEAD.tab2"] = '{"tabs":[]}';
+	fakeStorage._data["unrelated.key"] = "keep me";
+	fakeStorage._data["dsh.other-plugin.session-DEAD"] = "not ours";
+	resetOrphanCleanup(fakeStorage);
+	const removed = pruneOrphanKeys(["session-A", "session-B"], fakeStorage);
+	check("orphan cleanup removes dead session nav key", !Object.hasOwn(fakeStorage._data, "dsh.plugin-kit.v1.session-DEAD"), null);
+	check("orphan cleanup removes dead session browser tab key", !Object.hasOwn(fakeStorage._data, "dsh.plugin-kit.browser.tabs.v2.session-DEAD.tab2"), null);
+	check("orphan cleanup keeps live session keys", Object.hasOwn(fakeStorage._data, "dsh.plugin-kit.v1.session-A") && Object.hasOwn(fakeStorage._data, "dsh.plugin-kit.browser.tabs.v2.session-A.tab1"), null);
+	check("orphan cleanup leaves unrelated keys untouched", fakeStorage._data["unrelated.key"] === "keep me" && fakeStorage._data["dsh.other-plugin.session-DEAD"] === "not ours", null);
+	check("orphan cleanup reports correct removal count", removed === 2, removed);
+	check("orphan cleanup sets the flag so it never runs again", fakeStorage.getItem("dsh.plugin-kit.orphans.cleaned") !== null, null);
+	const removedAgain = pruneOrphanKeys(["session-A"], fakeStorage);
+	check("second call is a no-op (flag set)", removedAgain === 0 && Object.hasOwn(fakeStorage._data, "dsh.plugin-kit.v1.session-B"), removedAgain);
+	resetOrphanCleanup(fakeStorage);
+	const removedEmpty = pruneOrphanKeys([], fakeStorage);
+	check("empty live set prunes all remaining plugin keys", removedEmpty === 3 && !Object.hasOwn(fakeStorage._data, "dsh.plugin-kit.v1.session-A") && !Object.hasOwn(fakeStorage._data, "dsh.plugin-kit.v1.session-B"), removedEmpty);
 }
 
 // --- the generated bundle: registration + factory --------------------------------------
