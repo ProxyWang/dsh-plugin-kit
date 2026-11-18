@@ -32,6 +32,7 @@ import { stopAllStreams } from "./lib/host/streams.js";
 import { createBrowserService, browserTool } from "./lib/host/browser.js";
 import { createVaultService } from "./lib/host/vault.js";
 import { dbRoutes, closeAll as closeAllDb } from "./lib/host/db.js";
+import { createToolboxTools } from "./lib/host/tools.js";
 
 function apply(ctx) {
 	let browser;
@@ -45,7 +46,12 @@ function apply(ctx) {
 		vault = vaultInstance;
 		ctx.effect(() => () => { if (vault === vaultInstance) vault = undefined; return vaultInstance.close(); }, "toolbox: api secret vault lifetime");
 		ctx.inject(["tools"], (toolCtx) => {
-			if (toolCtx.tools) ctx.effect(() => toolCtx.tools.register(browserTool(instance)), "toolbox: browser bookmarks tool");
+			if (toolCtx.tools) {
+				ctx.effect(() => toolCtx.tools.register(browserTool(instance)), "toolbox: browser bookmarks tool");
+				for (const tool of createToolboxTools({ routes, dbRoutes })) {
+					ctx.effect(() => toolCtx.tools.register(tool), `toolbox: ${tool.name} tool`);
+				}
+			}
 		});
 	});
 	ctx.inject(["skills"], (skillsCtx) => {

@@ -901,8 +901,7 @@ for (const cleanup of cleanups) cleanup();
 	}
 }
 
-console.log(`\n${pass} passed, ${fail} failed${skipped ? `, ${skipped} skipped` : ""}`);
-process.exit(fail ? 1 : 0);
+// --- vault service: secret persistence for the API workbench ---------------------------
 {
 	const { createVaultService } = await import("./lib/host/vault.js");
 	let stored;
@@ -929,6 +928,71 @@ process.exit(fail ? 1 : 0);
 	check("vault.get after delete returns nothing for that id", !Object.hasOwn(gotAfterDel.values, set1.ids["auth.token"]), gotAfterDel.values);
 	await vault.close();
 	await assert.rejects(vault.execute({ action: "get", ids: [] }), /closed/, "vault refuses after close");
+}
+
+// --- toolbox agent tools: api_request, git_review, skills_manage -----------------------
+{
+	const { createToolboxTools } = await import("./lib/host/tools.js");
+	const { routes } = await import("./lib/host/routes.js");
+	const { dbRoutes } = await import("./lib/host/db.js");
+	const tools = createToolboxTools({ routes, dbRoutes });
+	check("toolbox exposes three agent tools", tools.length === 3 && tools.map((t) => t.name).sort().join() === "api_request,git_review,skills_manage", tools.map((t) => t.name));
+	// git_review status on the test fixture.
+	const gitTool = tools.find((t) => t.name === "git_review");
+	const statusRes = JSON.parse((await gitTool.execute({ action: "status", cwd })).data);
+	check("git_review status returns branch and file lists", typeof statusRes.branch === "string" && Array.isArray(statusRes.working), statusRes);
+	const diffRes = JSON.parse((await gitTool.execute({ action: "diff", cwd, path: "main.go", scope: "working" })).data);
+	check("git_review diff returns diff text or empty for clean file", typeof diffRes.diff === "string", diffRes.diff?.slice(0, 60));
+	const branchesRes = JSON.parse((await gitTool.execute({ action: "branches", cwd })).data);
+	check("git_review branches returns a list", Array.isArray(branchesRes.branches), branchesRes);
+	// skills_manage list on the test fixture.
+	const skillsTool = tools.find((t) => t.name === "skills_manage");
+	const skillsRes = JSON.parse((await skillsTool.execute({ action: "list", cwd })).data);
+	check("skills_manage list returns skill entries", Array.isArray(skillsRes.skills), skillsRes);
+	// api_request with a mock fetch (no real network).
+	const apiTool = tools.find((t) => t.name === "api_request");
+	const origFetch = globalThis.fetch;
+	globalThis.fetch = async () => {
+		const bodyText = '{"ok":true}';
+		const encoded = new TextEncoder().encode(bodyText);
+		return {
+			status: 200, statusText: "OK",
+			headers: { entries: () => [["content-type", "application/json"]], get: () => "application/json" },
+			body: { getReader: () => { let sent = false; return { read: async () => { if (sent) return { done: true }; sent = true; return { done: false, value: encoded }; } }; } },
+			arrayBuffer: async () => encoded.buffer,
+		};
+	};
+	try {
+		const apiRes = JSON.parse((await apiTool.execute({ method: "GET", url: "https://example.test/api" })).data);
+		check("api_request returns status and body", apiRes.status === 200 && apiRes.body === '{"ok":true}', apiRes);
+	} finally { globalThis.fetch = origFetch; }
+}
+
+// --- .bru collection runner -----------------------------------------------------------
+{
+	const { runCollection } = await import("./lib/host/runner.js");
+	const rdir = "/tmp/ce-runner-test";
+	rmSync(rdir, { recursive: true, force: true });
+	mkdirSync(rdir, { recursive: true });
+	writeFileSync(join(rdir, "01-get.bru"), "meta {\n  name: get users\n}\n\nget {\n  url: https://api.example.test/users\n}\n\nheaders {\n  Accept: application/json\n}\n");
+	writeFileSync(join(rdir, "02-post.bru"), "meta {\n  name: create user\n}\n\npost {\n  url: https://api.example.test/users\n}\n\nheaders {\n  Content-Type: application/json\n}\n\nbody:json {\n  {\"name\":\"{{userName}}\"}\n}\n\nextract {\n  userId: $.id\n}\n");
+	writeFileSync(join(rdir, "not-a-bru.txt"), "ignored");
+	writeFileSync(join(rdir, ".hidden.bru"), "meta { name: hidden }\nget { url: https://x }\n");
+	const sentRequests = [];
+	const mockSend = async (resolved) => {
+		sentRequests.push(resolved);
+		if (resolved.url.includes("/users") && resolved.method === "GET") return { status: 200, text: '[{"id":1}]', headers: [], ms: 5 };
+		if (resolved.method === "POST") return { status: 201, text: '{"id":42}', headers: [], ms: 8 };
+		return { status: 404, text: "", headers: [], ms: 1 };
+	};
+	const envStore = { envs: [{ id: "e1", name: "Test", vars: [{ name: "userName", value: "Alice", enabled: true }] }], activeId: "e1" };
+	const result = await runCollection("/tmp", "ce-runner-test", envStore, mockSend);
+	check("runner executes .bru files in sorted order", result.results.length === 2 && result.results[0].name === "get users" && result.results[1].name === "create user", result.results.map((r) => r.name));
+	check("runner skips non-.bru and hidden files", sentRequests.length === 2, sentRequests.length);
+	check("runner resolves {{var}} from env store", sentRequests[1].body.includes("Alice"), sentRequests[1].body);
+	check("runner reports status and timing per request", result.results.every((r) => r.status > 0 && r.ms >= 0), result.results.map((r) => ({ s: r.status, ms: r.ms })));
+	check("runner reports total time", typeof result.totalMs === "number" && result.totalMs >= 0, result.totalMs);
+	rmSync(rdir, { recursive: true, force: true });
 }
 
 console.log(`\n${pass} passed, ${fail} failed${skipped ? `, ${skipped} skipped` : ""}`);
