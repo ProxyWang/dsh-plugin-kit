@@ -576,6 +576,7 @@ var zh = {
   "editor.dirty": "未保存",
   "editor.tooBig": "文件过大，无法编辑",
   "editor.find": "文件内查找",
+  "editor.noMatch": "无匹配",
   "editor.replace": "替换",
   "editor.replaceAll": "全部替换",
   "editor.replaceToggle": "切换替换",
@@ -1191,6 +1192,7 @@ var en = {
   "editor.dirty": "unsaved",
   "editor.tooBig": "File too large to edit",
   "editor.find": "Find in file",
+  "editor.noMatch": "No matches",
   "editor.replace": "Replace",
   "editor.replaceAll": "Replace All",
   "editor.replaceToggle": "Toggle Replace",
@@ -5817,6 +5819,103 @@ function coarseOps(a, b) {
   return ops;
 }
 
+// src/client/editmode.js
+function buildEditGutter(lineCount) {
+  const rows = [];
+  for (let i = 1; i <= lineCount; i++) {
+    rows.push({ line: i, top: (i - 1) * ROW });
+  }
+  return rows;
+}
+function handleTabIndent(text, start, end, shift) {
+  const before = text.slice(0, start);
+  const selected = text.slice(start, end);
+  const after = text.slice(end);
+  const lineStart = before.lastIndexOf("\n") + 1;
+  const lineEnd = after.indexOf("\n");
+  const blockEnd = lineEnd < 0 ? text.length : start + selected.length + lineEnd;
+  const block = text.slice(lineStart, blockEnd);
+  const lines2 = block.split("\n");
+  let delta = 0;
+  const newLines = lines2.map((line) => {
+    if (shift) {
+      if (line.startsWith("	")) {
+        delta--;
+        return line.slice(1);
+      }
+      const m = /^( {1,4})/.exec(line);
+      if (m) {
+        delta -= m[1].length;
+        return line.slice(m[1].length);
+      }
+      return line;
+    }
+    delta++;
+    return `	${line}`;
+  });
+  const newBlock = newLines.join("\n");
+  const newText = text.slice(0, lineStart) + newBlock + text.slice(blockEnd);
+  const newStart = start === end ? Math.max(lineStart, start + (newLines[0].length - lines2[0].length)) : Math.max(lineStart, start + (newLines[0].length - lines2[0].length));
+  const newEnd = start === end ? newStart : Math.max(lineStart, end + delta);
+  return { text: newText, start: newStart, end: newEnd };
+}
+function findInText(text, query, opts = {}) {
+  if (!query) return [];
+  const flags = (opts.caseSensitive ? "" : "i") + (opts.regex ? "" : "");
+  let pattern;
+  try {
+    const escaped = opts.regex ? query : query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const wrapped = opts.words ? `\\b${escaped}\\b` : escaped;
+    pattern = new RegExp(wrapped, flags + "g");
+  } catch {
+    return [];
+  }
+  const ranges = [];
+  let m;
+  while ((m = pattern.exec(text)) !== null) {
+    ranges.push({ start: m.index, end: m.index + m[0].length });
+    if (m[0].length === 0) pattern.lastIndex++;
+  }
+  return ranges;
+}
+function replaceInText2(text, query, replacement, opts = {}, idx = 0, all = false) {
+  const ranges = findInText(text, query, opts);
+  if (ranges.length === 0) return { text, count: 0 };
+  if (opts.regex && replacement.includes("$") && /\$\d/.test(replacement)) {
+    try {
+      const flags = (opts.caseSensitive ? "" : "i") + (all ? "g" : "");
+      const pattern = new RegExp(query, flags);
+      const result = all ? text.replace(pattern, replacement) : text.replace(pattern, replacement);
+      const count = all ? (text.match(pattern) ?? []).length : result !== text ? 1 : 0;
+      return { text: result, count };
+    } catch {
+    }
+  }
+  if (all) {
+    let result = "";
+    let pos = 0;
+    let count = 0;
+    for (const r2 of ranges) {
+      result += text.slice(pos, r2.start);
+      result += expandReplacement(replacement, text.slice(r2.start, r2.end), opts.regex);
+      pos = r2.end;
+      count++;
+    }
+    result += text.slice(pos);
+    return { text: result, count };
+  }
+  if (idx < 0 || idx >= ranges.length) return { text, count: 0 };
+  const r = ranges[idx];
+  const before = text.slice(0, r.start);
+  const after = text.slice(r.end);
+  const expanded = expandReplacement(replacement, text.slice(r.start, r.end), opts.regex);
+  return { text: before + expanded + after, count: 1 };
+}
+function expandReplacement(replacement, matched, isRegex) {
+  if (!isRegex || !replacement.includes("$")) return replacement;
+  return replacement.replace(/\$&/g, matched);
+}
+
 // src/client/code.js
 var PREVIEW_RE = /\.(md|markdown|html?|svg)$/i;
 var MD_RE = /\.(md|markdown)$/i;
@@ -5873,6 +5972,14 @@ function CodeBody(props) {
   const [replaceOpen, setReplaceOpen] = useState(false);
   const [replaceText, setReplaceText] = useState("");
   const [preserveCase, setPreserveCase] = useState(false);
+  const [editFindOpen, setEditFindOpen] = useState(false);
+  const [editFindQuery, setEditFindQuery] = useState("");
+  const [editFindIdx, setEditFindIdx] = useState(0);
+  const [editReplaceText, setEditReplaceText] = useState("");
+  const [editFindOpts, setEditFindOpts] = useState({ regex: false, caseSensitive: false, words: false });
+  const editFindMatches = useMemo(() => editing ? findInText(editText, editFindQuery, editFindOpts) : [], [editing, editText, editFindQuery, editFindOpts]);
+  const editGutter = useMemo(() => editing ? buildEditGutter(editText.split("\n").length) : null, [editing, editText]);
+  const editTaRef = useRef(null);
   const [diffMarks, setDiffMarks] = useState(null);
   const [branchPickOpen, setBranchPickOpen] = useState(false);
   const [blameOn, setBlameOn] = useState(false);
@@ -7855,7 +7962,80 @@ function CodeBody(props) {
               { className: "ce-imgwrap ce-scroll" },
               doc.image.base64 ? h("img", { className: "ce-img", src: `data:${doc.image.mime};base64,${doc.image.base64}`, alt: doc.path }) : h("div", { className: "ce-note" }, t("image.tooBig")),
               h("div", { className: "ce-imgmeta" }, `${doc.image.mime} · ${(doc.image.size / 1024).toFixed(1)} KB${doc.image.truncated ? ` · ${t("image.tooBig")}` : ""}`)
-            ) : editing ? h("textarea", { className: `ce-edit-ta${wrapOn ? " ce-edit-ta-wrap" : ""}`, value: editText, spellcheck: false, onChange: (e) => setEditText(e.target.value) }) : previewActive ? MD_RE.test(doc.path) ? h(MarkdownView, { text: doc.raw }) : SVG_RE.test(doc.path) ? h("div", { className: "ce-imgwrap ce-scroll" }, h("img", { className: "ce-img", src: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(doc.raw)}`, alt: doc.path })) : h("iframe", { className: "ce-htmlprev", sandbox: "", srcDoc: doc.raw, title: doc.path }) : h(
+            ) : editing ? h(
+              "div",
+              { className: "ce-edit-wrap" },
+              editGutter ? h("div", { className: "ce-gutter ce-edit-gutter" }, editGutter.map((g) => h("div", { key: g.line, className: "ce-gutter-row", style: { top: g.top } }, g.line))) : null,
+              h("textarea", {
+                ref: editTaRef,
+                className: `ce-edit-ta${wrapOn ? " ce-edit-ta-wrap" : ""}`,
+                value: editText,
+                spellcheck: false,
+                onChange: (e) => setEditText(e.target.value),
+                onScroll: (e) => {
+                  if (editGutter) {
+                    const g = e.currentTarget.parentElement?.querySelector(".ce-edit-gutter");
+                    if (g) g.scrollTop = e.currentTarget.scrollTop;
+                  }
+                },
+                onKeyDown: (e) => {
+                  if (e.key === "Tab") {
+                    e.preventDefault();
+                    const ta = e.currentTarget;
+                    const res = handleTabIndent(editText, ta.selectionStart, ta.selectionEnd, e.shiftKey);
+                    setEditText(res.text);
+                    requestAnimationFrame(() => {
+                      ta.selectionStart = res.start;
+                      ta.selectionEnd = res.end;
+                    });
+                    return;
+                  }
+                  if ((e.metaKey || e.ctrlKey) && e.code === "KeyF" && !e.shiftKey) {
+                    e.preventDefault();
+                    setEditFindOpen(true);
+                    return;
+                  }
+                  if ((e.metaKey || e.ctrlKey) && e.altKey && e.code === "KeyF") {
+                    e.preventDefault();
+                    setEditFindOpen(true);
+                    return;
+                  }
+                }
+              }),
+              editFindOpen ? h(
+                "div",
+                { className: "ce-edit-find" },
+                h("input", { className: "ce-input ce-edit-find-input", value: editFindQuery, placeholder: t("editor.find"), onChange: (e) => {
+                  setEditFindQuery(e.target.value);
+                  setEditFindIdx(0);
+                }, onKeyDown: (e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    setEditFindIdx((i) => (i + 1) % Math.max(1, editFindMatches.length));
+                  }
+                  if (e.key === "Escape") {
+                    e.preventDefault();
+                    setEditFindOpen(false);
+                  }
+                } }),
+                h("span", { className: "ce-edit-find-count" }, editFindMatches.length > 0 ? `${editFindIdx + 1}/${editFindMatches.length}` : t("editor.noMatch")),
+                h("button", { type: "button", className: "ce-tool ce-tiny", title: t("editor.replace"), onClick: () => {
+                  const res = replaceInText2(editText, editFindQuery, editReplaceText, editFindOpts, editFindIdx, false);
+                  if (res.count > 0) {
+                    setEditText(res.text);
+                    setEditFindIdx(Math.min(editFindIdx, Math.max(0, findInText(res.text, editFindQuery, editFindOpts).length - 1)));
+                  }
+                } }, "⇄"),
+                h("button", { type: "button", className: "ce-tool ce-tiny", title: t("editor.replaceAll"), onClick: () => {
+                  const res = replaceInText2(editText, editFindQuery, editReplaceText, editFindOpts, 0, true);
+                  if (res.count > 0) {
+                    setEditText(res.text);
+                    say(t("replace.replacedAll", { n: res.count }));
+                  }
+                } }, t("editor.replaceAll")),
+                h("button", { type: "button", className: "ce-tool ce-tiny", title: t("close"), onClick: () => setEditFindOpen(false) }, "✕")
+              ) : null
+            ) : previewActive ? MD_RE.test(doc.path) ? h(MarkdownView, { text: doc.raw }) : SVG_RE.test(doc.path) ? h("div", { className: "ce-imgwrap ce-scroll" }, h("img", { className: "ce-img", src: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(doc.raw)}`, alt: doc.path })) : h("iframe", { className: "ce-htmlprev", sandbox: "", srcDoc: doc.raw, title: doc.path }) : h(
               Fragment,
               null,
               blameOn && blame !== null && !wrapOn ? h("div", { className: "ce-blame" }, visible?.blameRows) : null,
@@ -8404,6 +8584,12 @@ var CSS2 = `
 .ce-problem-off{opacity:.45;text-decoration:line-through}
 .cea-request-panel .cea-fields+.cea-fields{margin-top:10px;border-top:.5px solid var(--dsw-alias-border-l1,#333);padding-top:6px}
 .ce-edit-ta{flex:1;min-height:0;resize:none;border:0;outline:none;background:var(--dsw-alias-bg-base,#181818);color:var(--dsw-alias-label-primary,#ddd);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;line-height:${ROW}px;padding:8px 10px;white-space:pre;overflow:auto;tab-size:4}
+.ce-edit-wrap{flex:1;min-height:0;display:flex;position:relative;overflow:hidden}
+.ce-edit-gutter{flex:none;width:48px;overflow:hidden;background:var(--dsw-alias-bg-layer-1,#1d2126);border-right:.5px solid var(--dsw-alias-border-l1,#333);position:relative}
+.ce-edit-gutter .ce-gutter-row{position:absolute;left:0;right:0;height:${ROW}px;line-height:${ROW}px;text-align:right;padding-right:8px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;color:var(--dsw-alias-label-tertiary,#777);user-select:none}
+.ce-edit-find{position:absolute;top:4px;right:8px;z-index:5;display:flex;align-items:center;gap:4px;padding:4px 6px;background:var(--dsw-alias-bg-layer-1,#1d2126);border:.5px solid var(--dsw-alias-border-l2,#454a52);border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,.3)}
+.ce-edit-find-input{width:160px;height:24px;padding:0 6px;font-size:12px;background:var(--dsw-alias-bg-base,#181818);color:var(--dsw-alias-label-primary,#eee);border:.5px solid var(--dsw-alias-border-l1,#333);border-radius:4px;outline:none}
+.ce-edit-find-count{font-size:11px;color:var(--dsw-alias-label-tertiary,#889);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;min-width:40px;text-align:center}
 .ce-gline-find{color:var(--dsw-alias-state-warn-primary,#e3b341)}
 .ce-line-changed{background:color-mix(in srgb,var(--dsw-alias-state-success-primary,#3fb950) 20%,transparent);box-shadow:inset 3px 0 0 0 var(--dsw-alias-state-success-primary,#3fb950)}
 .ce-gline-changed{color:var(--dsw-alias-state-success-primary,#3fb950);font-weight:700;background:color-mix(in srgb,var(--dsw-alias-state-success-primary,#3fb950) 14%,transparent)}

@@ -23,6 +23,7 @@ import { useNavPersistence } from "./usepersistence.js";
 import { fileDragProps, hasFileDrag, readFileDrag, dragFilePath, reorderFileTabs } from "./filedrag.js";
 import { createWatchLoop, docAction, parentDirs } from "./watch.js";
 import { draftDiskDiff } from "./draftdiff.js";
+import { buildEditGutter, handleTabIndent, findInText, replaceInText } from "./editmode.js";
 import { useDismissLayer } from "./dismiss.js";
 
 /** Files that open in rendered preview by default: markdown, html and svg. */
@@ -84,6 +85,14 @@ export function CodeBody(props) {
 	const [replaceOpen, setReplaceOpen] = useState(false);
 	const [replaceText, setReplaceText] = useState("");
 	const [preserveCase, setPreserveCase] = useState(false);
+	const [editFindOpen, setEditFindOpen] = useState(false); // find/replace inside the edit textarea
+	const [editFindQuery, setEditFindQuery] = useState("");
+	const [editFindIdx, setEditFindIdx] = useState(0);
+	const [editReplaceText, setEditReplaceText] = useState("");
+	const [editFindOpts, setEditFindOpts] = useState({ regex: false, caseSensitive: false, words: false });
+	const editFindMatches = useMemo(() => editing ? findInText(editText, editFindQuery, editFindOpts) : [], [editing, editText, editFindQuery, editFindOpts]);
+	const editGutter = useMemo(() => editing ? buildEditGutter(editText.split("\n").length) : null, [editing, editText]);
+	const editTaRef = useRef(null);
 	const [diffMarks, setDiffMarks] = useState(null);
 	const [branchPickOpen, setBranchPickOpen] = useState(false);
 	const [blameOn, setBlameOn] = useState(false);
@@ -2120,7 +2129,44 @@ export function CodeBody(props) {
 									h("div", { className: "ce-imgmeta" }, `${doc.image.mime} · ${(doc.image.size / 1024).toFixed(1)} KB${doc.image.truncated ? ` · ${t("image.tooBig")}` : ""}`),
 								)
 								: editing
-								? h("textarea", { className: `ce-edit-ta${wrapOn ? " ce-edit-ta-wrap" : ""}`, value: editText, spellcheck: false, onChange: (e) => setEditText(e.target.value) })
+								? h("div", { className: "ce-edit-wrap" },
+									editGutter ? h("div", { className: "ce-gutter ce-edit-gutter" }, editGutter.map((g) => h("div", { key: g.line, className: "ce-gutter-row", style: { top: g.top } }, g.line))) : null,
+									h("textarea", {
+										ref: editTaRef,
+										className: `ce-edit-ta${wrapOn ? " ce-edit-ta-wrap" : ""}`,
+										value: editText,
+										spellcheck: false,
+										onChange: (e) => setEditText(e.target.value),
+										onScroll: (e) => { if (editGutter) { const g = e.currentTarget.parentElement?.querySelector(".ce-edit-gutter"); if (g) g.scrollTop = e.currentTarget.scrollTop; } },
+										onKeyDown: (e) => {
+											if (e.key === "Tab") {
+												e.preventDefault();
+												const ta = e.currentTarget;
+												const res = handleTabIndent(editText, ta.selectionStart, ta.selectionEnd, e.shiftKey);
+												setEditText(res.text);
+												requestAnimationFrame(() => { ta.selectionStart = res.start; ta.selectionEnd = res.end; });
+												return;
+											}
+											if ((e.metaKey || e.ctrlKey) && e.code === "KeyF" && !e.shiftKey) {
+												e.preventDefault();
+												setEditFindOpen(true);
+												return;
+											}
+											if ((e.metaKey || e.ctrlKey) && e.altKey && e.code === "KeyF") {
+												e.preventDefault();
+												setEditFindOpen(true);
+												return;
+											}
+										},
+									}),
+									editFindOpen ? h("div", { className: "ce-edit-find" },
+										h("input", { className: "ce-input ce-edit-find-input", value: editFindQuery, placeholder: t("editor.find"), onChange: (e) => { setEditFindQuery(e.target.value); setEditFindIdx(0); }, onKeyDown: (e) => { if (e.key === "Enter") { e.preventDefault(); setEditFindIdx((i) => (i + 1) % Math.max(1, editFindMatches.length)); } if (e.key === "Escape") { e.preventDefault(); setEditFindOpen(false); } } }),
+										h("span", { className: "ce-edit-find-count" }, editFindMatches.length > 0 ? `${editFindIdx + 1}/${editFindMatches.length}` : t("editor.noMatch")),
+										h("button", { type: "button", className: "ce-tool ce-tiny", title: t("editor.replace"), onClick: () => { const res = replaceInText(editText, editFindQuery, editReplaceText, editFindOpts, editFindIdx, false); if (res.count > 0) { setEditText(res.text); setEditFindIdx(Math.min(editFindIdx, Math.max(0, findInText(res.text, editFindQuery, editFindOpts).length - 1))); } } }, "⇄"),
+										h("button", { type: "button", className: "ce-tool ce-tiny", title: t("editor.replaceAll"), onClick: () => { const res = replaceInText(editText, editFindQuery, editReplaceText, editFindOpts, 0, true); if (res.count > 0) { setEditText(res.text); say(t("replace.replacedAll", { n: res.count })); } } }, t("editor.replaceAll")),
+										h("button", { type: "button", className: "ce-tool ce-tiny", title: t("close"), onClick: () => setEditFindOpen(false) }, "✕"),
+									) : null,
+								)
 								: previewActive
 									? (MD_RE.test(doc.path)
 										? h(MarkdownView, { text: doc.raw })

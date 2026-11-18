@@ -3125,6 +3125,43 @@ check("docAction reloads clean drafts, flags dirty ones, ignores others", docAct
 	check("empty live set prunes all remaining plugin keys", removedEmpty === 3 && !Object.hasOwn(fakeStorage._data, "dsh.plugin-kit.v1.session-A") && !Object.hasOwn(fakeStorage._data, "dsh.plugin-kit.v1.session-B"), removedEmpty);
 }
 
+// --- edit-mode helpers: gutter, Tab indent, find/replace ---------------------------------
+{
+	const { buildEditGutter, handleTabIndent, findInText, replaceInText } = await import("./src/client/editmode.js");
+	// Gutter
+	const g = buildEditGutter(3);
+	check("edit gutter has one row per line", g.length === 3 && g[0].line === 1 && g[2].line === 3 && g[1].top === 22, g);
+	check("edit gutter empty for zero lines", buildEditGutter(0).length === 0, null);
+	// Tab indent
+	const tab1 = handleTabIndent("hello\nworld", 0, 0, false);
+	check("Tab at line start inserts a tab", tab1.text === "\thello\nworld" && tab1.start === 1 && tab1.end === 1, tab1);
+	const tab2 = handleTabIndent("\thello\n\tworld", 1, 1, true);
+	check("Shift-Tab removes leading tab", tab2.text === "hello\n\tworld" && tab2.start === 0 && tab2.end === 0, tab2);
+	const tab3 = handleTabIndent("    hello", 2, 2, true);
+	check("Shift-Tab removes up to 4 spaces", tab3.text === "hello" && tab3.start === 0, tab3);
+	const tab4 = handleTabIndent("a\nb\nc", 0, 3, false);
+	check("Tab on multi-line selection indents all touched lines", tab4.text === "\ta\n\tb\nc" && tab4.start === 1 && tab4.end === 5, tab4);
+	// Find
+	const f1 = findInText("abc abc abc", "abc");
+	check("findInText finds all occurrences", f1.length === 3 && f1[0].start === 0 && f1[2].end === 11, f1);
+	const f2 = findInText("ABC abc", "abc", { caseSensitive: true });
+	check("findInText respects case sensitivity", f2.length === 1 && f2[0].start === 4, f2);
+	const f3 = findInText("cat catalog", "cat", { words: true });
+	check("findInText whole-word skips partial matches", f3.length === 1 && f3[0].start === 0, f3);
+	const f4 = findInText("a.b c", "a\\.b", { regex: true });
+	check("findInText regex mode works", f4.length === 1 && f4[0].start === 0, f4);
+	check("findInText empty query returns []", findInText("hello", "").length === 0, null);
+	// Replace
+	const r1 = replaceInText("abc abc", "abc", "X", {}, 0, false);
+	check("replaceInText single replaces first match", r1.text === "X abc" && r1.count === 1, r1);
+	const r2 = replaceInText("abc abc", "abc", "X", {}, 0, true);
+	check("replaceInText all replaces every match", r2.text === "X X" && r2.count === 2, r2);
+	const r3 = replaceInText("no match here", "xyz", "X", {}, 0, true);
+	check("replaceInText no match returns original", r3.text === "no match here" && r3.count === 0, r3);
+	const r4 = replaceInText("hello world", "(\\w+) (\\w+)", "$2 $1", { regex: true }, 0, false);
+	check("replaceInText regex group refs work", r4.text === "world hello" && r4.count === 1, r4);
+}
+
 // --- the generated bundle: registration + factory --------------------------------------
 
 const bundle = await readFile(new URL("./client.js", import.meta.url), "utf8");

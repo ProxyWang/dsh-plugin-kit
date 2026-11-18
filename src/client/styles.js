@@ -385,6 +385,12 @@ export const CSS = `
 .ce-problem-off{opacity:.45;text-decoration:line-through}
 .cea-request-panel .cea-fields+.cea-fields{margin-top:10px;border-top:.5px solid var(--dsw-alias-border-l1,#333);padding-top:6px}
 .ce-edit-ta{flex:1;min-height:0;resize:none;border:0;outline:none;background:var(--dsw-alias-bg-base,#181818);color:var(--dsw-alias-label-primary,#ddd);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;line-height:${ROW}px;padding:8px 10px;white-space:pre;overflow:auto;tab-size:4}
+.ce-edit-wrap{flex:1;min-height:0;display:flex;position:relative;overflow:hidden}
+.ce-edit-gutter{flex:none;width:48px;overflow:hidden;background:var(--dsw-alias-bg-layer-1,#1d2126);border-right:.5px solid var(--dsw-alias-border-l1,#333);position:relative}
+.ce-edit-gutter .ce-gutter-row{position:absolute;left:0;right:0;height:${ROW}px;line-height:${ROW}px;text-align:right;padding-right:8px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;color:var(--dsw-alias-label-tertiary,#777);user-select:none}
+.ce-edit-find{position:absolute;top:4px;right:8px;z-index:5;display:flex;align-items:center;gap:4px;padding:4px 6px;background:var(--dsw-alias-bg-layer-1,#1d2126);border:.5px solid var(--dsw-alias-border-l2,#454a52);border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,.3)}
+.ce-edit-find-input{width:160px;height:24px;padding:0 6px;font-size:12px;background:var(--dsw-alias-bg-base,#181818);color:var(--dsw-alias-label-primary,#eee);border:.5px solid var(--dsw-alias-border-l1,#333);border-radius:4px;outline:none}
+.ce-edit-find-count{font-size:11px;color:var(--dsw-alias-label-tertiary,#889);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;min-width:40px;text-align:center}
 .ce-gline-find{color:var(--dsw-alias-state-warn-primary,#e3b341)}
 .ce-line-changed{background:color-mix(in srgb,var(--dsw-alias-state-success-primary,#3fb950) 20%,transparent);box-shadow:inset 3px 0 0 0 var(--dsw-alias-state-success-primary,#3fb950)}
 .ce-gline-changed{color:var(--dsw-alias-state-success-primary,#3fb950);font-weight:700;background:color-mix(in srgb,var(--dsw-alias-state-success-primary,#3fb950) 14%,transparent)}
