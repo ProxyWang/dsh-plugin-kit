@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased — fix: the built-in terminal could not be typed into
+
+Opening DSH's own terminal beside the workspace left the keyboard in the editor: the host focuses a terminal's xterm textarea only when its `visible`/`writable` state flips, and an open beside an already-focused pane can leave both unchanged — so keystrokes went to the workspace (or nowhere) instead of the shell. Three focus paths conspired, all fixed on the plugin side; the host terminal package is untouched.
+
+- **Focus handoff on open** (`src/client/terminal.js`): after `openTab('terminal', {preferNewPane:true})` succeeds, `scheduleTerminalFocus` retries (120 ms, 3 s deadline, cancellable) until the newest live `[data-sidebar-terminal]` screen has a mounted `.xterm` and focuses its textarea. Hidden/detached/inert screens, read-only textareas and not-yet-connected shells are skipped, never forced; a failed open schedules nothing.
+- **Escape belongs to the shell** (`src/client/dismiss.js`): the shared dismiss registry's document-level capture used to swallow every Escape while any transient layer (peek, palette, tab menu…) was open — including Escape typed into the terminal — and then restored focus to the editor. An Escape whose target sits in `[data-sidebar-terminal]`/`.xterm` now closes the layer as an *outside* dismissal without `preventDefault`/`stopPropagation`, so vim/fzf receive it and focus stays put.
+- **No focus yank-back**: Escape dismissal restores the opener only while focus is still inside the closed layer (or orphaned on body/documentElement after its input unmounted). If an outside click already moved focus into the terminal, a later dismissal leaves it there.
+- **Hidden tabs stay quiet** (`src/client/code.js`): `revealPosition` (Problems ⌘⇧M row, symbol-palette pick) returns early while the kept-mounted Code tab is not visible, so a background jump can no longer steal keyboard focus from the terminal pane; visible tabs keep the exact VS Code behavior.
+- Regressions: focus handoff targets/skips (hidden, detached, no-xterm, disabled, missing doc), retry-until-connected, deadline stop, cancel, open-schedules/failed-open-does-not; terminal Escape reaches the shell while the layer closes, non-terminal Escape keeps guard + editor restore, outside-pointer and late-Escape never refocus the workspace; hidden-tab reveal jumps grab no focus while visible ones still do; favorite-dialog Escape restore updated to model the real autoFocus caret.
+
 ## Unreleased — Changes: delete untracked files (and stop the misleading revert error)
 
 Reverting an untracked file was impossible, but the UI offered no alternative and a folder-level revert sent `U` entries into `git checkout HEAD --`, which answers with git's pathspec error — the banner users saw was `pathspec ':(literal)…' did not match any file(s) known to git`. Two separate problems: a missing destructive action, and a folder action silently mixing it in.

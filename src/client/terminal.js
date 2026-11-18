@@ -23,6 +23,73 @@
 
 const TERMINAL_KIND = "terminal";
 
+// The host focuses a terminal's xterm textarea only when its `visible` or
+// `writable` state flips (TerminalScreen in dsh-client-ui-sidebar-terminal).
+// Opening beside an already-focused workspace pane can leave both unchanged —
+// a second terminal in the same pane, or a fast reconnect — so the keyboard
+// stays wherever it was and typing goes nowhere. Hand focus over explicitly
+// once the new screen exists; retries stop at the first success or the deadline.
+const FOCUS_RETRY_MS = 120;
+const FOCUS_DEADLINE_MS = 3000;
+
+/**
+ * Focus the newest live host terminal screen in the product document.
+ *
+ * Only `[data-sidebar-terminal]` sections are touched, so the workspace never
+ * grabs focus for itself here. A screen without an `.xterm` child has not
+ * connected yet (guide / loading / error states) and is skipped, not forced.
+ *
+ * @param doc - the product document (injectable for tests).
+ * @returns whether a terminal textarea took focus.
+ */
+export function focusHostTerminal(doc = globalThis.document) {
+	try {
+		const screens = doc?.querySelectorAll?.("[data-sidebar-terminal]") ?? [];
+		for (let i = screens.length - 1; i >= 0; i--) {
+			const screen = screens[i];
+			if (screen?.isConnected === false) continue;
+			if (screen.closest?.('[aria-hidden="true"], [hidden], [inert]')) continue;
+			const xterm = screen.querySelector?.(".xterm");
+			if (!xterm) continue;
+			const textarea = xterm.querySelector?.("textarea");
+			if (!textarea || textarea.disabled) continue;
+			textarea.focus({ preventScroll: true });
+			return doc.activeElement === textarea;
+		}
+	} catch { /* focus is best-effort; the host still owns input */ }
+	return false;
+}
+
+/**
+ * Retry {@link focusHostTerminal} until the host screen mounts and connects.
+ * Creation plus stream attachment usually settles within a few hundred ms;
+ * the deadline keeps a failed terminal from polling forever.
+ *
+ * @returns a cancel function (also self-cancels on success or deadline).
+ */
+export function scheduleTerminalFocus({
+	doc = globalThis.document,
+	setTimer = (fn, ms) => setTimeout(fn, ms),
+	clearTimer = (id) => clearTimeout(id),
+	now = () => Date.now(),
+} = {}) {
+	const deadline = now() + FOCUS_DEADLINE_MS;
+	let timer = null;
+	let done = false;
+	const attempt = () => {
+		timer = null;
+		if (done) return;
+		if (focusHostTerminal(doc)) { done = true; return; }
+		if (now() >= deadline) { done = true; return; }
+		timer = setTimer(attempt, FOCUS_RETRY_MS);
+	};
+	timer = setTimer(attempt, FOCUS_RETRY_MS);
+	return () => {
+		done = true;
+		if (timer !== null) clearTimer(timer);
+	};
+}
+
 /** Whether the host registers the interactive terminal tab type in this profile. */
 export function terminalKindRegistered(tabs) {
 	try {
@@ -69,8 +136,11 @@ export function createTerminalEntry({ sidebarRight, sidebarRightTabs } = {}) {
 			return { ok: false, reason: "failed" };
 		}
 		// A `multiple: true` kind always yields a new tab, and the host expands
-		// the column and focuses it. Diffing the tab list here would only turn a
-		// real anomaly into a silent success, so the outcome is trusted.
+		// the column and reveals it. Diffing the tab list here would only turn a
+		// real anomaly into a silent success, so the outcome is trusted — but
+		// keyboard focus is not part of that contract (see scheduleTerminalFocus),
+		// so the workspace hands it to the new screen once it exists.
+		scheduleTerminalFocus();
 		return { ok: true, sessionId };
 	};
 

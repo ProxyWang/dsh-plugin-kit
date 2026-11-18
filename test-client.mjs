@@ -1804,6 +1804,8 @@ try {
  findPopup((n) => n.props["data-ce-popup-trigger"] === "api-save").props.onClick(); paintPopup();
  findPopup((n) => n.props["aria-label"] === "api.saveTitle").props.ref.current = makeLayerNode(favoriteInside); popupApi.flushEffects();
  check("reopening favorite retains the unsaved name", findPopup((n) => n.props.placeholder === "api.savePlaceholder")?.props.value === "Keep favorite draft", null);
+ // autoFocus put the caret in the dialog's name input; Escape restores the opener.
+ layerDoc.activeElement = favoriteInside;
  dispatchLayer("keydown", eventFor(favoriteInside, { key: "Escape" })); paintPopup(); popupApi.flushEffects();
  check("favorite Escape dismisses and restores prior focus", !findPopup((n) => n.props.placeholder === "api.savePlaceholder") && restoredFocus === 1, restoredFocus);
  findPopup((n) => n.props["data-ce-popup-trigger"] === "api-import").props.onClick(); paintPopup();
@@ -2547,6 +2549,189 @@ check("docAction reloads clean drafts, flags dirty ones, ignores others", docAct
 	} finally {
 		Object.assign(globalThis, coGlobals);
 	}
+}
+
+// --- Terminal typing: focus handoff to the host xterm, no focus theft afterwards --------
+{
+	const { focusHostTerminal, scheduleTerminalFocus } = await import("./src/client/terminal.js");
+	const makeScreen = ({ connected = true, hidden = false, disabled = false, withXterm = true } = {}) => {
+		const doc = { activeElement: null };
+		const textarea = { disabled, focus() { doc.activeElement = textarea; } };
+		const xterm = { querySelector: (sel) => (sel === "textarea" ? textarea : null) };
+		const screen = {
+			isConnected: connected,
+			closest: (sel) => (hidden && sel.includes("aria-hidden") ? {} : null),
+			querySelector: (sel) => (sel === ".xterm" && withXterm ? xterm : null),
+		};
+		doc.querySelectorAll = () => [screen];
+		return { doc, textarea, screen };
+	};
+	const live = makeScreen();
+	check("focus handoff targets the host terminal textarea", focusHostTerminal(live.doc) === true && live.doc.activeElement === live.textarea, null);
+	const hiddenScreen = makeScreen({ hidden: true });
+	check("hidden terminal screens are never focused", focusHostTerminal(hiddenScreen.doc) === false && hiddenScreen.doc.activeElement === null, null);
+	const detached = makeScreen({ connected: false });
+	check("detached terminal screens are skipped", focusHostTerminal(detached.doc) === false, null);
+	const noXterm = makeScreen({ withXterm: false });
+	check("a terminal without a mounted xterm is left alone", focusHostTerminal(noXterm.doc) === false, null);
+	const disabledTa = makeScreen({ disabled: true });
+	check("read-only terminal textareas are not forced", focusHostTerminal(disabledTa.doc) === false, null);
+	check("focus handoff survives a missing document", focusHostTerminal(undefined) === false, null);
+
+	// Retry loop: waits for the shell to connect, stops on success and at the deadline.
+	let clock = 0; const pending = new Map(); let nextId = 1;
+	const setTimer = (fn) => { const id = nextId++; pending.set(id, fn); return id; };
+	const clearTimer = (id) => pending.delete(id);
+	const fireTimers = () => { for (const [id, fn] of [...pending]) { pending.delete(id); fn(); } };
+	const late = makeScreen({ withXterm: false });
+	const cancelLate = scheduleTerminalFocus({ doc: late.doc, setTimer, clearTimer, now: () => clock });
+	fireTimers();
+	check("focus retries while the terminal is still connecting", pending.size === 1 && late.doc.activeElement === null, pending.size);
+	late.screen.querySelector = (sel) => (sel === ".xterm" ? { querySelector: () => late.textarea } : null);
+	clock = 240; fireTimers();
+	check("focus lands as soon as the xterm mounts and stops retrying", late.doc.activeElement === late.textarea && pending.size === 0, pending.size);
+	cancelLate();
+	const never = makeScreen({ withXterm: false });
+	const cancelNever = scheduleTerminalFocus({ doc: never.doc, setTimer, clearTimer, now: () => clock });
+	for (let i = 0; i < 40 && pending.size > 0; i++) { clock += 120; fireTimers(); }
+	check("focus retries stop at the deadline instead of polling forever", pending.size === 0 && clock >= 3000, clock);
+	cancelNever();
+	const cancelled = makeScreen();
+	const cancelIt = scheduleTerminalFocus({ doc: cancelled.doc, setTimer, clearTimer, now: () => clock });
+	cancelIt(); fireTimers();
+	check("cancelling the handoff prevents any later focus grab", cancelled.doc.activeElement === null && pending.size === 0, null);
+
+	// Opening through the entry schedules the handoff (real timers stubbed out).
+	const openGlobals = { setTimeout: globalThis.setTimeout, clearTimeout: globalThis.clearTimeout, document: globalThis.document };
+	const scheduled = [];
+	globalThis.setTimeout = (fn, ms) => { scheduled.push(ms); return scheduled.length; };
+	globalThis.clearTimeout = () => {};
+	try {
+		const opens = [];
+		const entryDoc = makeScreen();
+		globalThis.document = entryDoc.doc;
+		const opening = createTerminalEntry({ sidebarRight: { mounted: { getSnapshot: () => "s1" }, openTab: (kind, opts) => opens.push([kind, opts]) }, sidebarRightTabs: fakeRegistry });
+		check("successful terminal open schedules the keyboard handoff", opening.open().ok === true && scheduled.length === 1, scheduled);
+		scheduled.length = 0;
+		createTerminalEntry({ sidebarRight: { mounted: { getSnapshot: () => undefined }, openTab: () => {} }, sidebarRightTabs: fakeRegistry }).open();
+		check("failed opens never schedule a focus grab", scheduled.length === 0, scheduled);
+	} finally { Object.assign(globalThis, openGlobals); }
+
+	// Dismiss layers must not steal Escape or focus from a focused host terminal.
+	const termDismissListeners = new Map();
+	const termLayerDoc = {
+		activeElement: null,
+		addEventListener(name, listener, capture) { termDismissListeners.set(name, { listener, capture }); },
+		removeEventListener(name, listener) { if (termDismissListeners.get(name)?.listener === listener) termDismissListeners.delete(name); },
+	};
+	const termDismissGlobals = { document: globalThis.document };
+	globalThis.document = termLayerDoc;
+	try {
+		let closed = 0; let editorRefocus = 0;
+		const inside = {};
+		const layerNode = { ownerDocument: termLayerDoc, isConnected: true, contains: (target) => target === inside, closest: () => null };
+		const editorNode = { isConnected: true, focus() { editorRefocus++; } };
+		const release = registerDismissLayer(termLayerDoc, { node: () => layerNode, dismiss: (reason) => { closed++; if (reason === "escape" && editorNode.isConnected !== false) editorNode.focus(); } });
+		const terminalTarget = { closest: (sel) => (sel.includes("data-sidebar-terminal") ? {} : null) };
+		const escapeInTerminal = { key: "Escape", target: terminalTarget, preventDefault() { this.defaultPrevented = true; }, stopPropagation() { this.stopped = true; } };
+		termDismissListeners.get("keydown").listener(escapeInTerminal);
+		check("Escape typed in the terminal closes the layer but reaches the shell", closed === 1 && !escapeInTerminal.defaultPrevented && !escapeInTerminal.stopped && editorRefocus === 0, { closed, editorRefocus });
+		const escapeElsewhere = { key: "Escape", target: { closest: () => null }, preventDefault() { this.defaultPrevented = true; }, stopPropagation() { this.stopped = true; } };
+		termDismissListeners.get("keydown").listener(escapeElsewhere);
+		check("Escape outside the terminal keeps the guard and restores the editor", closed === 2 && escapeElsewhere.defaultPrevented && escapeElsewhere.stopped && editorRefocus === 1, { closed, editorRefocus });
+		release();
+
+		// Hook-level: after an outside click moved focus into the terminal, a
+		// later Escape dismissal must not yank focus back to the opener.
+		const { useDismissLayer } = await import("./src/client/dismiss.js");
+		const terminalTextarea = { isConnected: true, focus() { termLayerDoc.activeElement = terminalTextarea; } };
+		const openerInput = { isConnected: true, focus() { termLayerDoc.activeElement = openerInput; openerFocus++; } };
+		let openerFocus = 0; let hookClosed = 0;
+		termLayerDoc.activeElement = openerInput;
+		const drawLayer = createHookRenderer(() => {
+			const ref = useDismissLayer({ onDismiss: () => hookClosed++ });
+			return { type: "div", props: { ref }, children: [] };
+		}, {}, { effects: true });
+		const layerEl = drawLayer();
+		layerEl.props.ref.current = { ownerDocument: termLayerDoc, isConnected: true, contains: (target) => target === hookInside, closest: () => null };
+		const hookInside = {};
+		drawLayer.flushEffects();
+		// The user clicks the terminal: pointer dismissal leaves focus alone.
+		termDismissListeners.get("pointerdown").listener({ target: terminalTextarea, button: 0 });
+		termLayerDoc.activeElement = terminalTextarea;
+		check("outside pointer dismissal closes without touching terminal focus", hookClosed === 1 && openerFocus === 0, { hookClosed, openerFocus });
+		drawLayer.unmount();
+		// Re-open while the terminal owns focus; Escape then must keep it there.
+		termLayerDoc.activeElement = terminalTextarea;
+		const drawLayer2 = createHookRenderer(() => {
+			const ref = useDismissLayer({ onDismiss: () => hookClosed++ });
+			return { type: "div", props: { ref }, children: [] };
+		}, {}, { effects: true });
+		const layerEl2 = drawLayer2();
+		layerEl2.props.ref.current = { ownerDocument: termLayerDoc, isConnected: true, contains: () => false, closest: () => null };
+		drawLayer2.flushEffects();
+		termDismissListeners.get("keydown").listener({ key: "Escape", target: { closest: () => null }, preventDefault() {}, stopPropagation() {} });
+		check("Escape with focus already in the terminal never refocuses the workspace", hookClosed === 2 && openerFocus === 0 && termLayerDoc.activeElement === terminalTextarea, { hookClosed, openerFocus });
+		drawLayer2.unmount();
+		check("terminal dismiss regressions release their listeners", termDismissListeners.size === 0, termDismissListeners.size);
+	} finally { Object.assign(globalThis, termDismissGlobals); }
+
+	// A kept-mounted hidden Code tab must not focus its editor on reveal jumps
+	// (Problems ⌘⇧M row / symbol palette pick), while a visible tab still does.
+	const hiddenGlobals = { fetch: globalThis.fetch, requestAnimationFrame: globalThis.requestAnimationFrame, cancelAnimationFrame: globalThis.cancelAnimationFrame, setTimeout: globalThis.setTimeout, clearTimeout: globalThis.clearTimeout, window: globalThis.window, document: globalThis.document };
+	globalThis.fetch = async (url) => {
+		if (url.endsWith("/fs.read")) return { json: async () => ({ ok: true, value: { kind: "text", content: "package main\nfunc helper() {}\n", mtimeMs: 1 } }) };
+		if (url.endsWith("/lsp.diagnostics")) return { json: async () => ({ ok: true, value: { items: [{ line: 2, col: 1, severity: 1, message: "e" }] } }) };
+		return { json: async () => ({ ok: true, value: {} }) };
+	};
+	globalThis.requestAnimationFrame = (fn) => { fn(); return 0; };
+	globalThis.cancelAnimationFrame = () => {};
+	globalThis.setTimeout = () => 0;
+	globalThis.clearTimeout = () => {};
+	globalThis.window = { innerWidth: 1200, innerHeight: 900 };
+	globalThis.document = { addEventListener() {}, removeEventListener() {} };
+	try {
+		let hiddenTab = { visible: false, actions: {} };
+		let codeFocusCalls = 0;
+		const fakeCodeArea = { focus() { codeFocusCalls++; }, scrollTop: 0, clientHeight: 600, querySelector: () => null, getBoundingClientRect: () => ({ top: 0 }) };
+		const renderHidden = createHookRenderer(CodeBody, {
+			sessionId: "hid",
+			useSessions: (select) => select({ byId: { hid: { cwd: "/w" } } }),
+			useTabInfo: () => ({ tab: hiddenTab }),
+			t: (k) => k,
+		}, { effects: true });
+		const paintHidden = () => {
+			let tree = renderHidden(); renderHidden.flushEffects(); tree = renderHidden();
+			const area = collect(tree).find((n) => typeof n.props.className === "string" && n.props.className.split(" ").includes("ce-code"));
+			if (area) area.props.ref.current = fakeCodeArea;
+			return tree;
+		};
+		let hiddenTree = paintHidden();
+		const getHidden = (test) => collect(hiddenTree).find(test);
+		getHidden((n) => n.type === TreePanelCmp).props.onOpenFile("main.go", 1, 1);
+		for (let i = 0; i < 4; i++) await new Promise((r) => setImmediate(r));
+		hiddenTree = paintHidden();
+		check("hidden-tab fixture loaded the document and its diagnostics", getHidden((n) => n.props.className === "ce-head-path")?.children[0] === "main.go" && Boolean(getHidden((n) => typeof n.props.className === "string" && n.props.className.includes("ce-diag-btn"))), null);
+		// Drive revealPosition through the ProblemsPanel props captured before any
+		// flush: the hidden tab's visibility effect would dismiss a flushed panel.
+		hiddenTree.props.onKeyDown({ code: "KeyM", metaKey: true, shiftKey: true, preventDefault() {} });
+		hiddenTree = renderHidden();
+		const hiddenPanel = getHidden((n) => n.type.name === "ProblemsPanel");
+		check("problems panel opens on the hidden tab", Boolean(hiddenPanel), null);
+		hiddenPanel.props.onPick({ line: 2, col: 1 });
+		hiddenTree = paintHidden();
+		check("reveal jumps from a hidden tab never grab keyboard focus", codeFocusCalls === 0, codeFocusCalls);
+		hiddenTab = { visible: true, actions: {} };
+		hiddenTree = paintHidden();
+		hiddenTree.props.onKeyDown({ code: "KeyM", metaKey: true, shiftKey: true, preventDefault() {} });
+		hiddenTree = paintHidden();
+		const visiblePanel = getHidden((n) => n.type.name === "ProblemsPanel");
+		check("problems panel reopens on the visible tab", Boolean(visiblePanel), null);
+		visiblePanel.props.onPick({ line: 2, col: 1 });
+		hiddenTree = paintHidden();
+		check("visible tabs still focus the editor on reveal jumps", codeFocusCalls === 1, codeFocusCalls);
+		renderHidden.unmount();
+	} finally { Object.assign(globalThis, hiddenGlobals); }
 }
 
 // --- the generated bundle: registration + factory --------------------------------------

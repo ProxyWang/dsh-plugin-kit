@@ -622,6 +622,9 @@ export function CodeBody(props) {
 	const revealPosition = useCallback((line, col, word) => {
 		const current = docRef.current;
 		if (!current) return;
+		// A kept-mounted hidden tab must not steal keyboard focus from the
+		// visible pane (e.g. a host terminal beside the workspace).
+		if (tab?.visible === false) return;
 		const cur = cursorRef.current;
 		histRef.current.back.push({ path: current.path, line: cur?.line ?? 1, col: cur?.col ?? 1, word: cur?.word });
 		if (histRef.current.back.length > 80) histRef.current.back.shift();
@@ -632,7 +635,7 @@ export function CodeBody(props) {
 		setTimeout(() => setFlash((f) => (f && f.line === line ? null : f)), 1800);
 		scrollAreaToLine(line);
 		codeRef.current?.focus({ preventScroll: true });
-	}, [scrollAreaToLine]);
+	}, [scrollAreaToLine, tab?.visible]);
 
 	const openDiff = useCallback(
 		async (path, scope, repoOverride, refs) => {

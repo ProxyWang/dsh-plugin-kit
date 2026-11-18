@@ -1495,6 +1495,54 @@ var IconTextSearch = () => svg([h("path", { key: "a", d: "M4 5h16" }), h("path",
 
 // src/client/terminal.js
 var TERMINAL_KIND = "terminal";
+var FOCUS_RETRY_MS = 120;
+var FOCUS_DEADLINE_MS = 3e3;
+function focusHostTerminal(doc = globalThis.document) {
+  try {
+    const screens = doc?.querySelectorAll?.("[data-sidebar-terminal]") ?? [];
+    for (let i = screens.length - 1; i >= 0; i--) {
+      const screen = screens[i];
+      if (screen?.isConnected === false) continue;
+      if (screen.closest?.('[aria-hidden="true"], [hidden], [inert]')) continue;
+      const xterm = screen.querySelector?.(".xterm");
+      if (!xterm) continue;
+      const textarea = xterm.querySelector?.("textarea");
+      if (!textarea || textarea.disabled) continue;
+      textarea.focus({ preventScroll: true });
+      return doc.activeElement === textarea;
+    }
+  } catch {
+  }
+  return false;
+}
+function scheduleTerminalFocus({
+  doc = globalThis.document,
+  setTimer = (fn, ms) => setTimeout(fn, ms),
+  clearTimer = (id) => clearTimeout(id),
+  now = () => Date.now()
+} = {}) {
+  const deadline = now() + FOCUS_DEADLINE_MS;
+  let timer = null;
+  let done = false;
+  const attempt = () => {
+    timer = null;
+    if (done) return;
+    if (focusHostTerminal(doc)) {
+      done = true;
+      return;
+    }
+    if (now() >= deadline) {
+      done = true;
+      return;
+    }
+    timer = setTimer(attempt, FOCUS_RETRY_MS);
+  };
+  timer = setTimer(attempt, FOCUS_RETRY_MS);
+  return () => {
+    done = true;
+    if (timer !== null) clearTimer(timer);
+  };
+}
 function terminalKindRegistered(tabs) {
   try {
     const entries = typeof tabs?.entries === "function" ? tabs.entries() : [];
@@ -1521,6 +1569,7 @@ function createTerminalEntry({ sidebarRight, sidebarRightTabs } = {}) {
     } catch {
       return { ok: false, reason: "failed" };
     }
+    scheduleTerminalFocus();
     return { ok: true, sessionId };
   };
   return { available, open };
@@ -1553,9 +1602,12 @@ function registerDismissLayer(doc, layer) {
       if (event.key !== "Escape" || event.isComposing || event.keyCode === 229 || event.defaultPrevented) return;
       const entry = top();
       if (!entry) return;
-      event.preventDefault();
-      event.stopPropagation();
-      entry.dismiss("escape");
+      const inTerminal = Boolean(event.target?.closest?.("[data-sidebar-terminal], .xterm"));
+      if (!inTerminal) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+      entry.dismiss(inTerminal ? "outside" : "escape");
     };
     registry = { layers, pointer, key };
     registries.set(doc, registry);
@@ -1593,7 +1645,11 @@ function useDismissLayer({ open = true, onDismiss, ignoreSelector } = {}) {
       },
       dismiss: (reason) => {
         latest.current.onDismiss?.(reason);
-        if (reason === "escape" && previousFocus?.isConnected !== false) previousFocus?.focus?.({ preventScroll: true });
+        if (reason !== "escape") return;
+        const active2 = doc.activeElement;
+        const insideLayer = Boolean(active2 && ref.current?.contains?.(active2));
+        const orphaned = active2 == null || active2 === doc.body || active2 === doc.documentElement;
+        if ((insideLayer || orphaned) && previousFocus?.isConnected !== false) previousFocus?.focus?.({ preventScroll: true });
       }
     });
   }, [open]);
@@ -6032,6 +6088,7 @@ function CodeBody(props) {
   const revealPosition = useCallback((line, col, word) => {
     const current = docRef.current;
     if (!current) return;
+    if (tab?.visible === false) return;
     const cur = cursorRef.current;
     histRef.current.back.push({ path: current.path, line: cur?.line ?? 1, col: cur?.col ?? 1, word: cur?.word });
     if (histRef.current.back.length > 80) histRef.current.back.shift();
@@ -6042,7 +6099,7 @@ function CodeBody(props) {
     setTimeout(() => setFlash((f) => f && f.line === line ? null : f), 1800);
     scrollAreaToLine(line);
     codeRef.current?.focus({ preventScroll: true });
-  }, [scrollAreaToLine]);
+  }, [scrollAreaToLine, tab?.visible]);
   const openDiff = useCallback(
     async (path, scope, repoOverride, refs) => {
       if (!cwd || !canNavigate()) return;

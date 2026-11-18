@@ -26,9 +26,15 @@ export function registerDismissLayer(doc, layer) {
 			if (event.key !== "Escape" || event.isComposing || event.keyCode === 229 || event.defaultPrevented) return;
 			const entry = top();
 			if (!entry) return;
-			event.preventDefault();
-			event.stopPropagation();
-			entry.dismiss("escape");
+			// Escape typed into a host terminal belongs to the shell (vim, fzf…).
+			// The layer still closes on this outside key, but the keystroke must
+			// reach xterm untouched and focus must stay in the terminal.
+			const inTerminal = Boolean(event.target?.closest?.("[data-sidebar-terminal], .xterm"));
+			if (!inTerminal) {
+				event.preventDefault();
+				event.stopPropagation();
+			}
+			entry.dismiss(inTerminal ? "outside" : "escape");
 		};
 		registry = { layers, pointer, key };
 		registries.set(doc, registry);
@@ -70,7 +76,15 @@ export function useDismissLayer({ open = true, onDismiss, ignoreSelector } = {})
 			dismiss: (reason) => {
 				latest.current.onDismiss?.(reason);
 				// Pointer dismissal must leave focus to the clicked destination.
-				if (reason === "escape" && previousFocus?.isConnected !== false) previousFocus?.focus?.({ preventScroll: true });
+				// Escape restores the opener only while focus is still inside the
+				// closed layer (or on the body after its input unmounted): an
+				// outside click may already have moved focus to another pane —
+				// e.g. the host terminal — and yanking it back would break typing.
+				if (reason !== "escape") return;
+				const active = doc.activeElement;
+				const insideLayer = Boolean(active && ref.current?.contains?.(active));
+				const orphaned = active == null || active === doc.body || active === doc.documentElement;
+				if ((insideLayer || orphaned) && previousFocus?.isConnected !== false) previousFocus?.focus?.({ preventScroll: true });
 			},
 		});
 	}, [open]);
