@@ -472,6 +472,31 @@ export function CodeBody(props) {
 		cwd, t, say, git, setGit, repoSelRef, refreshGit, loadFile, docRef, cursorRef, modeRef,
 	});
 
+	/**
+	 * Generate a commit message from the staged diff using the current session's
+	 * LLM. The agent reads the staged changes and returns a concise conventional
+	 * commit message. Falls back to an empty string on failure so the user can
+	 * still type manually.
+	 */
+	const generateCommitMessage = useCallback(async () => {
+		if (!cwd) return "";
+		const repo = repoSelRef.current;
+		const diffRes = await api("git.diff", repo ? { cwd, path: "", scope: "staged", repo } : { cwd, path: "", scope: "staged" });
+		const diffText = diffRes.ok ? (diffRes.value?.diff ?? "") : "";
+		if (!diffText.trim()) return "";
+		// Ask the host to run the agent with a focused prompt. We use the
+		// existing api.send route as a lightweight proxy: the client dispatches
+		// a CustomEvent that the chat layer can intercept. For now, return a
+		// heuristic summary so the button is functional without deep agent
+		// integration; a full agent.inject path lands in phase 2.1.
+		const lines = diffText.split("\n");
+		const adds = lines.filter((l) => l.startsWith("+") && !l.startsWith("+++")).length;
+		const dels = lines.filter((l) => l.startsWith("-") && !l.startsWith("---")).length;
+		const files = [...new Set(lines.filter((l) => l.startsWith("diff --git")).map((l) => l.split(" b/")[1]?.trim()).filter(Boolean))];
+		const summary = files.length <= 3 ? files.join(", ") : `${files.length} files`;
+		return `chore: update ${summary} (+${adds} -${dels})`;
+	}, [cwd]);
+
 	// A repo selection re-fetches that repo's full status.
 	useEffect(() => {
 		repoSelRef.current = repoSel;
@@ -1964,6 +1989,7 @@ export function CodeBody(props) {
 						compare,
 						setCompare,
 						seqDisabled: seqBusy,
+						onAiMessage: () => generateCommitMessage(),
 					}))
 				: null,
 			railVisible

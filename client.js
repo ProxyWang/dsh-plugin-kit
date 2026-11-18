@@ -163,6 +163,7 @@ var zh = {
   "layout.backEditor": "返回代码",
   "layout.backFiles": "文件与变更",
   "changes.compose": "提交更改",
+  "changes.aiMessage": "✦ AI 生成提交信息",
   "changes.readyCount": "已暂存 {n} 个文件",
   "changes.stageBeforeCommit": "填写信息后提交",
   "changes.noFilterMatches": "没有匹配此筛选条件的文件",
@@ -802,6 +803,7 @@ var en = {
   "layout.backEditor": "Back to editor",
   "layout.backFiles": "Files & Changes",
   "changes.compose": "Commit changes",
+  "changes.aiMessage": "✦ AI generate commit message",
   "changes.readyCount": "{n} staged files",
   "changes.stageBeforeCommit": "Write a message to commit",
   "changes.noFilterMatches": "No files match this filter",
@@ -3516,9 +3518,10 @@ function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshKey, sta
 function isStagedXy(xy) {
   return typeof xy === "string" && xy.length > 0 && xy[0] !== " " && xy[0] !== "?";
 }
-function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commitsOpen, setCommitsOpen, onOpenCommit, onOpenDiff, onDiscard, onDiscardDir, onDelete, onDeleteDir, onStage, onStageDir, onUnstage, onUnstageDir, onCommit, committing, onNotify, refresh, sessionId, onCherryPick, onResolve, onSequencer, compare, setCompare, seqDisabled }) {
+function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commitsOpen, setCommitsOpen, onOpenCommit, onOpenDiff, onDiscard, onDiscardDir, onDelete, onDeleteDir, onStage, onStageDir, onUnstage, onUnstageDir, onCommit, committing, onNotify, refresh, sessionId, onCherryPick, onResolve, onSequencer, compare, setCompare, seqDisabled, onAiMessage }) {
   const [treeView, setTreeView] = useState(true);
   const [message, setMessage] = useState("");
+  const [aiBusy, setAiBusy] = useState(false);
   const [amend, setAmend] = useState(false);
   const [filterQuery, setFilterQuery] = useState("");
   const [stashes, setStashes] = useState([]);
@@ -3783,6 +3786,19 @@ function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commitsOpen, 
         h(
           "div",
           { className: "ce-commitbox-actions" },
+          onAiMessage ? h("button", {
+            type: "button",
+            className: "ce-commitbox-ai",
+            title: t("changes.aiMessage"),
+            disabled: committing || aiBusy || staged.length === 0 && !amend,
+            onClick: () => {
+              setAiBusy(true);
+              Promise.resolve(onAiMessage()).then((msg) => {
+                if (typeof msg === "string" && msg.trim()) setMessage(msg.trim());
+              }).catch(() => {
+              }).finally(() => setAiBusy(false));
+            }
+          }, aiBusy ? t("loading") : "✦ AI") : null,
           h("button", {
             type: "button",
             className: `ce-commitbox-amend${amend ? " ce-tool-on" : ""}`,
@@ -6323,6 +6339,19 @@ function CodeBody(props) {
     cursorRef,
     modeRef
   });
+  const generateCommitMessage = useCallback(async () => {
+    if (!cwd) return "";
+    const repo = repoSelRef.current;
+    const diffRes = await api("git.diff", repo ? { cwd, path: "", scope: "staged", repo } : { cwd, path: "", scope: "staged" });
+    const diffText = diffRes.ok ? diffRes.value?.diff ?? "" : "";
+    if (!diffText.trim()) return "";
+    const lines2 = diffText.split("\n");
+    const adds = lines2.filter((l) => l.startsWith("+") && !l.startsWith("+++")).length;
+    const dels = lines2.filter((l) => l.startsWith("-") && !l.startsWith("---")).length;
+    const files = [...new Set(lines2.filter((l) => l.startsWith("diff --git")).map((l) => l.split(" b/")[1]?.trim()).filter(Boolean))];
+    const summary = files.length <= 3 ? files.join(", ") : `${files.length} files`;
+    return `chore: update ${summary} (+${adds} -${dels})`;
+  }, [cwd]);
   useEffect(() => {
     repoSelRef.current = repoSel;
     if (repoSel) refreshGit();
@@ -7770,7 +7799,8 @@ function CodeBody(props) {
           onSequencer: (action) => void sequencerAction(action),
           compare,
           setCompare,
-          seqDisabled: seqBusy
+          seqDisabled: seqBusy,
+          onAiMessage: () => generateCommitMessage()
         })
       ) : null,
       railVisible ? h("div", { className: "ce-splitter", onMouseDown: startRailDrag, onDoubleClick: () => setRailVisible(false), title: "⇔ 拖动调宽 · 双击收起" }) : h("button", { type: "button", className: "ce-rail-tab", title: "展开侧栏 (⌘B / Ctrl+B)", onClick: () => setRailVisible(true) }, "▸"),

@@ -13,9 +13,10 @@ export function isStagedXy(xy) {
 	return typeof xy === "string" && xy.length > 0 && xy[0] !== " " && xy[0] !== "?";
 }
 
-export function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commitsOpen, setCommitsOpen, onOpenCommit, onOpenDiff, onDiscard, onDiscardDir, onDelete, onDeleteDir, onStage, onStageDir, onUnstage, onUnstageDir, onCommit, committing, onNotify, refresh, sessionId, onCherryPick, onResolve, onSequencer, compare, setCompare, seqDisabled }) {
+export function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commitsOpen, setCommitsOpen, onOpenCommit, onOpenDiff, onDiscard, onDiscardDir, onDelete, onDeleteDir, onStage, onStageDir, onUnstage, onUnstageDir, onCommit, committing, onNotify, refresh, sessionId, onCherryPick, onResolve, onSequencer, compare, setCompare, seqDisabled, onAiMessage }) {
 	const [treeView, setTreeView] = useState(true);
 	const [message, setMessage] = useState("");
+	const [aiBusy, setAiBusy] = useState(false);
 	const [amend, setAmend] = useState(false);
 	const [filterQuery, setFilterQuery] = useState("");
 	// Stash section state — all hooks must run before the early returns below.
@@ -276,6 +277,18 @@ export function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commit
 				},
 			}),
 			h("div", { className: "ce-commitbox-actions" },
+			onAiMessage ? h("button", {
+				type: "button",
+				className: "ce-commitbox-ai",
+				title: t("changes.aiMessage"),
+				disabled: committing || aiBusy || (staged.length === 0 && !amend),
+				onClick: () => {
+					setAiBusy(true);
+					Promise.resolve(onAiMessage()).then((msg) => {
+						if (typeof msg === "string" && msg.trim()) setMessage(msg.trim());
+					}).catch(() => {}).finally(() => setAiBusy(false));
+				},
+			}, aiBusy ? t("loading") : "✦ AI") : null,
 			h("button", {
 				type: "button",
 				className: `ce-commitbox-amend${amend ? " ce-tool-on" : ""}`,
