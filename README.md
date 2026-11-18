@@ -111,7 +111,7 @@ pnpm run build   # src/client/** -> client.js（DSH 客户端模块格式）
 pnpm test        # host 路由 + client 纯逻辑 + bundle 形状，6 个套件（gopls 缺失时 LSP 用例自动跳过）
 ```
 
-重新生成文档截图：`node scripts/render-readme-previews.mjs`（需要 Chrome，可用 `CHROME_BIN` 指定路径；仅使用脚本内的虚构数据，不连接真实 DSH 服务）。
+重新生成文档截图：`node scripts/render-readme-previews.mjs`（需要 Node ≥ 22 与 Chrome，可用 `CHROME_BIN` 指定路径；单个无头 Chrome 实例通过 CDP 依次截取全部场景，仅使用脚本内的虚构数据，不连接真实 DSH 服务）。
 
 CI：`.github/workflows/ci.yml`（Node 20 + pnpm + gopls，push/PR 触发）。
 

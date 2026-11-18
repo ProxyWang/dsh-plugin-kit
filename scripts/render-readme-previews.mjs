@@ -1,11 +1,14 @@
 // Reproducible README screenshots. Uses fictional fixtures only, with no live
 // DSH connection, user workspace reads, credentials or business HTTP requests.
+// One headless Chrome instance serves every scene through CDP: each shot is a
+// navigation plus Page.captureScreenshot in the same tab, so six images cost
+// one browser launch instead of six `--screenshot` processes.
 import { register } from "node:module";
-import { mkdtemp, writeFile, readFile } from "node:fs/promises";
+import { mkdtemp, writeFile, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 
 register(new URL("../test-support/esm-react-hook.mjs", import.meta.url), import.meta.url);
 const { createHookRenderer } = await import("../test-support/react-stub.mjs");
@@ -171,11 +174,69 @@ function serialize(node) {
  return `<${type}${attrs}>${voids.has(type) ? "" : serialize(node.children) + `</${type}>`}`;
 }
 
+/** Minimal CDP client over the browser-level WebSocket (Node >= 22). */
+function createCdpClient(socket) {
+ let nextId = 1;
+ const pending = new Map();
+ const listeners = new Map();
+ socket.addEventListener("message", (event) => {
+  const message = JSON.parse(event.data);
+  if (message.id !== undefined) {
+   const entry = pending.get(message.id);
+   if (!entry) return;
+   pending.delete(message.id);
+   if (message.error) entry.reject(Error(`${message.error.message} (${message.error.code})`));
+   else entry.resolve(message.result ?? {});
+   return;
+  }
+  for (const callback of listeners.get(message.method) ?? []) callback(message.params ?? {});
+ });
+ const closed = new Promise((_, reject) => socket.addEventListener("close", () => reject(Error("Chrome DevTools socket closed"))));
+ return {
+  send(method, params = {}, sessionId) {
+   const id = nextId++;
+   const result = new Promise((resolve, reject) => pending.set(id, { resolve, reject }));
+   socket.send(JSON.stringify({ id, method, params, ...(sessionId ? { sessionId } : {}) }));
+   return Promise.race([result, closed]);
+  },
+  on(method, callback) {
+   const list = listeners.get(method) ?? [];
+   list.push(callback);
+   listeners.set(method, list);
+   return () => listeners.set(method, (listeners.get(method) ?? []).filter((entry) => entry !== callback));
+  },
+  close() { socket.close(); },
+ };
+}
+
+/** Launch one headless Chrome with an ephemeral profile and return its CDP endpoint. */
+async function launchChrome(chrome, profileDirectory) {
+ const child = spawn(chrome, ["--headless=new", "--no-sandbox", "--disable-gpu", "--hide-scrollbars", "--remote-debugging-port=0", `--user-data-dir=${profileDirectory}`, "about:blank"], { stdio: ["ignore", "ignore", "pipe"] });
+ let stderr = "";
+ const endpoint = await new Promise((resolve, reject) => {
+  const timer = setTimeout(() => reject(Error(`Chrome did not expose a DevTools endpoint within 30s. ${stderr.slice(-400)}`)), 30_000);
+  child.once("error", (error) => { clearTimeout(timer); reject(error); });
+  child.once("exit", (code) => { clearTimeout(timer); reject(Error(`Chrome exited early (code ${code}). ${stderr.slice(-400)}`)); });
+  child.stderr.setEncoding("utf8");
+  child.stderr.on("data", (chunk) => {
+   stderr += chunk;
+   const match = /DevTools listening on (ws:\/\/\S+)/.exec(stderr);
+   if (match) { clearTimeout(timer); resolve(match[1]); }
+  });
+ });
+ return { child, endpoint };
+}
+
 const scenes = { workspace: await codePreview(), api: await apiPreview(), skills: await skillsPreview() };
+// Fixture rendering stubs setTimeout; real timers are needed for CDP below.
+globalThis.setTimeout = nativeSetTimeout;
+if (typeof WebSocket !== "function") throw Error("This script needs Node >= 22 (global WebSocket). Run it with a newer Node, e.g. the DSH bundled runtime.");
 const temporary = await mkdtemp(join(tmpdir(), "dsh-readme-preview-"));
 const chrome = process.env.CHROME_BIN ?? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 const light = "--dsw-alias-bg-base:#fff;--dsw-alias-bg-layer-1:#f7f8fa;--dsw-alias-bg-layer-2:#eff1f4;--dsw-alias-interactive-bg-hover:#e9edf3;--dsw-alias-label-primary:#202329;--dsw-alias-label-secondary:#555d68;--dsw-alias-label-tertiary:#697481;--dsw-alias-border-l1:#d5dae0;--dsw-alias-border-l2:#b8c1cc;--dsw-alias-button-primary-fill:#2463c7;--dsw-alias-label-primary-foreground:#fff;--dsw-alias-state-success-primary:#247449";
 const dark = "--dsw-alias-bg-base:#111315;--dsw-alias-bg-layer-1:#181b1f;--dsw-alias-bg-layer-2:#20242a;--dsw-alias-interactive-bg-hover:#29313b;--dsw-alias-label-primary:#edf2f7;--dsw-alias-label-secondary:#aab5c1;--dsw-alias-label-tertiary:#7d8996;--dsw-alias-border-l1:#39414a;--dsw-alias-border-l2:#515b66;--dsw-alias-button-primary-fill:#b9d1ff;--dsw-alias-label-primary-foreground:#13243d";
+// Write every fixture first so the privacy gate runs before any browser starts.
+const shots = [];
 for (const [scene, tree] of Object.entries(scenes)) {
  const markup = serialize(tree);
  if (/\/Users\/|\/home\/|bilibili|wang-jun|Bearer\s|localhost:\d|127\.0\.0\.1/i.test(markup)) throw Error(`Privacy check failed: ${scene}`);
@@ -183,11 +244,40 @@ for (const [scene, tree] of Object.entries(scenes)) {
   const htmlPath = join(temporary, `${scene}-${theme}.html`);
   const imagePath = fileURLToPath(new URL(`../docs/images/readme-${scene}-${theme}.png`, import.meta.url));
   await writeFile(htmlPath, `<!doctype html><html lang="zh"><meta charset="utf-8"><style>html,body{margin:0;height:100%;width:1100px;font-family:system-ui,-apple-system,sans-serif;color-scheme:${theme};${theme === "light" ? light : dark}}body{display:flex;flex-direction:column}*{box-sizing:border-box}.preview-caption{height:28px;flex:none;display:flex;align-items:center;padding:0 14px;background:${theme === "light" ? "#f7f8fa" : "#181b1f"};color:${theme === "light" ? "#555d68" : "#aab5c1"};font-size:11px;border-bottom:1px solid ${theme === "light" ? "#d5dae0" : "#39414a"}}.preview-scene{flex:1;min-height:0;overflow:hidden}.preview-explorer{display:flex;flex:1;min-height:0}${CSS}</style><div class="preview-caption">DEMO · 完全虚构数据 / Fictional data · ${scene}</div><main class="preview-scene">${markup}</main></html>`);
-  const result = spawnSync(chrome, ["--headless", "--no-sandbox", "--disable-gpu", "--hide-scrollbars", "--window-size=1100,760", `--screenshot=${imagePath}`, `file://${htmlPath}`], { encoding: "utf8" });
-  if (result.status !== 0) throw Error(result.stderr || "Chrome screenshot failed");
+  shots.push({ scene, theme, htmlPath, imagePath });
+ }
+}
+
+const profileDirectory = join(temporary, "chrome-profile");
+const { child, endpoint } = await launchChrome(chrome, profileDirectory);
+let client;
+try {
+ const socket = new WebSocket(endpoint);
+ await new Promise((resolve, reject) => { socket.addEventListener("open", resolve, { once: true }); socket.addEventListener("error", () => reject(Error("Chrome DevTools socket failed to connect")), { once: true }); });
+ client = createCdpClient(socket);
+ const { targetId } = await client.send("Target.createTarget", { url: "about:blank" });
+ const { sessionId } = await client.send("Target.attachToTarget", { targetId, flatten: true });
+ await client.send("Emulation.setDeviceMetricsOverride", { width: 1100, height: 760, deviceScaleFactor: 1, mobile: false }, sessionId);
+ await client.send("Page.enable", {}, sessionId);
+ for (const { scene, theme, htmlPath, imagePath } of shots) {
+  const loaded = new Promise((resolve, reject) => {
+   const off = client.on("Page.loadEventFired", () => { clearTimeout(timer); off(); resolve(); });
+   const timer = setTimeout(() => { off(); reject(Error(`Page load timed out: ${scene}-${theme}`)); }, 30_000);
+  });
+  const navigation = await client.send("Page.navigate", { url: `file://${htmlPath}` }, sessionId);
+  if (navigation.errorText) throw Error(`Navigation failed for ${scene}-${theme}: ${navigation.errorText}`);
+  await loaded;
+  // Two animation frames let fonts and flex layout settle before capture.
+  await client.send("Runtime.evaluate", { expression: "new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))", awaitPromise: true }, sessionId);
+  const { data } = await client.send("Page.captureScreenshot", { format: "png" }, sessionId);
+  await writeFile(imagePath, Buffer.from(data, "base64"));
   const bytes = await readFile(imagePath);
   if (bytes.length < 5000) throw Error(`Screenshot appears empty: ${scene}`);
   console.log(`Created readme-${scene}-${theme}.png (${bytes.length} bytes)`);
  }
+} finally {
+ try { client?.close(); } catch { /* already closed */ }
+ child.kill("SIGTERM");
+ await new Promise((resolve) => { if (child.exitCode !== null || child.signalCode !== null) resolve(); else { child.once("exit", resolve); setTimeout(() => { child.kill("SIGKILL"); resolve(); }, 5000).unref(); } });
+ await rm(temporary, { recursive: true, force: true }).catch(() => {});
 }
-globalThis.setTimeout = nativeSetTimeout;

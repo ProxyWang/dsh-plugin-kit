@@ -109,7 +109,7 @@ pnpm run build   # src/client/** -> client.js (DSH client module format)
 pnpm test        # host routes + client pure logic + bundle shape, 6 suites (LSP cases auto-skip without gopls)
 ```
 
-Regenerate the documentation screenshots with `node scripts/render-readme-previews.mjs` (requires Chrome; set `CHROME_BIN` to override its path). The script uses only embedded fictional fixtures and never connects to a real DSH service.
+Regenerate the documentation screenshots with `node scripts/render-readme-previews.mjs` (requires Node ≥ 22 and Chrome; set `CHROME_BIN` to override its path). One headless Chrome instance captures every scene over CDP. The script uses only embedded fictional fixtures and never connects to a real DSH service.
 
 CI: `.github/workflows/ci.yml` (Node 20 + pnpm + gopls, runs on push/PR).
 
