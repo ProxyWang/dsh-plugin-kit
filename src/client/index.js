@@ -1,13 +1,14 @@
 /* ---------------- module descriptor ---------------- */
 
 import { h } from "./react.js";
-import { NS, TAB_ID, TAB_KIND, SKILLS_TAB_ID, SKILLS_TAB_KIND, API_TAB_ID, API_TAB_KIND } from "./constants.js";
+import { NS, TAB_ID, TAB_KIND, SKILLS_TAB_ID, SKILLS_TAB_KIND, API_TAB_ID, API_TAB_KIND, DB_TAB_ID, DB_TAB_KIND } from "./constants.js";
 import { en, zh } from "./locale.js";
 import { CodeBody, CodeTitle } from "./code.js";
-import { definition, insertStyles, skillsDefinition, apiDefinition } from "./register.js";
+import { definition, insertStyles, skillsDefinition, apiDefinition, dbDefinition } from "./register.js";
 import { CallDiffRow } from "./calldiff.js";
 import { SkillsTabBody, SkillsTitle } from "./skills.js";
 import { ApiView, ApiTitle } from "./apiclient.js";
+import { DbView, DbTitle } from "./db.js";
 import { installLeftTools, WorkspaceGuide } from "./lefttools.js";
 import { registerToolCloseGuard } from "./closeguard.js";
 import { installBrowser } from "./browserregister.js";
@@ -104,6 +105,18 @@ export default {
 			name: "sidebar.right.pane.tab.title",
 			key: API_TAB_ID,
 		}, ApiTitle)));
+		// Top-level "Database" tab: local SQLite / MySQL / PostgreSQL workbench.
+		safe("db tab type", () => ctx.sidebarRightTabs.register(dbDefinition(bound)));
+		const DbBound = (props) => h(DbView, { ...props, t: props.t ?? bound });
+		safe("db tab body", () => ctx.slots.inject("sidebar.right.pane.tab", () => ctx.slots.register({
+			name: "sidebar.right.pane.tab",
+			key: DB_TAB_ID,
+			locale: NS,
+		}, DbBound)));
+		safe("db tab title", () => ctx.slots.inject("sidebar.right.pane.tab.title", () => ctx.slots.register({
+			name: "sidebar.right.pane.tab.title",
+			key: DB_TAB_ID,
+		}, DbTitle)));
 		// Compact chat rows for edit/write: clicking one opens this call's diff in
 		// the side panel. Negative priority so unloading restores the stock rows.
 		safe("call diff rows", () => ctx.slots.inject("tool.call.toolview", function* () {

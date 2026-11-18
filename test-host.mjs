@@ -870,7 +870,39 @@ if (hasNpm) {
 
 for (const cleanup of cleanups) cleanup();
 
-// --- vault service: secret persistence for the API workbench ---------------------------
+// --- database driver: SQLite in-memory via node:sqlite ---------------------------------
+{
+	const { connect, disconnect, listObjects, query, listConnections, closeAll } = await import("./lib/host/db.js");
+	// Check if node:sqlite is available (Node ≥ 22.5 / Electron with Node 24).
+	let sqliteAvailable = false;
+	try { await import("node:sqlite"); sqliteAvailable = true; } catch {}
+	if (sqliteAvailable) {
+		const conn = await connect({ driver: "sqlite", path: ":memory:" });
+		check("db.connect returns an id and driver", typeof conn.id === "string" && conn.driver === "sqlite", conn);
+		check("db.connections lists the new connection", listConnections().some((c) => c.id === conn.id), null);
+		await query(conn.id, "CREATE TABLE users(id INTEGER PRIMARY KEY, name TEXT, age INTEGER)");
+		await query(conn.id, "INSERT INTO users VALUES(1,'Alice',30),(2,'Bob',25)");
+		const list = await listObjects(conn.id);
+		check("db.list finds the created table", list.tables.some((t) => t.name === "users"), list.tables.map((t) => t.name));
+		check("db.list reports column names and types", list.tables.find((t) => t.name === "users").columns.some((c) => c.name === "name" && c.type === "TEXT"), list.tables.find((t) => t.name === "users").columns);
+		const res = await query(conn.id, "SELECT * FROM users ORDER BY id");
+		check("db.query returns columns and rows", res.columns.length === 3 && res.rows.length === 2 && res.rows[0][1] === "Alice", res);
+		check("db.query reports ms timing", typeof res.ms === "number" && res.ms >= 0, res.ms);
+		const ins = await query(conn.id, "INSERT INTO users VALUES(3,'Carol',28)");
+		check("db.query INSERT returns changes count", ins.changes === 1, ins);
+		const limited = await query(conn.id, "SELECT * FROM users", 1);
+		check("db.query respects limit and sets truncated", limited.rows.length === 1 && limited.truncated === true, limited);
+		disconnect(conn.id);
+		check("db.disconnect removes the connection", !listConnections().some((c) => c.id === conn.id), null);
+		closeAll();
+	} else {
+		console.log("  skip  db SQLite tests (node:sqlite unavailable on this Node version)");
+		skipped += 7;
+	}
+}
+
+console.log(`\n${pass} passed, ${fail} failed${skipped ? `, ${skipped} skipped` : ""}`);
+process.exit(fail ? 1 : 0);
 {
 	const { createVaultService } = await import("./lib/host/vault.js");
 	let stored;

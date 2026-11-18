@@ -1,6 +1,6 @@
 /* ---------------- module ---------------- */
 
-import { TAB_ID, TAB_KIND, SKILLS_TAB_ID, SKILLS_TAB_KIND, API_TAB_ID, API_TAB_KIND } from "./constants.js";
+import { TAB_ID, TAB_KIND, SKILLS_TAB_ID, SKILLS_TAB_KIND, API_TAB_ID, API_TAB_KIND, DB_TAB_ID, DB_TAB_KIND } from "./constants.js";
 import { CSS } from "./styles.js";
 
 export const definition = (t) => ({
@@ -27,6 +27,15 @@ export const apiDefinition = (t) => ({
 	priority: "extension",
 	keepMounted: true,
 	title: () => t("api.label"),
+	guide: [],
+});
+
+export const dbDefinition = (t) => ({
+	id: DB_TAB_ID,
+	kind: DB_TAB_KIND,
+	priority: "extension",
+	keepMounted: true,
+	title: () => t("db.label"),
 	guide: [],
 });
 

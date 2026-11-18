@@ -3162,6 +3162,18 @@ check("docAction reloads clean drafts, flags dirty ones, ignores others", docAct
 	check("replaceInText regex group refs work", r4.text === "world hello" && r4.count === 1, r4);
 }
 
+// --- DB panel pure helpers ---------------------------------------------------------------
+{
+	const { formatCell, truncateCell } = await import("./src/client/db.js");
+	check("formatCell null → NULL", formatCell(null) === "NULL", null);
+	check("formatCell undefined → empty", formatCell(undefined) === "", null);
+	check("formatCell object → JSON", formatCell({ a: 1 }) === '{"a":1}', null);
+	check("formatCell number → string", formatCell(42) === "42", null);
+	check("truncateCell short passthrough", truncateCell("hello") === "hello", null);
+	check("truncateCell long truncates with ellipsis", truncateCell("x".repeat(200), 10) === "x".repeat(9) + "…", truncateCell("x".repeat(200), 10));
+	check("truncateCell null → NULL", truncateCell(null) === "NULL", null);
+}
+
 // --- the generated bundle: registration + factory --------------------------------------
 
 const bundle = await readFile(new URL("./client.js", import.meta.url), "utf8");

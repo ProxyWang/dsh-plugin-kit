@@ -67,6 +67,8 @@ var SKILLS_TAB_ID = "dsh-plugin-kit/skills";
 var SKILLS_TAB_KIND = "code-skills";
 var API_TAB_ID = "dsh-plugin-kit/api";
 var API_TAB_KIND = "code-api";
+var DB_TAB_ID = "dsh-plugin-kit/db";
+var DB_TAB_KIND = "code-db";
 var ROW = 22;
 
 // src/client/locale.js
@@ -342,6 +344,29 @@ var zh = {
   "tree.fileWord": "文件",
   "tree.dirWord": "文件夹",
   "api.label": "接口",
+  "db.label": "数据库",
+  "dbGuide.title": "数据库",
+  "dbGuide.description": "本地 SQLite / MySQL / PostgreSQL 查询工作台",
+  "db.connect": "新建连接",
+  "db.disconnect": "断开",
+  "db.newConnection": "新建数据库连接",
+  "db.driver": "驱动",
+  "db.path": "文件路径",
+  "db.host": "主机",
+  "db.port": "端口",
+  "db.user": "用户名",
+  "db.password": "密码",
+  "db.database": "数据库",
+  "db.connectAction": "连接",
+  "db.connections": "连接",
+  "db.noConnections": "暂无连接，点击「新建连接」开始",
+  "db.tables": "表",
+  "db.noTables": "无表",
+  "db.sqlPlaceholder": "输入 SQL 语句… (⌘/Ctrl+Enter 执行)",
+  "db.run": "执行",
+  "db.truncated": "结果已截断",
+  "db.noRows": "无结果行",
+  "db.runHint": "输入 SQL 后按 ⌘/Ctrl+Enter 或点击「执行」",
   "apiGuide.title": "接口调试",
   "apiGuide.description": "curl 一键导入、编辑方法/URL/请求头/Body、发送并查看响应（Postman 基础能力）",
   "api.send": "发送",
@@ -958,6 +983,29 @@ var en = {
   "tree.fileWord": "file",
   "tree.dirWord": "folder",
   "api.label": "API",
+  "db.label": "Database",
+  "dbGuide.title": "Database",
+  "dbGuide.description": "Local SQLite / MySQL / PostgreSQL query workbench",
+  "db.connect": "New connection",
+  "db.disconnect": "Disconnect",
+  "db.newConnection": "New database connection",
+  "db.driver": "Driver",
+  "db.path": "File path",
+  "db.host": "Host",
+  "db.port": "Port",
+  "db.user": "User",
+  "db.password": "Password",
+  "db.database": "Database",
+  "db.connectAction": "Connect",
+  "db.connections": "Connections",
+  "db.noConnections": 'No connections yet — click "New connection" to start',
+  "db.tables": "Tables",
+  "db.noTables": "No tables",
+  "db.sqlPlaceholder": "Enter SQL… (⌘/Ctrl+Enter to run)",
+  "db.run": "Run",
+  "db.truncated": "Results truncated",
+  "db.noRows": "No rows",
+  "db.runHint": "Enter SQL and press ⌘/Ctrl+Enter or click Run",
   "apiGuide.title": "API tester",
   "apiGuide.description": "One-click curl import, edit method/URL/headers/body, send and inspect responses (basic Postman)",
   "api.send": "Send",
@@ -8590,6 +8638,43 @@ var CSS2 = `
 .ce-edit-find{position:absolute;top:4px;right:8px;z-index:5;display:flex;align-items:center;gap:4px;padding:4px 6px;background:var(--dsw-alias-bg-layer-1,#1d2126);border:.5px solid var(--dsw-alias-border-l2,#454a52);border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,.3)}
 .ce-edit-find-input{width:160px;height:24px;padding:0 6px;font-size:12px;background:var(--dsw-alias-bg-base,#181818);color:var(--dsw-alias-label-primary,#eee);border:.5px solid var(--dsw-alias-border-l1,#333);border-radius:4px;outline:none}
 .ce-edit-find-count{font-size:11px;color:var(--dsw-alias-label-tertiary,#889);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;min-width:40px;text-align:center}
+
+/* Database panel */
+.ceb-db-root{display:flex;flex-direction:column;height:100%;overflow:hidden}
+.ceb-db-toolbar{flex:none;display:flex;align-items:center;gap:8px;padding:6px 10px;border-bottom:.5px solid var(--dsw-alias-border-l1,#333);background:var(--dsw-alias-bg-layer-1,#1d2126)}
+.ceb-db-title{font-weight:600;font-size:13px;color:var(--dsw-alias-label-primary,#eee)}
+.ceb-db-conn{font-size:12px;color:var(--dsw-alias-label-secondary,#aab);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ceb-db-connect{position:absolute;top:40px;left:10px;right:10px;z-index:10;background:var(--dsw-alias-bg-layer-1,#1d2126);border:.5px solid var(--dsw-alias-border-l2,#454a52);border-radius:8px;padding:12px;box-shadow:0 8px 24px rgba(0,0,0,.4);display:flex;flex-direction:column;gap:8px}
+.ceb-db-connect h3{margin:0;font-size:14px;color:var(--dsw-alias-label-primary,#eee)}
+.ceb-db-connect label{display:flex;flex-direction:column;gap:2px;font-size:12px;color:var(--dsw-alias-label-secondary,#aab)}
+.ceb-db-connect .ce-input,.ceb-db-connect .ce-sk-scope{width:100%}
+.ceb-db-connect-actions{display:flex;gap:6px;justify-content:flex-end;margin-top:4px}
+.ceb-db-body{flex:1;min-height:0;display:flex;overflow:hidden}
+.ceb-db-rail{flex:none;width:200px;border-right:.5px solid var(--dsw-alias-border-l1,#333);overflow-y:auto;padding:6px 0}
+.ceb-db-section{padding:4px 10px;font-size:11px;font-weight:600;color:var(--dsw-alias-label-tertiary,#777);text-transform:uppercase;letter-spacing:.5px}
+.ceb-db-empty{padding:4px 10px;font-size:12px;color:var(--dsw-alias-label-tertiary,#667)}
+.ceb-db-conn-row{display:flex;align-items:center;gap:6px;width:100%;padding:4px 10px;border:0;background:transparent;color:var(--dsw-alias-label-secondary,#ccc);font-size:12px;cursor:pointer;text-align:left}
+.ceb-db-conn-row:hover{background:var(--dsw-alias-interactive-bg-hover,#2a2e35)}
+.ceb-db-conn-active{background:var(--ce-accent-soft);color:var(--ce-fg)}
+.ceb-db-driver{font-size:10px;padding:1px 4px;border-radius:3px;background:var(--dsw-alias-bg-layer-2,#2a2e35);color:var(--dsw-alias-label-tertiary,#889)}
+.ceb-db-label{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ceb-db-table{display:flex;align-items:center;justify-content:space-between;padding:2px 10px}
+.ceb-db-table-name{border:0;background:transparent;color:var(--dsw-alias-label-secondary,#ccc);font-size:12px;cursor:pointer;padding:2px 4px;border-radius:3px}
+.ceb-db-table-name:hover{background:var(--dsw-alias-interactive-bg-hover,#2a2e35)}
+.ceb-db-table-active{background:var(--ce-accent-soft);color:var(--ce-fg)}
+.ceb-db-col-count{font-size:10px;color:var(--dsw-alias-label-tertiary,#667)}
+.ceb-db-main{flex:1;min-width:0;display:flex;flex-direction:column;overflow:hidden}
+.ceb-db-editor-wrap{flex:none;display:flex;align-items:flex-start;gap:6px;padding:6px 10px;border-bottom:.5px solid var(--dsw-alias-border-l1,#333)}
+.ceb-db-sql{flex:1;min-height:60px;max-height:180px;resize:vertical;border:.5px solid var(--dsw-alias-border-l1,#333);border-radius:6px;padding:6px 8px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;line-height:1.5;background:var(--dsw-alias-bg-base,#181818);color:var(--dsw-alias-label-primary,#ddd);outline:none}
+.ceb-db-run{flex:none;align-self:flex-start}
+.ceb-db-result{flex:1;min-height:0;overflow:auto;padding:6px 10px}
+.ceb-db-result-meta{font-size:11px;color:var(--dsw-alias-label-tertiary,#889);margin-bottom:4px;display:flex;gap:8px}
+.ceb-db-error{color:var(--dsw-alias-state-error-primary,#f85149);font-size:12px;white-space:pre-wrap}
+.ceb-db-grid{width:100%;border-collapse:collapse;font-size:12px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.ceb-db-grid th{text-align:left;padding:4px 8px;border-bottom:1px solid var(--dsw-alias-border-l1,#333);color:var(--dsw-alias-label-secondary,#aab);font-weight:600;position:sticky;top:0;background:var(--dsw-alias-bg-layer-1,#1d2126)}
+.ceb-db-grid td{padding:3px 8px;border-bottom:.5px solid var(--dsw-alias-border-l1,#222);color:var(--dsw-alias-label-primary,#ddd);max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ceb-db-grid tr:hover td{background:var(--dsw-alias-interactive-bg-hover,#2a2e35)}
+.ceb-db-result-empty{display:flex;align-items:center;justify-content:center;color:var(--dsw-alias-label-tertiary,#667);font-size:13px}
 .ce-gline-find{color:var(--dsw-alias-state-warn-primary,#e3b341)}
 .ce-line-changed{background:color-mix(in srgb,var(--dsw-alias-state-success-primary,#3fb950) 20%,transparent);box-shadow:inset 3px 0 0 0 var(--dsw-alias-state-success-primary,#3fb950)}
 .ce-gline-changed{color:var(--dsw-alias-state-success-primary,#3fb950);font-weight:700;background:color-mix(in srgb,var(--dsw-alias-state-success-primary,#3fb950) 14%,transparent)}
@@ -9113,6 +9198,14 @@ var apiDefinition = (t) => ({
   priority: "extension",
   keepMounted: true,
   title: () => t("api.label"),
+  guide: []
+});
+var dbDefinition = (t) => ({
+  id: DB_TAB_ID,
+  kind: DB_TAB_KIND,
+  priority: "extension",
+  keepMounted: true,
+  title: () => t("db.label"),
   guide: []
 });
 function insertStyles() {
@@ -12152,6 +12245,220 @@ function ApiTitle({ useTabInfo }) {
   return h(Fragment, null, h("span", { className: "ce-title-ico" }, h(ApiGlyph)), tabInfo?.tab?.title ?? "API");
 }
 
+// src/client/db.js
+function formatCell(value) {
+  if (value === null) return "NULL";
+  if (value === void 0) return "";
+  if (typeof value === "object") return JSON.stringify(value);
+  return String(value);
+}
+function truncateCell(value, max = 120) {
+  const s = formatCell(value);
+  return s.length > max ? s.slice(0, max - 1) + "…" : s;
+}
+function DbView({ t, useTabInfo, sessionId, useSessions }) {
+  const cwd = useSessions ? useSessions((sessions) => sessionId ? sessions.byId[sessionId]?.cwd : void 0) : void 0;
+  const hostTab = useTabInfo ? useTabInfo()?.tab : null;
+  const [drivers, setDrivers] = useState([]);
+  const [connections, setConnections] = useState([]);
+  const [activeConn, setActiveConn] = useState(null);
+  const [schema, setSchema] = useState(null);
+  const [sql, setSql] = useState("");
+  const [result, setResult] = useState(null);
+  const [running, setRunning] = useState(false);
+  const [connectForm, setConnectForm] = useState({ driver: "sqlite", path: "", host: "localhost", port: "", user: "", password: "", database: "" });
+  const [connectOpen, setConnectOpen] = useState(false);
+  const connectRef = useDismissLayer({ open: connectOpen, onDismiss: () => setConnectOpen(false) });
+  const [selectedTable, setSelectedTable] = useState(null);
+  const sqlRef = useRef(null);
+  useEffect(() => {
+    api("db.drivers", {}).then((res) => {
+      if (res.ok) setDrivers(res.value);
+    });
+    api("db.connections", {}).then((res) => {
+      if (res.ok) setConnections(res.value);
+    });
+  }, []);
+  useEffect(() => {
+    if (!activeConn) {
+      setSchema(null);
+      return;
+    }
+    api("db.list", { id: activeConn }).then((res) => {
+      if (res.ok) setSchema(res.value);
+      else setSchema({ databases: [], tables: [], error: res.error });
+    });
+  }, [activeConn]);
+  const doConnect = useCallback(async () => {
+    const f = connectForm;
+    const params = { driver: f.driver };
+    if (f.driver === "sqlite") params.path = f.path;
+    else {
+      params.host = f.host;
+      params.port = f.port ? Number(f.port) : void 0;
+      params.user = f.user;
+      params.password = f.password;
+      params.database = f.database;
+    }
+    const res = await api("db.connect", params);
+    if (res.ok) {
+      setConnections((prev) => [...prev, res.value]);
+      setActiveConn(res.value.id);
+      setConnectOpen(false);
+    }
+  }, [connectForm]);
+  const doDisconnect = useCallback(async (id) => {
+    await api("db.disconnect", { id });
+    setConnections((prev) => prev.filter((c) => c.id !== id));
+    if (activeConn === id) {
+      setActiveConn(null);
+      setSchema(null);
+      setResult(null);
+    }
+  }, [activeConn]);
+  const runQuery = useCallback(async () => {
+    if (!activeConn || !sql.trim() || running) return;
+    setRunning(true);
+    setResult(null);
+    const res = await api("db.query", { id: activeConn, sql: sql.trim(), limit: 1e3 });
+    setRunning(false);
+    if (res.ok) setResult(res.value);
+    else setResult({ error: res.error });
+  }, [activeConn, sql, running]);
+  const selectTable = useCallback((name) => {
+    setSelectedTable(name);
+    setSql(`SELECT * FROM "${name}" LIMIT 100`);
+  }, []);
+  const onKeyDown = useCallback((e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+      e.preventDefault();
+      runQuery();
+    }
+  }, [runQuery]);
+  if (!cwd) {
+    return h("div", { className: "ce-root" }, h("div", { className: "ce-empty" }, t("editor.noSession")));
+  }
+  return h(
+    "div",
+    { className: "ce-root ceb-db-root", onKeyDown },
+    h(
+      "div",
+      { className: "ceb-db-toolbar" },
+      h("span", { className: "ceb-db-title" }, t("db.label")),
+      h("button", { type: "button", className: "ce-sk-btn", onClick: () => setConnectOpen(true) }, t("db.connect")),
+      activeConn ? h("span", { className: "ceb-db-conn" }, connections.find((c) => c.id === activeConn)?.label ?? activeConn.slice(0, 8)) : null,
+      activeConn ? h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost", onClick: () => doDisconnect(activeConn) }, t("db.disconnect")) : null
+    ),
+    connectOpen ? h(
+      "div",
+      { className: "ceb-db-connect", ref: connectRef },
+      h("h3", null, t("db.newConnection")),
+      h(
+        "label",
+        null,
+        t("db.driver"),
+        h(
+          "select",
+          { className: "ce-sk-scope", value: connectForm.driver, onChange: (e) => setConnectForm({ ...connectForm, driver: e.target.value }) },
+          drivers.map((d) => h("option", { key: d.id, value: d.id, disabled: !d.ready }, `${d.label}${d.note ? ` (${d.note})` : ""}`))
+        )
+      ),
+      connectForm.driver === "sqlite" ? h("label", null, t("db.path"), h("input", { className: "ce-input", value: connectForm.path, placeholder: "/path/to/database.sqlite", onChange: (e) => setConnectForm({ ...connectForm, path: e.target.value }) })) : h(
+        Fragment,
+        null,
+        h("label", null, t("db.host"), h("input", { className: "ce-input", value: connectForm.host, onChange: (e) => setConnectForm({ ...connectForm, host: e.target.value }) })),
+        h("label", null, t("db.port"), h("input", { className: "ce-input", type: "number", value: connectForm.port, placeholder: connectForm.driver === "mysql" ? "3306" : "5432", onChange: (e) => setConnectForm({ ...connectForm, port: e.target.value }) })),
+        h("label", null, t("db.user"), h("input", { className: "ce-input", value: connectForm.user, onChange: (e) => setConnectForm({ ...connectForm, user: e.target.value }) })),
+        h("label", null, t("db.password"), h("input", { className: "ce-input", type: "password", value: connectForm.password, onChange: (e) => setConnectForm({ ...connectForm, password: e.target.value }) })),
+        h("label", null, t("db.database"), h("input", { className: "ce-input", value: connectForm.database, onChange: (e) => setConnectForm({ ...connectForm, database: e.target.value }) }))
+      ),
+      h(
+        "div",
+        { className: "ceb-db-connect-actions" },
+        h("button", { type: "button", className: "ce-sk-btn ce-sk-primary", onClick: doConnect }, t("db.connectAction")),
+        h("button", { type: "button", className: "ce-sk-btn", onClick: () => setConnectOpen(false) }, t("editor.cancel"))
+      )
+    ) : null,
+    h(
+      "div",
+      { className: "ceb-db-body" },
+      h(
+        "div",
+        { className: "ceb-db-rail ce-scroll" },
+        h("div", { className: "ceb-db-section" }, t("db.connections")),
+        connections.length === 0 ? h("div", { className: "ceb-db-empty" }, t("db.noConnections")) : connections.map((c) => h("button", {
+          key: c.id,
+          type: "button",
+          className: `ceb-db-conn-row${c.id === activeConn ? " ceb-db-conn-active" : ""}`,
+          onClick: () => setActiveConn(c.id)
+        }, h("span", { className: "ceb-db-driver" }, c.driver), h("span", { className: "ceb-db-label" }, c.label))),
+        schema ? h(
+          Fragment,
+          null,
+          h("div", { className: "ceb-db-section" }, t("db.tables")),
+          schema.tables?.length === 0 ? h("div", { className: "ceb-db-empty" }, t("db.noTables")) : schema.tables?.map((tbl) => h(
+            "div",
+            { key: tbl.name, className: "ceb-db-table" },
+            h("button", {
+              type: "button",
+              className: `ceb-db-table-name${selectedTable === tbl.name ? " ceb-db-table-active" : ""}`,
+              onClick: () => selectTable(tbl.name)
+            }, tbl.name),
+            h("span", { className: "ceb-db-col-count" }, `${tbl.columns?.length ?? 0} cols`)
+          ))
+        ) : null
+      ),
+      h(
+        "div",
+        { className: "ceb-db-main" },
+        h(
+          "div",
+          { className: "ceb-db-editor-wrap" },
+          h("textarea", {
+            ref: sqlRef,
+            className: "ceb-db-sql",
+            value: sql,
+            placeholder: t("db.sqlPlaceholder"),
+            spellcheck: false,
+            onChange: (e) => setSql(e.target.value)
+          }),
+          h("button", {
+            type: "button",
+            className: "ce-sk-btn ce-sk-primary ceb-db-run",
+            disabled: !activeConn || !sql.trim() || running,
+            onClick: runQuery
+          }, running ? t("loading") : t("db.run"))
+        ),
+        result ? h(
+          "div",
+          { className: "ceb-db-result ce-scroll" },
+          result.error ? h("div", { className: "ceb-db-error" }, result.error) : h(
+            Fragment,
+            null,
+            h(
+              "div",
+              { className: "ceb-db-result-meta" },
+              result.ms !== void 0 ? `${result.ms} ms` : null,
+              result.truncated ? t("db.truncated") : null,
+              result.changes !== void 0 ? `${result.changes} rows affected` : null,
+              !result.columns?.length && !result.rows?.length && result.changes === void 0 ? t("db.noRows") : null
+            ),
+            result.columns?.length > 0 ? h(
+              "table",
+              { className: "ceb-db-grid" },
+              h("thead", null, h("tr", null, result.columns.map((col, i) => h("th", { key: i }, col)))),
+              h("tbody", null, result.rows?.map((row, ri) => h("tr", { key: ri }, row.map((cell, ci) => h("td", { key: ci, title: formatCell(cell) }, truncateCell(cell))))))
+            ) : null
+          )
+        ) : h("div", { className: "ceb-db-empty ceb-db-result-empty" }, t("db.runHint"))
+      )
+    )
+  );
+}
+function DbTitle({ useTabInfo }) {
+  return null;
+}
+
 // src/client/launcher.js
 var GROUPS = [
   { id: "skills", test: (kind) => /skill/.test(kind) },
@@ -12224,10 +12531,18 @@ function isHiddenLeftToolKind(kind) {
 var OWN_TOOLS = [
   { kind: TAB_KIND, label: "guide.title", description: "guide.description", glyph: "code" },
   { kind: API_TAB_KIND, label: "apiGuide.title", description: "apiGuide.description", glyph: "api" },
-  { kind: SKILLS_TAB_KIND, label: "skillsGuide.title", description: "skillsGuide.description", glyph: "skills" }
+  { kind: SKILLS_TAB_KIND, label: "skillsGuide.title", description: "skillsGuide.description", glyph: "skills" },
+  { kind: DB_TAB_KIND, label: "dbGuide.title", description: "dbGuide.description", glyph: "db" }
 ];
 function ToolGlyph({ size = 16, glyph = "code" }) {
   if (glyph === "code") return h(IconCode, { size });
+  if (glyph === "db") return h(
+    "svg",
+    { viewBox: "0 0 24 24", width: size, height: size, fill: "none", stroke: "currentColor", strokeWidth: 1.7, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true },
+    h("ellipse", { key: "t", cx: 12, cy: 5, rx: 8, ry: 3 }),
+    h("path", { key: "m", d: "M4 5v6c0 1.66 3.58 3 8 3s8-1.34 8-3V5" }),
+    h("path", { key: "b", d: "M4 11v6c0 1.66 3.58 3 8 3s8-1.34 8-3v-6" })
+  );
   return h(
     "svg",
     { viewBox: "0 0 24 24", width: size, height: size, fill: "none", stroke: "currentColor", strokeWidth: 1.7, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true },
@@ -13385,6 +13700,17 @@ var index_default = {
       name: "sidebar.right.pane.tab.title",
       key: API_TAB_ID
     }, ApiTitle)));
+    safe("db tab type", () => ctx.sidebarRightTabs.register(dbDefinition(bound)));
+    const DbBound = (props) => h(DbView, { ...props, t: props.t ?? bound });
+    safe("db tab body", () => ctx.slots.inject("sidebar.right.pane.tab", () => ctx.slots.register({
+      name: "sidebar.right.pane.tab",
+      key: DB_TAB_ID,
+      locale: NS
+    }, DbBound)));
+    safe("db tab title", () => ctx.slots.inject("sidebar.right.pane.tab.title", () => ctx.slots.register({
+      name: "sidebar.right.pane.tab.title",
+      key: DB_TAB_ID
+    }, DbTitle)));
     safe("call diff rows", () => ctx.slots.inject("tool.call.toolview", function* () {
       const bridge = {
         t: bound,

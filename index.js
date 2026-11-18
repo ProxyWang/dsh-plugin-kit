@@ -31,6 +31,7 @@ import { stopAllWatchers } from "./lib/host/watch.js";
 import { stopAllStreams } from "./lib/host/streams.js";
 import { createBrowserService, browserTool } from "./lib/host/browser.js";
 import { createVaultService } from "./lib/host/vault.js";
+import { dbRoutes, closeAll as closeAllDb } from "./lib/host/db.js";
 
 function apply(ctx) {
 	let browser;
@@ -59,15 +60,23 @@ function apply(ctx) {
 				path: API_PREFIX,
 				handler: async (req, res) => {
 					const route = (req.url ?? "/").split("?")[0].slice(API_PREFIX.length + 1);
-					if (req.method !== "POST" || (!Object.hasOwn(routes, route) && route !== "browser.data" && route !== "vault")) {
+					if (req.method !== "POST" && !Object.hasOwn(routes, route) && route !== "browser.data" && route !== "vault" && !Object.hasOwn(dbRoutes, route)) {
 						respondJson(res, 404, { ok: false, error: `unknown route: ${route}` });
+						return;
+					}
+					if (req.method !== "POST") {
+						respondJson(res, 405, { ok: false, error: "POST required" });
 						return;
 					}
 					try {
 						const body = await readJsonBody(req);
 						if (route === "browser.data" && !browser) throw new Error("Browser storage is unavailable in this profile");
 						if (route === "vault" && !vault) throw new Error("Secret vault is unavailable in this profile");
-						const value = route === "browser.data" ? await browser.execute(body) : route === "vault" ? await vault.execute(body) : await routes[route](body, { req, res });
+						let value;
+						if (route === "browser.data") value = await browser.execute(body);
+						else if (route === "vault") value = await vault.execute(body);
+						else if (Object.hasOwn(dbRoutes, route)) value = await dbRoutes[route](body);
+						else value = await routes[route](body, { req, res });
 						respondJson(res, 200, { ok: true, value });
 					} catch (error) {
 						respondJson(res, 200, { ok: false, error: String(error?.message ?? error) });
@@ -84,6 +93,7 @@ function apply(ctx) {
 		stopAllTasks();
 		stopAllStreams();
 		textCache.clear();
+		closeAllDb();
 	}, "code-explorer: servers lifetime");
 }
 

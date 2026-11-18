@@ -2,7 +2,7 @@
  * PanelRow selects a main key; the synchronous panelInfo subscriber routes our
  * keys back to Conversation before opening a right-side page. No DOM patching. */
 import { h, useEffect, useState } from "./react.js";
-import { NS, TAB_KIND, API_TAB_KIND, SKILLS_TAB_KIND } from "./constants.js";
+import { NS, TAB_KIND, API_TAB_KIND, SKILLS_TAB_KIND, DB_TAB_KIND } from "./constants.js";
 import { IconCode } from "./icons.js";
 import { collectBoxes, makeBrowserOpener } from "./launcher.js";
 
@@ -26,10 +26,16 @@ const OWN_TOOLS = [
 	{ kind: TAB_KIND, label: "guide.title", description: "guide.description", glyph: "code" },
 	{ kind: API_TAB_KIND, label: "apiGuide.title", description: "apiGuide.description", glyph: "api" },
 	{ kind: SKILLS_TAB_KIND, label: "skillsGuide.title", description: "skillsGuide.description", glyph: "skills" },
+	{ kind: DB_TAB_KIND, label: "dbGuide.title", description: "dbGuide.description", glyph: "db" },
 ];
 
 export function ToolGlyph({ size = 16, glyph = "code" }) {
 	if (glyph === "code") return h(IconCode, { size });
+	if (glyph === "db") return h("svg", { viewBox: "0 0 24 24", width: size, height: size, fill: "none", stroke: "currentColor", strokeWidth: 1.7, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true },
+		h("ellipse", { key: "t", cx: 12, cy: 5, rx: 8, ry: 3 }),
+		h("path", { key: "m", d: "M4 5v6c0 1.66 3.58 3 8 3s8-1.34 8-3V5" }),
+		h("path", { key: "b", d: "M4 11v6c0 1.66 3.58 3 8 3s8-1.34 8-3v-6" }),
+	);
 	return h("svg", { viewBox: "0 0 24 24", width: size, height: size, fill: "none", stroke: "currentColor", strokeWidth: 1.7, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true },
 		glyph === "api" ? [h("path", { key: "a", d: "M8 3v5m8-5v5M6 8h12v5a6 6 0 0 1-12 0V8Zm6 11v3" })]
 			: [h("path", { key: "s", d: "m12 3 9 5v8l-9 5-9-5V8l9-5Zm0 10 9-5M3 8l9 5v8" })],
