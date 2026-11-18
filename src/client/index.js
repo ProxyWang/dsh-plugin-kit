@@ -11,7 +11,7 @@ import { ApiView, ApiTitle } from "./apiclient.js";
 import { installLeftTools, WorkspaceGuide } from "./lefttools.js";
 import { registerToolCloseGuard } from "./closeguard.js";
 import { installBrowser } from "./browserregister.js";
-import { createTerminalEntry } from "./terminal.js";
+import { createTerminalEntry, installTerminalRefreshGuard } from "./terminal.js";
 import { installRightbarWidth } from "./rightbarwidth.js";
 
 export default {
@@ -36,6 +36,11 @@ export default {
 		// beside itself, so availability is a registry probe rather than a
 		// capability this plugin implements.
 		const terminal = createTerminalEntry({ sidebarRight: ctx.sidebarRight, sidebarRightTabs: ctx.sidebarRightTabs });
+		// The host xterm DOM renderer can drop incremental repaints while a
+		// terminal pane slides in / hides / resizes, leaving erased glyphs on
+		// screen though the buffer is correct. Repay full refreshes at those
+		// lifecycle moments via the textarea's blur handler (no PTY resize).
+		safe("terminal refresh guard", () => installTerminalRefreshGuard());
 		ctx.inject(["workspaces"], (browserCtx) => {
 			browserCtx.effect(() => installBrowser(browserCtx, bound), "toolbox: enhanced browser");
 		});

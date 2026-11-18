@@ -90,6 +90,116 @@ export function scheduleTerminalFocus({
 	};
 }
 
+// The host's xterm DOM renderer drops incremental row refreshes while its
+// screen is off-viewport (IntersectionObserver pause during the dock slide-in,
+// hidden tab toggles, pane resizes). The buffer stays correct — commands run
+// fine — but erased cells keep their old glyphs until a FULL refresh lands.
+// A real resize heals it (user-confirmed); so does DomRenderer.handleBlur,
+// which repaints every row without touching PTY dimensions or shell state.
+// Dispatching a synthetic `blur` FocusEvent on the xterm textarea is therefore
+// a safe, side-effect-free full-refresh lever: no SIGWINCH, no prompt redraw,
+// no focus steal (the event does not move document.activeElement).
+const REFRESH_SETTLE_MS = 180;
+
+/**
+ * Force one full repaint of a host terminal screen via its textarea's blur
+ * handler. Skips screens that are detached, hidden, or not yet connected.
+ *
+ * @param screen - a `[data-sidebar-terminal]` element.
+ * @returns whether a repaint was requested.
+ */
+export function refreshHostTerminalScreen(screen, FE = globalThis.FocusEvent) {
+	try {
+		if (!screen || screen.isConnected === false) return false;
+		if (screen.closest?.('[aria-hidden="true"], [hidden], [inert]')) return false;
+		const textarea = screen.querySelector?.(".xterm textarea");
+		if (!textarea) return false;
+		const EventCtor = typeof FE === "function" ? FE : globalThis.Event;
+		if (typeof EventCtor !== "function") return false;
+		textarea.dispatchEvent(new EventCtor("blur"));
+		return true;
+	} catch {
+		return false;
+	}
+}
+
+/**
+ * Watch host terminal screens and heal dropped refreshes at the moments they
+ * happen: when a screen (re)enters the viewport, and shortly after window
+ * resizes settle. One delayed blur per trigger burst; never polls, never
+ * touches steady-state typing.
+ *
+ * @returns a disposer removing every observer/listener/timer.
+ */
+export function installTerminalRefreshGuard({
+	doc = globalThis.document,
+	view = globalThis.window,
+	setTimer = (fn, ms) => setTimeout(fn, ms),
+	clearTimer = (id) => clearTimeout(id),
+	IO = globalThis.IntersectionObserver,
+	MO = globalThis.MutationObserver,
+} = {}) {
+	if (typeof doc?.querySelectorAll !== "function") return () => {};
+	let timer = null;
+	const pending = new Set();
+	const flush = () => {
+		timer = null;
+		for (const screen of pending) refreshHostTerminalScreen(screen);
+		pending.clear();
+	};
+	const schedule = (screen) => {
+		if (!screen) return;
+		pending.add(screen);
+		if (timer !== null) clearTimer(timer);
+		timer = setTimer(flush, REFRESH_SETTLE_MS);
+	};
+	const visibleScreens = () => {
+		try {
+			return [...doc.querySelectorAll("[data-sidebar-terminal]")].filter((s) => s?.isConnected !== false && !s.closest?.('[aria-hidden="true"], [hidden], [inert]'));
+		} catch {
+			return [];
+		}
+	};
+	// Intersection transitions: a screen becoming visible after the slide-in
+	// or a tab switch is exactly when paused refreshes must be repaid.
+	let io = null;
+	const observed = new WeakSet();
+	const observeAll = () => {
+		if (!io) return;
+		for (const screen of visibleScreens()) {
+			if (observed.has(screen)) continue;
+			observed.add(screen);
+			io.observe(screen);
+		}
+	};
+	if (typeof IO === "function") {
+		io = new IO((entries) => {
+			for (const entry of entries) {
+				if (entry.isIntersecting) schedule(entry.target);
+			}
+		}, { threshold: 0 });
+		observeAll();
+	}
+	// New terminals mount after us; a light MutationObserver keeps IO coverage
+	// current without polling. Only childList on the body subtree is needed.
+	let mo = null;
+	if (typeof MO === "function" && doc.body) {
+		mo = new MO(() => observeAll());
+		mo.observe(doc.body, { childList: true, subtree: true });
+	}
+	// Resize settle: the host fit may land mid-gesture; repay once it ends.
+	const onResize = () => { for (const screen of visibleScreens()) schedule(screen); };
+	if (typeof view?.addEventListener === "function") view.addEventListener("resize", onResize);
+	return () => {
+		if (timer !== null) clearTimer(timer);
+		timer = null;
+		pending.clear();
+		io?.disconnect();
+		mo?.disconnect();
+		try { view?.removeEventListener?.("resize", onResize); } catch {}
+	};
+}
+
 /** Whether the host registers the interactive terminal tab type in this profile. */
 export function terminalKindRegistered(tabs) {
 	try {

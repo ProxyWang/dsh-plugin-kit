@@ -1,4 +1,5 @@
 // Drives the host half through a fake webServer to exercise every route.
+import assert from "node:assert/strict";
 import { Readable } from "node:stream";
 import { execFileSync, spawnSync } from "node:child_process";
 import { mkdirSync, writeFileSync, appendFileSync, readFileSync, rmSync, symlinkSync, existsSync } from "node:fs";
@@ -49,6 +50,18 @@ const ctx = {
 	},
 	skills: {
 		list: async () => [{ name: "registry-fake", description: "from registry", provider: "office-plugin" }],
+	},
+	storageDomain: {
+		async open(spec) {
+			let value = structuredClone(spec.global.initial);
+			return {
+				global: {
+					get: () => value,
+					async set(next) { value = structuredClone(next); },
+				},
+				async close() {},
+			};
+		},
 	},
 };
 
@@ -844,5 +857,35 @@ if (hasNpm) {
 }
 
 for (const cleanup of cleanups) cleanup();
+
+// --- vault service: secret persistence for the API workbench ---------------------------
+{
+	const { createVaultService } = await import("./lib/host/vault.js");
+	let stored;
+	const fakeStorageDomain = {
+		async open(spec) {
+			stored = structuredClone(spec.global.initial);
+			return { global: { get: () => stored, async set(next) { stored = structuredClone(next); } }, async close() {} };
+		},
+	};
+	const vault = createVaultService(fakeStorageDomain);
+	const set1 = await vault.execute({ action: "set", entries: [{ key: "auth.token", value: "sk-secret-123" }] });
+	check("vault.set mints an id and stores the secret", typeof set1.ids["auth.token"] === "string" && set1.revision === 1, set1);
+	const got = await vault.execute({ action: "get", ids: [set1.ids["auth.token"]] });
+	check("vault.get returns the stored plaintext", got.values[set1.ids["auth.token"]] === "sk-secret-123", got.values);
+	const set2 = await vault.execute({ action: "set", entries: [{ key: "env.var", value: "DB_PASS=secret" }] });
+	check("vault.set mints a second independent id", set2.ids["env.var"] !== set1.ids["auth.token"], set2.ids);
+	const reSet = await vault.execute({ action: "set", entries: [{ key: "auth.token", id: set1.ids["auth.token"], value: "sk-updated" }] });
+	check("vault.set with existing id updates in place", reSet.ids["auth.token"] === set1.ids["auth.token"], reSet.ids);
+	const gotUpdated = await vault.execute({ action: "get", ids: [set1.ids["auth.token"]] });
+	check("vault.get returns the updated value", gotUpdated.values[set1.ids["auth.token"]] === "sk-updated", gotUpdated.values);
+	const del = await vault.execute({ action: "delete", ids: [set1.ids["auth.token"]] });
+	check("vault.delete removes the entry", !Object.hasOwn(stored.secrets, set1.ids["auth.token"]), null);
+	const gotAfterDel = await vault.execute({ action: "get", ids: [set1.ids["auth.token"]] });
+	check("vault.get after delete returns nothing for that id", !Object.hasOwn(gotAfterDel.values, set1.ids["auth.token"]), gotAfterDel.values);
+	await vault.close();
+	await assert.rejects(vault.execute({ action: "get", ids: [] }), /closed/, "vault refuses after close");
+}
+
 console.log(`\n${pass} passed, ${fail} failed${skipped ? `, ${skipped} skipped` : ""}`);
 process.exit(fail ? 1 : 0);

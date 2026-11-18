@@ -2847,6 +2847,79 @@ check("docAction reloads clean drafts, flags dirty ones, ignores others", docAct
 		check("visible tabs still focus the editor on reveal jumps", codeFocusCalls === 1, codeFocusCalls);
 		renderHidden.unmount();
 	} finally { Object.assign(globalThis, hiddenGlobals); }
+
+	// Terminal refresh guard: dropped-refresh heal via synthetic textarea blur.
+	const { refreshHostTerminalScreen, installTerminalRefreshGuard } = await import("./src/client/terminal.js");
+	const makeGuardScreen = ({ connected = true, hidden = false, withTa = true } = {}) => {
+		const events = [];
+		const textarea = { dispatchEvent(ev) { events.push(ev.type); return true; } };
+		const screen = {
+			isConnected: connected,
+			closest: (sel) => (hidden && /aria-hidden|hidden|inert/.test(sel) ? {} : null),
+			querySelector: (sel) => (sel === ".xterm textarea" && withTa ? textarea : null),
+		};
+		return { screen, textarea, events };
+	};
+	const FakeFocusEvent = class { constructor(type) { this.type = type; } };
+	const gLive = makeGuardScreen();
+	check("refresh guard dispatches blur on a live terminal textarea", refreshHostTerminalScreen(gLive.screen, FakeFocusEvent) === true && gLive.events.join() === "blur", gLive.events);
+	const gHidden = makeGuardScreen({ hidden: true });
+	check("refresh guard skips hidden terminals", refreshHostTerminalScreen(gHidden.screen) === false && gHidden.events.length === 0, null);
+	const gDetached = makeGuardScreen({ connected: false });
+	check("refresh guard skips detached terminals", refreshHostTerminalScreen(gDetached.screen) === false, null);
+	const gNoTa = makeGuardScreen({ withTa: false });
+	check("refresh guard skips terminals without a textarea", refreshHostTerminalScreen(gNoTa.screen) === false, null);
+	check("refresh guard survives a missing screen", refreshHostTerminalScreen(null) === false, null);
+
+	// Guard lifecycle: IO entry schedules one delayed blur per burst; resize
+	// schedules visible screens; disposer removes everything.
+	{
+		const guardTimers = new Map(); let guardNextId = 1;
+		const gSetTimer = (fn) => { const id = guardNextId++; guardTimers.set(id, fn); return id; };
+		const gClearTimer = (id) => guardTimers.delete(id);
+		const fireGuardTimers = () => { for (const [id, fn] of [...guardTimers]) { guardTimers.delete(id); fn(); } };
+		let ioCallback = null; const ioObserved = [];
+		class FakeIO { constructor(cb) { ioCallback = cb; } observe(el) { ioObserved.push(el); } disconnect() { ioObserved.length = 0; } }
+		let moCallback = null;
+		class FakeMO { constructor(cb) { moCallback = cb; } observe() {} disconnect() { moCallback = null; } }
+		const gScreenA = makeGuardScreen();
+		const gScreenB = makeGuardScreen();
+		const gDoc = {
+			body: {},
+			querySelectorAll: (sel) => (sel === "[data-sidebar-terminal]" ? [gScreenA.screen, gScreenB.screen] : []),
+		};
+		const resizeListeners = [];
+		const gView = { addEventListener: (n, fn) => resizeListeners.push([n, fn]), removeEventListener: (n, fn) => { const i = resizeListeners.findIndex(([nn, ff]) => nn === n && ff === fn); if (i >= 0) resizeListeners.splice(i, 1); } };
+		const savedFO = globalThis.FocusEvent;
+		globalThis.FocusEvent = class { constructor(type) { this.type = type; } };
+		try {
+			const dispose = installTerminalRefreshGuard({ doc: gDoc, view: gView, setTimer: gSetTimer, clearTimer: gClearTimer, IO: FakeIO, MO: FakeMO });
+			check("guard observes existing terminal screens", ioObserved.length === 2, ioObserved.length);
+			// IO burst: both become visible -> one timer, both blurred on flush.
+			ioCallback([{ isIntersecting: true, target: gScreenA.screen }, { isIntersecting: true, target: gScreenB.screen }]);
+			ioCallback([{ isIntersecting: true, target: gScreenA.screen }]);
+			check("guard coalesces a visibility burst into one timer", guardTimers.size === 1, guardTimers.size);
+			fireGuardTimers();
+			check("guard repaints every screen in the burst", gScreenA.events.join() === "blur" && gScreenB.events.join() === "blur", [gScreenA.events, gScreenB.events]);
+			// Non-intersecting entries never schedule.
+			gScreenA.events.length = 0; gScreenB.events.length = 0;
+			ioCallback([{ isIntersecting: false, target: gScreenA.screen }]);
+			check("guard ignores off-viewport entries", guardTimers.size === 0, null);
+			// Resize schedules visible screens.
+			resizeListeners.find(([n]) => n === "resize")[1]();
+			fireGuardTimers();
+			check("guard repaints on window resize settle", gScreenA.events.length === 1 && gScreenB.events.length === 1, null);
+			// MutationObserver picks up newly mounted screens.
+			const gScreenC = makeGuardScreen();
+			gDoc.querySelectorAll = () => [gScreenA.screen, gScreenB.screen, gScreenC.screen];
+			moCallback();
+			check("guard observes terminals mounted after install", ioObserved.includes(gScreenC.screen), ioObserved.length);
+			dispose();
+			check("guard disposer clears timers, observers and listeners", guardTimers.size === 0 && ioObserved.length === 0 && resizeListeners.length === 0 && moCallback === null, null);
+		} finally {
+			if (savedFO === undefined) delete globalThis.FocusEvent; else globalThis.FocusEvent = savedFO;
+		}
+	}
 }
 
 // --- hover tooltip + VS Code click model -----------------------------------------------
@@ -2932,6 +3005,38 @@ check("docAction reloads clean drafts, flags dirty ones, ignores others", docAct
 		check("cmd-click still jumps to definition", lspCalls.filter((c) => c.kind === "definition").length === defBefore + 1, null);
 		render.unmount();
 	} finally { Object.assign(globalThis, hoverGlobals); }
+}
+
+// --- API store: per-workspace scoping + secret refs ------------------------------------
+{
+	const { apiKey, workspaceScope, legacyApiKey, migrateLegacyApiStores, collectSecretRefs, resolveSecrets, isSecretRef, secretRef, secretId } = await import("./src/client/apistore.js");
+	check("workspaceScope encodes a path safely", workspaceScope("/Users/me/proj") === encodeURIComponent("/Users/me/proj"), workspaceScope("/Users/me/proj"));
+	check("workspaceScope empty → global", workspaceScope("") === "global" && workspaceScope(undefined) === "global", null);
+	check("apiKey produces scoped keys", apiKey("draft", "/w") === `dsh.ce.api.draft.v2.${encodeURIComponent("/w")}`, apiKey("draft", "/w"));
+	check("legacyApiKey matches old global keys", legacyApiKey("draft") === "dsh.ce.api.draft.v1" && legacyApiKey("env") === "dsh.ce.api.env.v1", null);
+	// Migration: legacy global stores move into the first workspace.
+	const fakeStorage = { _data: {}, getItem(k) { return Object.hasOwn(this._data, k) ? this._data[k] : null; }, setItem(k, v) { this._data[k] = String(v); }, removeItem(k) { delete this._data[k]; } };
+	fakeStorage._data["dsh.ce.api.draft.v1"] = '{"method":"POST"}';
+	fakeStorage._data["dsh.ce.api.history.v1"] = '[{"id":"h1"}]';
+	const moved = migrateLegacyApiStores("/first-ws", fakeStorage);
+	check("migration moves legacy stores to the first workspace", moved.includes("draft") && moved.includes("history"), moved);
+	check("migration leaves the legacy keys empty", fakeStorage.getItem("dsh.ce.api.draft.v1") === null, null);
+	check("migration writes the new scoped key", fakeStorage.getItem(apiKey("draft", "/first-ws")) === '{"method":"POST"}', null);
+	check("migration sets the flag so it never runs again", fakeStorage.getItem("dsh.ce.api.migrated.v1") !== null, null);
+	const movedAgain = migrateLegacyApiStores("/second-ws", fakeStorage);
+	check("second workspace does not re-migrate", movedAgain.length === 0, movedAgain);
+	// Secret refs
+	check("isSecretRef detects markers", isSecretRef("secret:abc-123") && !isSecretRef("plain text") && !isSecretRef(""), null);
+	check("secretRef builds marker", secretRef("abc") === "secret:abc", null);
+	check("secretId extracts id", secretId("secret:xyz") === "xyz" && secretId("plain") === null, null);
+	// collectSecretRefs walks auth and env vars
+	const refs = collectSecretRefs({ auth: { token: "secret:t1", pass: "plain" }, envs: [{ id: "e1", vars: [{ name: "DB", value: "secret:e2" }] }] });
+	check("collectSecretRefs finds auth.token and env var refs", refs.includes("t1") && refs.includes("e2") && !refs.includes("plain"), refs);
+	// resolveSecrets replaces markers with lookup values
+	const resolved = resolveSecrets({ auth: { mode: "bearer", token: "secret:t1", pass: "keep" }, envs: [{ id: "e1", vars: [{ name: "DB", value: "secret:e2" }] }] }, { t1: "real-token", e2: "real-pass" });
+	check("resolveSecrets substitutes known refs", resolved.auth.token === "real-token" && resolved.auth.pass === "keep" && resolved.envs[0].vars[0].value === "real-pass", resolved);
+	check("resolveSecrets unknown ref → empty string", resolveSecrets({ auth: { token: "secret:gone" } }, {}).auth.token === "", null);
+	check("resolveSecrets does not mutate input", (() => { const o = { auth: { token: "secret:x" } }; resolveSecrets(o, { x: "y" }); return o.auth.token; })() === "secret:x", null);
 }
 
 // --- the generated bundle: registration + factory --------------------------------------

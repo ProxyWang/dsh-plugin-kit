@@ -1557,6 +1557,90 @@ function scheduleTerminalFocus({
     if (timer !== null) clearTimer(timer);
   };
 }
+var REFRESH_SETTLE_MS = 180;
+function refreshHostTerminalScreen(screen, FE = globalThis.FocusEvent) {
+  try {
+    if (!screen || screen.isConnected === false) return false;
+    if (screen.closest?.('[aria-hidden="true"], [hidden], [inert]')) return false;
+    const textarea = screen.querySelector?.(".xterm textarea");
+    if (!textarea) return false;
+    const EventCtor = typeof FE === "function" ? FE : globalThis.Event;
+    if (typeof EventCtor !== "function") return false;
+    textarea.dispatchEvent(new EventCtor("blur"));
+    return true;
+  } catch {
+    return false;
+  }
+}
+function installTerminalRefreshGuard({
+  doc = globalThis.document,
+  view = globalThis.window,
+  setTimer = (fn, ms) => setTimeout(fn, ms),
+  clearTimer = (id) => clearTimeout(id),
+  IO = globalThis.IntersectionObserver,
+  MO = globalThis.MutationObserver
+} = {}) {
+  if (typeof doc?.querySelectorAll !== "function") return () => {
+  };
+  let timer = null;
+  const pending = /* @__PURE__ */ new Set();
+  const flush = () => {
+    timer = null;
+    for (const screen of pending) refreshHostTerminalScreen(screen);
+    pending.clear();
+  };
+  const schedule = (screen) => {
+    if (!screen) return;
+    pending.add(screen);
+    if (timer !== null) clearTimer(timer);
+    timer = setTimer(flush, REFRESH_SETTLE_MS);
+  };
+  const visibleScreens = () => {
+    try {
+      return [...doc.querySelectorAll("[data-sidebar-terminal]")].filter((s) => s?.isConnected !== false && !s.closest?.('[aria-hidden="true"], [hidden], [inert]'));
+    } catch {
+      return [];
+    }
+  };
+  let io = null;
+  const observed = /* @__PURE__ */ new WeakSet();
+  const observeAll = () => {
+    if (!io) return;
+    for (const screen of visibleScreens()) {
+      if (observed.has(screen)) continue;
+      observed.add(screen);
+      io.observe(screen);
+    }
+  };
+  if (typeof IO === "function") {
+    io = new IO((entries) => {
+      for (const entry of entries) {
+        if (entry.isIntersecting) schedule(entry.target);
+      }
+    }, { threshold: 0 });
+    observeAll();
+  }
+  let mo = null;
+  if (typeof MO === "function" && doc.body) {
+    mo = new MO(() => observeAll());
+    mo.observe(doc.body, { childList: true, subtree: true });
+  }
+  const onResize = () => {
+    for (const screen of visibleScreens()) schedule(screen);
+  };
+  if (typeof view?.addEventListener === "function") view.addEventListener("resize", onResize);
+  return () => {
+    if (timer !== null) clearTimer(timer);
+    timer = null;
+    pending.clear();
+    io?.disconnect();
+    mo?.disconnect();
+    try {
+      view?.removeEventListener?.("resize", onResize);
+    } catch {
+    }
+  };
+}
 function terminalKindRegistered(tabs) {
   try {
     const entries = typeof tabs?.entries === "function" ? tabs.entries() : [];
@@ -10546,12 +10630,88 @@ function RequestFields({ t, label, rows, onChange, hint }) {
   );
 }
 
+// src/client/apistore.js
+var PREFIX = "dsh.ce.api";
+var LEGACY_SUFFIX = { draft: "draft.v1", history: "history.v1", saved: "saved.v1", env: "env.v1", colldir: "colldir.v1" };
+var MIGRATED_FLAG = "dsh.ce.api.migrated.v1";
+function workspaceScope(cwd) {
+  const clean = String(cwd ?? "").trim();
+  if (clean === "") return "global";
+  return encodeURIComponent(clean);
+}
+function apiKey(kind, cwd) {
+  return `${PREFIX}.${kind}.v2.${workspaceScope(cwd)}`;
+}
+function legacyApiKey(kind) {
+  return `${PREFIX}.${LEGACY_SUFFIX[kind] ?? kind}`;
+}
+function migrateLegacyApiStores(cwd, storage = globalThis.localStorage) {
+  if (!cwd || !storage) return [];
+  try {
+    if (storage.getItem(MIGRATED_FLAG) !== null) return [];
+  } catch {
+    return [];
+  }
+  const moved = [];
+  for (const kind of Object.keys(LEGACY_SUFFIX)) {
+    let raw = null;
+    try {
+      raw = storage.getItem(legacyApiKey(kind));
+    } catch {
+      continue;
+    }
+    if (raw === null) continue;
+    try {
+      storage.setItem(apiKey(kind, cwd), raw);
+      storage.removeItem(legacyApiKey(kind));
+      moved.push(kind);
+    } catch {
+    }
+  }
+  try {
+    storage.setItem(MIGRATED_FLAG, String(Date.now()));
+  } catch {
+  }
+  return moved;
+}
+var SECRET_PREFIX = "secret:";
+function isSecretRef(value) {
+  return typeof value === "string" && value.startsWith(SECRET_PREFIX) && value.length > SECRET_PREFIX.length;
+}
+function secretRef(id) {
+  return `${SECRET_PREFIX}${id}`;
+}
+function secretId(value) {
+  return isSecretRef(value) ? value.slice(SECRET_PREFIX.length) : null;
+}
+function collectSecretRefs(shape) {
+  const ids = /* @__PURE__ */ new Set();
+  const visit = (value) => {
+    if (isSecretRef(value)) ids.add(secretId(value));
+  };
+  if (shape && typeof shape === "object") {
+    if (shape.auth && typeof shape.auth === "object") {
+      visit(shape.auth.token);
+      visit(shape.auth.pass);
+    }
+    if (Array.isArray(shape.envs)) {
+      for (const env of shape.envs) for (const v of env?.vars ?? []) visit(v?.value);
+    }
+    if (Array.isArray(shape.vars)) for (const v of shape.vars) visit(v?.value);
+  }
+  return [...ids];
+}
+function resolveSecrets(shape, lookup) {
+  const subst = (value) => isSecretRef(value) ? String(lookup?.[secretId(value)] ?? "") : value;
+  if (!shape || typeof shape !== "object") return shape;
+  const out = { ...shape };
+  if (shape.auth && typeof shape.auth === "object") out.auth = { ...shape.auth, token: subst(shape.auth.token), pass: subst(shape.auth.pass) };
+  if (Array.isArray(shape.envs)) out.envs = shape.envs.map((env) => ({ ...env, vars: (env?.vars ?? []).map((v) => ({ ...v, value: subst(v?.value) })) }));
+  if (Array.isArray(shape.vars)) out.vars = shape.vars.map((v) => ({ ...v, value: subst(v?.value) }));
+  return out;
+}
+
 // src/client/apiclient.js
-var DRAFT_KEY = "dsh.ce.api.draft.v1";
-var HIST_KEY = "dsh.ce.api.history.v1";
-var SAVED_KEY = "dsh.ce.api.saved.v1";
-var ENV_KEY = "dsh.ce.api.env.v1";
-var COLLDIR_KEY = "dsh.ce.api.colldir.v1";
 var HIST_CAP = 30;
 var SAVED_CAP = 50;
 var SNAPSHOT_V = 2;
@@ -10595,6 +10755,31 @@ function restoredUrlParams(req) {
 function ApiView({ t, useTabInfo, sessionId, useSessions }) {
   const cwd = useSessions ? useSessions((sessions) => sessionId ? sessions.byId[sessionId]?.cwd : void 0) : void 0;
   const hostTab = useTabInfo ? useTabInfo()?.tab : null;
+  const scopeCwd = cwd ?? "";
+  const keys = useMemo(() => ({
+    draft: apiKey("draft", scopeCwd),
+    history: apiKey("history", scopeCwd),
+    saved: apiKey("saved", scopeCwd),
+    env: apiKey("env", scopeCwd),
+    colldir: apiKey("colldir", scopeCwd)
+  }), [scopeCwd]);
+  const migratedRef = useRef(false);
+  if (!migratedRef.current && scopeCwd) {
+    migratedRef.current = true;
+    migrateLegacyApiStores(scopeCwd);
+  }
+  const [vaultReady, setVaultReady] = useState(false);
+  const secretCacheRef = useRef({});
+  const secretIdByKeyRef = useRef({});
+  const vaultProbeRef = useRef(false);
+  useEffect(() => {
+    if (vaultProbeRef.current) return;
+    vaultProbeRef.current = true;
+    api("vault", { action: "get", ids: [] }).then((res) => {
+      if (res.ok) setVaultReady(true);
+    }).catch(() => {
+    });
+  }, []);
   const [method, setMethod] = useState("GET");
   const [url, setUrl] = useState("");
   const [headers, setHeaders] = useState([]);
@@ -10619,7 +10804,7 @@ function ApiView({ t, useTabInfo, sessionId, useSessions }) {
   const [saveName, setSaveName] = useState("");
   const [collectionDir, setCollectionDir] = useState(() => {
     try {
-      return localStorage.getItem(COLLDIR_KEY) ?? "";
+      return localStorage.getItem(apiKey("colldir", scopeCwd)) ?? "";
     } catch {
       return "";
     }
@@ -10627,7 +10812,7 @@ function ApiView({ t, useTabInfo, sessionId, useSessions }) {
   const [saveToCollection, setSaveToCollection] = useState(true);
   const [codeMenuOpen, setCodeMenuOpen] = useState(false);
   const [copiedCode, setCopiedCode] = useState("");
-  const [envStore, setEnvStore] = useState(() => normalizeEnvStore(loadJson(ENV_KEY)));
+  const [envStore, setEnvStore] = useState(() => normalizeEnvStore(loadJson(apiKey("env", scopeCwd))));
   const [envNameDraft, setEnvNameDraft] = useState(null);
   const [envDeleteArmed, setEnvDeleteArmed] = useState(false);
   const importRef = useDismissLayer({ open: importOpen, onDismiss: () => setImportOpen(false), ignoreSelector: '[data-ce-popup-trigger="api-import"]' });
@@ -10662,39 +10847,146 @@ function ApiView({ t, useTabInfo, sessionId, useSessions }) {
     if (!rect || rect.height <= 0) return;
     setSplit((event.clientY - rect.top) / rect.height * 100);
   };
+  const loadScopeRef = useRef(null);
   useEffect(() => {
-    storeJson(ENV_KEY, envStore);
-  }, [envStore]);
-  useEffect(() => {
-    setHistory(loadList(HIST_KEY));
-    setSaved(loadList(SAVED_KEY));
-  }, []);
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(DRAFT_KEY);
-      if (raw === null) return;
-      const d = JSON.parse(raw);
-      if (typeof d.method === "string") setMethod(d.method);
-      const restored = restoredUrlParams(d);
-      setUrl(restored.url);
-      setParamPairs(restored.pairs);
-      if (Array.isArray(d.headers)) setHeaders(d.headers);
-      if (typeof d.bodyType === "string") {
-        setBodyType(d.bodyType);
-        if (d.bodyType !== "none") setRequestTab("body");
+    if (loadScopeRef.current === scopeCwd) return;
+    loadScopeRef.current = scopeCwd;
+    let cancelled = false;
+    const draftRaw = loadJson(keys.draft);
+    const envRaw = normalizeEnvStore(loadJson(keys.env));
+    const histRaw = loadList(keys.history);
+    const savedRaw = loadList(keys.saved);
+    const applyStores = (lookup) => {
+      if (cancelled) return;
+      for (const [id, value] of Object.entries(lookup ?? {})) secretCacheRef.current[id] = value;
+      setHistory(histRaw.map((row) => row?.request ? { ...row, request: resolveSecrets(row.request, lookup) } : row));
+      setSaved(savedRaw.map((row) => row?.request ? { ...row, request: resolveSecrets(row.request, lookup) } : row));
+      setEnvStore(resolveSecrets(envRaw, lookup));
+      try {
+        setCollectionDir(localStorage.getItem(keys.colldir) ?? "");
+      } catch {
+        setCollectionDir("");
       }
-      if (typeof d.rawSub === "string") setRawSub(d.rawSub);
-      if (Array.isArray(d.formPairs)) setFormPairs(d.formPairs);
-      if (typeof d.body === "string") setBody(d.body);
-      if (d.auth) setAuth(normalizeAuth(d.auth));
-      if (Number.isFinite(d.timeoutMs) && d.timeoutMs >= 1e3) setTimeoutMs(Math.min(12e4, d.timeoutMs));
-      if (Array.isArray(d.extracts)) setExtracts(d.extracts);
-    } catch {
+      if (draftRaw && typeof draftRaw === "object") {
+        const d = resolveSecrets(draftRaw, lookup);
+        if (typeof d.method === "string") setMethod(d.method);
+        const restored = restoredUrlParams(d);
+        setUrl(restored.url);
+        setParamPairs(restored.pairs);
+        if (Array.isArray(d.headers)) setHeaders(d.headers);
+        if (typeof d.bodyType === "string") {
+          setBodyType(d.bodyType);
+          if (d.bodyType !== "none") setRequestTab("body");
+        }
+        if (typeof d.rawSub === "string") setRawSub(d.rawSub);
+        if (Array.isArray(d.formPairs)) setFormPairs(d.formPairs);
+        if (typeof d.body === "string") setBody(d.body);
+        if (d.auth) setAuth(normalizeAuth(d.auth));
+        if (Number.isFinite(d.timeoutMs) && d.timeoutMs >= 1e3) setTimeoutMs(Math.min(12e4, d.timeoutMs));
+        if (Array.isArray(d.extracts)) setExtracts(d.extracts);
+      } else {
+        setMethod("GET");
+        setUrl("");
+        setParamPairs([]);
+        setHeaders([]);
+        setBodyType("none");
+        setRawSub("json");
+        setFormPairs([]);
+        setBody("");
+        setAuth(normalizeAuth(null));
+        setTimeoutMs(3e4);
+        setExtracts([]);
+      }
+    };
+    const ids = [...collectSecretRefs(draftRaw), ...collectSecretRefs(envRaw), ...histRaw.flatMap((r) => collectSecretRefs(r?.request)), ...savedRaw.flatMap((r) => collectSecretRefs(r?.request))];
+    if (ids.length === 0) {
+      applyStores({});
+      return () => {
+        cancelled = true;
+      };
     }
-  }, []);
+    api("vault", { action: "get", ids: [...new Set(ids)] }).then((res) => {
+      applyStores(res.ok ? res.value.values ?? {} : {});
+    }).catch(() => applyStores({}));
+    return () => {
+      cancelled = true;
+    };
+  }, [scopeCwd, keys]);
+  const persistWithSecrets = useCallback(async (key, snapshot2, secretEntries) => {
+    if (!vaultReady || secretEntries.length === 0) {
+      storeJson(key, snapshot2);
+      return;
+    }
+    const entries = secretEntries.map(({ stableKey, value }) => ({ key: stableKey, id: secretIdByKeyRef.current[stableKey], value }));
+    const res = await api("vault", { action: "set", entries }).catch(() => null);
+    if (!res?.ok) {
+      storeJson(key, snapshot2);
+      return;
+    }
+    for (const [stableKey, id] of Object.entries(res.value.ids ?? {})) {
+      secretIdByKeyRef.current[stableKey] = id;
+      secretCacheRef.current[id] = entries.find((e) => e.key === stableKey)?.value ?? "";
+    }
+    storeJson(key, snapshot2);
+  }, [vaultReady]);
   useEffect(() => {
-    storeJson(DRAFT_KEY, requestSnapshot({ method, url, headers, bodyType, rawSub, formPairs, body, paramPairs, timeoutMs, auth, extracts }));
-  }, [method, url, headers, bodyType, rawSub, formPairs, body, paramPairs, timeoutMs, auth, extracts]);
+    const snapshot2 = requestSnapshot({ method, url, headers, bodyType, rawSub, formPairs, body, paramPairs, timeoutMs, auth, extracts });
+    const secretEntries = [];
+    if (vaultReady) {
+      if (auth.mode === "bearer" && String(auth.token ?? "") !== "" && !isSecretRef(auth.token)) {
+        secretEntries.push({ stableKey: "auth.token", value: String(auth.token) });
+      }
+      if (auth.mode === "basic" && String(auth.pass ?? "") !== "" && !isSecretRef(auth.pass)) {
+        secretEntries.push({ stableKey: "auth.pass", value: String(auth.pass) });
+      }
+    }
+    if (secretEntries.length === 0) {
+      storeJson(keys.draft, snapshot2);
+      return;
+    }
+    const refSnapshot = { ...snapshot2, auth: { ...auth } };
+    let pending = Promise.resolve();
+    for (const { stableKey } of secretEntries) {
+      const existing = secretIdByKeyRef.current[stableKey];
+      if (existing) {
+        if (stableKey === "auth.token") refSnapshot.auth.token = secretRef(existing);
+        else refSnapshot.auth.pass = secretRef(existing);
+      }
+    }
+    storeJson(keys.draft, refSnapshot);
+    pending = persistWithSecrets(keys.draft, snapshot2, secretEntries).then(() => {
+      const finalSnapshot = { ...snapshot2, auth: { ...auth } };
+      if (secretIdByKeyRef.current["auth.token"] && auth.mode === "bearer") finalSnapshot.auth.token = secretRef(secretIdByKeyRef.current["auth.token"]);
+      if (secretIdByKeyRef.current["auth.pass"] && auth.mode === "basic") finalSnapshot.auth.pass = secretRef(secretIdByKeyRef.current["auth.pass"]);
+      storeJson(keys.draft, finalSnapshot);
+    });
+    void pending;
+  }, [method, url, headers, bodyType, rawSub, formPairs, body, paramPairs, timeoutMs, auth, extracts, keys.draft, vaultReady, persistWithSecrets]);
+  useEffect(() => {
+    if (!vaultReady) {
+      storeJson(keys.env, envStore);
+      return;
+    }
+    const entries = [];
+    const refStore = { ...envStore, envs: envStore.envs.map((env) => ({ ...env, vars: (env.vars ?? []).map((v) => {
+      const value = String(v?.value ?? "");
+      if (value === "" || isSecretRef(value)) return v;
+      const stableKey = `env:${env.id}:${v.name}`;
+      entries.push({ stableKey, value });
+      const existing = secretIdByKeyRef.current[stableKey];
+      return existing ? { ...v, value: secretRef(existing) } : v;
+    }) })) };
+    storeJson(keys.env, refStore);
+    if (entries.length === 0) return;
+    void persistWithSecrets(keys.env, envStore, entries).then(() => {
+      const finalStore = { ...envStore, envs: envStore.envs.map((env) => ({ ...env, vars: (env.vars ?? []).map((v) => {
+        const stableKey = `env:${env.id}:${v.name}`;
+        const id = secretIdByKeyRef.current[stableKey];
+        return id && String(v?.value ?? "") !== "" ? { ...v, value: secretRef(id) } : v;
+      }) })) };
+      storeJson(keys.env, finalStore);
+    });
+  }, [envStore, keys.env, vaultReady, persistWithSecrets]);
   useEffect(() => () => {
     if (copiedTimer.current) clearTimeout(copiedTimer.current);
   }, []);
@@ -10711,31 +11003,41 @@ function ApiView({ t, useTabInfo, sessionId, useSessions }) {
     [method, url, headers, bodyType, rawSub, formPairs, body, paramPairs, timeoutMs, auth, extracts]
   );
   const snapshot = useCallback(() => requestSnapshot(editorState()), [editorState]);
+  const snapshotWithRefs = useCallback((snap) => {
+    if (!vaultReady) return snap;
+    const out = { ...snap, auth: { ...snap.auth } };
+    const tokenId = secretIdByKeyRef.current["auth.token"];
+    const passId = secretIdByKeyRef.current["auth.pass"];
+    if (tokenId && out.auth?.mode === "bearer" && String(out.auth.token ?? "") !== "") out.auth.token = secretRef(tokenId);
+    if (passId && out.auth?.mode === "basic" && String(out.auth.pass ?? "") !== "") out.auth.pass = secretRef(passId);
+    return out;
+  }, [vaultReady]);
   const restoreRequest = useCallback((req) => {
     if (!req || typeof req !== "object") return;
-    if (typeof req.method === "string") setMethod(req.method);
-    const restored = restoredUrlParams(req);
+    const r = resolveSecrets(req, secretCacheRef.current);
+    if (typeof r.method === "string") setMethod(r.method);
+    const restored = restoredUrlParams(r);
     setUrl(restored.url);
     setParamPairs(restored.pairs);
-    if (Array.isArray(req.headers)) setHeaders(req.headers);
-    if (typeof req.bodyType === "string") {
-      setBodyType(req.bodyType);
-      setRequestTab(req.bodyType === "none" ? "params" : "body");
+    if (Array.isArray(r.headers)) setHeaders(r.headers);
+    if (typeof r.bodyType === "string") {
+      setBodyType(r.bodyType);
+      setRequestTab(r.bodyType === "none" ? "params" : "body");
     }
-    if (typeof req.rawSub === "string") setRawSub(req.rawSub);
-    if (Array.isArray(req.formPairs)) setFormPairs(req.formPairs);
-    if (typeof req.body === "string") setBody(req.body);
-    setAuth(normalizeAuth(req.auth));
-    if (Array.isArray(req.extracts)) setExtracts(req.extracts);
+    if (typeof r.rawSub === "string") setRawSub(r.rawSub);
+    if (Array.isArray(r.formPairs)) setFormPairs(r.formPairs);
+    if (typeof r.body === "string") setBody(r.body);
+    setAuth(normalizeAuth(r.auth));
+    if (Array.isArray(r.extracts)) setExtracts(r.extracts);
     else setExtracts([]);
-    if (Number.isFinite(req.timeoutMs) && req.timeoutMs >= 1e3) setTimeoutMs(Math.min(12e4, req.timeoutMs));
+    if (Number.isFinite(r.timeoutMs) && r.timeoutMs >= 1e3) setTimeoutMs(Math.min(12e4, r.timeoutMs));
     setResponse(null);
     setHistOpen(false);
   }, []);
   const send = useCallback(() => {
     if (url.trim() === "" || sending) return;
     const resolved = resolveRequest(editorState(), envMapOf(envStore));
-    const sentSnapshot = snapshot();
+    const sentSnapshot = snapshotWithRefs(snapshot());
     setSending(true);
     setResponseCopied(false);
     api("api.send", resolved).then((res) => {
@@ -10773,7 +11075,7 @@ function ApiView({ t, useTabInfo, sessionId, useSessions }) {
       };
       setHistory((prev) => {
         const next = pushEntry(prev, entry, HIST_CAP);
-        storeJson(HIST_KEY, next);
+        storeJson(keys.history, next);
         return next;
       });
       const { store: nextStore, applied, missed } = applyExtracts(extracts, value, resolved, envStore);
@@ -10784,7 +11086,7 @@ function ApiView({ t, useTabInfo, sessionId, useSessions }) {
         setExtractNote("");
       }
     });
-  }, [url, sending, editorState, snapshot, envStore, extracts, t]);
+  }, [url, sending, editorState, snapshot, snapshotWithRefs, envStore, extracts, t, keys.history]);
   const streamEpoch = useRef(0);
   useEffect(() => {
     if (!stream || stream.state.done) return void 0;
@@ -10852,7 +11154,7 @@ function ApiView({ t, useTabInfo, sessionId, useSessions }) {
       setSaved((prev) => {
         const names = new Set(entries.map((e) => e.name));
         const next = [...entries, ...prev.filter((e) => e && !names.has(e.name))].slice(0, SAVED_CAP);
-        storeJson(SAVED_KEY, next);
+        storeJson(keys.saved, next);
         return next;
       });
       const first = collection.requests[0];
@@ -10913,7 +11215,7 @@ function ApiView({ t, useTabInfo, sessionId, useSessions }) {
   const loadCollection = useCallback(async () => {
     if (collectionDir.trim() === "") return;
     try {
-      localStorage.setItem(COLLDIR_KEY, collectionDir);
+      localStorage.setItem(keys.colldir, collectionDir);
     } catch {
     }
     const res = await api("collection.load", { cwd: cwd ?? "", dir: collectionDir.trim() });
@@ -10942,7 +11244,7 @@ function ApiView({ t, useTabInfo, sessionId, useSessions }) {
     setSaved((prev) => {
       const names = new Set(entries.map((e) => e.name));
       const next = [...entries, ...prev.filter((e) => e && !names.has(e.name))].slice(0, SAVED_CAP);
-      storeJson(SAVED_KEY, next);
+      storeJson(keys.saved, next);
       return next;
     });
     setImportNote(`${(res.value.files ?? []).length} · ${t("api.collectionLoaded")}`);
@@ -10968,34 +11270,34 @@ function ApiView({ t, useTabInfo, sessionId, useSessions }) {
         return;
       }
     }
-    const entry = { id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, name, ts: Date.now(), request: snap };
+    const entry = { id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, name, ts: Date.now(), request: snapshotWithRefs(snap) };
     setSaved((prev) => {
       const next = [entry, ...prev.filter((e) => e && e.name !== name)].slice(0, SAVED_CAP);
-      storeJson(SAVED_KEY, next);
+      storeJson(keys.saved, next);
       return next;
     });
     setSaveName("");
     setSaveOpen(false);
     setHistTab("saved");
     setHistOpen(true);
-  }, [saveName, snapshot, saveToCollection, collectionDir, cwd]);
+  }, [saveName, snapshot, snapshotWithRefs, saveToCollection, collectionDir, cwd, keys.saved]);
   const removeHistory = useCallback((id) => {
     setHistory((prev) => {
       const next = prev.filter((e) => e && e.id !== id);
-      storeJson(HIST_KEY, next);
+      storeJson(keys.history, next);
       return next;
     });
   }, []);
   const removeSaved = useCallback((id) => {
     setSaved((prev) => {
       const next = prev.filter((e) => e && e.id !== id);
-      storeJson(SAVED_KEY, next);
+      storeJson(keys.saved, next);
       return next;
     });
   }, []);
   const clearHistory = useCallback(() => {
     setHistory([]);
-    storeJson(HIST_KEY, []);
+    storeJson(keys.history, []);
   }, []);
   const activeEnv = activeEnvOf(envStore);
   const envDraftName = envNameDraft && activeEnv && envNameDraft.id === activeEnv.id ? envNameDraft.name : activeEnv?.name ?? "";
@@ -12735,6 +13037,7 @@ var index_default = {
     const bound = ctx.locale.bind(NS);
     safe("dictionaries", () => ctx.locale.register(NS, { zh, en }));
     const terminal = createTerminalEntry({ sidebarRight: ctx.sidebarRight, sidebarRightTabs: ctx.sidebarRightTabs });
+    safe("terminal refresh guard", () => installTerminalRefreshGuard());
     ctx.inject(["workspaces"], (browserCtx) => {
       browserCtx.effect(() => installBrowser(browserCtx, bound), "toolbox: enhanced browser");
     });
