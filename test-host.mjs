@@ -960,6 +960,102 @@ for (const cleanup of cleanups) cleanup();
 	check("parseCsv drops the trailing newline row", parsed.length === 3, parsed.length);
 }
 
+// --- executable resolution (PATH, project-local, per-user installs) ---------------------
+{
+	const { binaryCandidates, findBinary, clearBinaryCache, findBinaries } = await import("./lib/host/binpath.js");
+	const root = `${cwd}-binpath`;
+	rmSync(root, { recursive: true, force: true });
+	mkdirSync(`${root}/node_modules/.bin`, { recursive: true });
+	mkdirSync(`${root}/.venv/bin`, { recursive: true });
+	mkdirSync(`${root}-path`, { recursive: true });
+	const fake = (path) => { writeFileSync(path, "#!/bin/sh\nexit 0\n", { mode: 0o755 }); };
+	fake(`${root}/node_modules/.bin/typescript-language-server`);
+	fake(`${root}/.venv/bin/pyright-langserver`);
+	fake(`${root}-path/typescript-language-server`);
+
+	clearBinaryCache();
+	const local = findBinary("typescript-language-server", { root, env: { PATH: `${root}-path` } });
+	check("a project-local server wins over a PATH one", local === `${root}/node_modules/.bin/typescript-language-server`, local);
+	const pathOnly = findBinary("typescript-language-server", { root: `${cwd}-elsewhere`, env: { PATH: `${root}-path` } });
+	check("PATH is searched when the project has none", pathOnly === `${root}-path/typescript-language-server`, pathOnly);
+	const venv = findBinary("pyright-langserver", { root, env: { PATH: "" } });
+	check("a project virtualenv is searched for Python servers", venv === `${root}/.venv/bin/pyright-langserver`, venv);
+	check("a missing binary resolves to null", findBinary("definitely-not-installed-lsp", { root, env: { PATH: "" } }) === null, null);
+
+	clearBinaryCache();
+	const overridden = findBinary("typescript-language-server", { root, env: { PATH: `${root}-path`, DSH_TYPESCRIPT_LANGUAGE_SERVER_BIN: `${root}/.venv/bin/pyright-langserver` } });
+	check("an explicit DSH_*_BIN override wins", overridden === `${root}/.venv/bin/pyright-langserver`, overridden);
+
+	const candidates = binaryCandidates("pyright-langserver", { root, env: { PATH: `${root}-path` } });
+	check("candidate order puts the project first and the bare name last", candidates[0].startsWith(root) && candidates.at(-1) === "pyright-langserver", [candidates[0], candidates.at(-1)]);
+	check("findBinaries returns every available name", findBinaries(["pyright-langserver", "pylsp"], { root }).includes(`${root}/.venv/bin/pyright-langserver`), null);
+
+	// The language-server table resolves through the same lookup.
+	const { LANGUAGE_SERVERS } = await import("./lib/host/lsp.js");
+	const ts = LANGUAGE_SERVERS.find((entry) => entry.id === "ts");
+	const launchers = ts.launchers(root);
+	check("the TypeScript server launcher prefers the project binary", launchers[0].command === `${root}/node_modules/.bin/typescript-language-server` && launchers[0].args[0] === "--stdio", launchers[0]);
+	check("a missing server explains how to install it", typeof ts.install === "string" && ts.install.includes("typescript-language-server"), ts.install);
+	rmSync(root, { recursive: true, force: true });
+	rmSync(`${root}-path`, { recursive: true, force: true });
+	clearBinaryCache();
+}
+
+// --- a project-local language server, started through its node interpreter ---------------
+{
+	// The exact regression: an npm-installed server is a `#!…node` script, and a
+	// Desktop Host's PATH has no `node`, so spawning it directly fails with
+	// ENOENT on a file that exists. The fake server below only works if the
+	// plugin starts it with a real Node and speaks the framing correctly.
+	const root = `${cwd}-lsp`;
+	rmSync(root, { recursive: true, force: true });
+	mkdirSync(`${root}/node_modules/.bin`, { recursive: true });
+	writeFileSync(`${root}/tsconfig.json`, "{}\n");
+	writeFileSync(`${root}/a.ts`, "export const a = 1;\n");
+	writeFileSync(`${root}/node_modules/.bin/typescript-language-server`, `#!/usr/bin/env node
+let buf = Buffer.alloc(0);
+function send(message) {
+  const body = JSON.stringify(message);
+  process.stdout.write("Content-Length: " + Buffer.byteLength(body) + "\\r\\n\\r\\n" + body);
+}
+function handle(message) {
+  if (message.method === "initialize") {
+    send({ jsonrpc: "2.0", id: message.id, result: { capabilities: { hoverProvider: true, referencesProvider: true } } });
+    return;
+  }
+  if (message.method === "textDocument/hover") {
+    send({ jsonrpc: "2.0", id: message.id, result: { contents: "fake hover" } });
+    return;
+  }
+  if (message.method === "textDocument/references") {
+    send({ jsonrpc: "2.0", id: message.id, result: [] });
+    return;
+  }
+  if (message.id !== undefined) send({ jsonrpc: "2.0", id: message.id, result: null });
+}
+process.stdin.on("data", (chunk) => {
+  buf = Buffer.concat([buf, chunk]);
+  for (;;) {
+    const sep = buf.indexOf("\\r\\n\\r\\n");
+    if (sep < 0) return;
+    const match = /Content-Length: (\\d+)/i.exec(buf.subarray(0, sep).toString());
+    const length = Number(match && match[1]);
+    if (buf.length < sep + 4 + length) return;
+    const message = JSON.parse(buf.subarray(sep + 4, sep + 4 + length).toString());
+    buf = buf.subarray(sep + 4 + length);
+    handle(message);
+  }
+});
+`, { mode: 0o755 });
+
+	const { routes } = await import("./lib/host/routes.js");
+	const hovered = await routes["lsp.request"]({ cwd: root, path: "a.ts", kind: "hover", line: 1, col: 5 });
+	check("a project-local server starts through its node interpreter", hovered.status?.state === "ready" && hovered.hover === "fake hover", hovered);
+	const refs = await routes["lsp.request"]({ cwd: root, path: "a.ts", kind: "references", line: 1, col: 5 });
+	check("references go through the same project-local server", Array.isArray(refs.targets) && refs.targets.length === 0, refs);
+	rmSync(root, { recursive: true, force: true });
+}
+
 // --- saved database connections (profiles + vault-held passwords) ------------------------
 {
 	const { createVaultService } = await import("./lib/host/vault.js");

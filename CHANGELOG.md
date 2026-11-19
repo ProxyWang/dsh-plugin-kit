@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased — language servers are found where they actually are
+
+References and definition jumps still failed on files whose server was installed, because the launcher only knew a short list of absolute paths and a bare name resolved against the Host's PATH — and a Desktop Host started from Finder has neither `node` nor an npm bin directory on it:
+
+- **Project-local servers win** ([lib/host/binpath.js](<lib/host/binpath.js>)): the lookup now walks up from the project root through `node_modules/.bin`, `.venv/bin`, `venv/bin` and `.bin`, then PATH, then the per-user install locations (npm/nvm/pnpm/bun/volta/asdf, pyenv/conda, Homebrew, `/usr/local/bin`). `DSH_<NAME>_BIN` overrides everything, and Go keeps its own `GOBIN`/`GOPATH` precedence. The result is memoised.
+- **A shebang script is started with a real Node.** An npm server is a `#!…node` script; spawning it directly needs `env node`, which the Host's PATH does not have, so the spawn failed with ENOENT on a file that plainly exists. Such a target is now run as `<node> <script>`, with the Node resolved by the same lookup.
+- **The failure that gets reported is the informative one.** A candidate that could not spawn is just "not this path"; a server that started and then refused (a missing `typescript`, an unsupported version) is the real answer. The loop used to overwrite that with the last ENOENT and print "not installed".
+- **A missing server says how to install it**, per language (`go install …gopls@latest`, `npm i -g typescript-language-server typescript`, `pip install pyright`).
+- Verified end to end in a scratch TypeScript project whose server lived only in its own `node_modules`: references at a call site returned the declaration and both uses, with `status.state === "ready"`. The database panel's CLI detection now uses the same lookup instead of its own copy.
+- Regressions: project-local wins over PATH, PATH is searched when the project has none, a project virtualenv is searched for Python servers, `DSH_*_BIN` wins, candidate order, every-name lookup, the TypeScript launcher prefers the project binary, the install hint, and a fake node-shebang server that only answers if the plugin starts it with a real Node (hover + references through the route).
+
 ## Unreleased — find references is reachable, and says why it cannot run
 
 "View references" looked broken because there was almost no way to ask for it and no answer when it could not work:
