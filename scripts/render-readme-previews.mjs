@@ -306,7 +306,8 @@ async function dbPreview() {
 
  button(t("db.connect")).props.onClick();
  tree = draw();
- pick(tree, (node) => node.props.className === "ce-input" && node.props.placeholder === "/path/to/app.sqlite").props.onChange({ target: { value: "/demo/demo.sqlite" } });
+ // The dialog asks for the target only; the driver is inferred from it.
+ pick(tree, (node) => node.props.className === "ce-input" && node.props.placeholder === t("db.addressPlaceholder")).props.onChange({ target: { value: "/demo/demo.sqlite" } });
  tree = draw();
  pick(tree, (node) => node.type === "button" && node.props.className?.includes("ce-sk-primary") && node.children?.[0] === t("db.connectAction")).props.onClick();
  await tick();
