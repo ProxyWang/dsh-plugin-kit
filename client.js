@@ -13137,11 +13137,6 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
       h(
         "aside",
         { className: "cedb-rail" },
-        h(
-          "div",
-          { className: "cedb-rail-head" },
-          h("span", { className: "cedb-rail-title" }, t("db.connections"))
-        ),
         profiles.length > 0 ? h(
           Fragment,
           null,
@@ -13167,6 +13162,11 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
             h("button", { type: "button", className: "ce-tool ce-tiny", title: t("db.forget"), onClick: () => void forgetProfile(profile) }, "✕")
           ))
         ) : null,
+        h(
+          "div",
+          { className: "cedb-rail-head" },
+          h("span", { className: "cedb-rail-title" }, t("db.connections"))
+        ),
         connections.length === 0 ? h("div", { className: "cedb-empty" }, t("db.noConnections")) : connections.map((connection) => h(
           "div",
           { key: connection.id, className: `cedb-conn${connection.id === activeConn ? " cedb-conn-on" : ""}` },

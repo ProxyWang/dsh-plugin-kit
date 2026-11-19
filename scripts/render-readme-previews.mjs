@@ -76,7 +76,14 @@ globalThis.fetch = async (route, options) => {
    { id: "mysql", label: "MySQL", ready: false, note: "mysql CLI not on PATH" },
    { id: "postgres", label: "PostgreSQL", ready: false, note: "psql CLI not on PATH" },
   ]; break;
-  case "db.connect": value = { id: "demo-conn", driver: "sqlite", label: "demo.sqlite" }; break;
+  case "db.connect": value = { id: "demo-conn", driver: "sqlite", label: "demo.sqlite", mode: "worker" }; break;
+  // Saved connections: the rail renders these, so the preview must answer the
+  // routes instead of tripping the fixture's allowlist.
+  case "db.profile.list": value = { revision: 1, profiles: [] }; break;
+  // One stable id: repeated saves in the preview replace the row instead of
+  // stacking a column of identical entries in the screenshot.
+  case "db.profile.save": value = { revision: 2, profile: { id: "saved-1", label: "demo.sqlite", driver: "sqlite", address: "/demo/demo.sqlite", path: "/demo/demo.sqlite", host: "", port: 0, user: "", database: "", secretId: "", updatedAt: 1763550000000 } }; break;
+  case "db.cancel": value = { cancelled: false, connectionClosed: false }; break;
   case "db.schema": value = {
    driver: "sqlite",
    current: "main",
