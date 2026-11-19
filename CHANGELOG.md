@@ -1,5 +1,56 @@
 # Changelog
 
+## Unreleased — 空白页签：旧的 gRPC 页没有标题，也没搬进工作台
+
+合并后截图里出现了一个**没有标题的页签**。原因是合并只改了入口，没有处理**合并前保存的布局**：旧会话里还存着一个 `code-rpc` 页，宿主照旧把它恢复出来，而它的标题槽 `RpcTitle` 返回 `null`——一个渲染空的标题槽不会回退到页签自带的标题，于是只剩一个空白 chip。
+
+- **标题不再可能为空**（[src/client/rpc.js](<src/client/rpc.js>)）：`RpcTitle` 渲染 `>_ 标题`，标题缺失时用 "gRPC" 兜底。任何标题槽都不该渲染 `null`：宿主把槽的产物当作标题本身，空就是空。
+- **旧页一次性搬进工作台**（[src/client/migrate.js](<src/client/migrate.js>)、[src/client/index.js](<src/client/index.js>)）：插件启动时订阅打开的页签列表，遇到 `code-rpc` 就 —— 先把协议偏好设为 gRPC（工作台因此直接落在 gRPC 上）、关闭旧页、在同一个会话里打开工作台。每个页签只搬一次（`session:tab` 去重，且在动作前登记，避免关闭回调重入成环）；工作台还没注册时不动手；关闭被拒绝时保留旧页并停止本次搬迁，绝不丢页面。
+- Regressions：9 项——替换类型、搬迁顺序（偏好先于打开）、其他类型不受影响、同页只搬一次、同 id 跨会话各搬一次、工作台未注册时不动、关闭被拒时不打开且计数为 0、缺列表容错、标题槽在空标题/有标题/无 hook 三种情况下都有文字。
+
+## Unreleased — 一套历史、一套收藏：gRPC 接入工作台的存储
+
+上一轮只合并了外壳：HTTP 的历史/收藏/环境在 `apistore` 里，gRPC 的地址与 `.proto` 路径还只是组件内状态，切过去仍是"另一个人"的表单。这一轮把 gRPC 接进同一套存储。
+
+- **记录增加协议字段**（[src/client/apientries.js](<src/client/apientries.js>)）：形状仍是 `{ id, ts, request }`，多一个 `protocol`。合并前写下的行没有这个字段，读取时按 HTTP 处理——**迁移是"缺省即 http"，不需要重写历史**；写 HTTP 行时也不加字段，存储保持逐字节兼容。`filterByProtocol` / `mergeProtocols` 负责分拣与合并，`entryLabel` 给出统一列表里的可读标题（HTTP: `GET url`；gRPC: `/svc.Method → host`）。
+- **gRPC 会写历史**（[src/client/rpc.js](<src/client/rpc.js>)）：每次调用落一条 `protocol: "grpc"` 记录（地址、`.proto`、方法、消息、metadata、状态、耗时）。写入走"**合并**而不是覆盖"——先读整份存储，按 id 去重后前插再截断，所以 HTTP 的行不会被 gRPC 冲掉（这个 bug 是测试当场抓到的：第一次实现直接用自己的过滤结果覆盖了整份存储）。
+- **gRPC 有了自己的历史/收藏抽屉**：工具栏多了「历史 N」与「保存」，抽屉里按协议过滤（只显示 gRPC 行），点一行恢复到编辑器；收藏用 `方法 → 地址` 自动命名并去重。
+- **工作台有了合并历史**（[src/client/workbench.js](<src/client/workbench.js>)）：顶部条上「历史 N」列出**两个协议**的记录，按时间倒序、带 `HTTP`/`gRPC` 徽标；点一行会**自动切到对应协议**并把记录交给那个面板加载（`incoming` + nonce 的一次性交接，两个面板各自忽略不是自己的协议）。列表每 4 秒重读一次存储（另一个面板或另一个窗口刚写入的行会出现），并用 id 指纹挡住无变化时的重渲染。
+- **环境变量对 gRPC 生效**：地址、metadata 名与值、消息体里的 `{{var}}` 都按**当前激活环境**替换；未定义的变量**原样保留**（而不是变成空串把目标改错），与 HTTP 面板同一套环境存储，所以在 HTTP 面板里改环境，gRPC 侧立刻用上。
+- Regressions：21 项——协议缺省与打标、两种过滤、跨协议合并排序、空列表容错、历史上限、两种标题、变量替换（含未知变量、嵌套值、只取激活环境的启用项、无环境）、工作台合并抽屉（计数、排序、徽标、点击切协议并交接、抽屉关闭）、gRPC 面板（只统计自己的协议、抽屉只列自己的行、调用写入共享存储、HTTP 行不被覆盖、环境变量替换进地址、合并历史的交接填充编辑器）。
+
+## Unreleased — 数据库连接：填地址就够，驱动自动识别
+
+「新建连接」先问"用哪个驱动"，而且那个下拉框可能**是空的**——截图里就是这个状态：Host 的 `db.drivers` 探测没回来时 `drivers` 为空，`<select>` 一个 `option` 都没有，于是驱动框一片空白，人根本不知道该选什么。DB 客户端不该这样：你只需要知道**目标**，协议由客户端读出来。
+
+- **一个地址字段**（[src/client/dbconnect.js](<src/client/dbconnect.js>)）：`postgres://` / `postgresql://` → PostgreSQL（默认 5432），`mysql://` / `mariadb://` → MySQL（默认 3306），`sqlite://` / `file:` / 任何路径（含 `C:\…`、`./app.db`、`app.sqlite`）→ SQLite。URL 里的用户名/密码做百分号解码，query 与 hash 丢弃；端口缺省按驱动补齐。识别结果以「自动识别：PostgreSQL」显示，**填地址就能点连接**。
+- **不猜**：`notes.txt`、`http://…` 这类"看起来像但不是"的输入报「无法识别」并禁用连接，而不是当 SQLite 打开后在使用中才炸。空地址只是"还没填"，不报错。
+- **手动覆盖仍在，但不会空**：识别不了、或想自己指定驱动时才展开「手动填写字段（高级）」，其中的驱动菜单**永远有三项**（SQLite / MySQL / PostgreSQL），探测不到的命令行驱动带原因显示（如 `MySQL — mysql CLI not on PATH`）并置灰，不会再出现空白下拉框。
+- **可用性前置**：探测说当前部署打不开的驱动（本机没有 `psql`/`mysql` CLI）直接禁用「连接」并显示原因，而不是点了之后由 Host 报错。
+- **相对路径按会话工作区解析**（[lib/host/db.js](<lib/host/db.js>)）：`db.connect` 接受 `cwd`，SQLite 的相对路径以会话目录为基准，和人在面板里看到的路径一致；绝对路径原样使用。
+- Regressions：12 项地址解析（URL/凭据解码/默认端口/两种 sqlite scheme/Windows 路径/裸文件名/无法识别/畸形 URL/路径判定/格式化与往返）+ 10 项对话框行为（先问地址、不先问驱动、空地址的提示、驱动菜单永不为空、不可用驱动带原因、URL 与路径的识别文案、不可用驱动禁用连接、就绪驱动启用、连接请求携带解析后的驱动与工作区）。
+
+## Unreleased — 接口调试与 gRPC 合并为一个工作台
+
+HTTP 调试和 gRPC 调试本来就是同一件事——"给服务发点东西，看它回什么"——却占了两条导航、两个页签。现在是一个 **接口调试（Request Workbench）** 页签，顶部一条细栏切换协议：
+
+- **合并方式**（[src/client/workbench.js](<src/client/workbench.js>)）：工作台复用原 API 页签的身份（`code-api`），所以已保存的布局重开就是工作台；两个面板**首次访问后保持挂载**，切换协议不会丢草稿、响应或日志滚动位置，非活动面板用 `hidden` 隐藏而不是卸载。gRPC 面板**首次切过去才挂载**——它要解析 `.proto`，只调 HTTP 的人不必付这份成本。
+- **协议选择记一次就够**（`dsh.plugin-kit.workbench.protocol`）：只记"上次用哪个"，不是每页签状态；整天写 gRPC 的人不用每次重选。存储被拒或值是垃圾时退回 HTTP。
+- **导航只留一个入口**：左侧原来的 "RPC 调试" 行折叠进工作台（`LEFT_TOOL_HIDDEN_KINDS = ["code-rpc"]`，规则仍是"只有已具备同等能力的工作区入口才能折叠"）。旧的 `code-rpc` 页签类型**继续注册**，早先保存的布局照常打开，只是不再出现在任何入口。
+- **文案**：zh/en 同步为「接口调试 / Request Workbench」，提示语分别说明 HTTP（curl 导入、环境变量、集合、SSE）与 gRPC（工作区 .proto、方法选择、流式）。
+- Regressions：11 项——工作台标题即页签名、旧 RPC 类型仍可解析、左侧列表不再出现 RPC 行、协议记忆的读写与三种降级（未知值、存储拒绝、垃圾值）、默认 HTTP、gRPC 延迟挂载、切换后两侧都保持挂载、点击当前协议无副作用、`aria-selected` 与提示语跟随。
+
+## Unreleased — terminal: mouse reporting, selection and copy
+
+The plugin's terminal could run a shell and a full-screen TUI, but it could not be *clicked at* or *copied from*: mouse modes were parsed and discarded, and there was no selection at all. Both now work, and both are decided per event rather than per mode.
+
+- **Mouse reporting** ([src/client/vt/mouse.js](<src/client/vt/mouse.js>)): DECSET 1000/1002/1003 plus SGR (?1006). Press, release, drag and hover are encoded with the modifier bits and the motion offset, in the SGR form (`ESC [ < b ; x ; y M/m`) when the program asked for it and in the X10 form otherwise — including X10's 223-column ceiling, which is refused rather than silently mis-encoded. A wheel turn becomes button 64/65 and goes to the program while it owns the pointer, because `less` and `vim` scroll themselves. Holding **Shift** keeps selection working anyway, which is the escape hatch every terminal offers.
+- **Selection** ([src/client/vt/selection.js](<src/client/vt/selection.js>)): an anchor and a head in **buffer** coordinates, so a selection survives scrolling. A drag sets the head (and scrolls the viewport when it leaves the grid), a double click takes the word under the pointer, a triple click the whole row, and `⌘A`/`Ctrl+A` the retained buffer. Copying emits the text between the cells — wide characters once, wrapped rows joined without a newline, trailing padding dropped — and clears the highlight.
+- **Painting** ([src/client/vt/render.js](<src/client/vt/render.js>)): the selection is an overlay of one rectangle per row segment between the rows and the cursor. It never invalidates row markup, so highlighting does not cost a repaint of the grid. Hit-testing uses the rows' own bounding box, so padded or scaled layouts stay aligned.
+- **Keys**: `⌘C` and `Ctrl+Shift+C` copy, `⌘A` selects all, `Shift+PageUp/PageDown/Home/End` walk the scrollback, and any input returns to the live viewport. Only keys that would otherwise be swallowed are intercepted — everything else still becomes VT bytes.
+- **Right click** copies the selection; with none, it focuses the input so the platform paste shortcut applies. Reading the clipboard proactively would need a permission prompt, so it is not done.
+- Regressions: 21 selection/mouse cases (normalisation in both drag directions, per-row spans, multi-row and wrapped-row text, padding, word and line and select-all ranges, ownership and motion modes, SGR press/release/drag/modifiers/right button/wheel, X10 offset bytes and its ceiling, unreported hover and drag) and 6 interaction cases driven through the real component with a DOM shim (drag paints one rect, ⌘C copies exactly the dragged cells and clears the highlight, double click takes the word, Ctrl+Shift+C with no selection copies nothing, Shift+PageUp scrolls without writing to the shell, and a program that owns the pointer receives press/drag/release/wheel). Two defects the tests caught on the way: the selection overlay kept a captured child list (a live collection never shrank, hanging the paint loop) and a stale test fixture selected the wrong row.
+
 ## Unreleased — a real database workbench, and gRPC debugging
 
 The first database panel was a connection list, one SQL box and a result table. It did the three things a database tool has to do and none of the things that make one usable: no schema columns, no way to browse a table, no paging, no history, nothing to click. This replaces it, and adds the RPC half the request workbench was missing.
@@ -22,6 +73,14 @@ Ports the gRPC request model Bruno ships, against DSH's own runtime instead of a
 - **gRPC over Node's HTTP/2** (`grpc.js`): `POST /<service>/<method>`, `content-type: application/grpc`, the 5-byte length-prefixed framing, `grpc-timeout`, `-bin` metadata base64-encoded, replies decoded per frame with a bounded stream cap, status and trailers surfaced by name. `grpc://` is plaintext HTTP/2 and `grpcs://` uses TLS (with an explicit skip-verify switch). A refused connection is reported as an error instead of crashing the host on an unhandled session event.
 - **Panel** (`rpc.js`): address + `.proto` + Load in the toolbar, methods grouped by service in the rail with a `→` / `|→` / `→|` / `↔` streaming glyph, a JSON request editor seeded from the message schema, an editable metadata table, timeout and certificate switches, and a response pane showing the status code and name, every returned message, trailers, and the round-trip time.
 - Regressions: proto parsing (package, nested messages, enums, field numbers/repeated/map flags, nested type resolution, method paths and streaming flags), protobuf round-trips (strings/ints/bools/repeats, packed scalars, maps, nested messages, enum names, unknown-field skip, sample skeleton, exact negative varints), `parseTarget` accept/refuse, status names, `parseJsonText`, `methodArrows`, `groupMethods`; host: `rpc.proto` method listing and sample body, a missing proto refused, **a real in-process HTTP/2 gRPC server** answering a unary call end to end (status 0, decoded reply, trailers, timing), an unknown method refused, and a dead port surfaced as an error.
+
+### Responsiveness and cancellation ([lib/host/db-worker.js](<lib/host/db-worker.js>), [lib/host/sqlite-ops.js](<lib/host/sqlite-ops.js>))
+
+- **SQLite no longer blocks the Host.** `node:sqlite` is synchronous, so a slow statement used to freeze every other panel, tool call and session request for its whole duration. Each SQLite connection now lives in its own worker thread: the Host posts `{id, op, args}` and stays free while the query runs. The operations themselves live in `sqlite-ops.js`, shared by the worker and an inline fallback for runtimes without `worker_threads`.
+- **A running statement can be stopped** (`db.cancel`, and the Stop button that replaces Run while a query is in flight). A CLI-backed connection survives (the child process is killed); a SQLite statement cannot be interrupted in place, so cancelling ends that connection and the panel says so instead of pretending the handle survived.
+- **Driver detection actually finds the CLI**: `fs.access("mysql")` resolves against the current directory, never PATH, so MySQL/PostgreSQL were permanently reported as unavailable. Each PATH entry is now probed (with `PATHEXT` on Windows) and the answer cached.
+- **CLI result parsing is faithful**: mysql's batch escaping is undone instead of `--raw` splitting rows on a newline cell, and psql runs with `--csv` plus an explicit NULL marker so a value holding a tab, a comma, a newline or an empty string keeps its meaning; a write statement's command tag becomes a change count.
+- Regressions: worker mode reported, a long query leaves the event loop ticking, cancel ends both the statement and (for SQLite) the connection, `parseCsv` handles quoted commas, embedded newlines, doubled quotes and the NULL marker.
 
 ### Docs
 

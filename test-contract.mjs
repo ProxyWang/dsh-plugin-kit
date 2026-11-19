@@ -75,5 +75,18 @@ try {
 // 5. Verify storageDomain injection point (directory exists in asar).
 check("storageDomain packages directory available", asarExists("dsh/package.json"), null);
 
+// 6. Verify this package's Config is a Standard Schema. Cordis validates the
+//    Loader entry's config through Config["~standard"].validate at activation;
+//    a plain descriptor object throws "Cannot read properties of undefined
+//    (reading 'validate')" and takes the whole Host half down with it.
+try {
+	const { Config } = await import("./index.js");
+	check("Config exposes ~standard.validate", typeof Config?.["~standard"]?.validate === "function", null);
+	const parsed = Config["~standard"].validate({});
+	check("Config fills defaults for an empty entry config", !parsed.issues && parsed.value?.apiTimeoutMs === 30_000, parsed.issues?.[0]?.message);
+} catch (error) {
+	check("Config importable from index.js", false, error.message.slice(0, 80));
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

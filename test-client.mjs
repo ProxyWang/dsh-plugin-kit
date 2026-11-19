@@ -2995,6 +2995,456 @@ check("docAction reloads clean drafts, flags dirty ones, ignores others", docAct
 	check("truncateCell null → NULL", truncateCell(null) === "NULL", null);
 }
 
+// --- Database panel: the connect dialog asks for an address, not a driver ----------
+{
+	const dbGlobals = { fetch: globalThis.fetch, document: globalThis.document, window: globalThis.window };
+	const dbRequests = [];
+	globalThis.fetch = async (url, options) => {
+		const body = JSON.parse(options?.body ?? "{}");
+		dbRequests.push({ url: String(url), body });
+		if (String(url).endsWith("/db.drivers")) {
+			return { json: async () => ({ ok: true, value: [
+				{ id: "sqlite", label: "SQLite", ready: true, note: "" },
+				{ id: "mysql", label: "MySQL", ready: false, note: "mysql CLI not on PATH" },
+				{ id: "postgres", label: "PostgreSQL", ready: false, note: "psql CLI not on PATH" },
+			] }) };
+		}
+		if (String(url).endsWith("/db.connect")) return { json: async () => ({ ok: true, value: { id: "c1", driver: body.driver, label: "app" } }) };
+		return { json: async () => ({ ok: true, value: {} }) };
+	};
+	globalThis.document = { addEventListener() {}, removeEventListener() {} };
+	try {
+		const { DbView } = await import("./src/client/db.js");
+		const draw = createHookRenderer(DbView, { t: (key) => key, sessionId: "s1", useSessions: (select) => select({ byId: { s1: { cwd: "/w" } } }) }, { effects: true });
+		const flatten = (node) => {
+			if (!node || typeof node !== "object") return [];
+			if (Array.isArray(node)) return node.flatMap(flatten);
+			return [node, ...(node.children ?? []).flatMap(flatten)];
+		};
+		let tree = draw();
+		draw.flushEffects();
+		await new Promise((resolve) => setImmediate(resolve));
+		tree = draw();
+		draw.flushEffects();
+		tree = draw();
+		const find = (test) => flatten(tree).find(test);
+		const chip = () => find((n) => typeof n.props?.className === "string" && n.props.className.startsWith("cedb-detect"))?.children?.[0]?.children?.[0];
+		check("the database panel starts with no connection", Boolean(find((n) => n.children?.[0] === "db.noConnections")), null);
+
+		find((n) => n.type === "button" && n.children?.[0] === "＋ db.connect").props.onClick();
+		tree = draw();
+		draw.flushEffects();
+		tree = draw();
+		const dialog = () => find((n) => n.props?.role === "dialog" && n.props?.["aria-label"] === "db.newConnection");
+		check("the connect dialog asks for a connection address first", Boolean(dialog()) && Boolean(find((n) => n.props?.placeholder === "db.addressPlaceholder")), null);
+		const allOptions = (select) => (select?.children ?? []).flatMap((child) => (Array.isArray(child) ? child : [child]));
+		check("an empty address asks for one instead of guessing", chip() === "db.notDetected", chip());
+		check("the manual driver menu is populated even before the probe answers", allOptions(find((n) => n.type === "select")).length === 3, null);
+		check("connect stays disabled until the address makes sense", find((n) => n.type === "button" && n.children?.[0] === "db.connectAction").props.disabled === true, null);
+
+		const address = () => find((n) => n.props?.placeholder === "db.addressPlaceholder");
+		address().props.onChange({ target: { value: "postgres://alice:secret@db.example:6543/app" } });
+		tree = draw();
+		check("pasting a URL names the driver it recognised", chip() === "db.detected: PostgreSQL", chip());
+		check("an address for an unavailable driver stays blocked and says why", find((n) => n.type === "button" && n.children?.[0] === "db.connectAction").props.disabled === true && Boolean(find((n) => n.props?.className === "cedb-detect-note")), null);
+
+		address().props.onChange({ target: { value: "notes.txt" } });
+		tree = draw();
+		check("an unrecognised address blocks connecting and says why", find((n) => n.type === "button" && n.children?.[0] === "db.connectAction").props.disabled === true && Boolean(find((n) => n.props?.className === "cedb-dialog-error")), null);
+
+		address().props.onChange({ target: { value: "./data/app.sqlite" } });
+		tree = draw();
+		check("a path is understood as SQLite", chip() === "db.detected: SQLite", chip());
+		check("a ready driver enables connecting", find((n) => n.type === "button" && n.children?.[0] === "db.connectAction").props.disabled === false, null);
+
+		// The advanced path always offers every driver — the empty-select defect.
+		const toggle = find((n) => typeof n.props?.className === "string" && n.props.className === "cedb-advanced");
+		check("a recognised address still offers the manual override", Boolean(toggle), null);
+		toggle.props.onClick();
+		tree = draw();
+		const select = find((n) => n.type === "select");
+		const options = (select?.children ?? []).flatMap((child) => (Array.isArray(child) ? child : [child]));
+		check("the driver menu is never empty", options.length === 3 && options.map((option) => option.props.value).join() === "sqlite,mysql,postgres", options.map((option) => option.props.value));
+		check("an unavailable driver is listed with its reason instead of vanishing", options[1].props.disabled === true && options[1].children?.[0] === "MySQL — mysql CLI not on PATH", options[1].children);
+
+		find((n) => n.type === "button" && n.children?.[0] === "db.connectAction").props.onClick();
+		await new Promise((resolve) => setImmediate(resolve));
+		const connect = dbRequests.find((request) => request.url.endsWith("/db.connect"));
+		check("connecting sends the resolved driver and the workspace", connect?.body.driver === "sqlite" && connect.body.path === "./data/app.sqlite" && connect.body.cwd === "/w", connect?.body);
+		draw.unmount();
+	} finally {
+		Object.assign(globalThis, dbGlobals);
+	}
+}
+
+// --- Database connect: one address, the driver is inferred --------------------------
+{
+	const { DRIVERS, driverLabel, formatConnectionAddress, inferDriver, looksLikePath, parseConnectionAddress } = await import("./src/client/dbconnect.js");
+
+	check("the panel knows the three drivers it can open", DRIVERS.join() === "sqlite,mysql,postgres" && driverLabel("postgres") === "PostgreSQL", DRIVERS);
+	check("a postgres URL yields host, port, credentials and database", (() => {
+		const parsed = parseConnectionAddress("postgres://alice:s3cret@db.example:6543/app");
+		return parsed.driver === "postgres" && parsed.host === "db.example" && parsed.port === "6543" && parsed.user === "alice" && parsed.password === "s3cret" && parsed.database === "app" && parsed.error === "";
+	})(), parseConnectionAddress("postgres://alice:s3cret@db.example:6543/app"));
+	check("postgresql:// and mariadb:// are the same drivers", inferDriver("postgresql://h/d") === "postgres" && inferDriver("mariadb://h/d") === "mysql", null);
+	check("a server URL without a port gets the driver default", (() => {
+		const pg = parseConnectionAddress("postgres://db.example/app");
+		const my = parseConnectionAddress("mysql://db.example/app");
+		return pg.port === "5432" && my.port === "3306";
+	})(), null);
+	check("credentials are URL-decoded", (() => { const parsed = parseConnectionAddress("mysql://u%40corp:p%40ss@h/db"); return parsed.user === "u@corp" && parsed.password === "p@ss"; })(), parseConnectionAddress("mysql://u%40corp:p%40ss@h/db"));
+	check("sqlite addresses accept both the scheme and a bare path", (() => {
+		const a = parseConnectionAddress("sqlite://./app.db");
+		const b = parseConnectionAddress("file:///tmp/x.sqlite");
+		const c = parseConnectionAddress("/var/data/app.sqlite3");
+		const d = parseConnectionAddress("app.db");
+		return a.path === "./app.db" && b.path === "/tmp/x.sqlite" && c.path === "/var/data/app.sqlite3" && d.path === "app.db" && a.driver === "sqlite" && d.driver === "sqlite";
+	})(), [parseConnectionAddress("sqlite://./app.db"), parseConnectionAddress("app.db")]);
+	check("a Windows drive path is a file, not a URI scheme", parseConnectionAddress("C:\\\\work\\\\a.db").driver === "sqlite" && parseConnectionAddress("C:\\\\work\\\\a.db").error === "", parseConnectionAddress("C:\\\\work\\\\a.db"));
+	check("an empty address is simply incomplete", (() => { const parsed = parseConnectionAddress("   "); return parsed.driver === "" && parsed.error === ""; })(), null);
+	check("an unrelated target is reported, not guessed", (() => {
+		const notes = parseConnectionAddress("notes.txt");
+		const http = parseConnectionAddress("http://example.com/db");
+		return notes.driver === "" && notes.error === "unrecognised address" && http.driver === "" && http.error === "unrecognised address";
+	})(), [parseConnectionAddress("notes.txt"), parseConnectionAddress("http://example.com/db")]);
+	check("a malformed server URL keeps its driver but reports the problem", (() => { const parsed = parseConnectionAddress("postgres://[::1"); return parsed.driver === "postgres" && parsed.error === "malformed URL"; })(), parseConnectionAddress("postgres://[::1"));
+	check("path detection needs a separator or a database suffix", looksLikePath("./x") === true && looksLikePath("app.db") === true && looksLikePath("notes.txt") === false && looksLikePath("") === false, null);
+	check("a parsed connection formats back into an address", (() => {
+		const sqlite = formatConnectionAddress({ driver: "sqlite", path: "./app.db" });
+		const pg = formatConnectionAddress({ driver: "postgres", host: "h", port: "5432", user: "u", password: "p", database: "d" });
+		const mysql = formatConnectionAddress({ driver: "mysql", host: "h", user: "", password: "", database: "" });
+		return sqlite === "./app.db" && pg === "postgres://u:p@h:5432/d" && mysql === "mysql://h:3306";
+	})(), null);
+	check("the address survives a round trip", (() => {
+		const address = "postgres://u:p@h:5432/d";
+		return formatConnectionAddress(parseConnectionAddress(address)) === address;
+	})(), null);
+}
+
+// --- gRPC pane: the shared stores in practice --------------------------------------
+{
+	const storeBackup = globalThis.localStorage;
+	const fetchBackup = globalThis.fetch;
+	const documentBackup = globalThis.document;
+	const store = new Map();
+	const calls = [];
+	globalThis.localStorage = {
+		getItem: (key) => (store.has(key) ? store.get(key) : null),
+		setItem: (key, value) => { store.set(key, String(value)); },
+		removeItem: (key) => store.delete(key),
+	};
+	globalThis.document = { addEventListener() {}, removeEventListener() {} };
+	globalThis.fetch = async (url, options) => {
+		const body = JSON.parse(options?.body ?? "{}");
+		calls.push({ url: String(url), body });
+		if (String(url).endsWith("/rpc.proto")) {
+			return { json: async () => ({ ok: true, value: { methods: [{ path: "/hello.Greeter/SayHello", name: "SayHello", service: "hello.Greeter", request: "HelloRequest", response: "HelloReply", sample: { name: "world" } }], files: [] } }) };
+		}
+		if (String(url).endsWith("/rpc.call")) {
+			return { json: async () => ({ ok: true, value: { status: 0, statusName: "OK", ms: 12, messages: [{ message: "hi" }], trailers: {} } }) };
+		}
+		return { json: async () => ({ ok: true, value: {} }) };
+	};
+	try {
+		const { apiKey } = await import("./src/client/apistore.js");
+		const { RpcView } = await import("./src/client/rpc.js");
+		store.set(apiKey("env", "/w"), JSON.stringify({ activeId: "e1", envs: [{ id: "e1", name: "dev", vars: [{ name: "host", value: "env-host:50051", enabled: true }] }] }));
+		store.set(apiKey("history", "/w"), JSON.stringify([
+			{ id: "h1", ts: 1, method: "GET", url: "http://a" },
+			{ id: "g-old", ts: 2, protocol: "grpc", status: 0, request: { method: "/old/M", address: "grpc://old:1" } },
+		]));
+
+		const draw = createHookRenderer(RpcView, {
+			t: (key) => key,
+			sessionId: "s1",
+			useSessions: (select) => select({ byId: { s1: { cwd: "/w" } } }),
+		}, { effects: true });
+		const flatten = (node) => {
+			if (!node || typeof node !== "object") return [];
+			if (Array.isArray(node)) return node.flatMap(flatten);
+			return [node, ...(node.children ?? []).flatMap(flatten)];
+		};
+		let tree = draw();
+		draw.flushEffects();
+		await new Promise((resolve) => setImmediate(resolve));
+		tree = draw();
+		const find = (test) => flatten(tree).find(test);
+		const chip = () => find((n) => typeof n.props?.className === "string" && n.props.className.startsWith("ce-sk-btn ce-sk-btn-ghost") && String(n.children?.[0]).startsWith("api.history"));
+
+		check("the gRPC pane counts only its own protocol in the shared history", chip()?.children?.[0] === "api.history 1", chip()?.children?.[0]);
+		chip().props.onClick();
+		tree = draw();
+		const rows = () => flatten(tree).filter((n) => n.props?.className === "cea-hist-row");
+		check("its drawer lists the gRPC row and not the HTTP one", rows().length === 1 && rows()[0].props.title === "/old/M → grpc://old:1", rows().map((row) => row.props.title));
+
+		const address = () => find((n) => n.props?.className === "ce-input cerpc-input" && n.props.placeholder === "grpc://host:50051");
+		address().props.onChange({ target: { value: "grpc://{{host}}" } });
+		find((n) => n.props?.placeholder === "proto/hello.proto").props.onChange({ target: { value: "proto/hello.proto" } });
+		tree = draw();
+		find((n) => n.type === "button" && n.children?.[0] === "rpc.load").props.onClick();
+		await new Promise((resolve) => setImmediate(resolve));
+		tree = draw();
+		const invoke = () => find((n) => n.type === "button" && String(n.children?.[0]).includes("rpc.invoke"));
+		check("loading a proto selects its first method", Boolean(invoke()) && invoke().props.disabled === false, invoke()?.props.disabled);
+		invoke().props.onClick();
+		await new Promise((resolve) => setImmediate(resolve));
+
+		const call = calls.find((entry) => entry.url.endsWith("/rpc.call"));
+		check("environment variables are interpolated into the address", call?.body.url === "grpc://env-host:50051", call?.body.url);
+		const saved = JSON.parse(store.get(apiKey("history", "/w")));
+		check("the call joins the shared history as a gRPC row", saved[0].protocol === "grpc" && saved[0].request.method === "/hello.Greeter/SayHello" && saved[0].status === 0, saved[0]);
+		check("the HTTP rows already in that store are untouched", saved.some((row) => row.id === "h1" && row.protocol === undefined), saved.map((row) => row.id));
+		draw.unmount();
+
+		// A row handed over by the merged history lands in the editor.
+		const handOff = createHookRenderer(RpcView, {
+			t: (key) => key,
+			sessionId: "s1",
+			useSessions: (select) => select({ byId: { s1: { cwd: "/w" } } }),
+			incoming: { protocol: "grpc", nonce: 42, entry: { id: "g1", protocol: "grpc", request: { address: "grpc://from-history:1", proto: "p/x.proto", method: "/x/Y", body: { a: 1 }, metadata: [] } } },
+		}, { effects: true });
+		let tree2 = handOff();
+		handOff.flushEffects();
+		await new Promise((resolve) => setImmediate(resolve));
+		tree2 = handOff();
+		const find2 = (test) => flatten(tree2).find(test);
+		check("a gRPC row from the merged history fills the editor", find2((n) => n.props?.className === "ce-input cerpc-input" && n.props.placeholder === "grpc://host:50051")?.props.value === "grpc://from-history:1" && find2((n) => n.props?.placeholder === "proto/hello.proto")?.props.value === "p/x.proto", null);
+		handOff.unmount();
+	} finally {
+		globalThis.localStorage = storeBackup;
+		globalThis.fetch = fetchBackup;
+		globalThis.document = documentBackup;
+	}
+}
+
+// --- Legacy gRPC pages fold into the workbench -------------------------------------
+{
+	const { migrateLegacyRpcTabs, WORKBENCH_KIND } = await import("./src/client/migrate.js");
+	const { RpcTitle } = await import("./src/client/rpc.js");
+
+	const calls = [];
+	const spy = () => ({
+		preferGrpc: () => calls.push("grpc"),
+		close: (tab) => calls.push(`close:${tab.sessionId}/${tab.id}`),
+		open: (sessionId) => calls.push(`open:${sessionId}`),
+	});
+	const run = (tabs, extra = {}) => {
+		calls.length = 0;
+		const migrated = extra.migrated ?? new Set();
+		const count = migrateLegacyRpcTabs({ tabs, migrated, canOpen: () => true, ...spy(), ...extra });
+		return { count, calls: calls.slice(), migrated };
+	};
+
+	check("the workbench is the replacement kind", WORKBENCH_KIND === "code-api", WORKBENCH_KIND);
+	check("a legacy gRPC page moves into the workbench", (() => {
+		const { count, calls: seen } = run([{ id: "r1", kind: "code-rpc", sessionId: "s1" }]);
+		return count === 1 && seen.join() === "grpc,close:s1/r1,open:s1";
+	})(), run([{ id: "r1", kind: "code-rpc", sessionId: "s1" }]).calls);
+	check("the preference is set before the page opens", (() => {
+		const order = run([{ id: "r1", kind: "code-rpc", sessionId: "s1" }]).calls;
+		return order.indexOf("grpc") < order.indexOf("open:s1");
+	})(), null);
+	check("other kinds are left alone", run([{ id: "t1", kind: "terminal", sessionId: "s1" }, { id: "a1", kind: "code-api", sessionId: "s1" }]).count === 0, null);
+	check("each page migrates exactly once", (() => {
+		const migrated = new Set();
+		const first = run([{ id: "r1", kind: "code-rpc", sessionId: "s1" }], { migrated });
+		const second = run([{ id: "r1", kind: "code-rpc", sessionId: "s1" }], { migrated });
+		return first.count === 1 && second.count === 0 && migrated.size === 1;
+	})(), null);
+	check("the same id in two sessions migrates twice", (() => {
+		const migrated = new Set();
+		const { count } = run([{ id: "r1", kind: "code-rpc", sessionId: "s1" }, { id: "r1", kind: "code-rpc", sessionId: "s2" }], { migrated });
+		return count === 2 && migrated.size === 2;
+	})(), null);
+	check("nothing happens before the workbench is registered", (() => {
+		const migrated = new Set();
+		const { count, calls: seen } = run([{ id: "r1", kind: "code-rpc", sessionId: "s1" }], { migrated, canOpen: () => false });
+		return count === 0 && seen.length === 0 && migrated.size === 0;
+	})(), null);
+	check("a refused close keeps the page and stops the pass", (() => {
+		const migrated = new Set();
+		const count = migrateLegacyRpcTabs({
+			tabs: [{ id: "r1", kind: "code-rpc", sessionId: "s1" }],
+			migrated,
+			canOpen: () => true,
+			preferGrpc: () => {},
+			close: () => { throw new Error("refused"); },
+			open: () => { throw new Error("must not open after a refusal"); },
+		});
+		return count === 0;
+	})(), null);
+	check("a missing tab list is harmless", migrateLegacyRpcTabs({ tabs: undefined, migrated: new Set(), canOpen: () => true }) === 0, null);
+
+	check("the legacy page always shows a label", (() => {
+		const chip = RpcTitle({ useTabInfo: () => ({ tab: { title: "" } }) });
+		const named = RpcTitle({ useTabInfo: () => ({ tab: { title: "Hello" } }) });
+		const bare = RpcTitle({});
+		return String(chip.children[0]).includes("gRPC") && String(named.children[0]).includes("Hello") && String(bare.children[0]).includes("gRPC");
+	})(), null);
+}
+
+// --- One history for both protocols ------------------------------------------------
+{
+	const { entryProtocol, withProtocol, filterByProtocol, mergeProtocols, pushHistory, entryLabel, interpolateVariables, interpolateDeep, activeVariables, HISTORY_CAP } = await import("./src/client/apientries.js");
+
+	check("a row from before the merge is an HTTP row", entryProtocol({ url: "/x" }) === "http" && entryProtocol({ protocol: "grpc" }) === "grpc" && entryProtocol(null) === "http", null);
+	check("only gRPC rows carry the field, so HTTP storage stays byte-identical", JSON.stringify(withProtocol({ id: 1 }, "http")) === '{"id":1}' && withProtocol({ id: 1 }, "grpc").protocol === "grpc", [withProtocol({ id: 1 }, "http"), withProtocol({ id: 1 }, "grpc")]);
+	const mixed = [
+		{ id: "h1", ts: 10, method: "GET", url: "http://a" },
+		{ id: "g1", ts: 30, protocol: "grpc", request: { method: "/svc.M", address: "grpc://b" } },
+		{ id: "h2", ts: 20, method: "POST", url: "http://c" },
+	];
+	check("filtering keeps one protocol", filterByProtocol(mixed, "http").map((row) => row.id).join() === "h1,h2" && filterByProtocol(mixed, "grpc").map((row) => row.id).join() === "g1", null);
+	check("the merged list is newest first across protocols", mergeProtocols(filterByProtocol(mixed, "http"), filterByProtocol(mixed, "grpc")).map((row) => row.id).join() === "g1,h2,h1", mergeProtocols(filterByProtocol(mixed, "http"), filterByProtocol(mixed, "grpc")).map((row) => row.id));
+	check("merging tolerates a missing or junk list", mergeProtocols(null, undefined, [{ id: "a", ts: 1 }]).length === 1, null);
+	check("history is capped newest-first", (() => { let rows = []; for (let i = 0; i < HISTORY_CAP + 5; i++) rows = pushHistory(rows, { id: `e${i}`, ts: i }); return rows.length === HISTORY_CAP && rows[0].id === `e${HISTORY_CAP + 4}`; })(), null);
+	check("gRPC rows label the method and target", entryLabel({ protocol: "grpc", request: { method: "/hello.Greeter/Say", address: "grpc://h:1" } }) === "/hello.Greeter/Say → grpc://h:1", entryLabel({ protocol: "grpc", request: { method: "/a.B/C" } }));
+	check("HTTP rows label the verb and URL", entryLabel({ method: "get", url: "http://x" }) === "GET http://x" && entryLabel({ request: { method: "post", url: "http://y" } }) === "POST http://y", [entryLabel({ method: "get", url: "http://x" }), entryLabel({ request: { method: "post", url: "http://y" } })]);
+
+	check("variables are substituted by name", interpolateVariables("grpc://{{host}}:{{ port }}/x", { host: "h", port: "50051" }) === "grpc://h:50051/x", interpolateVariables("grpc://{{host}}:{{ port }}/x", { host: "h", port: "50051" }));
+	check("an unknown variable is left visible instead of becoming empty", interpolateVariables("{{a}}/{{b}}", { a: "1" }) === "1/{{b}}", interpolateVariables("{{a}}/{{b}}", { a: "1" }));
+	check("interpolation touches nested values", JSON.stringify(interpolateDeep({ name: "{{who}}", list: ["{{who}}", 3] }, { who: "bob" })) === '{"name":"bob","list":["bob",3]}' && interpolateDeep(5, {}) === 5, null);
+	check("only the active environment's enabled variables apply", (() => {
+		const store = { activeId: "e2", envs: [
+			{ id: "e1", vars: [{ name: "host", value: "wrong", enabled: true }] },
+			{ id: "e2", vars: [{ name: "host", value: "right", enabled: true }, { name: "off", value: "x", enabled: false }, { name: "", value: "skip" }] },
+		] };
+		const vars = activeVariables(store);
+		return vars.host === "right" && vars.off === undefined && Object.keys(vars).length === 1;
+	})(), null);
+	check("no active environment yields no variables", Object.keys(activeVariables({ envs: [], activeId: null })).length === 0 && Object.keys(activeVariables(null)).length === 0, null);
+}
+
+// --- The workbench shows one merged history and hands a row to its pane ---------------
+{
+	const store = new Map();
+	const savedStorage = globalThis.localStorage;
+	globalThis.localStorage = {
+		getItem: (key) => (store.has(key) ? store.get(key) : null),
+		setItem: (key, value) => { store.set(key, String(value)); },
+	};
+	try {
+		const { apiKey } = await import("./src/client/apistore.js");
+		const { WorkbenchView } = await import("./src/client/workbench.js");
+		store.set(apiKey("history", "/w"), JSON.stringify([
+			{ id: "h1", ts: 100, method: "GET", url: "http://a" },
+			{ id: "g1", ts: 300, protocol: "grpc", status: 0, request: { method: "/svc.M", address: "grpc://b" } },
+			{ id: "h2", ts: 200, method: "POST", url: "http://c" },
+		]));
+
+		const httpPane = { type: "div", props: { className: "pane-http" }, children: [] };
+		const grpcPane = { type: "div", props: { className: "pane-grpc" }, children: [] };
+		const draw = createHookRenderer(WorkbenchView, {
+			t: (key) => key,
+			http: httpPane,
+			grpc: grpcPane,
+			initialProtocol: "http",
+			sessionId: "s1",
+			useSessions: (select) => select({ byId: { s1: { cwd: "/w" } } }),
+		}, { effects: true });
+		const flatten = (node) => {
+			if (!node || typeof node !== "object") return [];
+			if (Array.isArray(node)) return node.flatMap(flatten);
+			return [node, ...(node.children ?? []).flatMap(flatten)];
+		};
+		let tree = draw();
+		draw.flushEffects();
+		await new Promise((resolve) => setImmediate(resolve));
+		tree = draw();
+		const find = (test) => flatten(tree).find(test);
+
+		const chip = () => find((n) => typeof n.props?.className === "string" && n.props.className.startsWith("ce-wb-hist"));
+		check("the bar counts the rows of both protocols", chip().children[0] === "workbench.history 3", chip().children[0]);
+		check("the merged drawer is closed until asked for", !find((n) => n.props?.className === "ce-wb-drawer"), null);
+		chip().props.onClick();
+		tree = draw();
+		const rows = () => flatten(tree).filter((n) => n.props?.className === "ce-wb-drawer-row");
+		check("the drawer lists every protocol newest first", rows().length === 3 && rows().map((row) => row.props.title).join(" | ") === "/svc.M → grpc://b | POST http://c | GET http://a", rows().map((row) => row.props.title));
+		const badges = flatten(tree).filter((n) => typeof n.props?.className === "string" && n.props.className.startsWith("ce-wb-proto ce-wb-proto-"));
+		check("each row says which protocol it came from", badges.length === 3 && badges[0].children[0] === "gRPC" && badges[1].children[0] === "HTTP", badges.map((badge) => badge.children[0]));
+
+		rows()[0].props.onClick();
+		tree = draw();
+		const buttons = () => flatten(tree).filter((n) => n.props?.role === "tab");
+		const paneOf = (cls) => flatten(tree).find((n) => n.props?.className === cls);
+		check("picking a gRPC row switches the workbench to gRPC", buttons().map((node) => node.props["aria-selected"]).join() === "false,true", buttons().map((node) => node.props["aria-selected"]));
+		check("the row is handed to the pane that owns it", paneOf("pane-grpc")?.props.incoming?.entry?.id === "g1" && paneOf("pane-grpc")?.props.incoming?.protocol === "grpc", paneOf("pane-grpc")?.props.incoming);
+		check("the other pane is not given it", paneOf("pane-http")?.props.incoming?.entry?.id === "g1", paneOf("pane-http")?.props.incoming?.entry?.id);
+		check("the drawer closes after a pick", !find((n) => n.props?.className === "ce-wb-drawer"), null);
+	} finally {
+		globalThis.localStorage = savedStorage;
+	}
+}
+
+// --- Request workbench: HTTP and gRPC share one tab --------------------------------
+{
+	const { WorkbenchView, readProtocol, writeProtocol, PROTOCOL_KEY } = await import("./src/client/workbench.js");
+	const { apiDefinition, rpcDefinition } = await import("./src/client/register.js");
+	const { collectLeftTools } = await import("./src/client/lefttools.js");
+
+	{ // identity and copy
+		const t = (key) => key;
+		check("the API tab is the merged workbench", apiDefinition(t).title() === "workbench.title", apiDefinition(t).title());
+		check("the legacy RPC tab keeps its own type for saved layouts", rpcDefinition(t).kind === "code-rpc", rpcDefinition(t).kind);
+		const registry = {
+			entries: () => [
+				{ kind: "code-api", guide: [{ id: "api", title: () => "API" }] },
+				{ kind: "code-rpc", guide: [{ id: "rpc", title: () => "RPC" }] },
+			],
+		};
+		const tools = collectLeftTools(registry, t);
+		check("the left navigation offers one workbench entry, not a separate RPC row", tools.filter((tool) => tool.kind === "code-rpc").length === 0, tools.map((tool) => tool.kind));
+	}
+
+	{ // preference
+		const store = new Map();
+		const storage = { getItem: (key) => (store.has(key) ? store.get(key) : null), setItem: (key, value) => { store.set(key, String(value)); } };
+		check("a fresh profile starts on HTTP", readProtocol(storage) === "http", readProtocol(storage));
+		check("the chosen protocol is remembered", writeProtocol("grpc", storage) === true && readProtocol(storage) === "grpc" && store.get(PROTOCOL_KEY) === "grpc", store.get(PROTOCOL_KEY));
+		check("an unknown protocol is refused", writeProtocol("dns", storage) === false && readProtocol(storage) === "grpc", readProtocol(storage));
+		check("a denied storage area falls back to HTTP", readProtocol({ getItem() { throw new Error("denied"); } }) === "http" && writeProtocol("grpc", { setItem() { throw new Error("denied"); } }) === false, null);
+		check("junk in storage falls back to HTTP", readProtocol({ getItem: () => "telnet" }) === "http", null);
+	}
+
+	{ // switching panes
+		const store = new Map();
+		const storage = { getItem: () => store.get(PROTOCOL_KEY) ?? null, setItem: (key, value) => { store.set(key, String(value)); } };
+		const saved = globalThis.localStorage;
+		globalThis.localStorage = storage;
+		try {
+			const httpPane = { type: "div", props: { className: "pane-http" }, children: [] };
+			const grpcPane = { type: "div", props: { className: "pane-grpc" }, children: [] };
+			const draw = createHookRenderer(WorkbenchView, { t: (key) => key, http: httpPane, grpc: grpcPane, initialProtocol: "http" });
+			let tree = draw();
+			const collectNodes = (node) => {
+				if (!node || typeof node !== "object") return [];
+				if (Array.isArray(node)) return node.flatMap(collectNodes);
+				return [node, ...(node.children ?? []).flatMap(collectNodes)];
+			};
+			const panes = () => collectNodes(tree).filter((node) => node.props?.className === "ce-wb-pane");
+			const buttons = () => collectNodes(tree).filter((node) => node.props?.role === "tab");
+			check("the workbench starts on the HTTP pane", panes().length === 2 && panes()[0].props.hidden === false && panes()[1].props.hidden === true, panes().map((pane) => pane.props.hidden));
+			check("gRPC mounts only after its first visit", collectNodes(tree).some((node) => node.props?.className === "pane-http") && !collectNodes(tree).some((node) => node.props?.className === "pane-grpc"), null);
+			check("the bar marks the active protocol", buttons().map((node) => node.props["aria-selected"]).join() === "true,false", buttons().map((node) => node.props["aria-selected"]));
+
+			buttons()[1].props.onClick();
+			tree = draw();
+			check("choosing gRPC reveals its pane and hides HTTP", panes()[0].props.hidden === true && panes()[1].props.hidden === false && collectNodes(tree).some((node) => node.props?.className === "pane-grpc"), panes().map((pane) => pane.props.hidden));
+			check("the choice is persisted", store.get(PROTOCOL_KEY) === "grpc", store.get(PROTOCOL_KEY));
+			check("the bar and its hint follow the protocol", buttons().map((node) => node.props["aria-selected"]).join() === "false,true" && collectNodes(tree).some((node) => node.props?.className === "ce-wb-hint" && node.children?.[0] === "workbench.grpcHint"), null);
+
+			buttons()[0].props.onClick();
+			tree = draw();
+			check("switching back keeps the HTTP pane mounted", collectNodes(tree).some((node) => node.props?.className === "pane-http") && collectNodes(tree).some((node) => node.props?.className === "pane-grpc"), null);
+			buttons()[0].props.onClick();
+			tree = draw();
+			check("clicking the active protocol changes nothing", store.get(PROTOCOL_KEY) === "http" && buttons().map((node) => node.props["aria-selected"]).join() === "true,false", [store.get(PROTOCOL_KEY), buttons().map((node) => node.props["aria-selected"])]);
+		} finally {
+			globalThis.localStorage = saved;
+		}
+	}
+}
+
 // --- Built-in terminal: emulator, key encoding, renderer and tab registration ----------
 {
 	const { createScreen } = await import("./src/client/vt/screen.js");
@@ -3186,6 +3636,79 @@ check("docAction reloads clean drafts, flags dirty ones, ignores others", docAct
 	}
 }
 
+// --- Terminal selection and mouse reporting --------------------------------
+{
+	const { normalizeSelection, selectionRow, selectionText, wordRange, selectWord, selectLine, selectAll, lineText } = await import("./src/client/vt/selection.js");
+	const { encodeMouse, encodeWheel, mouseOwned, reportsMotion, reportsHover, modifierBits } = await import("./src/client/vt/mouse.js");
+
+	const cell = (text, extra = {}) => ({ c: text, fg: -1, bg: -1, fl: 0, w: 1, ...extra });
+	const line = (text) => ({ cells: [...text].map((ch) => cell(ch)), wrapped: false, version: 1 });
+	const lines = (...texts) => texts.map(line);
+	const reader = (rows) => (index) => rows[index] ?? null;
+
+	{ // geometry
+		const forward = { anchor: { row: 1, col: 2 }, head: { row: 3, col: 4 } };
+		const backward = { anchor: { row: 3, col: 4 }, head: { row: 1, col: 2 } };
+		const n1 = normalizeSelection(forward);
+		const n2 = normalizeSelection(backward);
+		check("a selection normalises regardless of drag direction", n1.start.row === 1 && n1.end.row === 3 && n2.start.row === 1 && n2.end.row === 3, [n1, n2]);
+		check("a click without movement is an empty selection", normalizeSelection({ anchor: { row: 0, col: 0 }, head: { row: 0, col: 0 } }).empty === true, null);
+		check("a missing selection normalises to nothing", normalizeSelection(null).empty === true, null);
+		check("the first row starts at the anchor column", JSON.stringify(selectionRow(forward, 1, 80)) === JSON.stringify({ from: 2, to: 80 }), selectionRow(forward, 1, 80));
+		check("a middle row spans the full width", JSON.stringify(selectionRow(forward, 2, 80)) === JSON.stringify({ from: 0, to: 80 }), selectionRow(forward, 2, 80));
+		check("the last row ends at the head column", JSON.stringify(selectionRow(forward, 3, 80)) === JSON.stringify({ from: 0, to: 4 }), selectionRow(forward, 3, 80));
+		check("rows outside the range select nothing", selectionRow(forward, 0, 80) === null && selectionRow(forward, 4, 80) === null, null);
+	}
+	{ // text extraction
+		const rows = lines("hello", "world", "tail");
+		check("a one-row selection copies just that row", selectionText({ anchor: { row: 0, col: 1 }, head: { row: 0, col: 4 } }, reader(rows), 20) === "ell", selectionText({ anchor: { row: 0, col: 1 }, head: { row: 0, col: 4 } }, reader(rows), 20));
+		const multi = selectionText({ anchor: { row: 0, col: 2 }, head: { row: 1, col: 3 } }, reader(rows), 20);
+		check("a multi-row selection joins rows with a newline", multi === "llo\nwor", JSON.stringify(multi));
+		const wrappedRows = [{ cells: [..."abcdef"].map((ch) => cell(ch)), wrapped: true, version: 1 }, line("ghi")];
+		const joined = selectionText({ anchor: { row: 0, col: 0 }, head: { row: 1, col: 3 } }, reader(wrappedRows), 20);
+		check("a wrapped row joins its successor without a newline", joined === "abcdefghi", JSON.stringify(joined));
+		const padded = [{ cells: [..."ab"].map((ch) => cell(ch)).concat(new Array(18).fill(undefined)), wrapped: false, version: 1 }];
+		check("trailing padding never reaches the clipboard", selectionText({ anchor: { row: 0, col: 0 }, head: { row: 0, col: 20 } }, reader(padded), 20) === "ab", null);
+		check("line text drops trailing blanks", lineText(padded[0]) === "ab", lineText(padded[0]));
+	}
+	{ // word and line selection
+		const row = line("git commit --amend");
+		check("a double click takes the whole word", JSON.stringify(wordRange(row, 5)) === JSON.stringify({ from: 4, to: 10 }), wordRange(row, 5));
+		check("path characters stay inside the word", JSON.stringify(wordRange(line("src/client/a.js"), 6)) === JSON.stringify({ from: 0, to: 15 }), wordRange(line("src/client/a.js"), 6));
+		const word = selectWord(row, 2, 5);
+		check("word selection spans from its start to its end", word.anchor.col === 4 && word.head.col === 10 && word.anchor.row === 2, word);
+		const full = selectLine(4, 80);
+		check("a triple click covers the whole row", full.anchor.col === 0 && full.head.col === 80 && full.head.row === 4, full);
+		const everything = selectAll(120, 80);
+		check("select-all covers scrollback and viewport", everything.anchor.row === 0 && everything.head.row === 119 && everything.head.col === 80, everything);
+	}
+	{ // mouse ownership and encoding
+		check("a program owns the pointer only in a reporting mode", mouseOwned({ mouse: "off" }) === false && mouseOwned({ mouse: "1000" }) === true && mouseOwned({ mouse: "1003" }) === true, null);
+		check("motion modes are distinguished", reportsMotion("1000") === false && reportsMotion("1002") === true && reportsMotion("1003") === true && reportsHover("1002") === false && reportsHover("1003") === true, null);
+		check("modifier bits follow the protocol", modifierBits({ shiftKey: true }) === 4 && modifierBits({ altKey: true }) === 8 && modifierBits({ ctrlKey: true }) === 16, null);
+		const press = encodeMouse({ button: "left", action: "press", x: 10, y: 4 }, { protocol: "sgr", mode: "1000" });
+		check("SGR encodes a press with 1-based coordinates", press === "\x1b[<0;11;5M", JSON.stringify(press));
+		const release = encodeMouse({ button: "left", action: "release", x: 10, y: 4 }, { protocol: "sgr", mode: "1000" });
+		check("SGR marks a release with a lowercase final", release === "\x1b[<0;11;5m", JSON.stringify(release));
+		const drag = encodeMouse({ button: "left", action: "drag", x: 1, y: 2 }, { protocol: "sgr", mode: "1002" });
+		check("SGR drags carry the motion bit", drag === "\x1b[<32;2;3M", JSON.stringify(drag));
+		const ctrlClick = encodeMouse({ button: "left", action: "press", x: 0, y: 0, ctrlKey: true }, { protocol: "sgr", mode: "1000" });
+		check("a modified click carries its modifier bits", ctrlClick === "\x1b[<16;1;1M", JSON.stringify(ctrlClick));
+		const right = encodeMouse({ button: "right", action: "press", x: 0, y: 0 }, { protocol: "sgr", mode: "1000" });
+		check("the right button is number 2", right === "\x1b[<2;1;1M", JSON.stringify(right));
+		const wheel = encodeWheel({ deltaY: -1, x: 3, y: 4 }, { protocol: "sgr", mode: "1000" });
+		check("a wheel turn is reported as button 64/65", wheel === "\x1b[<64;4;5M" && encodeWheel({ deltaY: 1, x: 0, y: 0 }, { protocol: "sgr", mode: "1000" }) === "\x1b[<65;1;1M", JSON.stringify(wheel));
+		check("the wheel is not reported without a mouse mode", encodeWheel({ deltaY: 1, x: 0, y: 0 }, { protocol: "sgr", mode: "off" }) === null, null);
+		check("a hover is ignored in a press-only mode", encodeMouse({ button: "left", action: "move", x: 0, y: 0 }, { protocol: "sgr", mode: "1000" }) === null, null);
+		check("a drag is ignored in a press-only mode", encodeMouse({ button: "left", action: "drag", x: 0, y: 0 }, { protocol: "sgr", mode: "1000" }) === null, null);
+		const x10 = encodeMouse({ button: "left", action: "press", x: 5, y: 6 }, { protocol: "x10", mode: "1000" });
+		check("the X10 form offsets the coordinates into bytes", x10 === "\x1b[M" + String.fromCharCode(32, 38, 39), JSON.stringify(x10));
+		const x10Release = encodeMouse({ button: "left", action: "release", x: 5, y: 6 }, { protocol: "x10", mode: "1000" });
+		check("the X10 release uses button 3", x10Release === "\x1b[M" + String.fromCharCode(35, 38, 39), JSON.stringify(x10Release));
+		check("X10 refuses columns it cannot address", encodeMouse({ button: "left", action: "press", x: 300, y: 0 }, { protocol: "x10", mode: "1000" }) === null, null);
+	}
+}
+
 // --- Built-in terminal body: frames, input and teardown against a DOM shim --------
 {
 	class ShimEl {
@@ -3269,7 +3792,7 @@ check("docAction reloads clean drafts, flags dirty ones, ignores others", docAct
 		const host = new ShimEl("div");
 		hostProps.props.ref.current = host;
 		draw.flushEffects();
-		check("the engine builds rows, a cursor, a measurer and a hidden input", host.children.length === 4 && host.children.some((child) => child.className === "ce-term-input"), host.children.map((child) => child.className));
+		check("the engine builds rows, a selection layer, a cursor, a measurer and a hidden input", host.children.length === 5 && host.children.some((child) => child.className === "ce-term-input") && host.children.some((child) => child.className === "ce-term-selection"), host.children.map((child) => child.className));
 		const rowsEl = host.children.find((child) => child.className === "ce-term-rows");
 		const painted = () => (rowsEl?.children ?? []).map((child) => child.innerHTML);
 
@@ -3295,6 +3818,79 @@ check("docAction reloads clean drafts, flags dirty ones, ignores others", docAct
 		input.dispatch("paste", { clipboardData: { getData: () => "a\nb" }, preventDefault() {} });
 		check("a paste is newline-normalised before it reaches the shell", written.at(-1)[0] === "a\rb", written.at(-1));
 		check("a visible writable terminal takes keyboard focus", input.focused === true, input.focused);
+
+		// Selection and mouse reporting need the clipboard and pointer events.
+		const copied = [];
+		const savedNavigator = globalThis.navigator;
+		Object.defineProperty(globalThis, "navigator", { value: { clipboard: { writeText: async (text) => { copied.push(text); } } }, configurable: true, writable: true });
+		try {
+			const selectionLayer = host.children.find((child) => child.className === "ce-term-selection");
+			const pointer = (type, x, y, extra = {}) => host.dispatch(type, {
+				button: 0, clientX: x * 7.83, clientY: y * 16, pointerId: 1,
+				shiftKey: false, altKey: false, ctrlKey: false, metaKey: false, preventDefault() {}, ...extra,
+			});
+
+			// A deterministic screen first: a snapshot replaces the grid wholesale.
+			state.render = { revision: 20, frame: { type: "snapshot", info: { cols: 80, rows: 24 }, screen: "git commit --amend" } };
+			tree = draw();
+			draw.flushEffects();
+			for (const fn of frames.splice(0)) fn();
+
+			// A drag selects cells; the overlay gets one rectangle per row.
+			pointer("pointerdown", 0, 0);
+			pointer("pointermove", 2, 0);
+			pointer("pointerup", 2, 0);
+			for (const fn of frames.splice(0)) fn();
+			check("a drag paints one selection rectangle", selectionLayer.children.length === 1, selectionLayer.children.length);
+			input.dispatch("keydown", { key: "c", metaKey: true, preventDefault() {} });
+			await new Promise((resolve) => setImmediate(resolve));
+			check("mod+C copies exactly the dragged cells", copied.at(-1) === "gi", copied);
+			for (const fn of frames.splice(0)) fn();
+			check("copying clears the highlight", selectionLayer.children.length === 0, selectionLayer.children.length);
+
+			// A double click takes the word under the pointer.
+			copied.length = 0;
+			pointer("pointerdown", 6, 0);
+			pointer("pointerup", 6, 0);
+			pointer("pointerdown", 6, 0);
+			pointer("pointerup", 6, 0);
+			input.dispatch("keydown", { key: "c", ctrlKey: true, shiftKey: true, preventDefault() {} });
+			await new Promise((resolve) => setImmediate(resolve));
+			check("a double click selects the word under the pointer", copied.at(-1) === "commit", copied.at(-1));
+
+			// Ctrl+Shift+C is the other copy shortcut, and it needs a selection too.
+			copied.length = 0;
+			input.dispatch("keydown", { key: "c", ctrlKey: true, shiftKey: true, preventDefault() {} });
+			await new Promise((resolve) => setImmediate(resolve));
+			check("copy without a selection sends nothing", copied.length === 0, copied);
+			// Shift+PageUp walks into the scrollback without touching the shell.
+			state.render = { revision: 10, frame: { type: "output", data: "\r\n" + Array.from({ length: 30 }, (_, i) => `line${i}`).join("\r\n") } };
+			tree = draw();
+			draw.flushEffects();
+			for (const fn of frames.splice(0)) fn();
+			const writesBefore = written.length;
+			input.dispatch("keydown", { key: "PageUp", shiftKey: true, preventDefault() {} });
+			for (const fn of frames.splice(0)) fn();
+			check("Shift+PageUp scrolls the viewport and sends nothing", written.length === writesBefore, written.slice(writesBefore));
+
+			// With a program owning the pointer, presses, drags and wheels are reported.
+			const before = written.length;
+			state.render = { revision: 11, frame: { type: "output", data: "\x1b[?1002h\x1b[?1006h" } };
+			tree = draw();
+			draw.flushEffects();
+			for (const fn of frames.splice(0)) fn();
+			pointer("pointerdown", 2, 2);
+			pointer("pointermove", 5, 3);
+			pointer("pointerup", 5, 3);
+			host.dispatch("wheel", { deltaY: -1, clientX: 2 * 7.83, clientY: 2 * 16, deltaMode: 0, shiftKey: false, altKey: false, ctrlKey: false, preventDefault() {} });
+			const reports = written.slice(before).map(([data]) => data);
+			check("a program that owns the pointer receives the press", reports.some((data) => /^\x1b\[<0;\d+;\d+M$/u.test(data)), reports);
+			check("dragging is reported in button-event mode", reports.some((data) => /^\x1b\[<32;\d+;\d+M$/u.test(data)), reports);
+			check("the release closes the press", reports.some((data) => /^\x1b\[<0;\d+;\d+m$/u.test(data)), reports);
+			check("the wheel belongs to the program while it owns the pointer", reports.some((data) => /^\x1b\[<6[45];\d+;\d+M$/u.test(data)), reports);
+		} finally {
+			Object.defineProperty(globalThis, "navigator", { value: savedNavigator, configurable: true, writable: true });
+		}
 
 		draw.unmount();
 		check("unmount removes every engine element", host.children.length === 0, host.children.length);

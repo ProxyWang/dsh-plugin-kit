@@ -20,6 +20,8 @@
  * servers die with this plugin's effect.
  */
 
+import { z } from "zod";
+
 import { API_PREFIX } from "./lib/host/constants.js";
 import { readJsonBody, respondJson } from "./lib/host/http.js";
 import { textCache } from "./lib/host/fence.js";
@@ -36,16 +38,22 @@ import { createToolboxTools } from "./lib/host/tools.js";
 import { setExternalTerminalApp } from "./lib/host/external-terminal.js";
 
 /** Plugin configuration schema. Fields are read at apply time; changes require
- *  a plugin restart (non-volatile). Users override via cordis.patch.yml. */
-export const Config = {
-	formatOnSave: { type: "boolean", default: true, description: "Format Go/TS/JS/Python files on save via the language server." },
-	liveRefresh: { type: "boolean", default: true, description: "Watch the workspace and live-refresh editor, tree and git status." },
-	lspIdleMs: { type: "number", default: 300_000, description: "Shut down idle LSP servers after this many milliseconds." },
-	apiTimeoutMs: { type: "number", default: 30_000, description: "Default timeout for API workbench requests (1000–120000 ms)." },
-	collectionDir: { type: "string", default: "", description: "Workspace-relative .bru collection directory for the API workbench." },
-	terminalApp: { type: "string", default: "", description: "Terminal application opened by the External Terminal action (macOS app name, e.g. iTerm or Warp; empty probes iTerm then Terminal)." },
-	dbDefaultDriver: { type: "string", default: "sqlite", description: "Default database driver for new connections (sqlite, mysql, postgres)." },
-};
+ *  a plugin restart (non-volatile). Users override via cordis.patch.yml.
+ *
+ *  The Loader validates the entry's `config` through the Standard Schema
+ *  protocol (`Config["~standard"].validate`), so this must be a real schema —
+ *  a plain descriptor object is not one, and the Host rejects the plugin with
+ *  "Cannot read properties of undefined (reading 'validate')". `prefault({})`
+ *  keeps an entry that omits `config` valid; the field defaults then fill in. */
+export const Config = z.object({
+	formatOnSave: z.boolean().default(true).describe("Format Go/TS/JS/Python files on save via the language server."),
+	liveRefresh: z.boolean().default(true).describe("Watch the workspace and live-refresh editor, tree and git status."),
+	lspIdleMs: z.number().default(300_000).describe("Shut down idle LSP servers after this many milliseconds."),
+	apiTimeoutMs: z.number().default(30_000).describe("Default timeout for API workbench requests (1000–120000 ms)."),
+	collectionDir: z.string().default("").describe("Workspace-relative .bru collection directory for the API workbench."),
+	terminalApp: z.string().default("").describe("Terminal application opened by the External Terminal action (macOS app name, e.g. iTerm or Warp; empty probes iTerm then Terminal)."),
+	dbDefaultDriver: z.string().default("sqlite").describe("Default database driver for new connections (sqlite, mysql, postgres)."),
+}).prefault({});
 
 function apply(ctx, config) {
 	// Deployment preference for the External Terminal action; "" probes at open time.

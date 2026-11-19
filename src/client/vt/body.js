@@ -22,6 +22,8 @@ import { h, useEffect, useRef, useState } from "../react.js";
 import { createScreen } from "./screen.js";
 import { createRenderer } from "./render.js";
 import { keyToBytes, pasteToBytes } from "./keys.js";
+import { selectionRow, selectionText, selectAll, selectLine, selectWord } from "./selection.js";
+import { encodeMouse, encodeWheel, mouseOwned, reportsMotion } from "./mouse.js";
 
 /**
  * Apply one stream frame to the emulator.
@@ -121,15 +123,46 @@ export function TerminalBody({ useTabInfo, useTerminal, useTheme, view, t }) {
 		let frame = 0;
 		let offset = 0;
 		let dirty = true;
+		// Selection lives in buffer coordinates, so it survives scrolling; a drag
+		// sets the head, a double click takes a word, a triple click a row.
+		let selection = null;
+		let dragKind = null;
+		let clickCount = 0;
+		let lastClick = { at: 0, row: -1, col: -1 };
+
+		const rectsForSelection = () => {
+			if (selection === null) return [];
+			const first = screen.topRow(offset);
+			const rects = [];
+			for (let row = 0; row < screen.rows; row++) {
+				const span = selectionRow(selection, first + row, screen.cols);
+				if (span === null) continue;
+				rects.push({
+					left: span.from * renderer.cellWidth,
+					top: row * renderer.rowHeight,
+					width: Math.max(1, (span.to - span.from) * renderer.cellWidth),
+					height: renderer.rowHeight,
+				});
+			}
+			return rects;
+		};
+
 		const paint = () => {
 			frame = 0;
 			if (!dirty) return;
 			dirty = false;
 			renderer.paint(screen, { offset });
+			renderer.paintSelection(rectsForSelection());
 		};
 		const schedule = () => {
 			dirty = true;
 			if (frame === 0) frame = requestAnimationFrame(paint);
+		};
+
+		const clearSelection = () => {
+			if (selection === null) return;
+			selection = null;
+			schedule();
 		};
 
 		/** Fit the grid to the element and tell the Host when the size changed. */
@@ -149,14 +182,87 @@ export function TerminalBody({ useTabInfo, useTerminal, useTheme, view, t }) {
 			}
 		};
 
+		/** Copy the selection; used by the shortcut, the context menu path and tests. */
+		const copySelection = async () => {
+			if (selection === null) return false;
+			const text = selectionText(selection, (row) => screen.lineAt(row), screen.cols);
+			if (text === "") return false;
+			try {
+				await navigator.clipboard.writeText(text);
+			} catch {
+				return false;
+			}
+			return true;
+		};
+
+		/** Forward one pointer event to a program that owns the pointer. */
+		const reportMouse = (action, event) => {
+			if (!latest.current.writable) return false;
+			const cell = renderer.cellAt(event.clientX, event.clientY);
+			if (cell === null) return false;
+			const bytes = encodeMouse({
+				button: event.button === 2 ? "right" : event.button === 1 ? "middle" : "left",
+				action,
+				x: cell.x,
+				y: cell.y,
+				shiftKey: event.shiftKey,
+				altKey: event.altKey,
+				ctrlKey: event.ctrlKey,
+			}, { protocol: screen.modes.sgrMouse ? "sgr" : "x10", mode: screen.modes.mouse });
+			if (bytes === null) return false;
+			model.write(bytes, true);
+			return true;
+		};
+
 		// Keep the bytes out of the way of the browser's own shortcuts: only the
 		// ones the terminal owns are consumed here.
 		const onKeyDown = (event) => {
 			if (event.isComposing || event.keyCode === 229) return;
 			if (!latest.current.writable) return;
+			const mod = event.metaKey || event.ctrlKey;
+			// Copy, select-all and scrollback keys belong to the terminal surface,
+			// not to the shell.
+			if (mod && !event.altKey && (event.key === "c" || event.key === "C") && !event.shiftKey) {
+				if (selection !== null) {
+					event.preventDefault();
+					void copySelection().then((copied) => { if (copied) clearSelection(); });
+					return;
+				}
+				if (event.metaKey) return; // let the browser copy anything else
+			}
+			if (mod && event.shiftKey && (event.key === "c" || event.key === "C")) {
+				if (selection !== null) {
+					event.preventDefault();
+					void copySelection().then((copied) => { if (copied) clearSelection(); });
+					return;
+				}
+			}
+			if (mod && !event.altKey && !event.shiftKey && (event.key === "a" || event.key === "A") && selection !== null) {
+				event.preventDefault();
+				selection = selectAll(screen.bufferRows, screen.cols);
+				schedule();
+				return;
+			}
+			if (event.metaKey && !event.altKey && !event.ctrlKey && (event.key === "a" || event.key === "A") && selection === null) {
+				event.preventDefault();
+				selection = selectAll(screen.bufferRows, screen.cols);
+				schedule();
+				return;
+			}
+			if (event.shiftKey && (event.key === "PageUp" || event.key === "PageDown" || event.key === "Home" || event.key === "End")) {
+				event.preventDefault();
+				const pages = Math.max(1, screen.rows - 1);
+				if (event.key === "PageUp") offset = Math.min(offset + pages, screen.scrollbackRows);
+				else if (event.key === "PageDown") offset = Math.max(0, offset - pages);
+				else if (event.key === "Home") offset = screen.scrollbackRows;
+				else offset = 0;
+				schedule();
+				return;
+			}
 			const bytes = keyToBytes(event, screen.modes);
 			if (bytes === null) return;
 			event.preventDefault();
+			clearSelection();
 			model.write(bytes, true);
 			// Typing at the bottom resumes following the output.
 			if (offset !== 0) { offset = 0; schedule(); }
@@ -166,6 +272,7 @@ export function TerminalBody({ useTabInfo, useTerminal, useTheme, view, t }) {
 			const text = input.value;
 			if (text === "") return;
 			input.value = "";
+			clearSelection();
 			model.write(text, true);
 			if (offset !== 0) { offset = 0; schedule(); }
 		};
@@ -174,13 +281,31 @@ export function TerminalBody({ useTabInfo, useTerminal, useTheme, view, t }) {
 			const text = event.clipboardData?.getData("text") ?? "";
 			if (text === "") return;
 			event.preventDefault();
+			clearSelection();
 			model.write(pasteToBytes(text, screen.modes.bracketedPaste), true);
 			if (offset !== 0) { offset = 0; schedule(); }
 		};
 		const onWheel = (event) => {
+			// A full-screen program that owns the pointer also owns the wheel: vim
+			// and less scroll themselves, and stealing those turns is worse than
+			// ignoring them.
+			if (mouseOwned(screen.modes) && !event.shiftKey && latest.current.writable) {
+				const cell = renderer.cellAt(event.clientX, event.clientY);
+				if (cell !== null) {
+					const bytes = encodeWheel(
+						{ deltaY: event.deltaY, x: cell.x, y: cell.y, shiftKey: event.shiftKey, altKey: event.altKey, ctrlKey: event.ctrlKey },
+						{ protocol: screen.modes.sgrMouse ? "sgr" : "x10", mode: screen.modes.mouse },
+					);
+					if (bytes !== null) {
+						event.preventDefault();
+						model.write(bytes, true);
+						return;
+					}
+				}
+			}
 			const step = event.deltaMode === 1 ? 1 : 3;
 			const next = offset + (event.deltaY > 0 ? -step : step);
-			const clamped = Math.max(0, next);
+			const clamped = Math.max(0, Math.min(next, screen.scrollbackRows));
 			if (clamped === offset) return;
 			event.preventDefault();
 			offset = clamped;
@@ -188,7 +313,60 @@ export function TerminalBody({ useTabInfo, useTerminal, useTheme, view, t }) {
 		};
 		const onFocus = () => host.classList.add("ce-term-focused");
 		const onBlur = () => host.classList.remove("ce-term-focused");
-		const onPointerDown = () => {
+		const onPointerDown = (event) => {
+			input.focus({ preventScroll: true });
+			if (event.button !== 0) return;
+			// Shift keeps selection working while a program owns the pointer.
+			if (mouseOwned(screen.modes) && !event.shiftKey) {
+				if (reportMouse("press", event)) {
+					dragKind = "mouse";
+					host.setPointerCapture?.(event.pointerId);
+					return;
+				}
+			}
+			const cell = renderer.cellAt(event.clientX, event.clientY);
+			if (cell === null) return;
+			const row = screen.topRow(offset) + cell.y;
+			const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+			const repeat = lastClick.row === row && lastClick.col === cell.x && now - lastClick.at < 500;
+			clickCount = repeat ? Math.min(3, clickCount + 1) : 1;
+			lastClick = { at: now, row, col: cell.x };
+			if (clickCount >= 3) selection = selectLine(row, screen.cols);
+			else if (clickCount === 2) selection = selectWord(screen.lineAt(row), row, cell.x);
+			else selection = { anchor: { row, col: cell.x }, head: { row, col: cell.x } };
+			dragKind = "select";
+			host.setPointerCapture?.(event.pointerId);
+			schedule();
+		};
+		const onPointerMove = (event) => {
+			if (dragKind === "mouse") {
+				if (reportsMotion(screen.modes.mouse)) reportMouse("drag", event);
+				return;
+			}
+			if (dragKind !== "select" || selection === null) return;
+			const cell = renderer.cellAt(event.clientX, event.clientY);
+			if (cell === null) return;
+			const row = screen.topRow(offset) + cell.y;
+			if (selection.head.row === row && selection.head.col === cell.x) return;
+			selection = { anchor: selection.anchor, head: { row, col: cell.x } };
+			// Dragging past the top or bottom edge scrolls the viewport.
+			if (cell.y < 0 && offset < screen.scrollbackRows) offset += 1;
+			else if (cell.y >= screen.rows && offset > 0) offset -= 1;
+			schedule();
+		};
+		const onPointerUp = (event) => {
+			if (dragKind === "mouse" && reportsMotion(screen.modes.mouse)) reportMouse("release", event);
+			dragKind = null;
+			host.releasePointerCapture?.(event.pointerId);
+		};
+		const onContextMenu = (event) => {
+			// Right click copies a selection, or pastes when there is none — the two
+			// things a terminal's context menu is used for most.
+			event.preventDefault();
+			if (selection !== null) {
+				void copySelection().then((copied) => { if (copied) clearSelection(); });
+				return;
+			}
 			input.focus({ preventScroll: true });
 		};
 
@@ -199,6 +377,10 @@ export function TerminalBody({ useTabInfo, useTerminal, useTheme, view, t }) {
 		input.addEventListener("blur", onBlur);
 		host.addEventListener("wheel", onWheel, { passive: false });
 		host.addEventListener("pointerdown", onPointerDown);
+		host.addEventListener("pointermove", onPointerMove);
+		host.addEventListener("pointerup", onPointerUp);
+		host.addEventListener("pointercancel", onPointerUp);
+		host.addEventListener("contextmenu", onContextMenu);
 
 		const observer = new ResizeObserver(fit);
 		observer.observe(host);
@@ -213,6 +395,9 @@ export function TerminalBody({ useTabInfo, useTerminal, useTheme, view, t }) {
 			schedule,
 			resetOffset() { offset = 0; },
 			/** Apply one render frame and acknowledge it to the Host immediately. */
+			copySelection,
+			get selection() { return selection; },
+			get scrollbackOffset() { return offset; },
 			apply(render) {
 				if (!render) return;
 				const snapshot = render.frame?.type === "snapshot";
@@ -233,6 +418,10 @@ export function TerminalBody({ useTabInfo, useTerminal, useTheme, view, t }) {
 				input.removeEventListener("blur", onBlur);
 				host.removeEventListener("wheel", onWheel);
 				host.removeEventListener("pointerdown", onPointerDown);
+				host.removeEventListener("pointermove", onPointerMove);
+				host.removeEventListener("pointerup", onPointerUp);
+				host.removeEventListener("pointercancel", onPointerUp);
+				host.removeEventListener("contextmenu", onContextMenu);
 				input.remove();
 				renderer.dispose();
 			},

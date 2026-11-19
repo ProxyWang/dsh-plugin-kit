@@ -149,12 +149,15 @@ export function rowHtml(line, theme) {
 export function createRenderer({ container, doc = globalThis.document, theme = () => ({ fg: "#d4d4d4", bg: "#1e1e1e" }), font = () => ({ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontSize: 13 }) } = {}) {
 	const rowsEl = doc.createElement("div");
 	rowsEl.className = "ce-term-rows";
+	const selectionEl = doc.createElement("div");
+	selectionEl.className = "ce-term-selection";
 	const cursorEl = doc.createElement("div");
 	cursorEl.className = "ce-term-cursor";
 	const measureEl = doc.createElement("span");
 	measureEl.className = "ce-term-measure";
 	measureEl.textContent = "MMMMMMMMMM";
 	container.appendChild(rowsEl);
+	container.appendChild(selectionEl);
 	container.appendChild(cursorEl);
 	container.appendChild(measureEl);
 
@@ -231,14 +234,60 @@ export function createRenderer({ container, doc = globalThis.document, theme = (
 		}
 	}
 
+	/**
+	 * Cell under a viewport point.
+	 * @param clientX - pointer x in client coordinates.
+	 * @param clientY - pointer y in client coordinates.
+	 * @returns \`{ x, y }\` in cells, or null outside the grid.
+	 */
+	function cellAt(clientX, clientY) {
+		const box = rowsEl.getBoundingClientRect();
+		if (box.width <= 0 || box.height <= 0) return null;
+		const x = Math.floor((clientX - box.left) / cellWidth);
+		const y = Math.floor((clientY - box.top) / rowHeight);
+		if (x < 0 || y < 0) return null;
+		return { x: Math.min(x, Math.max(0, Math.round(box.width / cellWidth) - 1)), y };
+	}
+
 	/** Invalidate every cached row so the next paint rewrites all of them. */
 	function invalidate() {
 		for (let i = 0; i < versions.length; i++) versions[i] = -1;
 	}
 
+	/**
+	 * Draw the selection as one rectangle per row segment.
+	 *
+	 * A rectangle overlay keeps selection out of the row markup: rows stay
+	 * versioned strings, so highlighting never invalidates a repaint.
+	 *
+	 * @param rects - rectangles in cell pixels: `{ left, top, width, height }`.
+	 */
+	function paintSelection(rects) {
+		const wanted = Array.isArray(rects) ? rects : [];
+		// Re-read the child list on each pass: it may be a live collection, and a
+		// captured snapshot would never shrink when a rect is removed.
+		while (selectionEl.children.length < wanted.length) {
+			const el = doc.createElement("div");
+			el.className = "ce-term-selection-rect";
+			selectionEl.appendChild(el);
+		}
+		while (selectionEl.children.length > wanted.length) {
+			selectionEl.children[selectionEl.children.length - 1].remove();
+		}
+		for (let i = 0; i < wanted.length; i++) {
+			const rect = wanted[i];
+			const style = selectionEl.children[i].style;
+			style.transform = `translate(${rect.left}px, ${rect.top}px)`;
+			style.width = `${rect.width}px`;
+			style.height = `${rect.height}px`;
+		}
+	}
+
 	return {
 		measure,
+		cellAt,
 		paint,
+		paintSelection,
 		invalidate,
 		get cellWidth() { return cellWidth; },
 		get rowHeight() { return rowHeight; },
@@ -246,6 +295,7 @@ export function createRenderer({ container, doc = globalThis.document, theme = (
 		gridSize(cols, rows) { return { width: cols * cellWidth, height: rows * rowHeight }; },
 		dispose() {
 			rowsEl.remove();
+			selectionEl.remove();
 			cursorEl.remove();
 			measureEl.remove();
 			rowEls = [];

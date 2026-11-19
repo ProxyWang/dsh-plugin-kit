@@ -8,6 +8,8 @@ import { definition, insertStyles, skillsDefinition, apiDefinition, dbDefinition
 import { CallDiffRow } from "./calldiff.js";
 import { SkillsTabBody, SkillsTitle } from "./skills.js";
 import { ApiView, ApiTitle } from "./apiclient.js";
+import { WorkbenchView, writeProtocol } from "./workbench.js";
+import { migrateLegacyRpcTabs } from "./migrate.js";
 import { DbView, DbTitle } from "./db.js";
 import { RpcView, RpcTitle } from "./rpc.js";
 import { installLeftTools, WorkspaceGuide } from "./lefttools.js";
@@ -103,9 +105,15 @@ export default {
 			name: "sidebar.right.pane.tab.title",
 			key: SKILLS_TAB_ID,
 		}, SkillsTitle)));
-		// Top-level "API" tab: curl-importable request editor + response viewer.
+		// Top-level request workbench: one tab for HTTP and gRPC. Both panes stay
+		// mounted once visited, so switching protocol never discards a draft.
 		safe("api tab type", () => ctx.sidebarRightTabs.register(apiDefinition(bound)));
-		const ApiBound = (props) => h(ApiView, { ...props, t: props.t ?? bound });
+		const ApiBound = (props) => h(WorkbenchView, {
+			...props,
+			t: props.t ?? bound,
+			http: h(ApiView, { ...props, t: props.t ?? bound }),
+			grpc: h(RpcView, { ...props, t: props.t ?? bound }),
+		});
 		safe("api tab body", () => ctx.slots.inject("sidebar.right.pane.tab", () => ctx.slots.register({
 			name: "sidebar.right.pane.tab",
 			key: API_TAB_ID,
@@ -130,7 +138,27 @@ export default {
 			name: "sidebar.right.pane.tab.title",
 			key: DB_TAB_ID,
 		}, DbTitle)));
-		// Top-level "RPC" tab: gRPC calls driven by a .proto in the workspace.
+		// Legacy "RPC" pages are folded into the workbench once per session: the
+		// preference starts on gRPC, the old page closes, the workbench opens.
+		safe("legacy rpc tabs", () => ctx.effect(() => {
+			const migrated = new Set();
+			const run = () => {
+				let tabs = [];
+				try { tabs = ctx.sidebarRight.openTabs.getSnapshot(); } catch { return; }
+				migrateLegacyRpcTabs({
+					tabs,
+					migrated,
+					canOpen: () => Boolean(ctx.sidebarRightTabs.get(API_TAB_ID)),
+					preferGrpc: () => { writeProtocol("grpc"); },
+					close: (tab) => { ctx.sidebarRight.close(tab.id); },
+					open: (sessionId) => { ctx.sidebarRight.openTabIn(sessionId, API_TAB_KIND, {}); },
+				});
+			};
+			const off = ctx.sidebarRight.openTabs.subscribe(run);
+			run();
+			return () => off();
+		}, "code-explorer: legacy rpc tabs"));
+		// The type itself stays registered so an old layout opens before it moves.
 		safe("rpc tab type", () => ctx.sidebarRightTabs.register(rpcDefinition(bound)));
 		const RpcBound = (props) => h(RpcView, { ...props, t: props.t ?? bound });
 		safe("rpc tab body", () => ctx.slots.inject("sidebar.right.pane.tab", () => ctx.slots.register({

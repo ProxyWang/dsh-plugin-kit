@@ -86,7 +86,7 @@ export function createScreen({ cols = 80, rows = 24, scrollback = 1000 } = {}) {
 	let tabs = defaultTabs(cols);
 	let modes = {
 		wrap: true, origin: false, insert: false, cursor: true, appCursor: false,
-		alt: false, bracketedPaste: false, mouse: "off", echo: true,
+		alt: false, bracketedPaste: false, mouse: "off", sgrMouse: false, echo: true,
 	};
 	let cursorStyle = "block";
 	let cursorBlink = true;
@@ -464,6 +464,7 @@ export function createScreen({ cols = 80, rows = 24, scrollback = 1000 } = {}) {
 					else { leaveAlternate(); x = saved.x; y = saved.y; }
 					break;
 				case 1000: case 1002: case 1003: modes.mouse = on ? String(value) : "off"; break;
+				case 1006: modes.sgrMouse = on; break;
 				case 2004: modes.bracketedPaste = on; break;
 				default: break;
 			}
@@ -515,7 +516,7 @@ export function createScreen({ cols = 80, rows = 24, scrollback = 1000 } = {}) {
 		scrollTop = 0;
 		scrollBottom = primary.rows - 1;
 		tabs = defaultTabs(primary.cols);
-		modes = { ...modes, wrap: true, origin: false, insert: false, cursor: true, appCursor: false, bracketedPaste: false, mouse: "off" };
+		modes = { ...modes, wrap: true, origin: false, insert: false, cursor: true, appCursor: false, bracketedPaste: false, mouse: "off", sgrMouse: false };
 		dirtyAll = true;
 	}
 
@@ -697,6 +698,18 @@ export function createScreen({ cols = 80, rows = 24, scrollback = 1000 } = {}) {
 		},
 		viewport,
 		viewportAt,
+		/** Absolute buffer index of the viewport's first row, at a scrollback offset. */
+		topRow(offset = 0) {
+			const maxOffset = buffer === primary ? Math.max(0, buffer.lines.length - buffer.rows) : 0;
+			const fromBottom = Math.min(Math.max(0, offset), maxOffset);
+			return Math.max(0, buffer.lines.length - buffer.rows - fromBottom);
+		},
+		/** One row by absolute buffer index, for selection and copy. */
+		lineAt(index) {
+			return buffer.lines[index] ?? null;
+		},
+		/** Total rows held, scrollback included. */
+		get bufferRows() { return buffer.lines.length; },
 		get cols() { return buffer.cols; },
 		get rows() { return buffer.rows; },
 		get alt() { return alt; },

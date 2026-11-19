@@ -923,6 +923,22 @@ for (const cleanup of cleanups) cleanup();
 		check("db.query answers over the private API", apiQuery.ok && apiQuery.value.rows[0][0] === 3, apiQuery.value);
 		await call("db.disconnect", { id: viaApi.value.id });
 
+		check("SQLite runs in a worker so the Host stays responsive", conn.mode === "worker", conn.mode);
+
+		// A second connection for the cancellation path (cancelling ends it).
+		const slowConn = await db.connect({ driver: "sqlite", path: file });
+		let ticks = 0;
+		const timer = setInterval(() => { ticks += 1; }, 5);
+		const slow = db.query(slowConn.id, "WITH RECURSIVE c(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM c WHERE x < 4000000) SELECT count(*) FROM c");
+		await new Promise((resolvePromise) => setTimeout(resolvePromise, 80));
+		clearInterval(timer);
+		check("a long SQLite query does not block the event loop", ticks >= 3, ticks);
+		const pendingRejection = slow.then(() => null, (error) => error);
+		const cancelled = await db.cancel(slowConn.id);
+		check("db.cancel ends a running SQLite statement", cancelled.cancelled === true && cancelled.connectionClosed === true, cancelled);
+		check("the cancelled statement rejects instead of hanging", (await pendingRejection) !== null, null);
+		check("a cancelled connection is gone from the list", !db.listConnections().some((entry) => entry.id === slowConn.id), null);
+
 		db.disconnect(conn.id);
 		check("db.disconnect closes the connection", !db.listConnections().some((entry) => entry.id === conn.id), null);
 		check("a closed connection refuses further queries", await db.query(conn.id, "SELECT 1").then(() => false, () => true), null);

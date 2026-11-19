@@ -18,6 +18,7 @@
 
 import { Fragment, h, useCallback, useEffect, useMemo, useRef, useState } from "./react.js";
 import { api } from "./api.js";
+import { DRIVERS, driverLabel, parseConnectionAddress } from "./dbconnect.js";
 import { useDismissLayer } from "./dismiss.js";
 import { DB_TAB_KIND, DB_TAB_ID } from "./constants.js";
 
@@ -101,7 +102,11 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 	const [activeTabId, setActiveTabId] = useState("");
 	const [history, setHistory] = useState([]);
 	const [connectOpen, setConnectOpen] = useState(false);
-	const [form, setForm] = useState({ driver: "sqlite", path: "", host: "localhost", port: "", user: "", password: "", database: "" });
+	// The address is the only thing a person has to know: the driver and the
+	// fields are derived from it (dbconnect.js). `advanced` reveals the fields
+	// for the cases where inference is not enough.
+	const [form, setForm] = useState({ address: "", driver: "", path: "", host: "localhost", port: "", user: "", password: "", database: "" });
+	const [advanced, setAdvanced] = useState(false);
 	const [cellDetail, setCellDetail] = useState(null); // {title, value}
 	const [notice, setNotice] = useState("");
 	const [historyOpen, setHistoryOpen] = useState(false);
@@ -110,10 +115,10 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 
 	useEffect(() => {
 		api("db.drivers", {}).then((res) => {
-			if (!res.ok) return;
-			setDrivers(res.value ?? []);
-			const first = (res.value ?? []).find((driver) => driver.ready);
-			if (first) setForm((current) => ({ ...current, driver: first.id }));
+			// The readiness list only decorates the optional override; a failed
+			// probe must not silence the panel, so it degrades to "assume ready"
+			// and the Host reports the real reason when connecting.
+			if (res.ok) setDrivers(res.value ?? []);
 		});
 	}, []);
 
@@ -156,8 +161,37 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 		else { setSchema(null); setSchemaError(res.error); }
 	}, [activeConn]);
 
+	/**
+	 * Read a pasted address into driver and fields.
+	 *
+	 * A URL fills host/port/user/password/database; a path fills the SQLite
+	 * file. Unknown input clears the driver so Connect stays disabled, and the
+	 * reason is shown instead of being swallowed.
+	 */
+	const applyAddress = useCallback((value) => {
+		const parsed = parseConnectionAddress(value);
+		setForm((current) => ({
+			...current,
+			address: value,
+			driver: parsed.driver,
+			path: parsed.driver === "sqlite" ? parsed.path : current.path,
+			host: parsed.driver === "sqlite" ? current.host : (parsed.host || current.host),
+			port: parsed.port,
+			user: parsed.user,
+			password: parsed.password,
+			database: parsed.database,
+		}));
+		setNotice(parsed.error);
+	}, []);
+
+	const driverReady = drivers.find((entry) => entry.id === form.driver)?.ready ?? true;
+	const canConnect = form.driver !== ""
+		&& driverReady
+		&& (form.driver === "sqlite" ? form.path.trim() !== "" : form.host.trim() !== "");
+
 	const doConnect = useCallback(async () => {
-		const params = { driver: form.driver };
+		if (!canConnect) return;
+		const params = { driver: form.driver, cwd };
 		if (form.driver === "sqlite") params.path = form.path.trim();
 		else {
 			params.host = form.host.trim();
@@ -287,6 +321,26 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 		if (/^\s*(create|drop|alter)\b/i.test(sql)) void refreshSchema(conn);
 	}, [tabs, activeConn, patchTab, refreshSchema, t]);
 
+	/**
+	 * Stop the statement running on this tab's connection.
+	 *
+	 * A CLI-backed connection survives (the child process is killed); a SQLite
+	 * statement runs in a worker thread that cannot be interrupted in place, so
+	 * cancelling ends that connection and the panel says so.
+	 */
+	const cancelQuery = useCallback(async (tab) => {
+		const conn = tab.conn || activeConn;
+		if (!conn) return;
+		const res = await api("db.cancel", { id: conn });
+		patchTab(tab.id, { loading: false, error: t("db.cancelled") });
+		if (res.ok && res.value?.connectionClosed) {
+			setConnections((current) => current.filter((entry) => entry.id !== conn));
+			setTabs((current) => current.filter((entry) => entry.conn !== conn));
+			if (activeConn === conn) { setActiveConn(""); setSchema(null); }
+			setNotice(t("db.cancelledClosed"));
+		}
+	}, [activeConn, patchTab, t]);
+
 	const exportResult = useCallback((result, name) => {
 		if (!result?.columns?.length) return;
 		const csv = toCsv(result.columns, result.rows ?? []);
@@ -341,7 +395,7 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 			h("span", { className: "ce-spacer" }),
 			schema ? h("span", { className: "cedb-chip" }, `${counts.tables} ${t("db.tables")}`) : null,
 			schema ? h("span", { className: "cedb-chip" }, `${counts.views} ${t("db.views")}`) : null,
-			notice ? h("span", { className: "cedb-notice" }, notice) : null,
+			notice && !connectOpen ? h("span", { className: "cedb-notice" }, notice) : null,
 		),
 		h("div", { className: "cedb-body" },
 			// ---- rail ------------------------------------------------------------------
@@ -429,12 +483,14 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 											onChange: (event) => patchTab(activeTab.id, { conn: event.target.value }),
 											"aria-label": t("db.connections"),
 										}, connections.map((connection) => h("option", { key: connection.id, value: connection.id }, `${connection.driver} · ${connection.label}`))),
-										h("button", {
-											type: "button",
-											className: "ce-sk-btn ce-sk-primary cedb-run",
-											disabled: activeTab.loading || !String(activeTab.sql ?? "").trim(),
-											onClick: () => void runQuery(activeTab.id),
-										}, activeTab.loading ? t("loading") : `▶ ${t("db.run")}`),
+										activeTab.loading
+											? h("button", { type: "button", className: "ce-sk-btn cedb-run cedb-stop", onClick: () => void cancelQuery(activeTab) }, `■ ${t("db.stop")}`)
+											: h("button", {
+												type: "button",
+												className: "ce-sk-btn ce-sk-primary cedb-run",
+												disabled: !String(activeTab.sql ?? "").trim(),
+												onClick: () => void runQuery(activeTab.id),
+											}, `▶ ${t("db.run")}`),
 										h("button", { type: "button", className: "ce-sk-btn", title: t("db.history"), onClick: () => setHistoryOpen((v) => !v) }, t("db.history")),
 										h("span", { className: "ce-spacer" }),
 										h("span", { className: "cedb-kbd" }, "⌘/Ctrl+Enter"),
@@ -507,27 +563,54 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 		connectOpen
 			? h("div", { className: "cedb-dialog", ref: connectRef, role: "dialog", "aria-label": t("db.newConnection") },
 				h("h3", { className: "cedb-dialog-title" }, t("db.newConnection")),
-				h("label", { className: "cedb-field" }, t("db.driver"),
-					h("select", {
+				h("label", { className: "cedb-field" }, t("db.address"),
+					h("input", {
 						className: "ce-input",
-						value: form.driver,
-						onChange: (event) => setForm({ ...form, driver: event.target.value }),
-					}, drivers.map((driver) => h("option", { key: driver.id, value: driver.id, disabled: !driver.ready }, `${driver.label}${driver.ready ? "" : ` — ${driver.note}`}`)))),
-				form.driver === "sqlite"
-					? h("label", { className: "cedb-field" }, t("db.path"),
-						h("input", { className: "ce-input", value: form.path, placeholder: "/path/to/app.sqlite", onChange: (event) => setForm({ ...form, path: event.target.value }) }))
-					: h(Fragment, null,
-						h("div", { className: "cedb-field-row" },
-							h("label", { className: "cedb-field" }, t("db.host"), h("input", { className: "ce-input", value: form.host, onChange: (event) => setForm({ ...form, host: event.target.value }) })),
-							h("label", { className: "cedb-field cedb-field-narrow" }, t("db.port"), h("input", { className: "ce-input", type: "number", value: form.port, placeholder: form.driver === "mysql" ? "3306" : "5432", onChange: (event) => setForm({ ...form, port: event.target.value }) })),
-						),
-						h("label", { className: "cedb-field" }, t("db.database"), h("input", { className: "ce-input", value: form.database, onChange: (event) => setForm({ ...form, database: event.target.value }) })),
-						h("div", { className: "cedb-field-row" },
-							h("label", { className: "cedb-field" }, t("db.user"), h("input", { className: "ce-input", value: form.user, onChange: (event) => setForm({ ...form, user: event.target.value }) })),
-							h("label", { className: "cedb-field" }, t("db.password"), h("input", { className: "ce-input", type: "password", value: form.password, onChange: (event) => setForm({ ...form, password: event.target.value }) })),
-						)),
+						value: form.address,
+						placeholder: t("db.addressPlaceholder"),
+						autoFocus: true,
+						spellcheck: false,
+						autoComplete: "off",
+						onChange: (event) => applyAddress(event.target.value),
+					})),
+				h("div", { className: `cedb-detect${form.driver === "" ? " cedb-detect-miss" : ""}` },
+					h("span", null, form.driver === "" ? t("db.notDetected") : `${t("db.detected")}: ${driverLabel(form.driver)}`),
+					driverReady || form.driver === "" ? null : h("span", { className: "cedb-detect-note" }, drivers.find((entry) => entry.id === form.driver)?.note ?? "")),
+				advanced || form.driver === ""
+					? h(Fragment, null,
+						h("label", { className: "cedb-field" }, t("db.driver"),
+							h("select", {
+								className: "ce-input",
+								value: form.driver,
+								onChange: (event) => setForm({ ...form, driver: event.target.value }),
+							// Always populated: an unprobed deployment still shows the
+							// drivers it could open, instead of an empty box.
+							}, DRIVERS.map((id) => {
+								const known = drivers.find((entry) => entry.id === id);
+								return h("option", { key: id, value: id, disabled: known ? !known.ready : false }, known && !known.ready ? `${known.label} — ${known.note}` : driverLabel(id));
+							}))),
+						form.driver === "sqlite"
+							? h("label", { className: "cedb-field" }, t("db.path"),
+								h("input", { className: "ce-input", value: form.path, placeholder: "/path/to/app.sqlite", onChange: (event) => setForm({ ...form, path: event.target.value }) }))
+							: h(Fragment, null,
+								h("div", { className: "cedb-field-row" },
+									h("label", { className: "cedb-field" }, t("db.host"), h("input", { className: "ce-input", value: form.host, onChange: (event) => setForm({ ...form, host: event.target.value }) })),
+									h("label", { className: "cedb-field cedb-field-narrow" }, t("db.port"), h("input", { className: "ce-input", type: "number", value: form.port, placeholder: form.driver === "mysql" ? "3306" : "5432", onChange: (event) => setForm({ ...form, port: event.target.value }) })),
+								),
+								h("label", { className: "cedb-field" }, t("db.database"), h("input", { className: "ce-input", value: form.database, onChange: (event) => setForm({ ...form, database: event.target.value }) })),
+								h("div", { className: "cedb-field-row" },
+									h("label", { className: "cedb-field" }, t("db.user"), h("input", { className: "ce-input", value: form.user, onChange: (event) => setForm({ ...form, user: event.target.value }) })),
+									h("label", { className: "cedb-field" }, t("db.password"), h("input", { className: "ce-input", type: "password", value: form.password, onChange: (event) => setForm({ ...form, password: event.target.value }) })),
+								)))
+					: h("button", {
+						type: "button",
+						className: "cedb-advanced",
+						"aria-expanded": advanced,
+						onClick: () => setAdvanced(true),
+					}, t("db.advanced")),
+				notice !== "" && connectOpen ? h("div", { className: "cedb-dialog-error", role: "alert" }, notice) : null,
 				h("div", { className: "cedb-dialog-actions" },
-					h("button", { type: "button", className: "ce-sk-btn ce-sk-primary", onClick: () => void doConnect() }, t("db.connectAction")),
+					h("button", { type: "button", className: "ce-sk-btn ce-sk-primary", disabled: !canConnect, onClick: () => void doConnect() }, t("db.connectAction")),
 					h("button", { type: "button", className: "ce-sk-btn", onClick: () => setConnectOpen(false) }, t("editor.cancel")),
 				),
 			)

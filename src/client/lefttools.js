@@ -2,20 +2,19 @@
  * PanelRow selects a main key; the synchronous panelInfo subscriber routes our
  * keys back to Conversation before opening a right-side page. No DOM patching. */
 import { h, useEffect, useState } from "./react.js";
-import { NS, TAB_KIND, API_TAB_KIND, SKILLS_TAB_KIND, DB_TAB_KIND, RPC_TAB_KIND } from "./constants.js";
+import { NS, TAB_KIND, API_TAB_KIND, SKILLS_TAB_KIND, DB_TAB_KIND } from "./constants.js";
 import { IconCode } from "./icons.js";
 import { collectBoxes, makeBrowserOpener } from "./launcher.js";
 
 export const LEFT_TOOL_PREFIX = "dsh-plugin-kit/workspace/";
 /**
  * Host tool kinds the left navigation no longer lists, because Dev Workspace
- * carries the entry itself. Empty on purpose: the workspace now opens the
- * operating system's terminal, so it no longer stands in for the product's
- * embedded terminal — hiding that row would leave the embedded terminal with
- * only its keyboard shortcut. Each kind fold-in also needs a workspace entry
- * of the same capability before it may be listed here.
+ * carries the entry itself. Only kinds whose capability has a workspace entry
+ * may be listed here: the product's terminal row stays visible because the
+ * workspace now opens the *system* terminal, which is a different thing, while
+ * gRPC lives inside the request workbench and no longer needs its own row.
  */
-export const LEFT_TOOL_HIDDEN_KINDS = [];
+export const LEFT_TOOL_HIDDEN_KINDS = ["code-rpc"];
 
 /** Whether a host kind is folded into the workspace instead of the left rail. */
 export function isHiddenLeftToolKind(kind) {
@@ -24,10 +23,10 @@ export function isHiddenLeftToolKind(kind) {
 
 const OWN_TOOLS = [
 	{ kind: TAB_KIND, label: "guide.title", description: "guide.description", glyph: "code" },
+	// HTTP and gRPC are one workbench entry; the old RPC entry is gone.
 	{ kind: API_TAB_KIND, label: "apiGuide.title", description: "apiGuide.description", glyph: "api" },
 	{ kind: SKILLS_TAB_KIND, label: "skillsGuide.title", description: "skillsGuide.description", glyph: "skills" },
 	{ kind: DB_TAB_KIND, label: "dbGuide.title", description: "dbGuide.description", glyph: "db" },
-	{ kind: RPC_TAB_KIND, label: "rpcGuide.title", description: "rpcGuide.description", glyph: "rpc" },
 ];
 
 export function ToolGlyph({ size = 16, glyph = "code" }) {

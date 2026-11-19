@@ -21,12 +21,16 @@ export const skillsDefinition = (t) => ({
 	guide: [],
 });
 
+/**
+ * the merged request workbench: HTTP and gRPC in one tab. It keeps the API
+ * tab's identity so an already-saved layout reopens as the workbench.
+ */
 export const apiDefinition = (t) => ({
 	id: API_TAB_ID,
 	kind: API_TAB_KIND,
 	priority: "extension",
 	keepMounted: true,
-	title: () => t("api.label"),
+	title: () => t("workbench.title"),
 	guide: [],
 });
 

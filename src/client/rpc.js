@@ -15,6 +15,9 @@
 import { Fragment, h, useCallback, useEffect, useMemo, useState } from "./react.js";
 import { api } from "./api.js";
 import { RPC_TAB_ID, RPC_TAB_KIND } from "./constants.js";
+import { apiKey, migrateLegacyApiStores } from "./apistore.js";
+import { activeVariables, entryLabel, filterByProtocol, HISTORY_CAP, interpolateDeep, interpolateVariables, withProtocol } from "./apientries.js";
+import { useDismissLayer } from "./dismiss.js";
 
 export const rpcDefinition = (t) => ({
 	id: RPC_TAB_ID,
@@ -54,7 +57,7 @@ export function groupMethods(methods) {
 	return [...groups.entries()].map(([service, entries]) => ({ service, methods: entries }));
 }
 
-export function RpcView({ t, useTabInfo, sessionId, useSessions }) {
+export function RpcView({ t, useTabInfo, sessionId, useSessions, incoming }) {
 	const cwd = useSessions ? useSessions((sessions) => (sessionId ? sessions.byId[sessionId]?.cwd : void 0)) : void 0;
 
 	const [address, setAddress] = useState("");
@@ -70,6 +73,82 @@ export function RpcView({ t, useTabInfo, sessionId, useSessions }) {
 	const [busy, setBusy] = useState(false);
 	const [timeoutMs, setTimeoutMs] = useState(30000);
 	const [insecureTls, setInsecureTls] = useState(false);
+	// History, favorites and environments are the workbench's stores, shared with
+	// the HTTP pane; this pane only ever sees its own protocol's rows.
+	const [history, setHistory] = useState([]);
+	const [saved, setSaved] = useState([]);
+	const [envStore, setEnvStore] = useState({ envs: [], activeId: null });
+	const [drawerOpen, setDrawerOpen] = useState(false);
+	const [drawerTab, setDrawerTab] = useState("history");
+	const drawerRef = useDismissLayer({ open: drawerOpen, onDismiss: () => setDrawerOpen(false), ignoreSelector: '[data-ce-popup-trigger="rpc-history"]' });
+
+	const keys = useMemo(() => ({
+		history: apiKey("history", cwd ?? ""),
+		saved: apiKey("saved", cwd ?? ""),
+		env: apiKey("env", cwd ?? ""),
+	}), [cwd]);
+
+	const readStored = useCallback(() => {
+		const read = (key) => {
+			try {
+				const raw = localStorage.getItem(key);
+				const value = raw === null ? null : JSON.parse(raw);
+				return Array.isArray(value) ? value : null;
+			} catch {
+				return null;
+			}
+		};
+		if (cwd) migrateLegacyApiStores(cwd);
+		// The stores are shared with HTTP; this pane keeps only its own protocol.
+		setHistory(filterByProtocol(read(keys.history), "grpc"));
+		setSaved(filterByProtocol(read(keys.saved), "grpc"));
+		try {
+			const env = JSON.parse(localStorage.getItem(keys.env) ?? "null");
+			setEnvStore(env && typeof env === "object" && Array.isArray(env.envs) ? env : { envs: [], activeId: null });
+		} catch {
+			setEnvStore({ envs: [], activeId: null });
+		}
+	}, [cwd, keys]);
+
+	useEffect(() => { readStored(); }, [readStored]);
+
+	/**
+	 * Write one record into a shared store without dropping the other protocol's
+	 * rows: the pane owns only its own slice of the list.
+	 * @param key - the storage key.
+	 * @param entry - the record to add.
+	 * @param cap - maximum rows kept (history only).
+	 * @returns the full merged list that was stored.
+	 */
+	const writeMerged = useCallback((key, entry, cap = Number.POSITIVE_INFINITY) => {
+		let rows = [];
+		try {
+			const raw = JSON.parse(localStorage.getItem(key) ?? "null");
+			if (Array.isArray(raw)) rows = raw;
+		} catch { rows = []; }
+		const next = [entry, ...rows.filter((row) => row?.id !== entry.id)].slice(0, cap);
+		try { localStorage.setItem(key, JSON.stringify(next)); } catch { /* quota: the call still ran */ }
+		return next;
+	}, []);
+
+	/** Put one stored record back into the editor. */
+	const applyEntry = useCallback((entry) => {
+		const request = entry?.request ?? {};
+		if (typeof request.address === "string") setAddress(request.address);
+		if (typeof request.proto === "string") setProtoPath(request.proto);
+		if (typeof request.method === "string") setSelected(request.method);
+		if (request.body !== undefined) setRequestText(JSON.stringify(request.body, null, 2));
+		if (Array.isArray(request.metadata)) setMetadata(request.metadata.map((row) => ({ ...row })));
+		setResponse(null);
+		setDrawerOpen(false);
+	}, []);
+
+	// A row picked in the workbench's merged history arrives here once; applying it
+	// is the only way that panel can drive this one.
+	useEffect(() => {
+		if (!incoming || incoming.protocol !== "grpc" || !incoming.entry) return;
+		applyEntry(incoming.entry);
+	}, [incoming?.nonce]); // eslint-disable-line react-hooks/exhaustive-deps
 
 	const selectedMethod = useMemo(() => methods.find((method) => method.path === selected) ?? null, [methods, selected]);
 	const groups = useMemo(() => groupMethods(methods), [methods]);
@@ -105,24 +184,70 @@ export function RpcView({ t, useTabInfo, sessionId, useSessions }) {
 		if (request.error) return;
 		setBusy(true);
 		setResponse(null);
+		// The active environment's variables apply to the address, the metadata and
+		// the message, so one call is reproducible across environments.
+		const vars = activeVariables(envStore);
 		const meta = {};
 		for (const row of metadata) {
-			const name = String(row.name ?? "").trim();
-			if (name !== "" && row.enabled !== false) meta[name] = String(row.value ?? "");
+			const name = interpolateVariables(String(row.name ?? "").trim(), vars);
+			if (name !== "" && row.enabled !== false) meta[name] = interpolateVariables(String(row.value ?? ""), vars);
 		}
+		const body = interpolateDeep(request.value, vars);
+		const target = interpolateVariables(address.trim(), vars);
 		const res = await api("rpc.call", {
 			cwd,
 			proto: protoPath.trim(),
 			method: selectedMethod.path,
-			url: address.trim(),
-			messages: [request.value],
+			url: target,
+			messages: [body],
 			metadata: meta,
 			timeoutMs,
 			insecureTls,
 		});
 		setBusy(false);
-		setResponse(res.ok ? res.value : { error: res.error });
-	}, [busy, cwd, protoPath, selectedMethod, address, request, metadata, timeoutMs, insecureTls]);
+		const value = res.ok ? res.value : { error: res.error };
+		setResponse(value);
+		// Every settled call joins the shared history, tagged so the merged list can
+		// tell it apart from an HTTP request.
+		const entry = withProtocol({
+			id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+			ts: Date.now(),
+			status: value?.status,
+			ms: value?.ms,
+			error: value?.error ?? void 0,
+			request: {
+				address: target,
+				proto: protoPath.trim(),
+				method: selectedMethod.path,
+				body,
+				metadata: metadata.filter((row) => String(row.name ?? "").trim() !== "" && row.enabled !== false).map((row) => ({ ...row })),
+			},
+		}, "grpc");
+		const merged = writeMerged(keys.history, entry, HISTORY_CAP);
+		setHistory(filterByProtocol(merged, "grpc"));
+	}, [busy, cwd, protoPath, selectedMethod, address, request, metadata, timeoutMs, insecureTls, envStore, keys.history]);
+
+	/** Save the current call into favorites under a readable, derived name. */
+	const saveFavorite = useCallback(() => {
+		if (!selectedMethod) return;
+		const name = `${selectedMethod.name} → ${interpolateVariables(address.trim(), activeVariables(envStore)) || "?"}`;
+		const entry = withProtocol({
+			id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+			ts: Date.now(),
+			name,
+			request: {
+				address: address.trim(),
+				proto: protoPath.trim(),
+				method: selectedMethod.path,
+				body: request.value ?? {},
+				metadata: metadata.filter((row) => String(row.name ?? "").trim() !== "" && row.enabled !== false).map((row) => ({ ...row })),
+			},
+		}, "grpc");
+		// Same name replaces the old favorite, across the whole shared store.
+		const merged = writeMerged(keys.saved, entry).filter((row) => row?.name !== name || row.id === entry.id);
+		try { localStorage.setItem(keys.saved, JSON.stringify(merged)); } catch { /* best effort */ }
+		setSaved(filterByProtocol(merged, "grpc"));
+	}, [selectedMethod, address, envStore, protoPath, request, metadata, keys.saved]);
 
 	const onKeyDown = useCallback((event) => {
 		if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
@@ -147,8 +272,40 @@ export function RpcView({ t, useTabInfo, sessionId, useSessions }) {
 				h("span", { className: "cerpc-label" }, t("rpc.proto")),
 				h("input", { className: "ce-input cerpc-input", value: protoPath, spellCheck: false, placeholder: "proto/hello.proto", onChange: (event) => setProtoPath(event.target.value) })),
 			h("button", { type: "button", className: "ce-sk-btn", disabled: protoBusy, onClick: () => void loadProto() }, protoBusy ? t("loading") : t("rpc.load")),
+			h("button", {
+				type: "button",
+				className: `ce-sk-btn ce-sk-btn-ghost${drawerOpen ? " cea-btn-on" : ""}`,
+				"data-ce-popup-trigger": "rpc-history",
+				"aria-expanded": drawerOpen,
+				title: t("api.history"),
+				onClick: () => setDrawerOpen((open) => !open),
+			}, `${t("api.history")} ${history.length}`),
+			h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost", disabled: !selectedMethod, title: t("api.saveTitle"), onClick: saveFavorite }, t("api.saveBtn")),
 		),
 		protoError ? h("div", { className: "cedb-error" }, protoError) : null,
+		drawerOpen
+			? h("div", { className: "cea-hist cerpc-hist", ref: drawerRef, role: "dialog", "aria-label": t("api.history") },
+				h("div", { className: "cea-hist-tabs" },
+					h("button", { type: "button", className: `cea-tab${drawerTab === "history" ? " cea-tab-on" : ""}`, onClick: () => setDrawerTab("history") }, `${t("api.history")} · ${history.length}`),
+					h("button", { type: "button", className: `cea-tab${drawerTab === "saved" ? " cea-tab-on" : ""}`, onClick: () => setDrawerTab("saved") }, `${t("api.saved")} · ${saved.length}`),
+					h("span", { className: "ce-spacer" }),
+					h("button", { type: "button", className: "ce-tool ce-tiny", title: t("close"), onClick: () => setDrawerOpen(false) }, "✕"),
+				),
+				h("div", { className: "cea-hist-list ce-scroll" },
+					(drawerTab === "history" ? history : saved).length === 0
+						? h("div", { className: "cea-he" }, t(drawerTab === "history" ? "api.histEmpty" : "api.histEmpty"))
+						: (drawerTab === "history" ? history : saved).map((entry) => h("button", {
+							key: entry.id,
+							type: "button",
+							className: "cea-hist-row",
+							title: entryLabel(entry),
+							onClick: () => { applyEntry(entry); setDrawerTab("history"); },
+						},
+						h("span", { className: "cedb-chip" }, entry.status ?? "—"),
+						h("span", { className: "cea-hist-url" }, `${t("api.tabSaved") === drawerTab ? "" : ""}${entryLabel(entry)}`),
+						h("span", { className: "cea-hist-ms" }, entry.ms === undefined ? "" : `${entry.ms} ms`)))),
+			)
+			: null,
 		h("div", { className: "cerpc-body" },
 			// ---- method rail ------------------------------------------------------------
 			h("aside", { className: "cerpc-rail" },
@@ -256,7 +413,19 @@ export function RpcView({ t, useTabInfo, sessionId, useSessions }) {
 	);
 }
 
-/** The tab title is the fixed RPC label. */
-export function RpcTitle() {
-	return null;
+/**
+ * Title chip for the legacy gRPC page.
+ *
+ * A title slot that renders nothing leaves an empty tab, which is what a layout
+ * saved before the merge showed; the page is folded into the workbench on open,
+ * and until then it carries its own label.
+ *
+ * @param props - the slot's tab reader.
+ * @returns the chip.
+ */
+export function RpcTitle({ useTabInfo }) {
+	const info = useTabInfo ? useTabInfo() : null;
+	const title = info?.tab?.title;
+	const label = typeof title === "string" && title !== "" ? title : "gRPC";
+	return h("span", { className: "cerpc-title" }, `>_ ${label}`);
 }

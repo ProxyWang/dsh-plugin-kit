@@ -81,7 +81,7 @@ function restoredUrlParams(req) {
 	return normalizeUrlParams(req?.url ?? "", req?.paramPairs);
 }
 
-export function ApiView({ t, useTabInfo, sessionId, useSessions }) {
+export function ApiView({ t, useTabInfo, sessionId, useSessions, incoming }) {
 	const cwd = useSessions ? useSessions((sessions) => (sessionId ? sessions.byId[sessionId]?.cwd : void 0)) : void 0;
 	const hostTab = useTabInfo ? useTabInfo()?.tab : null;
 	// Per-workspace storage keys: project A's drafts/history/favorites/envs never
@@ -328,6 +328,13 @@ export function ApiView({ t, useTabInfo, sessionId, useSessions }) {
 		setResponse(null);
 		setHistOpen(false);
 	}, []);
+
+	// A row picked in the workbench's merged history arrives once; it is the only
+	// way that panel drives this one.
+	useEffect(() => {
+		if (!incoming || incoming.protocol !== "http" || !incoming.entry) return;
+		restoreRequest(incoming.entry.request);
+	}, [incoming?.nonce]); // eslint-disable-line react-hooks/exhaustive-deps
 
 	const send = useCallback(() => {
 		if (url.trim() === "" || sending) return;

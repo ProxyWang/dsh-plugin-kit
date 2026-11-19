@@ -357,6 +357,13 @@ var zh = {
   "tree.fileWord": "文件",
   "tree.dirWord": "文件夹",
   "api.label": "接口",
+  "workbench.title": "接口调试",
+  "workbench.history": "历史",
+  "workbench.historyHint": "HTTP 与 gRPC 的调用记录，点击恢复到对应面板",
+  "workbench.http": "HTTP",
+  "workbench.grpc": "gRPC",
+  "workbench.httpHint": "HTTP 请求：curl 导入、环境变量、批量集合、SSE 流",
+  "workbench.grpcHint": "gRPC 调用：加载工作区里的 .proto，选择方法并发送",
   "db.label": "数据库",
   "dbGuide.title": "数据库",
   "dbGuide.description": "本地 SQLite / MySQL / PostgreSQL 查询与表浏览工作台",
@@ -364,6 +371,12 @@ var zh = {
   "db.disconnect": "断开连接",
   "db.newConnection": "新建数据库连接",
   "db.driver": "驱动",
+  "db.address": "连接地址",
+  "db.addressPlaceholder": "postgres://user:pass@host:5432/db，或 ./app.sqlite",
+  "db.detected": "自动识别",
+  "db.notDetected": "无法识别：粘贴 postgres:// / mysql:// 开头的地址，或指向一个数据库文件",
+  "db.advanced": "手动填写字段（高级）",
+  "db.needAddress": "先填连接地址",
   "db.path": "数据库文件",
   "db.host": "主机",
   "db.port": "端口",
@@ -389,6 +402,9 @@ var zh = {
   "db.sqlPlaceholder": "输入 SQL…（⌘/Ctrl+Enter 执行）",
   "db.run": "执行",
   "db.runHint": "执行后结果会显示在这里。",
+  "db.stop": "停止",
+  "db.cancelled": "已取消执行",
+  "db.cancelledClosed": "已取消：SQLite 查询无法中途中断，该连接随之关闭。",
   "db.history": "历史",
   "db.export": "导出 CSV",
   "db.refresh": "刷新结构",
@@ -418,7 +434,7 @@ var zh = {
   "rpc.welcome": "选择一个方法并发起调用",
   "rpc.welcomeHint": "填写 grpc:// 或 grpcs:// 地址与工作区内的 .proto 路径，加载后从左侧选择方法。请求体是该消息的 JSON 形式，⌘/Ctrl+Enter 直接调用。",
   "apiGuide.title": "接口调试",
-  "apiGuide.description": "curl 一键导入、编辑方法/URL/请求头/Body、发送并查看响应（Postman 基础能力）",
+  "apiGuide.description": "HTTP 与 gRPC 同一个工作台：curl 导入、环境变量、批量集合与 SSE；切到 gRPC 用工作区 .proto 调服务（含流式）",
   "api.send": "发送",
   "api.sending": "发送中…",
   "api.import": "导入 curl",
@@ -1044,6 +1060,13 @@ var en = {
   "tree.fileWord": "file",
   "tree.dirWord": "folder",
   "api.label": "API",
+  "workbench.title": "Request Workbench",
+  "workbench.history": "History",
+  "workbench.historyHint": "HTTP and gRPC calls together; pick one to restore it in its pane",
+  "workbench.http": "HTTP",
+  "workbench.grpc": "gRPC",
+  "workbench.httpHint": "HTTP requests: curl import, environments, collections, SSE streams",
+  "workbench.grpcHint": "gRPC calls: load a .proto from the workspace, pick a method, send",
   "db.label": "Database",
   "dbGuide.title": "Database",
   "dbGuide.description": "Local SQLite / MySQL / PostgreSQL workbench: browse tables and run SQL",
@@ -1051,6 +1074,12 @@ var en = {
   "db.disconnect": "Disconnect",
   "db.newConnection": "New database connection",
   "db.driver": "Driver",
+  "db.address": "Connection address",
+  "db.addressPlaceholder": "postgres://user:pass@host:5432/db, or ./app.sqlite",
+  "db.detected": "Detected",
+  "db.notDetected": "Not recognised: paste a postgres:// or mysql:// address, or point at a database file",
+  "db.advanced": "Fill the fields by hand (advanced)",
+  "db.needAddress": "Enter a connection address first",
   "db.path": "Database file",
   "db.host": "Host",
   "db.port": "Port",
@@ -1076,6 +1105,9 @@ var en = {
   "db.sqlPlaceholder": "Enter SQL… (⌘/Ctrl+Enter to run)",
   "db.run": "Run",
   "db.runHint": "Results appear here after a statement runs.",
+  "db.stop": "Stop",
+  "db.cancelled": "Cancelled",
+  "db.cancelledClosed": "Cancelled. A SQLite statement cannot be interrupted in place, so that connection was closed.",
   "db.history": "History",
   "db.export": "Export CSV",
   "db.refresh": "Reload schema",
@@ -1104,8 +1136,8 @@ var en = {
   "rpc.emptyResponse": "The call succeeded but returned no message",
   "rpc.welcome": "Pick a method and invoke it",
   "rpc.welcomeHint": "Fill in a grpc:// or grpcs:// address and a workspace .proto path, then pick a method on the left. The body is that message as JSON; ⌘/Ctrl+Enter invokes.",
-  "apiGuide.title": "API tester",
-  "apiGuide.description": "One-click curl import, edit method/URL/headers/body, send and inspect responses (basic Postman)",
+  "apiGuide.title": "Request Workbench",
+  "apiGuide.description": "HTTP and gRPC in one workbench: curl import, environments, collections and SSE; switch to gRPC to call a workspace .proto (streaming included)",
   "api.send": "Send",
   "api.sending": "Sending…",
   "api.import": "Import curl",
@@ -9248,6 +9280,8 @@ var CSS2 = `
 .ce-term-row{white-space:pre;overflow:hidden;overflow-wrap:normal}
 .ce-term-row span{white-space:pre}
 .ce-term-measure{position:absolute;top:0;left:-9999px;visibility:hidden;white-space:pre;display:inline-block}
+.ce-term-selection{position:absolute;top:8px;left:8px;pointer-events:none}
+.ce-term-selection-rect{position:absolute;top:0;left:0;background:var(--dsw-alias-interactive-bg-hover,#264f78);opacity:.55}
 .ce-term-cursor{position:absolute;top:8px;left:8px;pointer-events:none;box-sizing:border-box}
 .ce-term-cursor-block{background:var(--dsw-alias-label-primary,#d4d4d4);mix-blend-mode:difference}
 .ce-term-cursor-underline{border-bottom:2px solid var(--dsw-alias-label-primary,#d4d4d4)}
@@ -9258,6 +9292,37 @@ var CSS2 = `
 .ce-term-status{position:absolute;left:8px;bottom:6px;right:8px;font-size:11.5px;color:var(--dsw-alias-label-secondary,#999);pointer-events:none}
 .ce-term-status-error{color:var(--dsw-alias-state-error-primary,#f85149)}
 .ce-term-title{display:inline-flex;align-items:center;gap:4px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+/* ---------------- request workbench: one tab, two protocols ---------------- */
+.ce-wb{display:flex;flex-direction:column;height:100%;min-height:0}
+.ce-wb-bar{display:flex;align-items:center;gap:8px;flex:none;padding:6px 8px;border-bottom:.5px solid var(--dsw-alias-border-l1,#333);background:var(--dsw-alias-bg-base,#181818)}
+.ce-wb-seg{display:flex;border-radius:var(--dsw-radius-sm,6px);overflow:hidden;border:.5px solid var(--dsw-alias-border-l2,#444)}
+.ce-wb-btn{border:0;background:transparent;color:var(--dsw-alias-label-secondary,#999);padding:2px 10px;cursor:pointer;font:inherit;font-size:11.5px}
+.ce-wb-btn:hover{background:var(--dsw-alias-interactive-bg-hover,#2b2b2b);color:var(--dsw-alias-label-primary,#eee)}
+.ce-wb-on{background:var(--dsw-alias-interactive-bg-hover,#2b2b2b);color:var(--dsw-alias-label-primary,#eee)}
+.ce-wb-on:focus-visible{outline:2px solid var(--ce-accent,#59b7ff);outline-offset:-2px}
+.ce-wb-hint{font-size:11px;color:var(--dsw-alias-label-tertiary,#778);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.ce-wb-pane{flex:1;min-height:0;min-width:0;display:flex}
+.ce-wb-pane[hidden]{display:none}
+.cedb-detect{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:11.5px;color:var(--dsw-alias-label-secondary,#999);margin:-2px 0 2px}
+.cedb-detect-miss{color:var(--dsw-alias-state-warn-primary,#e3b341)}
+.cedb-detect-note{color:var(--dsw-alias-state-error-primary,#f85149)}
+.cedb-advanced{align-self:flex-start;border:0;background:transparent;color:var(--dsw-alias-brand-primary,#59b7ff);font:inherit;font-size:11.5px;cursor:pointer;padding:2px 0}
+.cedb-dialog-error{font-size:11.5px;color:var(--dsw-alias-state-error-primary,#f85149);overflow-wrap:anywhere}
+.ce-wb-hist{border:0;background:transparent;color:var(--dsw-alias-label-secondary,#999);font:inherit;font-size:11.5px;padding:2px 8px;border-radius:5px;cursor:pointer}
+.ce-wb-hist:hover{background:var(--dsw-alias-interactive-bg-hover,#2b2b2b);color:var(--dsw-alias-label-primary,#eee)}
+.ce-wb-drawer{flex:none;max-height:46%;display:flex;flex-direction:column;border-bottom:.5px solid var(--dsw-alias-border-l1,#333);background:var(--dsw-alias-bg-layer-1,#1d2126)}
+.ce-wb-drawer-head{display:flex;align-items:center;gap:8px;padding:6px 8px;font-size:11.5px;color:var(--dsw-alias-label-secondary,#999)}
+.ce-wb-drawer-hint{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-tertiary,#778);font-size:11px}
+.ce-wb-drawer-list{min-height:0;overflow:auto;padding:0 4px 4px}
+.ce-wb-drawer-empty{padding:10px 12px;font-size:12px;color:var(--dsw-alias-label-tertiary,#778)}
+.ce-wb-drawer-row{display:flex;align-items:center;gap:8px;width:100%;border:0;background:transparent;color:inherit;font:inherit;font-size:12px;text-align:left;padding:4px 6px;border-radius:5px;cursor:pointer}
+.ce-wb-drawer-row:hover{background:var(--dsw-alias-interactive-bg-hover,#26292e)}
+.ce-wb-proto{flex:none;font-size:9.5px;font-weight:700;letter-spacing:.04em;padding:1px 5px;border-radius:4px;background:var(--dsw-alias-interactive-bg-hover,#2b3038);color:var(--dsw-alias-label-secondary,#aaa)}
+.ce-wb-proto-grpc{background:color-mix(in srgb,var(--dsw-alias-brand-primary,#59b7ff) 22%,transparent);color:var(--dsw-alias-brand-primary,#8ccfff)}
+.ce-wb-drawer-label{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px}
+.ce-wb-drawer-ms{flex:none;font-size:11px;color:var(--dsw-alias-label-tertiary,#889)}
+.cerpc-hist{margin:0 8px 8px}
+.cerpc-title{display:inline-flex;align-items:center;gap:4px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px}
 `;
 
 // src/client/register.js
@@ -9282,7 +9347,7 @@ var apiDefinition = (t) => ({
   kind: API_TAB_KIND,
   priority: "extension",
   keepMounted: true,
-  title: () => t("api.label"),
+  title: () => t("workbench.title"),
   guide: []
 });
 var dbDefinition = (t) => ({
@@ -11190,7 +11255,7 @@ function restoredUrlParams(req) {
   }
   return normalizeUrlParams(req?.url ?? "", req?.paramPairs);
 }
-function ApiView({ t, useTabInfo, sessionId, useSessions }) {
+function ApiView({ t, useTabInfo, sessionId, useSessions, incoming }) {
   const cwd = useSessions ? useSessions((sessions) => sessionId ? sessions.byId[sessionId]?.cwd : void 0) : void 0;
   const hostTab = useTabInfo ? useTabInfo()?.tab : null;
   const scopeCwd = cwd ?? "";
@@ -11472,6 +11537,10 @@ function ApiView({ t, useTabInfo, sessionId, useSessions }) {
     setResponse(null);
     setHistOpen(false);
   }, []);
+  useEffect(() => {
+    if (!incoming || incoming.protocol !== "http" || !incoming.entry) return;
+    restoreRequest(incoming.entry.request);
+  }, [incoming?.nonce]);
   const send = useCallback(() => {
     if (url.trim() === "" || sending) return;
     const resolved = resolveRequest(editorState(), envMapOf(envStore));
@@ -12338,9 +12407,289 @@ function ApiTitle({ useTabInfo }) {
   return h(Fragment, null, h("span", { className: "ce-title-ico" }, h(ApiGlyph)), tabInfo?.tab?.title ?? "API");
 }
 
+// src/client/apientries.js
+var PROTOCOLS = ["http", "grpc"];
+var HISTORY_CAP = 60;
+function entryProtocol(entry) {
+  return entry?.protocol === "grpc" ? "grpc" : "http";
+}
+function withProtocol(entry, protocol) {
+  return protocol === "grpc" ? { ...entry, protocol: "grpc" } : entry;
+}
+function filterByProtocol(list, protocol) {
+  const wanted = PROTOCOLS.includes(protocol) ? protocol : "http";
+  return (Array.isArray(list) ? list : []).filter((entry) => entryProtocol(entry) === wanted);
+}
+function mergeProtocols(...lists) {
+  const rows = lists.flatMap((list) => Array.isArray(list) ? list : []);
+  return rows.slice().sort((a, b) => Number(b?.ts ?? 0) - Number(a?.ts ?? 0));
+}
+function entryLabel(entry) {
+  if (entryProtocol(entry) === "grpc") {
+    const request = entry.request ?? {};
+    const method2 = String(request.method ?? "").trim();
+    const address = String(request.address ?? "").trim();
+    return `${method2 || "(method)"}${address ? ` → ${address}` : ""}`;
+  }
+  const method = String(entry.method ?? entry.request?.method ?? "").toUpperCase();
+  const url = String(entry.url ?? entry.request?.url ?? "");
+  return `${method}${url ? ` ${url}` : ""}`.trim();
+}
+function interpolateVariables(text, variables) {
+  if (typeof text !== "string" || text === "") return text;
+  const source = variables && typeof variables === "object" ? variables : {};
+  return text.replace(/\{\{\s*([\w.-]+)\s*\}\}/gu, (all, name) => {
+    const value = source[name];
+    return value === void 0 || value === null ? all : String(value);
+  });
+}
+function interpolateDeep(value, variables) {
+  if (typeof value === "string") return interpolateVariables(value, variables);
+  if (Array.isArray(value)) return value.map((item) => interpolateDeep(item, variables));
+  if (value && typeof value === "object") {
+    const out = {};
+    for (const [key, item] of Object.entries(value)) out[key] = interpolateDeep(item, variables);
+    return out;
+  }
+  return value;
+}
+function activeVariables(envStore) {
+  const active = (envStore?.envs ?? []).find((env) => env.id === envStore?.activeId);
+  const vars = {};
+  for (const row of active?.vars ?? []) {
+    if (row && row.enabled !== false && typeof row.name === "string" && row.name !== "") vars[row.name] = row.value ?? "";
+  }
+  return vars;
+}
+
+// src/client/workbench.js
+var PROTOCOL_KEY = "dsh.plugin-kit.workbench.protocol";
+var PROTOCOLS2 = ["http", "grpc"];
+function readProtocol(storage = globalThis.localStorage) {
+  try {
+    const value = storage?.getItem(PROTOCOL_KEY);
+    return PROTOCOLS2.includes(value) ? value : "http";
+  } catch {
+    return "http";
+  }
+}
+function writeProtocol(protocol, storage = globalThis.localStorage) {
+  if (!PROTOCOLS2.includes(protocol)) return false;
+  try {
+    storage?.setItem(PROTOCOL_KEY, protocol);
+    return true;
+  } catch {
+    return false;
+  }
+}
+function clonePane(pane, incoming) {
+  if (!pane || typeof pane !== "object") return null;
+  return { ...pane, props: { ...pane.props, incoming } };
+}
+function WorkbenchView({ t, http, grpc, initialProtocol, sessionId, useSessions }) {
+  const cwd = useSessions ? useSessions((sessions) => sessionId ? sessions.byId[sessionId]?.cwd : void 0) : void 0;
+  const [protocol, setProtocol] = useState(() => PROTOCOLS2.includes(initialProtocol) ? initialProtocol : readProtocol());
+  const seen = useRef({ http: protocol === "http", grpc: protocol === "grpc" });
+  seen.current[protocol] = true;
+  const choose = (next) => {
+    if (next === protocol) return;
+    setProtocol(next);
+    writeProtocol(next);
+  };
+  const historyKey = useMemo(() => apiKey("history", cwd ?? ""), [cwd]);
+  const [history, setHistory] = useState([]);
+  const lastHistory = useRef("");
+  const readHistory = useCallback(() => {
+    let rows;
+    try {
+      const raw = JSON.parse(localStorage.getItem(historyKey) ?? "null");
+      rows = mergeProtocols(filterByProtocol(raw, "http"), filterByProtocol(raw, "grpc"));
+    } catch {
+      rows = [];
+    }
+    const fingerprint = rows.map((row) => row?.id).join("|");
+    if (fingerprint === lastHistory.current) return;
+    lastHistory.current = fingerprint;
+    setHistory(rows);
+  }, [historyKey]);
+  useEffect(() => {
+    readHistory();
+    const timer = setInterval(readHistory, 4e3);
+    return () => clearInterval(timer);
+  }, [readHistory]);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [incoming, setIncoming] = useState(null);
+  const openEntry = (entry) => {
+    const target = entryProtocol(entry);
+    choose(target);
+    setIncoming({ protocol: target, entry, nonce: Date.now() + Math.random() });
+    setDrawerOpen(false);
+  };
+  return h(
+    "div",
+    { className: "ce-wb" },
+    h(
+      "div",
+      { className: "ce-wb-bar" },
+      h(
+        "div",
+        { className: "ce-wb-seg", role: "tablist", "aria-label": t("workbench.title") },
+        PROTOCOLS2.map((id) => h("button", {
+          key: id,
+          type: "button",
+          role: "tab",
+          "aria-selected": protocol === id,
+          className: `ce-wb-btn${protocol === id ? " ce-wb-on" : ""}`,
+          title: t(`workbench.${id}Hint`),
+          onClick: () => choose(id)
+        }, t(`workbench.${id}`)))
+      ),
+      h("span", { className: "ce-spacer" }),
+      h("span", { className: "ce-wb-hint" }, t(protocol === "http" ? "workbench.httpHint" : "workbench.grpcHint")),
+      h("button", {
+        type: "button",
+        className: `ce-wb-hist${drawerOpen ? " ce-wb-on" : ""}`,
+        "aria-expanded": drawerOpen,
+        title: t("workbench.historyHint"),
+        onClick: () => {
+          readHistory();
+          setDrawerOpen((open) => !open);
+        }
+      }, `${t("workbench.history")} ${history.length}`)
+    ),
+    drawerOpen ? h(
+      "div",
+      { className: "ce-wb-drawer", role: "dialog", "aria-label": t("workbench.history") },
+      h(
+        "div",
+        { className: "ce-wb-drawer-head" },
+        h("span", null, t("workbench.history")),
+        h("span", { className: "ce-wb-drawer-hint" }, t("workbench.historyHint")),
+        h("button", { type: "button", className: "ce-tool ce-tiny", title: t("close"), onClick: () => setDrawerOpen(false) }, "✕")
+      ),
+      history.length === 0 ? h("div", { className: "ce-wb-drawer-empty" }, t("api.histEmpty")) : h("div", { className: "ce-wb-drawer-list ce-scroll" }, history.map((entry) => h(
+        "button",
+        {
+          key: entry.id,
+          type: "button",
+          className: "ce-wb-drawer-row",
+          title: entryLabel(entry),
+          onClick: () => openEntry(entry)
+        },
+        h("span", { className: `ce-wb-proto ce-wb-proto-${entryProtocol(entry)}` }, entryProtocol(entry) === "grpc" ? "gRPC" : "HTTP"),
+        h("span", { className: "ce-wb-drawer-label" }, entryLabel(entry)),
+        h("span", { className: "ce-wb-drawer-ms" }, entry.status === void 0 ? "" : String(entry.status))
+      )))
+    ) : null,
+    h("div", { className: "ce-wb-pane", hidden: protocol !== "http" }, seen.current.http ? clonePane(http, incoming) : null),
+    h("div", { className: "ce-wb-pane", hidden: protocol !== "grpc" }, seen.current.grpc ? clonePane(grpc, incoming) : null)
+  );
+}
+
+// src/client/migrate.js
+function migrateLegacyRpcTabs({
+  tabs,
+  migrated,
+  canOpen,
+  preferGrpc,
+  close,
+  open
+} = {}) {
+  const rows = Array.isArray(tabs) ? tabs : [];
+  let count = 0;
+  for (const tab of rows) {
+    if (tab?.kind !== "code-rpc") continue;
+    const key = `${tab.sessionId}:${tab.id}`;
+    if (migrated?.has?.(key)) continue;
+    if (typeof canOpen === "function" && canOpen() === false) continue;
+    migrated?.add?.(key);
+    try {
+      preferGrpc?.();
+      close?.(tab);
+      open?.(tab.sessionId);
+      count += 1;
+    } catch {
+    }
+  }
+  return count;
+}
+
+// src/client/dbconnect.js
+var DRIVERS = ["sqlite", "mysql", "postgres"];
+var DEFAULT_PORT = { mysql: 3306, postgres: 5432 };
+var SCHEMES = {
+  postgres: "postgres",
+  postgresql: "postgres",
+  mysql: "mysql",
+  mariadb: "mysql",
+  sqlite: "sqlite",
+  sqlite3: "sqlite",
+  file: "sqlite"
+};
+var SQLITE_SUFFIX = /\.(sqlite3?|db|s3db|sl3)$/iu;
+var WINDOWS_PATH = /^[a-z]:[\\/]/iu;
+function decode(value) {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+function looksLikePath(input) {
+  const value = String(input ?? "").trim();
+  if (value === "") return false;
+  if (WINDOWS_PATH.test(value)) return true;
+  if (value.includes("/") || value.includes("\\")) return true;
+  return SQLITE_SUFFIX.test(value);
+}
+function inferDriver(input) {
+  const value = String(input ?? "").trim();
+  if (value === "") return "";
+  const scheme = /^([a-z][a-z0-9+.-]*):(\/\/)?/iu.exec(value);
+  if (scheme !== null && !WINDOWS_PATH.test(value)) {
+    const driver = SCHEMES[scheme[1].toLowerCase()];
+    if (driver !== void 0) return driver;
+    if (scheme[2] !== "//" && looksLikePath(value)) return "sqlite";
+    return "";
+  }
+  return looksLikePath(value) ? "sqlite" : "";
+}
+function parseConnectionAddress(input) {
+  const value = String(input ?? "").trim();
+  const empty = { driver: "", path: "", host: "", port: "", user: "", password: "", database: "", error: "" };
+  if (value === "") return empty;
+  const driver = inferDriver(value);
+  if (driver === "") return { ...empty, error: "unrecognised address" };
+  if (driver === "sqlite") {
+    const scheme = /^(?:sqlite3?|file):(?:\/\/)?/iu.exec(value);
+    const path = scheme === null ? value : value.slice(scheme[0].length);
+    return { ...empty, driver, path: path === "" ? "" : path };
+  }
+  let url;
+  try {
+    url = new URL(value);
+  } catch {
+    return { ...empty, driver, error: "malformed URL" };
+  }
+  const port = url.port === "" ? DEFAULT_PORT[driver] : Number(url.port);
+  return {
+    driver,
+    path: "",
+    host: url.hostname,
+    port: Number.isFinite(port) ? String(port) : String(DEFAULT_PORT[driver]),
+    user: decode(url.username),
+    password: decode(url.password),
+    database: decode(url.pathname.replace(/^\//u, "")),
+    error: ""
+  };
+}
+function driverLabel(driver) {
+  return { sqlite: "SQLite", mysql: "MySQL", postgres: "PostgreSQL" }[driver] ?? String(driver ?? "");
+}
+
 // src/client/db.js
 var PAGE_SIZE = 100;
-var HISTORY_CAP = 40;
+var HISTORY_CAP2 = 40;
 function formatCell(value) {
   if (value === null) return "NULL";
   if (value === void 0) return "";
@@ -12392,7 +12741,8 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
   const [activeTabId, setActiveTabId] = useState("");
   const [history, setHistory] = useState([]);
   const [connectOpen, setConnectOpen] = useState(false);
-  const [form, setForm] = useState({ driver: "sqlite", path: "", host: "localhost", port: "", user: "", password: "", database: "" });
+  const [form, setForm] = useState({ address: "", driver: "", path: "", host: "localhost", port: "", user: "", password: "", database: "" });
+  const [advanced, setAdvanced] = useState(false);
   const [cellDetail, setCellDetail] = useState(null);
   const [notice, setNotice] = useState("");
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -12400,10 +12750,7 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
   const connectRef = useDismissLayer({ open: connectOpen, onDismiss: () => setConnectOpen(false) });
   useEffect(() => {
     api("db.drivers", {}).then((res) => {
-      if (!res.ok) return;
-      setDrivers(res.value ?? []);
-      const first = (res.value ?? []).find((driver) => driver.ready);
-      if (first) setForm((current) => ({ ...current, driver: first.id }));
+      if (res.ok) setDrivers(res.value ?? []);
     });
   }, []);
   const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? null;
@@ -12442,8 +12789,26 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
       setSchemaError(res.error);
     }
   }, [activeConn]);
+  const applyAddress = useCallback((value) => {
+    const parsed = parseConnectionAddress(value);
+    setForm((current) => ({
+      ...current,
+      address: value,
+      driver: parsed.driver,
+      path: parsed.driver === "sqlite" ? parsed.path : current.path,
+      host: parsed.driver === "sqlite" ? current.host : parsed.host || current.host,
+      port: parsed.port,
+      user: parsed.user,
+      password: parsed.password,
+      database: parsed.database
+    }));
+    setNotice(parsed.error);
+  }, []);
+  const driverReady = drivers.find((entry) => entry.id === form.driver)?.ready ?? true;
+  const canConnect = form.driver !== "" && driverReady && (form.driver === "sqlite" ? form.path.trim() !== "" : form.host.trim() !== "");
   const doConnect = useCallback(async () => {
-    const params = { driver: form.driver };
+    if (!canConnect) return;
+    const params = { driver: form.driver, cwd };
     if (form.driver === "sqlite") params.path = form.path.trim();
     else {
       params.host = form.host.trim();
@@ -12564,9 +12929,24 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
       return;
     }
     patchTab(id, { loading: false, result: res.value, error: "", ms });
-    setHistory((current) => [{ sql, at: Date.now(), ms, ok: !res.value.error }, ...current.filter((entry) => entry.sql !== sql)].slice(0, HISTORY_CAP));
+    setHistory((current) => [{ sql, at: Date.now(), ms, ok: !res.value.error }, ...current.filter((entry) => entry.sql !== sql)].slice(0, HISTORY_CAP2));
     if (/^\s*(create|drop|alter)\b/i.test(sql)) void refreshSchema(conn);
   }, [tabs, activeConn, patchTab, refreshSchema, t]);
+  const cancelQuery = useCallback(async (tab) => {
+    const conn = tab.conn || activeConn;
+    if (!conn) return;
+    const res = await api("db.cancel", { id: conn });
+    patchTab(tab.id, { loading: false, error: t("db.cancelled") });
+    if (res.ok && res.value?.connectionClosed) {
+      setConnections((current) => current.filter((entry) => entry.id !== conn));
+      setTabs((current) => current.filter((entry) => entry.conn !== conn));
+      if (activeConn === conn) {
+        setActiveConn("");
+        setSchema(null);
+      }
+      setNotice(t("db.cancelledClosed"));
+    }
+  }, [activeConn, patchTab, t]);
   const exportResult = useCallback((result, name) => {
     if (!result?.columns?.length) return;
     const csv = toCsv(result.columns, result.rows ?? []);
@@ -12617,7 +12997,7 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
       h("span", { className: "ce-spacer" }),
       schema ? h("span", { className: "cedb-chip" }, `${counts.tables} ${t("db.tables")}`) : null,
       schema ? h("span", { className: "cedb-chip" }, `${counts.views} ${t("db.views")}`) : null,
-      notice ? h("span", { className: "cedb-notice" }, notice) : null
+      notice && !connectOpen ? h("span", { className: "cedb-notice" }, notice) : null
     ),
     h(
       "div",
@@ -12748,12 +13128,12 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
                   onChange: (event) => patchTab(activeTab.id, { conn: event.target.value }),
                   "aria-label": t("db.connections")
                 }, connections.map((connection) => h("option", { key: connection.id, value: connection.id }, `${connection.driver} · ${connection.label}`))),
-                h("button", {
+                activeTab.loading ? h("button", { type: "button", className: "ce-sk-btn cedb-run cedb-stop", onClick: () => void cancelQuery(activeTab) }, `■ ${t("db.stop")}`) : h("button", {
                   type: "button",
                   className: "ce-sk-btn ce-sk-primary cedb-run",
-                  disabled: activeTab.loading || !String(activeTab.sql ?? "").trim(),
+                  disabled: !String(activeTab.sql ?? "").trim(),
                   onClick: () => void runQuery(activeTab.id)
-                }, activeTab.loading ? t("loading") : `▶ ${t("db.run")}`),
+                }, `▶ ${t("db.run")}`),
                 h("button", { type: "button", className: "ce-sk-btn", title: t("db.history"), onClick: () => setHistoryOpen((v) => !v) }, t("db.history")),
                 h("span", { className: "ce-spacer" }),
                 h("span", { className: "cedb-kbd" }, "⌘/Ctrl+Enter")
@@ -12845,39 +13225,74 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
       h(
         "label",
         { className: "cedb-field" },
-        t("db.driver"),
-        h("select", {
+        t("db.address"),
+        h("input", {
           className: "ce-input",
-          value: form.driver,
-          onChange: (event) => setForm({ ...form, driver: event.target.value })
-        }, drivers.map((driver) => h("option", { key: driver.id, value: driver.id, disabled: !driver.ready }, `${driver.label}${driver.ready ? "" : ` — ${driver.note}`}`)))
-      ),
-      form.driver === "sqlite" ? h(
-        "label",
-        { className: "cedb-field" },
-        t("db.path"),
-        h("input", { className: "ce-input", value: form.path, placeholder: "/path/to/app.sqlite", onChange: (event) => setForm({ ...form, path: event.target.value }) })
-      ) : h(
-        Fragment,
-        null,
-        h(
-          "div",
-          { className: "cedb-field-row" },
-          h("label", { className: "cedb-field" }, t("db.host"), h("input", { className: "ce-input", value: form.host, onChange: (event) => setForm({ ...form, host: event.target.value }) })),
-          h("label", { className: "cedb-field cedb-field-narrow" }, t("db.port"), h("input", { className: "ce-input", type: "number", value: form.port, placeholder: form.driver === "mysql" ? "3306" : "5432", onChange: (event) => setForm({ ...form, port: event.target.value }) }))
-        ),
-        h("label", { className: "cedb-field" }, t("db.database"), h("input", { className: "ce-input", value: form.database, onChange: (event) => setForm({ ...form, database: event.target.value }) })),
-        h(
-          "div",
-          { className: "cedb-field-row" },
-          h("label", { className: "cedb-field" }, t("db.user"), h("input", { className: "ce-input", value: form.user, onChange: (event) => setForm({ ...form, user: event.target.value }) })),
-          h("label", { className: "cedb-field" }, t("db.password"), h("input", { className: "ce-input", type: "password", value: form.password, onChange: (event) => setForm({ ...form, password: event.target.value }) }))
-        )
+          value: form.address,
+          placeholder: t("db.addressPlaceholder"),
+          autoFocus: true,
+          spellcheck: false,
+          autoComplete: "off",
+          onChange: (event) => applyAddress(event.target.value)
+        })
       ),
       h(
         "div",
+        { className: `cedb-detect${form.driver === "" ? " cedb-detect-miss" : ""}` },
+        h("span", null, form.driver === "" ? t("db.notDetected") : `${t("db.detected")}: ${driverLabel(form.driver)}`),
+        driverReady || form.driver === "" ? null : h("span", { className: "cedb-detect-note" }, drivers.find((entry) => entry.id === form.driver)?.note ?? "")
+      ),
+      advanced || form.driver === "" ? h(
+        Fragment,
+        null,
+        h(
+          "label",
+          { className: "cedb-field" },
+          t("db.driver"),
+          h("select", {
+            className: "ce-input",
+            value: form.driver,
+            onChange: (event) => setForm({ ...form, driver: event.target.value })
+            // Always populated: an unprobed deployment still shows the
+            // drivers it could open, instead of an empty box.
+          }, DRIVERS.map((id) => {
+            const known = drivers.find((entry) => entry.id === id);
+            return h("option", { key: id, value: id, disabled: known ? !known.ready : false }, known && !known.ready ? `${known.label} — ${known.note}` : driverLabel(id));
+          }))
+        ),
+        form.driver === "sqlite" ? h(
+          "label",
+          { className: "cedb-field" },
+          t("db.path"),
+          h("input", { className: "ce-input", value: form.path, placeholder: "/path/to/app.sqlite", onChange: (event) => setForm({ ...form, path: event.target.value }) })
+        ) : h(
+          Fragment,
+          null,
+          h(
+            "div",
+            { className: "cedb-field-row" },
+            h("label", { className: "cedb-field" }, t("db.host"), h("input", { className: "ce-input", value: form.host, onChange: (event) => setForm({ ...form, host: event.target.value }) })),
+            h("label", { className: "cedb-field cedb-field-narrow" }, t("db.port"), h("input", { className: "ce-input", type: "number", value: form.port, placeholder: form.driver === "mysql" ? "3306" : "5432", onChange: (event) => setForm({ ...form, port: event.target.value }) }))
+          ),
+          h("label", { className: "cedb-field" }, t("db.database"), h("input", { className: "ce-input", value: form.database, onChange: (event) => setForm({ ...form, database: event.target.value }) })),
+          h(
+            "div",
+            { className: "cedb-field-row" },
+            h("label", { className: "cedb-field" }, t("db.user"), h("input", { className: "ce-input", value: form.user, onChange: (event) => setForm({ ...form, user: event.target.value }) })),
+            h("label", { className: "cedb-field" }, t("db.password"), h("input", { className: "ce-input", type: "password", value: form.password, onChange: (event) => setForm({ ...form, password: event.target.value }) }))
+          )
+        )
+      ) : h("button", {
+        type: "button",
+        className: "cedb-advanced",
+        "aria-expanded": advanced,
+        onClick: () => setAdvanced(true)
+      }, t("db.advanced")),
+      notice !== "" && connectOpen ? h("div", { className: "cedb-dialog-error", role: "alert" }, notice) : null,
+      h(
+        "div",
         { className: "cedb-dialog-actions" },
-        h("button", { type: "button", className: "ce-sk-btn ce-sk-primary", onClick: () => void doConnect() }, t("db.connectAction")),
+        h("button", { type: "button", className: "ce-sk-btn ce-sk-primary", disabled: !canConnect, onClick: () => void doConnect() }, t("db.connectAction")),
         h("button", { type: "button", className: "ce-sk-btn", onClick: () => setConnectOpen(false) }, t("editor.cancel"))
       )
     ) : null,
@@ -12993,7 +13408,7 @@ function groupMethods(methods) {
   }
   return [...groups.entries()].map(([service, entries]) => ({ service, methods: entries }));
 }
-function RpcView({ t, useTabInfo, sessionId, useSessions }) {
+function RpcView({ t, useTabInfo, sessionId, useSessions, incoming }) {
   const cwd = useSessions ? useSessions((sessions) => sessionId ? sessions.byId[sessionId]?.cwd : void 0) : void 0;
   const [address, setAddress] = useState("");
   const [protoPath, setProtoPath] = useState("");
@@ -13008,6 +13423,69 @@ function RpcView({ t, useTabInfo, sessionId, useSessions }) {
   const [busy, setBusy] = useState(false);
   const [timeoutMs, setTimeoutMs] = useState(3e4);
   const [insecureTls, setInsecureTls] = useState(false);
+  const [history, setHistory] = useState([]);
+  const [saved, setSaved] = useState([]);
+  const [envStore, setEnvStore] = useState({ envs: [], activeId: null });
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [drawerTab, setDrawerTab] = useState("history");
+  const drawerRef = useDismissLayer({ open: drawerOpen, onDismiss: () => setDrawerOpen(false), ignoreSelector: '[data-ce-popup-trigger="rpc-history"]' });
+  const keys = useMemo(() => ({
+    history: apiKey("history", cwd ?? ""),
+    saved: apiKey("saved", cwd ?? ""),
+    env: apiKey("env", cwd ?? "")
+  }), [cwd]);
+  const readStored = useCallback(() => {
+    const read = (key) => {
+      try {
+        const raw = localStorage.getItem(key);
+        const value = raw === null ? null : JSON.parse(raw);
+        return Array.isArray(value) ? value : null;
+      } catch {
+        return null;
+      }
+    };
+    if (cwd) migrateLegacyApiStores(cwd);
+    setHistory(filterByProtocol(read(keys.history), "grpc"));
+    setSaved(filterByProtocol(read(keys.saved), "grpc"));
+    try {
+      const env = JSON.parse(localStorage.getItem(keys.env) ?? "null");
+      setEnvStore(env && typeof env === "object" && Array.isArray(env.envs) ? env : { envs: [], activeId: null });
+    } catch {
+      setEnvStore({ envs: [], activeId: null });
+    }
+  }, [cwd, keys]);
+  useEffect(() => {
+    readStored();
+  }, [readStored]);
+  const writeMerged = useCallback((key, entry, cap = Number.POSITIVE_INFINITY) => {
+    let rows = [];
+    try {
+      const raw = JSON.parse(localStorage.getItem(key) ?? "null");
+      if (Array.isArray(raw)) rows = raw;
+    } catch {
+      rows = [];
+    }
+    const next = [entry, ...rows.filter((row) => row?.id !== entry.id)].slice(0, cap);
+    try {
+      localStorage.setItem(key, JSON.stringify(next));
+    } catch {
+    }
+    return next;
+  }, []);
+  const applyEntry = useCallback((entry) => {
+    const request2 = entry?.request ?? {};
+    if (typeof request2.address === "string") setAddress(request2.address);
+    if (typeof request2.proto === "string") setProtoPath(request2.proto);
+    if (typeof request2.method === "string") setSelected(request2.method);
+    if (request2.body !== void 0) setRequestText(JSON.stringify(request2.body, null, 2));
+    if (Array.isArray(request2.metadata)) setMetadata(request2.metadata.map((row) => ({ ...row })));
+    setResponse(null);
+    setDrawerOpen(false);
+  }, []);
+  useEffect(() => {
+    if (!incoming || incoming.protocol !== "grpc" || !incoming.entry) return;
+    applyEntry(incoming.entry);
+  }, [incoming?.nonce]);
   const selectedMethod = useMemo(() => methods.find((method) => method.path === selected) ?? null, [methods, selected]);
   const groups = useMemo(() => groupMethods(methods), [methods]);
   const request = useMemo(() => parseJsonText(requestText), [requestText]);
@@ -13048,24 +13526,66 @@ function RpcView({ t, useTabInfo, sessionId, useSessions }) {
     if (request.error) return;
     setBusy(true);
     setResponse(null);
+    const vars = activeVariables(envStore);
     const meta = {};
     for (const row of metadata) {
-      const name = String(row.name ?? "").trim();
-      if (name !== "" && row.enabled !== false) meta[name] = String(row.value ?? "");
+      const name = interpolateVariables(String(row.name ?? "").trim(), vars);
+      if (name !== "" && row.enabled !== false) meta[name] = interpolateVariables(String(row.value ?? ""), vars);
     }
+    const body = interpolateDeep(request.value, vars);
+    const target = interpolateVariables(address.trim(), vars);
     const res = await api("rpc.call", {
       cwd,
       proto: protoPath.trim(),
       method: selectedMethod.path,
-      url: address.trim(),
-      messages: [request.value],
+      url: target,
+      messages: [body],
       metadata: meta,
       timeoutMs,
       insecureTls
     });
     setBusy(false);
-    setResponse(res.ok ? res.value : { error: res.error });
-  }, [busy, cwd, protoPath, selectedMethod, address, request, metadata, timeoutMs, insecureTls]);
+    const value = res.ok ? res.value : { error: res.error };
+    setResponse(value);
+    const entry = withProtocol({
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      ts: Date.now(),
+      status: value?.status,
+      ms: value?.ms,
+      error: value?.error ?? void 0,
+      request: {
+        address: target,
+        proto: protoPath.trim(),
+        method: selectedMethod.path,
+        body,
+        metadata: metadata.filter((row) => String(row.name ?? "").trim() !== "" && row.enabled !== false).map((row) => ({ ...row }))
+      }
+    }, "grpc");
+    const merged = writeMerged(keys.history, entry, HISTORY_CAP);
+    setHistory(filterByProtocol(merged, "grpc"));
+  }, [busy, cwd, protoPath, selectedMethod, address, request, metadata, timeoutMs, insecureTls, envStore, keys.history]);
+  const saveFavorite = useCallback(() => {
+    if (!selectedMethod) return;
+    const name = `${selectedMethod.name} → ${interpolateVariables(address.trim(), activeVariables(envStore)) || "?"}`;
+    const entry = withProtocol({
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      ts: Date.now(),
+      name,
+      request: {
+        address: address.trim(),
+        proto: protoPath.trim(),
+        method: selectedMethod.path,
+        body: request.value ?? {},
+        metadata: metadata.filter((row) => String(row.name ?? "").trim() !== "" && row.enabled !== false).map((row) => ({ ...row }))
+      }
+    }, "grpc");
+    const merged = writeMerged(keys.saved, entry).filter((row) => row?.name !== name || row.id === entry.id);
+    try {
+      localStorage.setItem(keys.saved, JSON.stringify(merged));
+    } catch {
+    }
+    setSaved(filterByProtocol(merged, "grpc"));
+  }, [selectedMethod, address, envStore, protoPath, request, metadata, keys.saved]);
   const onKeyDown = useCallback((event) => {
     if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
       event.preventDefault();
@@ -13095,9 +13615,50 @@ function RpcView({ t, useTabInfo, sessionId, useSessions }) {
         h("span", { className: "cerpc-label" }, t("rpc.proto")),
         h("input", { className: "ce-input cerpc-input", value: protoPath, spellCheck: false, placeholder: "proto/hello.proto", onChange: (event) => setProtoPath(event.target.value) })
       ),
-      h("button", { type: "button", className: "ce-sk-btn", disabled: protoBusy, onClick: () => void loadProto() }, protoBusy ? t("loading") : t("rpc.load"))
+      h("button", { type: "button", className: "ce-sk-btn", disabled: protoBusy, onClick: () => void loadProto() }, protoBusy ? t("loading") : t("rpc.load")),
+      h("button", {
+        type: "button",
+        className: `ce-sk-btn ce-sk-btn-ghost${drawerOpen ? " cea-btn-on" : ""}`,
+        "data-ce-popup-trigger": "rpc-history",
+        "aria-expanded": drawerOpen,
+        title: t("api.history"),
+        onClick: () => setDrawerOpen((open) => !open)
+      }, `${t("api.history")} ${history.length}`),
+      h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost", disabled: !selectedMethod, title: t("api.saveTitle"), onClick: saveFavorite }, t("api.saveBtn"))
     ),
     protoError ? h("div", { className: "cedb-error" }, protoError) : null,
+    drawerOpen ? h(
+      "div",
+      { className: "cea-hist cerpc-hist", ref: drawerRef, role: "dialog", "aria-label": t("api.history") },
+      h(
+        "div",
+        { className: "cea-hist-tabs" },
+        h("button", { type: "button", className: `cea-tab${drawerTab === "history" ? " cea-tab-on" : ""}`, onClick: () => setDrawerTab("history") }, `${t("api.history")} · ${history.length}`),
+        h("button", { type: "button", className: `cea-tab${drawerTab === "saved" ? " cea-tab-on" : ""}`, onClick: () => setDrawerTab("saved") }, `${t("api.saved")} · ${saved.length}`),
+        h("span", { className: "ce-spacer" }),
+        h("button", { type: "button", className: "ce-tool ce-tiny", title: t("close"), onClick: () => setDrawerOpen(false) }, "✕")
+      ),
+      h(
+        "div",
+        { className: "cea-hist-list ce-scroll" },
+        (drawerTab === "history" ? history : saved).length === 0 ? h("div", { className: "cea-he" }, t(drawerTab === "history" ? "api.histEmpty" : "api.histEmpty")) : (drawerTab === "history" ? history : saved).map((entry) => h(
+          "button",
+          {
+            key: entry.id,
+            type: "button",
+            className: "cea-hist-row",
+            title: entryLabel(entry),
+            onClick: () => {
+              applyEntry(entry);
+              setDrawerTab("history");
+            }
+          },
+          h("span", { className: "cedb-chip" }, entry.status ?? "—"),
+          h("span", { className: "cea-hist-url" }, `${t("api.tabSaved") === drawerTab ? "" : ""}${entryLabel(entry)}`),
+          h("span", { className: "cea-hist-ms" }, entry.ms === void 0 ? "" : `${entry.ms} ms`)
+        ))
+      )
+    ) : null,
     h(
       "div",
       { className: "cerpc-body" },
@@ -13235,8 +13796,11 @@ function RpcView({ t, useTabInfo, sessionId, useSessions }) {
     )
   );
 }
-function RpcTitle() {
-  return null;
+function RpcTitle({ useTabInfo }) {
+  const info = useTabInfo ? useTabInfo() : null;
+  const title = info?.tab?.title;
+  const label = typeof title === "string" && title !== "" ? title : "gRPC";
+  return h("span", { className: "cerpc-title" }, `>_ ${label}`);
 }
 
 // src/client/launcher.js
@@ -13304,16 +13868,16 @@ function makeBrowserOpener(sidebarRight, now = Date.now) {
 
 // src/client/lefttools.js
 var LEFT_TOOL_PREFIX = "dsh-plugin-kit/workspace/";
-var LEFT_TOOL_HIDDEN_KINDS = [];
+var LEFT_TOOL_HIDDEN_KINDS = ["code-rpc"];
 function isHiddenLeftToolKind(kind) {
   return LEFT_TOOL_HIDDEN_KINDS.includes(String(kind));
 }
 var OWN_TOOLS = [
   { kind: TAB_KIND, label: "guide.title", description: "guide.description", glyph: "code" },
+  // HTTP and gRPC are one workbench entry; the old RPC entry is gone.
   { kind: API_TAB_KIND, label: "apiGuide.title", description: "apiGuide.description", glyph: "api" },
   { kind: SKILLS_TAB_KIND, label: "skillsGuide.title", description: "skillsGuide.description", glyph: "skills" },
-  { kind: DB_TAB_KIND, label: "dbGuide.title", description: "dbGuide.description", glyph: "db" },
-  { kind: RPC_TAB_KIND, label: "rpcGuide.title", description: "rpcGuide.description", glyph: "rpc" }
+  { kind: DB_TAB_KIND, label: "dbGuide.title", description: "dbGuide.description", glyph: "db" }
 ];
 function ToolGlyph({ size = 16, glyph = "code" }) {
   if (glyph === "code") return h(IconCode, { size });
@@ -14569,6 +15133,7 @@ function createScreen({ cols = 80, rows = 24, scrollback = 1e3 } = {}) {
     alt: false,
     bracketedPaste: false,
     mouse: "off",
+    sgrMouse: false,
     echo: true
   };
   let cursorStyle = "block";
@@ -15034,6 +15599,9 @@ function createScreen({ cols = 80, rows = 24, scrollback = 1e3 } = {}) {
         case 1003:
           modes.mouse = on ? String(value) : "off";
           break;
+        case 1006:
+          modes.sgrMouse = on;
+          break;
         case 2004:
           modes.bracketedPaste = on;
           break;
@@ -15098,7 +15666,7 @@ function createScreen({ cols = 80, rows = 24, scrollback = 1e3 } = {}) {
     scrollTop = 0;
     scrollBottom = primary.rows - 1;
     tabs = defaultTabs(primary.cols);
-    modes = { ...modes, wrap: true, origin: false, insert: false, cursor: true, appCursor: false, bracketedPaste: false, mouse: "off" };
+    modes = { ...modes, wrap: true, origin: false, insert: false, cursor: true, appCursor: false, bracketedPaste: false, mouse: "off", sgrMouse: false };
     dirtyAll = true;
   }
   function dispatchOsc(payload) {
@@ -15324,6 +15892,20 @@ function createScreen({ cols = 80, rows = 24, scrollback = 1e3 } = {}) {
     },
     viewport,
     viewportAt,
+    /** Absolute buffer index of the viewport's first row, at a scrollback offset. */
+    topRow(offset = 0) {
+      const maxOffset = buffer === primary ? Math.max(0, buffer.lines.length - buffer.rows) : 0;
+      const fromBottom = Math.min(Math.max(0, offset), maxOffset);
+      return Math.max(0, buffer.lines.length - buffer.rows - fromBottom);
+    },
+    /** One row by absolute buffer index, for selection and copy. */
+    lineAt(index) {
+      return buffer.lines[index] ?? null;
+    },
+    /** Total rows held, scrollback included. */
+    get bufferRows() {
+      return buffer.lines.length;
+    },
     get cols() {
       return buffer.cols;
     },
@@ -15482,12 +16064,15 @@ function rowHtml(line, theme) {
 function createRenderer({ container, doc = globalThis.document, theme = () => ({ fg: "#d4d4d4", bg: "#1e1e1e" }), font = () => ({ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontSize: 13 }) } = {}) {
   const rowsEl = doc.createElement("div");
   rowsEl.className = "ce-term-rows";
+  const selectionEl = doc.createElement("div");
+  selectionEl.className = "ce-term-selection";
   const cursorEl = doc.createElement("div");
   cursorEl.className = "ce-term-cursor";
   const measureEl = doc.createElement("span");
   measureEl.className = "ce-term-measure";
   measureEl.textContent = "MMMMMMMMMM";
   container.appendChild(rowsEl);
+  container.appendChild(selectionEl);
   container.appendChild(cursorEl);
   container.appendChild(measureEl);
   let cellWidth2 = 8;
@@ -15554,12 +16139,40 @@ function createRenderer({ container, doc = globalThis.document, theme = () => ({
       cursorEl.style.height = `${rowHeight}px`;
     }
   }
+  function cellAt(clientX, clientY) {
+    const box = rowsEl.getBoundingClientRect();
+    if (box.width <= 0 || box.height <= 0) return null;
+    const x = Math.floor((clientX - box.left) / cellWidth2);
+    const y = Math.floor((clientY - box.top) / rowHeight);
+    if (x < 0 || y < 0) return null;
+    return { x: Math.min(x, Math.max(0, Math.round(box.width / cellWidth2) - 1)), y };
+  }
   function invalidate() {
     for (let i = 0; i < versions.length; i++) versions[i] = -1;
   }
+  function paintSelection(rects) {
+    const wanted = Array.isArray(rects) ? rects : [];
+    while (selectionEl.children.length < wanted.length) {
+      const el = doc.createElement("div");
+      el.className = "ce-term-selection-rect";
+      selectionEl.appendChild(el);
+    }
+    while (selectionEl.children.length > wanted.length) {
+      selectionEl.children[selectionEl.children.length - 1].remove();
+    }
+    for (let i = 0; i < wanted.length; i++) {
+      const rect = wanted[i];
+      const style = selectionEl.children[i].style;
+      style.transform = `translate(${rect.left}px, ${rect.top}px)`;
+      style.width = `${rect.width}px`;
+      style.height = `${rect.height}px`;
+    }
+  }
   return {
     measure,
+    cellAt,
     paint,
+    paintSelection,
     invalidate,
     get cellWidth() {
       return cellWidth2;
@@ -15573,6 +16186,7 @@ function createRenderer({ container, doc = globalThis.document, theme = () => ({
     },
     dispose() {
       rowsEl.remove();
+      selectionEl.remove();
       cursorEl.remove();
       measureEl.remove();
       rowEls = [];
@@ -15658,6 +16272,113 @@ function pasteToBytes(text, bracketed) {
   return bracketed ? `\x1B[200~${normalised}\x1B[201~` : normalised;
 }
 
+// src/client/vt/selection.js
+function normalizeSelection(selection) {
+  if (!selection?.anchor || !selection?.head) return { start: null, end: null, empty: true };
+  const { anchor, head } = selection;
+  const anchorFirst = anchor.row < head.row || anchor.row === head.row && anchor.col <= head.col;
+  return {
+    start: anchorFirst ? anchor : head,
+    end: anchorFirst ? head : anchor,
+    empty: anchor.row === head.row && anchor.col === head.col
+  };
+}
+function selectionRow(selection, row, cols) {
+  const { start, end, empty } = normalizeSelection(selection);
+  if (empty || start === null) return null;
+  if (row < start.row || row > end.row) return null;
+  const from = row === start.row ? start.col : 0;
+  const to = row === end.row ? end.col : cols;
+  return to > from ? { from, to: Math.min(to, cols) } : null;
+}
+function selectionText(selection, lineAt, cols) {
+  const { start, end, empty } = normalizeSelection(selection);
+  if (empty || start === null) return "";
+  const out = [];
+  for (let row = start.row; row <= end.row; row++) {
+    const line = lineAt(row);
+    if (!line) continue;
+    const span = selectionRow(selection, row, cols);
+    if (!span) continue;
+    let text = "";
+    for (let col = span.from; col < span.to; col++) {
+      const cell = line.cells[col];
+      if (!cell || cell.w === 0) continue;
+      text += cell.c;
+    }
+    const lastRow = row === end.row;
+    if (!lastRow && line.wrapped) out.push(text);
+    else out.push(lastRow ? text : `${text}
+`);
+  }
+  return out.join("");
+}
+var WORD_RE = /[\p{L}\p{N}_\-./\\:@~+]$/u;
+function wordRange(line, col) {
+  const cells = line?.cells ?? [];
+  const charAt = (index) => {
+    const cell = cells[index];
+    if (!cell || cell.w === 0) return "";
+    return cell.c;
+  };
+  if (!WORD_RE.test(charAt(col))) return { from: col, to: Math.min(col + 1, cells.length) };
+  let from = col;
+  while (from > 0 && WORD_RE.test(charAt(from - 1))) from--;
+  let to = col + 1;
+  while (to < cells.length && WORD_RE.test(charAt(to))) to++;
+  return { from, to };
+}
+function selectWord(line, row, col) {
+  const { from, to } = wordRange(line, col);
+  return { anchor: { row, col: from }, head: { row, col: to } };
+}
+function selectLine(row, cols) {
+  return { anchor: { row, col: 0 }, head: { row, col: cols } };
+}
+function selectAll(rows, cols) {
+  return { anchor: { row: 0, col: 0 }, head: { row: Math.max(0, rows - 1), col: cols } };
+}
+
+// src/client/vt/mouse.js
+var BUTTON = { left: 0, middle: 1, right: 2, wheelUp: 64, wheelDown: 65, wheelLeft: 66, wheelRight: 67 };
+var MOTION = 32;
+function modifierBits(event) {
+  return (event.shiftKey ? 4 : 0) | (event.altKey ? 8 : 0) | (event.ctrlKey ? 16 : 0);
+}
+function mouseOwned(modes) {
+  return modes?.mouse !== void 0 && modes.mouse !== "off";
+}
+function reportsMotion(mode) {
+  return mode === "1002" || mode === "1003";
+}
+function reportsHover(mode) {
+  return mode === "1003";
+}
+function encodeMouse(event, { protocol = "x10", mode = "1000" } = {}) {
+  const { action } = event;
+  if (action === "move" && !reportsHover(mode)) return null;
+  if (action === "drag" && !reportsMotion(mode)) return null;
+  if (action === "press" && mode === "off") return null;
+  const button = action === "move" ? 3 : BUTTON[event.button] ?? 0;
+  let code = button + modifierBits(event);
+  if (action === "drag" || action === "move") code += MOTION;
+  const wheel = button >= 64;
+  const column = Math.max(0, Math.trunc(event.x));
+  const row = Math.max(0, Math.trunc(event.y));
+  if (protocol === "sgr") {
+    const final = action === "release" && !wheel ? "m" : "M";
+    return `\x1B[<${code};${column + 1};${row + 1}${final}`;
+  }
+  if (column > 222 || row > 222) return null;
+  const released = action === "release" ? 3 : code;
+  const bytes = [32 + released, 33 + Math.min(column, 222), 33 + Math.min(row, 222)];
+  return `\x1B[M${String.fromCharCode(...bytes)}`;
+}
+function encodeWheel(event, options) {
+  if (!mouseOwned({ mouse: options?.mode })) return null;
+  return encodeMouse({ ...event, button: event.deltaY < 0 ? "wheelUp" : "wheelDown", action: "press" }, options);
+}
+
 // src/client/vt/body.js
 function applyRenderFrame(screen, render) {
   const payload = render?.frame;
@@ -15728,15 +16449,41 @@ function TerminalBody({ useTabInfo, useTerminal, useTheme, view, t }) {
     let frame = 0;
     let offset = 0;
     let dirty = true;
+    let selection = null;
+    let dragKind = null;
+    let clickCount = 0;
+    let lastClick = { at: 0, row: -1, col: -1 };
+    const rectsForSelection = () => {
+      if (selection === null) return [];
+      const first = screen.topRow(offset);
+      const rects = [];
+      for (let row = 0; row < screen.rows; row++) {
+        const span = selectionRow(selection, first + row, screen.cols);
+        if (span === null) continue;
+        rects.push({
+          left: span.from * renderer.cellWidth,
+          top: row * renderer.rowHeight,
+          width: Math.max(1, (span.to - span.from) * renderer.cellWidth),
+          height: renderer.rowHeight
+        });
+      }
+      return rects;
+    };
     const paint = () => {
       frame = 0;
       if (!dirty) return;
       dirty = false;
       renderer.paint(screen, { offset });
+      renderer.paintSelection(rectsForSelection());
     };
     const schedule = () => {
       dirty = true;
       if (frame === 0) frame = requestAnimationFrame(paint);
+    };
+    const clearSelection = () => {
+      if (selection === null) return;
+      selection = null;
+      schedule();
     };
     const fit = () => {
       const width = host.clientWidth;
@@ -15753,12 +16500,83 @@ function TerminalBody({ useTabInfo, useTerminal, useTheme, view, t }) {
         model.resize(cols, rows);
       }
     };
+    const copySelection = async () => {
+      if (selection === null) return false;
+      const text = selectionText(selection, (row) => screen.lineAt(row), screen.cols);
+      if (text === "") return false;
+      try {
+        await navigator.clipboard.writeText(text);
+      } catch {
+        return false;
+      }
+      return true;
+    };
+    const reportMouse = (action, event) => {
+      if (!latest.current.writable) return false;
+      const cell = renderer.cellAt(event.clientX, event.clientY);
+      if (cell === null) return false;
+      const bytes = encodeMouse({
+        button: event.button === 2 ? "right" : event.button === 1 ? "middle" : "left",
+        action,
+        x: cell.x,
+        y: cell.y,
+        shiftKey: event.shiftKey,
+        altKey: event.altKey,
+        ctrlKey: event.ctrlKey
+      }, { protocol: screen.modes.sgrMouse ? "sgr" : "x10", mode: screen.modes.mouse });
+      if (bytes === null) return false;
+      model.write(bytes, true);
+      return true;
+    };
     const onKeyDown = (event) => {
       if (event.isComposing || event.keyCode === 229) return;
       if (!latest.current.writable) return;
+      const mod = event.metaKey || event.ctrlKey;
+      if (mod && !event.altKey && (event.key === "c" || event.key === "C") && !event.shiftKey) {
+        if (selection !== null) {
+          event.preventDefault();
+          void copySelection().then((copied) => {
+            if (copied) clearSelection();
+          });
+          return;
+        }
+        if (event.metaKey) return;
+      }
+      if (mod && event.shiftKey && (event.key === "c" || event.key === "C")) {
+        if (selection !== null) {
+          event.preventDefault();
+          void copySelection().then((copied) => {
+            if (copied) clearSelection();
+          });
+          return;
+        }
+      }
+      if (mod && !event.altKey && !event.shiftKey && (event.key === "a" || event.key === "A") && selection !== null) {
+        event.preventDefault();
+        selection = selectAll(screen.bufferRows, screen.cols);
+        schedule();
+        return;
+      }
+      if (event.metaKey && !event.altKey && !event.ctrlKey && (event.key === "a" || event.key === "A") && selection === null) {
+        event.preventDefault();
+        selection = selectAll(screen.bufferRows, screen.cols);
+        schedule();
+        return;
+      }
+      if (event.shiftKey && (event.key === "PageUp" || event.key === "PageDown" || event.key === "Home" || event.key === "End")) {
+        event.preventDefault();
+        const pages = Math.max(1, screen.rows - 1);
+        if (event.key === "PageUp") offset = Math.min(offset + pages, screen.scrollbackRows);
+        else if (event.key === "PageDown") offset = Math.max(0, offset - pages);
+        else if (event.key === "Home") offset = screen.scrollbackRows;
+        else offset = 0;
+        schedule();
+        return;
+      }
       const bytes = keyToBytes(event, screen.modes);
       if (bytes === null) return;
       event.preventDefault();
+      clearSelection();
       model.write(bytes, true);
       if (offset !== 0) {
         offset = 0;
@@ -15773,6 +16591,7 @@ function TerminalBody({ useTabInfo, useTerminal, useTheme, view, t }) {
       const text = input.value;
       if (text === "") return;
       input.value = "";
+      clearSelection();
       model.write(text, true);
       if (offset !== 0) {
         offset = 0;
@@ -15784,6 +16603,7 @@ function TerminalBody({ useTabInfo, useTerminal, useTheme, view, t }) {
       const text = event.clipboardData?.getData("text") ?? "";
       if (text === "") return;
       event.preventDefault();
+      clearSelection();
       model.write(pasteToBytes(text, screen.modes.bracketedPaste), true);
       if (offset !== 0) {
         offset = 0;
@@ -15791,9 +16611,23 @@ function TerminalBody({ useTabInfo, useTerminal, useTheme, view, t }) {
       }
     };
     const onWheel = (event) => {
+      if (mouseOwned(screen.modes) && !event.shiftKey && latest.current.writable) {
+        const cell = renderer.cellAt(event.clientX, event.clientY);
+        if (cell !== null) {
+          const bytes = encodeWheel(
+            { deltaY: event.deltaY, x: cell.x, y: cell.y, shiftKey: event.shiftKey, altKey: event.altKey, ctrlKey: event.ctrlKey },
+            { protocol: screen.modes.sgrMouse ? "sgr" : "x10", mode: screen.modes.mouse }
+          );
+          if (bytes !== null) {
+            event.preventDefault();
+            model.write(bytes, true);
+            return;
+          }
+        }
+      }
       const step = event.deltaMode === 1 ? 1 : 3;
       const next = offset + (event.deltaY > 0 ? -step : step);
-      const clamped = Math.max(0, next);
+      const clamped = Math.max(0, Math.min(next, screen.scrollbackRows));
       if (clamped === offset) return;
       event.preventDefault();
       offset = clamped;
@@ -15801,7 +16635,58 @@ function TerminalBody({ useTabInfo, useTerminal, useTheme, view, t }) {
     };
     const onFocus = () => host.classList.add("ce-term-focused");
     const onBlur = () => host.classList.remove("ce-term-focused");
-    const onPointerDown = () => {
+    const onPointerDown = (event) => {
+      input.focus({ preventScroll: true });
+      if (event.button !== 0) return;
+      if (mouseOwned(screen.modes) && !event.shiftKey) {
+        if (reportMouse("press", event)) {
+          dragKind = "mouse";
+          host.setPointerCapture?.(event.pointerId);
+          return;
+        }
+      }
+      const cell = renderer.cellAt(event.clientX, event.clientY);
+      if (cell === null) return;
+      const row = screen.topRow(offset) + cell.y;
+      const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+      const repeat = lastClick.row === row && lastClick.col === cell.x && now - lastClick.at < 500;
+      clickCount = repeat ? Math.min(3, clickCount + 1) : 1;
+      lastClick = { at: now, row, col: cell.x };
+      if (clickCount >= 3) selection = selectLine(row, screen.cols);
+      else if (clickCount === 2) selection = selectWord(screen.lineAt(row), row, cell.x);
+      else selection = { anchor: { row, col: cell.x }, head: { row, col: cell.x } };
+      dragKind = "select";
+      host.setPointerCapture?.(event.pointerId);
+      schedule();
+    };
+    const onPointerMove = (event) => {
+      if (dragKind === "mouse") {
+        if (reportsMotion(screen.modes.mouse)) reportMouse("drag", event);
+        return;
+      }
+      if (dragKind !== "select" || selection === null) return;
+      const cell = renderer.cellAt(event.clientX, event.clientY);
+      if (cell === null) return;
+      const row = screen.topRow(offset) + cell.y;
+      if (selection.head.row === row && selection.head.col === cell.x) return;
+      selection = { anchor: selection.anchor, head: { row, col: cell.x } };
+      if (cell.y < 0 && offset < screen.scrollbackRows) offset += 1;
+      else if (cell.y >= screen.rows && offset > 0) offset -= 1;
+      schedule();
+    };
+    const onPointerUp = (event) => {
+      if (dragKind === "mouse" && reportsMotion(screen.modes.mouse)) reportMouse("release", event);
+      dragKind = null;
+      host.releasePointerCapture?.(event.pointerId);
+    };
+    const onContextMenu = (event) => {
+      event.preventDefault();
+      if (selection !== null) {
+        void copySelection().then((copied) => {
+          if (copied) clearSelection();
+        });
+        return;
+      }
       input.focus({ preventScroll: true });
     };
     input.addEventListener("keydown", onKeyDown);
@@ -15811,6 +16696,10 @@ function TerminalBody({ useTabInfo, useTerminal, useTheme, view, t }) {
     input.addEventListener("blur", onBlur);
     host.addEventListener("wheel", onWheel, { passive: false });
     host.addEventListener("pointerdown", onPointerDown);
+    host.addEventListener("pointermove", onPointerMove);
+    host.addEventListener("pointerup", onPointerUp);
+    host.addEventListener("pointercancel", onPointerUp);
+    host.addEventListener("contextmenu", onContextMenu);
     const observer = new ResizeObserver(fit);
     observer.observe(host);
     fit();
@@ -15825,6 +16714,13 @@ function TerminalBody({ useTabInfo, useTerminal, useTheme, view, t }) {
         offset = 0;
       },
       /** Apply one render frame and acknowledge it to the Host immediately. */
+      copySelection,
+      get selection() {
+        return selection;
+      },
+      get scrollbackOffset() {
+        return offset;
+      },
       apply(render) {
         if (!render) return;
         const snapshot = render.frame?.type === "snapshot";
@@ -15845,6 +16741,10 @@ function TerminalBody({ useTabInfo, useTerminal, useTheme, view, t }) {
         input.removeEventListener("blur", onBlur);
         host.removeEventListener("wheel", onWheel);
         host.removeEventListener("pointerdown", onPointerDown);
+        host.removeEventListener("pointermove", onPointerMove);
+        host.removeEventListener("pointerup", onPointerUp);
+        host.removeEventListener("pointercancel", onPointerUp);
+        host.removeEventListener("contextmenu", onContextMenu);
         input.remove();
         renderer.dispose();
       }
@@ -16182,7 +17082,12 @@ var index_default = {
       key: SKILLS_TAB_ID
     }, SkillsTitle)));
     safe("api tab type", () => ctx.sidebarRightTabs.register(apiDefinition(bound)));
-    const ApiBound = (props) => h(ApiView, { ...props, t: props.t ?? bound });
+    const ApiBound = (props) => h(WorkbenchView, {
+      ...props,
+      t: props.t ?? bound,
+      http: h(ApiView, { ...props, t: props.t ?? bound }),
+      grpc: h(RpcView, { ...props, t: props.t ?? bound })
+    });
     safe("api tab body", () => ctx.slots.inject("sidebar.right.pane.tab", () => ctx.slots.register({
       name: "sidebar.right.pane.tab",
       key: API_TAB_ID,
@@ -16206,6 +17111,34 @@ var index_default = {
       name: "sidebar.right.pane.tab.title",
       key: DB_TAB_ID
     }, DbTitle)));
+    safe("legacy rpc tabs", () => ctx.effect(() => {
+      const migrated = /* @__PURE__ */ new Set();
+      const run = () => {
+        let tabs = [];
+        try {
+          tabs = ctx.sidebarRight.openTabs.getSnapshot();
+        } catch {
+          return;
+        }
+        migrateLegacyRpcTabs({
+          tabs,
+          migrated,
+          canOpen: () => Boolean(ctx.sidebarRightTabs.get(API_TAB_ID)),
+          preferGrpc: () => {
+            writeProtocol("grpc");
+          },
+          close: (tab) => {
+            ctx.sidebarRight.close(tab.id);
+          },
+          open: (sessionId) => {
+            ctx.sidebarRight.openTabIn(sessionId, API_TAB_KIND, {});
+          }
+        });
+      };
+      const off = ctx.sidebarRight.openTabs.subscribe(run);
+      run();
+      return () => off();
+    }, "code-explorer: legacy rpc tabs"));
     safe("rpc tab type", () => ctx.sidebarRightTabs.register(rpcDefinition(bound)));
     const RpcBound = (props) => h(RpcView, { ...props, t: props.t ?? bound });
     safe("rpc tab body", () => ctx.slots.inject("sidebar.right.pane.tab", () => ctx.slots.register({
