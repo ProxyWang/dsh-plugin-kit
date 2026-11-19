@@ -1,6 +1,10 @@
 # Changelog
 
-## Unreleased — review fixes: discovery, relative database paths, address inference
+## 2.1.0 (2026-11-19)
+
+The database workbench and gRPC debugging arrive, with saved connections, a virtualized result grid, server reflection, and the language-server fixes that make "find references" work at all.
+
+### review fixes: discovery, relative database paths, address inference
 
 A pass over the unreleased work found four defects worth fixing and two non-defects worth recording.
 
@@ -12,7 +16,7 @@ A pass over the unreleased work found four defects worth fixing and two non-defe
 - Also recorded: the earlier suspicion that a language server installed mid-session stays "not installed" is **not** a bug — the candidate list holds paths, so a server dropped into `node_modules/.bin` is picked up on the next retry (verified).
 - Regressions: a relative SQLite path resolving into the workspace and the refusal without one, `skipped` reported by discovery, a `host:port` address rejected while `app.db` still reads as SQLite.
 
-## Unreleased — language servers are found where they actually are
+### language servers are found where they actually are
 
 References and definition jumps still failed on files whose server was installed, because the launcher only knew a short list of absolute paths and a bare name resolved against the Host's PATH — and a Desktop Host started from Finder has neither `node` nor an npm bin directory on it:
 
@@ -23,7 +27,7 @@ References and definition jumps still failed on files whose server was installed
 - Verified end to end in a scratch TypeScript project whose server lived only in its own `node_modules`: references at a call site returned the declaration and both uses, with `status.state === "ready"`. The database panel's CLI detection now uses the same lookup instead of its own copy.
 - Regressions: project-local wins over PATH, PATH is searched when the project has none, a project virtualenv is searched for Python servers, `DSH_*_BIN` wins, candidate order, every-name lookup, the TypeScript launcher prefers the project binary, the install hint, and a fake node-shebang server that only answers if the plugin starts it with a real Node (hover + references through the route).
 
-## Unreleased — find references is reachable, and says why it cannot run
+### find references is reachable, and says why it cannot run
 
 "View references" looked broken because there was almost no way to ask for it and no answer when it could not work:
 
@@ -34,7 +38,7 @@ References and definition jumps still failed on files whose server was installed
 - Verified against real gopls on a two-file module: references at a call site return the declaration and every use, across files.
 - Regressions: the toolbar exposes the action, the palette lists it, running it issues exactly one `references` request at the cursor and opens the peek with the returned rows, and a note-only answer is shown as a message.
 
-## Unreleased — 空白页签：旧的 gRPC 页没有标题，也没搬进工作台
+### 空白页签：旧的 gRPC 页没有标题，也没搬进工作台
 
 合并后截图里出现了一个**没有标题的页签**。原因是合并只改了入口，没有处理**合并前保存的布局**：旧会话里还存着一个 `code-rpc` 页，宿主照旧把它恢复出来，而它的标题槽 `RpcTitle` 返回 `null`——一个渲染空的标题槽不会回退到页签自带的标题，于是只剩一个空白 chip。
 
@@ -42,7 +46,7 @@ References and definition jumps still failed on files whose server was installed
 - **旧页一次性搬进工作台**（[src/client/migrate.js](<src/client/migrate.js>)、[src/client/index.js](<src/client/index.js>)）：插件启动时订阅打开的页签列表，遇到 `code-rpc` 就 —— 先把协议偏好设为 gRPC（工作台因此直接落在 gRPC 上）、关闭旧页、在同一个会话里打开工作台。每个页签只搬一次（`session:tab` 去重，且在动作前登记，避免关闭回调重入成环）；工作台还没注册时不动手；关闭被拒绝时保留旧页并停止本次搬迁，绝不丢页面。
 - Regressions：9 项——替换类型、搬迁顺序（偏好先于打开）、其他类型不受影响、同页只搬一次、同 id 跨会话各搬一次、工作台未注册时不动、关闭被拒时不打开且计数为 0、缺列表容错、标题槽在空标题/有标题/无 hook 三种情况下都有文字。
 
-## Unreleased — 一套历史、一套收藏：gRPC 接入工作台的存储
+### 一套历史、一套收藏：gRPC 接入工作台的存储
 
 上一轮只合并了外壳：HTTP 的历史/收藏/环境在 `apistore` 里，gRPC 的地址与 `.proto` 路径还只是组件内状态，切过去仍是"另一个人"的表单。这一轮把 gRPC 接进同一套存储。
 
@@ -53,7 +57,7 @@ References and definition jumps still failed on files whose server was installed
 - **环境变量对 gRPC 生效**：地址、metadata 名与值、消息体里的 `{{var}}` 都按**当前激活环境**替换；未定义的变量**原样保留**（而不是变成空串把目标改错），与 HTTP 面板同一套环境存储，所以在 HTTP 面板里改环境，gRPC 侧立刻用上。
 - Regressions：21 项——协议缺省与打标、两种过滤、跨协议合并排序、空列表容错、历史上限、两种标题、变量替换（含未知变量、嵌套值、只取激活环境的启用项、无环境）、工作台合并抽屉（计数、排序、徽标、点击切协议并交接、抽屉关闭）、gRPC 面板（只统计自己的协议、抽屉只列自己的行、调用写入共享存储、HTTP 行不被覆盖、环境变量替换进地址、合并历史的交接填充编辑器）。
 
-## Unreleased — 数据库连接：填地址就够，驱动自动识别
+### 数据库连接：填地址就够，驱动自动识别
 
 「新建连接」先问"用哪个驱动"，而且那个下拉框可能**是空的**——截图里就是这个状态：Host 的 `db.drivers` 探测没回来时 `drivers` 为空，`<select>` 一个 `option` 都没有，于是驱动框一片空白，人根本不知道该选什么。DB 客户端不该这样：你只需要知道**目标**，协议由客户端读出来。
 
@@ -64,7 +68,7 @@ References and definition jumps still failed on files whose server was installed
 - **相对路径按会话工作区解析**（[lib/host/db.js](<lib/host/db.js>)）：`db.connect` 接受 `cwd`，SQLite 的相对路径以会话目录为基准，和人在面板里看到的路径一致；绝对路径原样使用。
 - Regressions：12 项地址解析（URL/凭据解码/默认端口/两种 sqlite scheme/Windows 路径/裸文件名/无法识别/畸形 URL/路径判定/格式化与往返）+ 10 项对话框行为（先问地址、不先问驱动、空地址的提示、驱动菜单永不为空、不可用驱动带原因、URL 与路径的识别文案、不可用驱动禁用连接、就绪驱动启用、连接请求携带解析后的驱动与工作区）。
 
-## Unreleased — 接口调试与 gRPC 合并为一个工作台
+### 接口调试与 gRPC 合并为一个工作台
 
 HTTP 调试和 gRPC 调试本来就是同一件事——"给服务发点东西，看它回什么"——却占了两条导航、两个页签。现在是一个 **接口调试（Request Workbench）** 页签，顶部一条细栏切换协议：
 
@@ -74,7 +78,7 @@ HTTP 调试和 gRPC 调试本来就是同一件事——"给服务发点东西�
 - **文案**：zh/en 同步为「接口调试 / Request Workbench」，提示语分别说明 HTTP（curl 导入、环境变量、集合、SSE）与 gRPC（工作区 .proto、方法选择、流式）。
 - Regressions：11 项——工作台标题即页签名、旧 RPC 类型仍可解析、左侧列表不再出现 RPC 行、协议记忆的读写与三种降级（未知值、存储拒绝、垃圾值）、默认 HTTP、gRPC 延迟挂载、切换后两侧都保持挂载、点击当前协议无副作用、`aria-selected` 与提示语跟随。
 
-## Unreleased — terminal: mouse reporting, selection and copy
+### terminal: mouse reporting, selection and copy
 
 The plugin's terminal could run a shell and a full-screen TUI, but it could not be *clicked at* or *copied from*: mouse modes were parsed and discarded, and there was no selection at all. Both now work, and both are decided per event rather than per mode.
 
@@ -85,11 +89,11 @@ The plugin's terminal could run a shell and a full-screen TUI, but it could not 
 - **Right click** copies the selection; with none, it focuses the input so the platform paste shortcut applies. Reading the clipboard proactively would need a permission prompt, so it is not done.
 - Regressions: 21 selection/mouse cases (normalisation in both drag directions, per-row spans, multi-row and wrapped-row text, padding, word and line and select-all ranges, ownership and motion modes, SGR press/release/drag/modifiers/right button/wheel, X10 offset bytes and its ceiling, unreported hover and drag) and 6 interaction cases driven through the real component with a DOM shim (drag paints one rect, ⌘C copies exactly the dragged cells and clears the highlight, double click takes the word, Ctrl+Shift+C with no selection copies nothing, Shift+PageUp scrolls without writing to the shell, and a program that owns the pointer receives press/drag/release/wheel). Two defects the tests caught on the way: the selection overlay kept a captured child list (a live collection never shrank, hanging the paint loop) and a stale test fixture selected the wrong row.
 
-## Unreleased — a real database workbench, and gRPC debugging
+### a real database workbench, and gRPC debugging
 
 The first database panel was a connection list, one SQL box and a result table. It did the three things a database tool has to do and none of the things that make one usable: no schema columns, no way to browse a table, no paging, no history, nothing to click. This replaces it, and adds the RPC half the request workbench was missing.
 
-### Database batch ([lib/host/db.js](<lib/host/db.js>), [src/client/db.js](<src/client/db.js>))
+#### Database batch ([lib/host/db.js](<lib/host/db.js>), [src/client/db.js](<src/client/db.js>))
 
 - **Schema, not a table list**: `db.schema` reports every database, table and view with its columns (type, NOT NULL, primary key, default) and its indexes; the rail renders that as an expandable tree with a name filter and `PK` / `NN` badges. SQLite reads `sqlite_master` + `PRAGMA table_info` / `index_list` / `index_info`; MySQL and PostgreSQL read `information_schema` through the CLI adapters and introspect the current database (other databases list by name only, so a server with fifty schemas does not spawn fifty queries on connect).
 - **Table browsing with a server-side page**: `db.rows` runs one ordered, filtered `LIMIT/OFFSET` page plus the matching `COUNT(*)`, capped at 500 rows. Clicking a table opens a grid tab; clicking a column header sorts (ascending, then descending); the filter box searches every column through `CAST(col AS TEXT) LIKE`, with the needle escaped as data — a filter of `O'Reilly` matches nothing rather than breaking the statement; the pager walks the total.
@@ -98,7 +102,7 @@ The first database panel was a connection list, one SQL box and a result table. 
 - **Connection dialog that adapts**: SQLite asks for a file path; MySQL/PostgreSQL ask for host, port, database, user and password, disable drivers this machine cannot reach (`mysql` / `psql` missing from PATH), and **prove the connection at connect time** with a `SELECT 1` so a wrong password fails where the user is looking instead of on the first query.
 - Regressions (host, SQLite): connect/close, schema with columns and indexes, PK/NOT NULL flags, a paged table with its total, the following page, descending order, a cross-column filter with its count, a quote-bearing filter treated as data, `SELECT` columns and rows, `UPDATE` change count, limit truncation, empty-statement refusal, a closed connection refusing queries. (client) `toCsv` quoting, `tableSql` paging/order/quoting/escaping, `formatCell` NULL-vs-empty, `truncateCell`.
 
-### gRPC / RPC panel ([lib/host/proto.js](<lib/host/proto.js>), [lib/host/protobuf.js](<lib/host/protobuf.js>), [lib/host/grpc.js](<lib/host/grpc.js>), [src/client/rpc.js](<src/client/rpc.js>))
+#### gRPC / RPC panel ([lib/host/proto.js](<lib/host/proto.js>), [lib/host/protobuf.js](<lib/host/protobuf.js>), [lib/host/grpc.js](<lib/host/grpc.js>), [src/client/rpc.js](<src/client/rpc.js>))
 
 Ports the gRPC request model Bruno ships, against DSH's own runtime instead of a grpc/protobuf dependency tree — the plugin still has no runtime dependencies:
 
@@ -108,21 +112,21 @@ Ports the gRPC request model Bruno ships, against DSH's own runtime instead of a
 - **Panel** (`rpc.js`): address + `.proto` + Load in the toolbar, methods grouped by service in the rail with a `→` / `|→` / `→|` / `↔` streaming glyph, a JSON request editor seeded from the message schema, an editable metadata table, timeout and certificate switches, and a response pane showing the status code and name, every returned message, trailers, and the round-trip time.
 - Regressions: proto parsing (package, nested messages, enums, field numbers/repeated/map flags, nested type resolution, method paths and streaming flags), protobuf round-trips (strings/ints/bools/repeats, packed scalars, maps, nested messages, enum names, unknown-field skip, sample skeleton, exact negative varints), `parseTarget` accept/refuse, status names, `parseJsonText`, `methodArrows`, `groupMethods`; host: `rpc.proto` method listing and sample body, a missing proto refused, **a real in-process HTTP/2 gRPC server** answering a unary call end to end (status 0, decoded reply, trailers, timing), an unknown method refused, and a dead port surfaced as an error.
 
-### Saved connections ([lib/host/dbprofiles.js](<lib/host/dbprofiles.js>))
+#### Saved connections ([lib/host/dbprofiles.js](<lib/host/dbprofiles.js>))
 
 - **A connection can be remembered.** The profile list is storage-backed (DSH `storageDomain`), so it survives a restart and is shared by every window on the profile; a saved entry appears in the rail under "Saved" and one click reopens it.
 - **The password never leaves the Host.** It is written to the plugin's secret vault — the same one the API workbench uses — and the profile record holds only its id. `db.connect` resolves the secret host-side, so neither the list, the client state nor any response ever carries it; `db.connect({profileId})` is the only path that needs it.
 - Writes are revision-checked (a stale window cannot drop a newer profile), an empty password means "keep the stored one", and deleting a profile deletes its secret too.
 - Regressions: profile round-trip, password absent from the record and resolvable host-side, keep-secret on update, keep-untouched fields, stale-revision refusal, delete removing both profile and secret, `db.connect` by id on a real SQLite file, and a profile id refused when the service is absent.
 
-### gRPC reflection: no `.proto` required ([lib/host/grpc-reflect.js](<lib/host/grpc-reflect.js>))
+#### gRPC reflection: no `.proto` required ([lib/host/grpc-reflect.js](<lib/host/grpc-reflect.js>))
 
 - **Discover** asks the server for its own schema. The panel sends `list_services`, then `file_containing_symbol` per service, decodes the returned `FileDescriptorProto` set with a hand-written descriptor schema, and folds it into the same shape `proto.js` produces — so samples, the codec and the call path need no special case. `grpc.reflection.v1` is tried first and `v1alpha` second (what most servers still expose); a server without reflection reports that as a state instead of failing the call.
 - The discovered schema is cached host-side and addressed by an id the panel passes back on invoke, so a reflection-based call needs no file on disk; an expired id answers "run Discover again" rather than guessing.
 - Descriptor folding covers nested messages, enums, `repeated`, `map<>` entries (a repeated message with `map_entry` becomes a real map) and both streaming flags.
 - Regressions: an in-process HTTP/2 server answering reflection end to end (service list, descriptor set, v1/v1alpha label, method list, sample body, schema id, expired id), and descriptor folding for nested types, maps, repetition, enums and streaming.
 
-### Responsiveness and cancellation ([lib/host/db-worker.js](<lib/host/db-worker.js>), [lib/host/sqlite-ops.js](<lib/host/sqlite-ops.js>))
+#### Responsiveness and cancellation ([lib/host/db-worker.js](<lib/host/db-worker.js>), [lib/host/sqlite-ops.js](<lib/host/sqlite-ops.js>))
 
 - **SQLite no longer blocks the Host.** `node:sqlite` is synchronous, so a slow statement used to freeze every other panel, tool call and session request for its whole duration. Each SQLite connection now lives in its own worker thread: the Host posts `{id, op, args}` and stays free while the query runs. The operations themselves live in `sqlite-ops.js`, shared by the worker and an inline fallback for runtimes without `worker_threads`.
 - **A running statement can be stopped** (`db.cancel`, and the Stop button that replaces Run while a query is in flight). A CLI-backed connection survives (the child process is killed); a SQLite statement cannot be interrupted in place, so cancelling ends that connection and the panel says so instead of pretending the handle survived.
@@ -130,7 +134,21 @@ Ports the gRPC request model Bruno ships, against DSH's own runtime instead of a
 - **CLI result parsing is faithful**: mysql's batch escaping is undone instead of `--raw` splitting rows on a newline cell, and psql runs with `--csv` plus an explicit NULL marker so a value holding a tab, a comma, a newline or an empty string keeps its meaning; a write statement's command tag becomes a change count.
 - Regressions: worker mode reported, a long query leaves the event loop ticking, cancel ends both the statement and (for SQLite) the connection, `parseCsv` handles quoted commas, embedded newlines, doubled quotes and the NULL marker.
 
-### Docs
+#### Statement-scoped cancellation
+
+Cancelling used to mean "stop whatever this connection is running", which is wrong the moment two tabs share a connection: the panel cancelled the most recently spawned child, or nothing at all.
+
+- Every request now carries a token (`db.query` / `db.rows` accept `token`, `db.cancel` accepts it back). A CLI-backed connection kills exactly that child, and cancelling a statement that already finished answers "that statement is not running" instead of killing an innocent one.
+- A SQLite statement runs in a worker that cannot be interrupted in place, so its cancel still ends the connection — but only when the token names the statement that is actually running.
+- The panel mints a token per run, keeps it on the tab while the request is in flight, and sends it with the Stop button.
+
+#### Virtualized result grid
+
+A query may return up to 10 000 rows, and all of them used to become `<tr>` elements. The grid now renders only the window the viewport shows (plus a little overscan) with proportional spacers above and below, measured against a `ResizeObserver` so resizing the panel re-windows it. `gridWindow` is pure and covered by regressions, including the empty result and a scroll past the end.
+
+The tests caught a real default bug while this was written: `Number(undefined) ?? 8` is `NaN`, not `8`, so every unset window option silently produced a `NaN` window.
+
+#### Docs
 
 - README (both languages) gains the two new panels in the entry table and two new screenshot rows; the preview script renders both from fictional fixtures (`readme-db-*.png`, `readme-rpc-*.png`) and now serializes `<textarea>` values so a static preview shows the SQL/message the panel really holds.
 

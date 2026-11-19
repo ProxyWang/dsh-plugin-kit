@@ -4112,6 +4112,27 @@ message HelloReply { string message = 1; int32 count = 2; }
 	check("tableSql escapes a double quote in the table name", tableSql('we"ird', { limit: 10, offset: 0, filter: "", columns: [] }).includes('"we""ird"'), null);
 	check("tableSql quotes identifiers with backticks for MySQL", tableSql("users", { driver: "mysql", order: "id", limit: 10, offset: 0, filter: "", columns: [] }) === "SELECT * FROM `users` ORDER BY `id` ASC LIMIT 10 OFFSET 0", tableSql("users", { driver: "mysql", order: "id", limit: 10, offset: 0, filter: "", columns: [] }));
 	check("tableSql adds a filter over the given columns", tableSql("t", { limit: 10, offset: 0, filter: "it's", columns: [{ name: "a" }, { name: "b" }] }).includes("it''s"), null);
+	// Virtualized grid: only the visible window is rendered, spacers keep the
+	// scrollbar proportional to the whole result.
+	{
+		const { gridWindow, GRID_ROW_H } = await import("./src/client/db.js");
+		check("the grid window renders only what fits", (() => {
+			const w = gridWindow({ count: 5000, scrollTop: 0, viewport: 480, overscan: 4 });
+			return w.start === 0 && w.end === Math.ceil(480 / GRID_ROW_H) + 8 && w.topPad === 0 && w.bottomPad === (5000 - w.end) * GRID_ROW_H;
+		})(), gridWindow({ count: 5000, scrollTop: 0, viewport: 480, overscan: 4 }));
+		check("scrolling moves the window and keeps both spacers", (() => {
+			const w = gridWindow({ count: 5000, scrollTop: 2400, viewport: 480, overscan: 4 });
+			return w.start === 2400 / GRID_ROW_H - 4 && w.topPad === w.start * GRID_ROW_H && w.bottomPad > 0 && w.end - w.start === Math.ceil(480 / GRID_ROW_H) + 8;
+		})(), gridWindow({ count: 5000, scrollTop: 2400, viewport: 480, overscan: 4 }));
+		check("the window never runs past the last row", (() => {
+			const w = gridWindow({ count: 10, scrollTop: 100000, viewport: 480, overscan: 4 });
+			return w.start <= 10 && w.end === 10 && w.bottomPad === 0;
+		})(), gridWindow({ count: 10, scrollTop: 100000, viewport: 480, overscan: 4 }));
+		check("an empty result yields an empty window", (() => {
+			const w = gridWindow({ count: 0, viewport: 480 });
+			return w.start === 0 && w.end === 0 && w.topPad === 0 && w.bottomPad === 0;
+		})(), null);
+	}
 	check("formatCell distinguishes NULL from an empty string", formatCell(null) === "NULL" && formatCell("") === "", null);
 	check("truncateCell ellipsizes past the limit", truncateCell("x".repeat(200), 10) === `${"x".repeat(9)}…`, null);
 }

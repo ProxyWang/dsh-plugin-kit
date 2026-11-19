@@ -940,12 +940,16 @@ for (const cleanup of cleanups) cleanup();
 		const slowConn = await db.connect({ driver: "sqlite", path: file });
 		let ticks = 0;
 		const timer = setInterval(() => { ticks += 1; }, 5);
-		const slow = db.query(slowConn.id, "WITH RECURSIVE c(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM c WHERE x < 4000000) SELECT count(*) FROM c");
+		const pendingToken = "slow-statement-1";
+		const slow = db.query(slowConn.id, "WITH RECURSIVE c(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM c WHERE x < 4000000) SELECT count(*) FROM c", 5000, pendingToken);
 		await new Promise((resolvePromise) => setTimeout(resolvePromise, 80));
 		clearInterval(timer);
 		check("a long SQLite query does not block the event loop", ticks >= 3, ticks);
 		const pendingRejection = slow.then(() => null, (error) => error);
-		const cancelled = await db.cancel(slowConn.id);
+		// Cancelling names a statement: a stale token must not stop the connection.
+		const wrongToken = await db.cancel(slowConn.id, "some-other-statement");
+		check("cancelling with a stale token leaves the connection alone", wrongToken.cancelled === false && db.listConnections().some((entry) => entry.id === slowConn.id), wrongToken);
+		const cancelled = await db.cancel(slowConn.id, pendingToken);
 		check("db.cancel ends a running SQLite statement", cancelled.cancelled === true && cancelled.connectionClosed === true, cancelled);
 		check("the cancelled statement rejects instead of hanging", (await pendingRejection) !== null, null);
 		check("a cancelled connection is gone from the list", !db.listConnections().some((entry) => entry.id === slowConn.id), null);

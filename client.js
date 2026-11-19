@@ -8775,6 +8775,8 @@ var CSS2 = `
 .cedb-grid-sortable:hover{color:var(--dsw-alias-label-primary,#fff)}
 .cedb-grid-sorted{color:var(--dsw-alias-button-info-fill,#58a6ff)}
 .cedb-grid-gutter{color:var(--dsw-alias-label-tertiary,#667);text-align:right;padding-right:8px !important;user-select:none;white-space:nowrap;background:var(--dsw-alias-bg-layer-1,#1d2126)}
+.cedb-grid-row{height:24px}
+.cedb-grid-row td{padding-top:0;padding-bottom:0}
 .cedb-grid-td{padding:3px 8px;border-bottom:.5px solid var(--dsw-alias-border-l1,#2a2e35);color:var(--dsw-alias-label-primary,#dde);max-width:340px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}
 .cedb-grid tr:hover td{background:var(--dsw-alias-interactive-bg-hover,#23272d)}
 .cedb-null{color:var(--dsw-alias-label-tertiary,#667);font-style:italic}
@@ -12789,6 +12791,9 @@ function tableSql(table, { order, dir, limit, offset, filter, columns, driver })
   const sorting = order ? ` ORDER BY ${q(order)} ${dir === "desc" ? "DESC" : "ASC"}` : "";
   return `SELECT * FROM ${quote}${where}${sorting} LIMIT ${limit} OFFSET ${offset}`;
 }
+function requestToken(prefix = "r") {
+  return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
 function countOf(schema) {
   let tables = 0;
   let views = 0;
@@ -12961,9 +12966,11 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
     }
   }, [activeConn]);
   const fetchRows = useCallback(async (tab) => {
-    patchTab(tab.id, { loading: true, error: "" });
+    const token = requestToken("rows");
+    patchTab(tab.id, { loading: true, error: "", runToken: token });
     const res = await api("db.rows", {
       id: tab.conn,
+      token,
       table: tab.table,
       database: tab.database,
       limit: PAGE_SIZE,
@@ -12976,7 +12983,7 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
       patchTab(tab.id, { loading: false, error: res.error });
       return;
     }
-    patchTab(tab.id, { loading: false, result: res.value, error: "" });
+    patchTab(tab.id, { loading: false, result: res.value, error: "", runToken: "" });
   }, [patchTab]);
   const loadRows = useCallback((tabId, override) => {
     const tab = tabs.find((entry) => entry.id === tabId);
@@ -13043,22 +13050,23 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
       patchTab(id, { error: t("db.noConnection"), result: null });
       return;
     }
-    patchTab(id, { loading: true, error: "" });
+    const token = requestToken("query");
+    patchTab(id, { loading: true, error: "", runToken: token });
     const started = Date.now();
-    const res = await api("db.query", { id: conn, sql, limit: 5e3 });
+    const res = await api("db.query", { id: conn, token, sql, limit: 5e3 });
     const ms = Date.now() - started;
     if (!res.ok) {
       patchTab(id, { loading: false, error: res.error, result: null });
       return;
     }
-    patchTab(id, { loading: false, result: res.value, error: "", ms });
+    patchTab(id, { loading: false, result: res.value, error: "", ms, runToken: "" });
     setHistory((current) => [{ sql, at: Date.now(), ms, ok: !res.value.error }, ...current.filter((entry) => entry.sql !== sql)].slice(0, HISTORY_CAP2));
     if (/^\s*(create|drop|alter)\b/i.test(sql)) void refreshSchema(conn);
   }, [tabs, activeConn, patchTab, refreshSchema, t]);
   const cancelQuery = useCallback(async (tab) => {
     const conn = tab.conn || activeConn;
     if (!conn) return;
-    const res = await api("db.cancel", { id: conn });
+    const res = await api("db.cancel", { id: conn, ...tab.runToken ? { token: tab.runToken } : {} });
     patchTab(tab.id, { loading: false, error: t("db.cancelled") });
     if (res.ok && res.value?.connectionClosed) {
       setConnections((current) => current.filter((entry) => entry.id !== conn));
@@ -13494,13 +13502,45 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
 function DbTitle() {
   return null;
 }
+var GRID_ROW_H = 24;
+function gridWindow(input = {}) {
+  const count = Math.max(0, Math.floor(Number(input.count) || 0));
+  const rawRowHeight = Number(input.rowHeight);
+  const rowHeight = Number.isFinite(rawRowHeight) && rawRowHeight > 0 ? rawRowHeight : GRID_ROW_H;
+  const rawOverscan = Number(input.overscan);
+  const overscan = Number.isFinite(rawOverscan) ? Math.max(0, Math.floor(rawOverscan)) : 8;
+  const viewport = Math.max(0, Number(input.viewport) || 0);
+  const scrollTop = Math.max(0, Number(input.scrollTop) || 0);
+  const span = Math.ceil(viewport / rowHeight) + overscan * 2;
+  const start = Math.min(count, Math.max(0, Math.floor(scrollTop / rowHeight) - overscan));
+  const end = Math.min(count, start + span);
+  return { start, end, topPad: start * rowHeight, bottomPad: Math.max(0, (count - end) * rowHeight) };
+}
 function ResultGrid({ t, result, onCell, onSort, order, dir }) {
   const columns = result.columns ?? [];
   const rows = result.rows ?? [];
+  const wrapRef = useRef(null);
+  const [scrollTop, setScrollTop] = useState(0);
+  const [viewport, setViewport] = useState(360);
+  useEffect(() => {
+    const node = wrapRef.current;
+    if (!node) return void 0;
+    const measure = () => setViewport(node.clientHeight || 360);
+    measure();
+    if (typeof ResizeObserver === "function") {
+      const observer = new ResizeObserver(measure);
+      observer.observe(node);
+      return () => observer.disconnect();
+    }
+    return void 0;
+  }, [columns.length]);
   if (columns.length === 0) return h("div", { className: "cedb-placeholder-small" }, t("db.noRows"));
+  const window_ = gridWindow({ count: rows.length, scrollTop, viewport });
+  const slice = rows.slice(window_.start, window_.end);
+  const pad = (height, key) => height > 0 ? h("tr", { key, className: "cedb-grid-pad", "aria-hidden": "true" }, h("td", { colSpan: columns.length + 1, style: { height: `${height}px`, padding: 0, border: 0 } })) : null;
   return h(
     "div",
-    { className: "cedb-grid-wrap" },
+    { className: "cedb-grid-wrap", ref: wrapRef, onScroll: (event) => setScrollTop(event.currentTarget.scrollTop) },
     h(
       "table",
       { className: "cedb-grid" },
@@ -13522,17 +13562,22 @@ function ResultGrid({ t, result, onCell, onSort, order, dir }) {
       h(
         "tbody",
         null,
-        rows.map((row, rowIndex) => h(
-          "tr",
-          { key: rowIndex },
-          h("td", { className: "cedb-grid-gutter" }, rowIndex + 1),
-          row.map((cell, cellIndex) => h("td", {
-            key: cellIndex,
-            className: `cedb-grid-td${cell === null ? " cedb-null" : ""}`,
-            title: formatCell(cell),
-            onClick: () => onCell?.({ title: `${columns[cellIndex]} · ${t("db.row")} ${rowIndex + 1}`, value: cell })
-          }, truncateCell(cell)))
-        ))
+        pad(window_.topPad, "pad-top"),
+        slice.map((row, offset) => {
+          const rowIndex = window_.start + offset;
+          return h(
+            "tr",
+            { key: rowIndex, className: "cedb-grid-row" },
+            h("td", { className: "cedb-grid-gutter" }, rowIndex + 1),
+            row.map((cell, cellIndex) => h("td", {
+              key: cellIndex,
+              className: `cedb-grid-td${cell === null ? " cedb-null" : ""}`,
+              title: formatCell(cell),
+              onClick: () => onCell?.({ title: `${columns[cellIndex]} · ${t("db.row")} ${rowIndex + 1}`, value: cell })
+            }, truncateCell(cell)))
+          );
+        }),
+        pad(window_.bottomPad, "pad-bottom")
       )
     )
   );
