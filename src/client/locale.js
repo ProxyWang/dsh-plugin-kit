@@ -334,6 +334,11 @@ export const zh = {
 	"db.run": "执行",
 	"db.runHint": "执行后结果会显示在这里。",
 	"db.stop": "停止",
+	"db.savedConnections": "已保存",
+	"db.connectSaved": "连接这个保存的连接",
+	"db.forget": "删除保存的连接",
+	"db.remember": "保存这个连接（密码存进凭据库）",
+
 	"db.cancelled": "已取消执行",
 	"db.cancelledClosed": "已取消：SQLite 查询无法中途中断，该连接随之关闭。",
 	"db.history": "历史",
@@ -1047,6 +1052,11 @@ export const en = {
 	"db.run": "Run",
 	"db.runHint": "Results appear here after a statement runs.",
 	"db.stop": "Stop",
+	"db.savedConnections": "Saved",
+	"db.connectSaved": "Connect to this saved connection",
+	"db.forget": "Forget this saved connection",
+	"db.remember": "Remember this connection (password goes to the secret vault)",
+
 	"db.cancelled": "Cancelled",
 	"db.cancelledClosed": "Cancelled. A SQLite statement cannot be interrupted in place, so that connection was closed.",
 	"db.history": "History",

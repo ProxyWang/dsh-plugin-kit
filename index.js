@@ -33,7 +33,8 @@ import { stopAllWatchers } from "./lib/host/watch.js";
 import { stopAllStreams } from "./lib/host/streams.js";
 import { createBrowserService, browserTool } from "./lib/host/browser.js";
 import { createVaultService } from "./lib/host/vault.js";
-import { dbRoutes, closeAll as closeAllDb } from "./lib/host/db.js";
+import { dbRoutes, closeAll as closeAllDb, setDbProfileService } from "./lib/host/db.js";
+import { createDbProfileService } from "./lib/host/dbprofiles.js";
 import { createToolboxTools } from "./lib/host/tools.js";
 import { setExternalTerminalApp } from "./lib/host/external-terminal.js";
 
@@ -68,6 +69,11 @@ function apply(ctx, config) {
 		const vaultInstance = createVaultService(storageCtx.storageDomain);
 		vault = vaultInstance;
 		ctx.effect(() => () => { if (vault === vaultInstance) vault = undefined; return vaultInstance.close(); }, "toolbox: api secret vault lifetime");
+		// Saved connections: the profile list is storage-backed, its passwords
+		// live in the vault created just above.
+		const profileInstance = createDbProfileService(storageCtx.storageDomain, vaultInstance);
+		ctx.effect(() => () => { setDbProfileService(null); return profileInstance.close(); }, "toolbox: db profiles lifetime");
+		setDbProfileService(profileInstance);
 		ctx.inject(["tools"], (toolCtx) => {
 			if (toolCtx.tools) {
 				ctx.effect(() => toolCtx.tools.register(browserTool(instance)), "toolbox: browser bookmarks tool");

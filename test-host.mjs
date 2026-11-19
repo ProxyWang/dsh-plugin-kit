@@ -960,6 +960,60 @@ for (const cleanup of cleanups) cleanup();
 	check("parseCsv drops the trailing newline row", parsed.length === 3, parsed.length);
 }
 
+// --- saved database connections (profiles + vault-held passwords) ------------------------
+{
+	const { createVaultService } = await import("./lib/host/vault.js");
+	const { createDbProfileService } = await import("./lib/host/dbprofiles.js");
+	const makeStorage = () => ({
+		async open(spec) {
+			let value = structuredClone(spec.global.initial);
+			return { global: { get: () => value, async set(next) { value = structuredClone(next); } }, async close() {} };
+		},
+	});
+	const vault = createVaultService(makeStorage());
+	const profiles = createDbProfileService(makeStorage(), vault);
+
+	const saved = await profiles.save({ label: "demo", driver: "sqlite", address: "/tmp/demo.sqlite", path: "/tmp/demo.sqlite", password: "s3cret" });
+	check("a saved connection returns its profile", Boolean(saved.profile?.id) && saved.profile.label === "demo", saved);
+	check("the profile never carries the password", !Object.hasOwn(saved.profile, "password") && saved.profile.secretId !== "", saved.profile);
+	check("the saved list holds the profile", (await profiles.list()).profiles.length === 1, null);
+	check("the password is resolved only on the host", (await profiles.resolve(saved.profile.id))?.password === "s3cret", null);
+
+	const updated = await profiles.save({ id: saved.profile.id, label: "renamed" });
+	check("saving without a password keeps the stored secret", updated.profile.secretId === saved.profile.secretId && (await profiles.passwordOf(saved.profile.id)) === "s3cret", updated.profile);
+	check("saving keeps fields it was not given", updated.profile.path === "/tmp/demo.sqlite" && updated.profile.driver === "sqlite", updated.profile);
+
+	const conflicted = await profiles.save({ id: saved.profile.id, label: "stale", baseRevision: 0 }).then(() => null, (error) => error);
+	check("a stale revision is refused instead of overwriting", conflicted !== null && /conflict/i.test(conflicted.message), String(conflicted));
+
+	const gone = await profiles.remove(saved.profile.id);
+	const afterDelete = await vault.execute({ action: "get", ids: [saved.profile.secretId] });
+	check("removing a profile removes it and its secret", gone.removed === true && (await profiles.list()).profiles.length === 0 && afterDelete.values[saved.profile.secretId] === undefined, gone);
+
+	let sqliteAvailable = false;
+	try { await import("node:sqlite"); sqliteAvailable = true; } catch {}
+	if (sqliteAvailable) {
+		const db = await import("./lib/host/db.js");
+		db.setDbProfileService(profiles);
+		const file = `${cwd}-profile.sqlite`;
+		rmSync(file, { force: true });
+		const made = await profiles.save({ label: "saved", driver: "sqlite", address: file, path: file });
+		const conn = await db.connect({ profileId: made.profile.id });
+		check("db.connect opens a saved connection by id", conn?.driver === "sqlite" && conn.mode === "worker", conn);
+		const queried = await db.query(conn.id, "SELECT 1 AS one");
+		check("a profile-backed connection answers queries", queried.rows[0][0] === 1, queried);
+		db.disconnect(conn.id);
+		db.setDbProfileService(null);
+		const refused = await db.connect({ profileId: made.profile.id }).then(() => null, (error) => error);
+		check("without the profile service a profile id is refused", refused !== null, String(refused));
+		rmSync(file, { force: true });
+	} else {
+		skipped += 3;
+	}
+	await profiles.close();
+	await vault.close();
+}
+
 // --- RPC: proto route and a real gRPC round trip ----------------------------------------
 {
 	const protoDir = `${cwd}-rpc`;

@@ -109,9 +109,16 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 	const [advanced, setAdvanced] = useState(false);
 	const [cellDetail, setCellDetail] = useState(null); // {title, value}
 	const [notice, setNotice] = useState("");
+	// Saved connections: the profile list (passwords stay in the Host vault).
+	const [profiles, setProfiles] = useState([]);
+	const [saveProfile, setSaveProfile] = useState(true);
 	const [historyOpen, setHistoryOpen] = useState(false);
 	const detailRef = useDismissLayer({ open: Boolean(cellDetail), onDismiss: () => setCellDetail(null) });
 	const connectRef = useDismissLayer({ open: connectOpen, onDismiss: () => setConnectOpen(false) });
+
+	useEffect(() => {
+		api("db.profile.list", {}).then((res) => { if (res.ok) setProfiles(res.value.profiles ?? []); }).catch(() => {});
+	}, []);
 
 	useEffect(() => {
 		api("db.drivers", {}).then((res) => {
@@ -189,6 +196,42 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 		&& driverReady
 		&& (form.driver === "sqlite" ? form.path.trim() !== "" : form.host.trim() !== "");
 
+	/** Save the current target as a reusable connection (password → Host vault). */
+	const rememberConnection = useCallback(async (draft) => {
+		const defaultPort = draft.driver === "mysql" ? 3306 : draft.driver === "postgres" ? 5432 : 0;
+		const label = draft.driver === "sqlite"
+			? (String(draft.path).split(/[\\/]/).pop() || draft.path)
+			: `${draft.host}:${Number(draft.port) || defaultPort}${draft.database ? `/${draft.database}` : ""}`;
+		const res = await api("db.profile.save", {
+			label,
+			driver: draft.driver,
+			address: draft.address,
+			path: draft.path,
+			host: draft.host,
+			port: Number(draft.port) || defaultPort,
+			user: draft.user,
+			database: draft.database,
+			...(draft.password ? { password: draft.password } : {}),
+		});
+		if (!res.ok) { setNotice(res.error); return; }
+		setProfiles((current) => [res.value.profile, ...current.filter((entry) => entry.id !== res.value.profile.id)]);
+	}, []);
+
+	/** Open a saved connection. The password never reaches this side. */
+	const connectProfile = useCallback(async (profile) => {
+		const res = await api("db.connect", { profileId: profile.id });
+		if (!res.ok) { setNotice(res.error); return; }
+		setConnections((current) => [...current.filter((entry) => entry.id !== res.value.id), res.value]);
+		setActiveConn(res.value.id);
+		setNotice("");
+		await refreshSchema(res.value.id);
+	}, [refreshSchema]);
+
+	const forgetProfile = useCallback(async (profile) => {
+		await api("db.profile.delete", { id: profile.id });
+		setProfiles((current) => current.filter((entry) => entry.id !== profile.id));
+	}, []);
+
 	const doConnect = useCallback(async () => {
 		if (!canConnect) return;
 		const params = { driver: form.driver, cwd };
@@ -206,8 +249,9 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 		setActiveConn(res.value.id);
 		setConnectOpen(false);
 		setNotice("");
+		if (saveProfile) await rememberConnection(form);
 		await refreshSchema(res.value.id);
-	}, [form, refreshSchema]);
+	}, [form, refreshSchema, saveProfile, rememberConnection]);
 
 	const doDisconnect = useCallback(async (id) => {
 		await api("db.disconnect", { id });
@@ -403,6 +447,22 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 				h("div", { className: "cedb-rail-head" },
 					h("span", { className: "cedb-rail-title" }, t("db.connections")),
 				),
+				profiles.length > 0
+					? h(Fragment, null,
+						h("div", { className: "cedb-rail-head cedb-rail-head-sub" },
+							h("span", { className: "cedb-rail-title" }, t("db.savedConnections"))),
+						profiles.map((profile) => h("div", { key: profile.id, className: "cedb-conn cedb-saved" },
+							h("button", {
+								type: "button",
+								className: "cedb-conn-main",
+								title: `${profile.address || profile.path} — ${t("db.connectSaved")}`,
+								onClick: () => void connectProfile(profile),
+							},
+							h("span", { className: `cedb-driver cedb-driver-${profile.driver}` }, profile.driver),
+							h("span", { className: "cedb-conn-label" }, profile.label)),
+							h("button", { type: "button", className: "ce-tool ce-tiny", title: t("db.forget"), onClick: () => void forgetProfile(profile) }, "✕"),
+						)))
+					: null,
 				connections.length === 0
 					? h("div", { className: "cedb-empty" }, t("db.noConnections"))
 					: connections.map((connection) => h("div", { key: connection.id, className: `cedb-conn${connection.id === activeConn ? " cedb-conn-on" : ""}` },
@@ -609,6 +669,9 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 						onClick: () => setAdvanced(true),
 					}, t("db.advanced")),
 				notice !== "" && connectOpen ? h("div", { className: "cedb-dialog-error", role: "alert" }, notice) : null,
+				h("label", { className: "cedb-remember" },
+					h("input", { type: "checkbox", checked: saveProfile, onChange: (event) => setSaveProfile(event.target.checked) }),
+					t("db.remember")),
 				h("div", { className: "cedb-dialog-actions" },
 					h("button", { type: "button", className: "ce-sk-btn ce-sk-primary", disabled: !canConnect, onClick: () => void doConnect() }, t("db.connectAction")),
 					h("button", { type: "button", className: "ce-sk-btn", onClick: () => setConnectOpen(false) }, t("editor.cancel")),
