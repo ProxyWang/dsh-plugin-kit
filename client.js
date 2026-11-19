@@ -240,6 +240,9 @@ var zh = {
   "editor.placeholder": "从左侧文件树选择文件，或在“变更”中查看 diff",
   "editor.noSession": "没有可用会话：代码 IDE 需要当前会话的工作目录。",
   "jump.noCursor": "先点击一个标识符（函数/变量/类型），再触发跳转",
+  "command.definition": "转到定义",
+  "command.references": "查找引用",
+  "jump.unsupportedFile": "这个文件类型没有语言服务器（支持 Go / TypeScript / JavaScript / Python）",
   "jump.noTarget": "未找到定义",
   "jump.busy": "语言服务器正在索引，稍后重试…",
   "jump.peekTitle": "定义",
@@ -951,6 +954,9 @@ var en = {
   "editor.placeholder": "Pick a file in the tree, or open a diff under Changes",
   "editor.noSession": "No session: the code explorer needs the current session workspace.",
   "jump.noCursor": "Click an identifier first, then jump",
+  "command.definition": "Go to definition",
+  "command.references": "Find references",
+  "jump.unsupportedFile": "No language server covers this file type (Go / TypeScript / JavaScript / Python)",
   "jump.noTarget": "no definition found",
   "jump.busy": "language server is indexing; retry shortly…",
   "jump.peekTitle": "Definition",
@@ -6940,8 +6946,17 @@ function CodeBody(props) {
   );
   const openPeek = useCallback(
     async (symbol, line, col) => {
-      if (!cwd || !LSP_RE.test(docRef.current?.path ?? "")) return;
-      const path = docRef.current.path;
+      if (!cwd) {
+        say(t("editor.noSession"), "error");
+        return;
+      }
+      const open = docRef.current;
+      if (!open) return;
+      if (!LSP_RE.test(open.path)) {
+        say(t("jump.unsupportedFile"), "error");
+        return;
+      }
+      const path = open.path;
       const nonce = ++peekNonce.current;
       setPeek({ symbol, anchorLine: line, busy: true, def: [], refs: [] });
       const [dres, rres] = await Promise.all([
@@ -6954,17 +6969,43 @@ function CodeBody(props) {
         setPeek({ symbol, anchorLine: line, busy: false, def: [], refs: [], error: dres.error ?? rres.error });
         return;
       }
+      const note = (dres.ok ? dres.value.note : "") || (rres.ok ? rres.value.note : "");
       setPeek({
         symbol,
         anchorLine: line,
         busy: false,
         def: dres.ok ? dres.value.targets ?? [] : [],
         refs: rres.ok ? rres.value.targets ?? [] : [],
-        error: !dres.ok ? dres.error : !rres.ok ? rres.error : void 0
+        error: note !== "" ? note : !dres.ok ? dres.error : !rres.ok ? rres.error : void 0
       });
     },
     [cwd]
   );
+  const findReferences = useCallback((pos) => {
+    const open = docRef.current;
+    if (!open) {
+      say(t("jump.noCursor"), "error");
+      return;
+    }
+    if (!LSP_RE.test(open.path)) {
+      say(t("jump.unsupportedFile"), "error");
+      return;
+    }
+    const at = pos ?? cursorRef.current;
+    if (!at) {
+      say(t("jump.noCursor"), "error");
+      return;
+    }
+    const line = open.lines[at.line - 1] ?? "";
+    const hit = wordAt(line, at.col);
+    const col = hit?.col ?? at.col;
+    const word = hit?.word ?? at.word ?? "";
+    if (word === "") {
+      say(t("jump.noCursor"), "error");
+      return;
+    }
+    void openPeek(word, at.line, col);
+  }, [openPeek, say, t]);
   const closePeek = useCallback(() => {
     peekNonce.current++;
     setPeek(null);
@@ -7261,7 +7302,15 @@ function CodeBody(props) {
   );
   const doJump = useCallback(
     async (kind, pos) => {
-      if (!cwd || !docRef.current || !LSP_RE.test(docRef.current.path)) return;
+      if (!cwd) {
+        say(t("editor.noSession"), "error");
+        return;
+      }
+      if (!docRef.current) return;
+      if (!LSP_RE.test(docRef.current.path)) {
+        say(t("jump.unsupportedFile"), "error");
+        return;
+      }
       const cur = pos ?? cursorRef.current;
       if (!cur) {
         say(t("jump.noCursor"));
@@ -7300,13 +7349,8 @@ function CodeBody(props) {
       const mod = event.metaKey || event.ctrlKey;
       if (event.key === "F12") {
         event.preventDefault();
-        if (event.shiftKey) {
-          const cur = cursorRef.current;
-          if (cur) void openPeek(cur.word || "", cur.line, cur.col);
-          else say(t("jump.noCursor"));
-        } else {
-          void doJump("definition");
-        }
+        if (event.shiftKey) findReferences();
+        else void doJump("definition");
         return;
       }
       if (event.altKey && event.key === "ArrowLeft") {
@@ -7330,7 +7374,7 @@ function CodeBody(props) {
         return;
       }
     },
-    [doJump, openPeek, say, t, goBack, goForward, hover, overlay]
+    [doJump, openPeek, findReferences, say, t, goBack, goForward, hover, overlay]
   );
   const cancelHover = useCallback(() => {
     hoverNonce.current++;
@@ -7528,6 +7572,8 @@ function CodeBody(props) {
       if (LSP_RE.test(docRef.current?.path ?? "")) setSymPalette({});
       else say(t("command.outlineUnavailable"), "error");
     } },
+    { id: "definition", icon: "⇢", label: t("command.definition"), hint: "F12", run: () => void doJump("definition") },
+    { id: "references", icon: "⌖", label: t("command.references"), hint: "⇧F12", run: () => findReferences() },
     { id: "wsym", icon: "#", label: t("command.wsym"), hint: "⌘⇧#", run: () => {
       if (!cwd) return;
       dismissPanels();
@@ -7571,7 +7617,7 @@ function CodeBody(props) {
       if (!openBuiltin()) void openTerminal();
     } }] : [],
     ...terminalEntry.available() ? [{ id: "terminal-external", icon: "↗", label: t("command.externalTerminal"), run: () => void openTerminal() }] : []
-  ], [t, refreshGit, openSearch, openPalette, toggleWrap, say, loadFile, dismissPanels, openTerminal, openBuiltin, terminalEntry, builtinTerminal, openBuiltinTerminal, editing, toggleProblems, reopenClosedTab, closeTabs, tabs, liveOn, cwd, formatOnSave, openCompare, openTasks]);
+  ], [t, refreshGit, openSearch, openPalette, toggleWrap, say, loadFile, dismissPanels, openTerminal, openBuiltin, terminalEntry, builtinTerminal, openBuiltinTerminal, editing, toggleProblems, reopenClosedTab, closeTabs, tabs, liveOn, cwd, formatOnSave, openCompare, openTasks, findReferences, doJump]);
   const startRailDrag = useCallback((event) => {
     event.preventDefault();
     const startX = event.clientX;
@@ -7943,6 +7989,7 @@ function CodeBody(props) {
               setBlameOn((v) => !v);
               setBlame(null);
             } }, "B") : null,
+            doc && !diff && !doc.image && LSP_RE.test(doc.path) ? h("button", { type: "button", className: "ce-tool ce-tiny", title: `${t("jump.refsTitle")} (⇧F12)`, "aria-label": t("jump.refsTitle"), onClick: () => findReferences() }, "⌖") : null,
             doc && !diff && !doc.image ? h("button", { type: "button", className: `ce-tool ce-tiny${fileHist ? " ce-tool-on" : ""}`, title: t("history.title"), onClick: openFileHistory }, "🕘") : null,
             h("span", { className: "ce-spacer" }),
             cursor ? h("button", { type: "button", className: "ce-pos ce-pos-btn", title: t("goto.title"), onClick: () => setGotoOpen(true) }, `Ln ${cursor.line}, Col ${cursor.col}${cursor.word ? ` · ${cursor.word}` : ""}`) : null,

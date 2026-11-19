@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased — find references is reachable, and says why it cannot run
+
+"View references" looked broken because there was almost no way to ask for it and no answer when it could not work:
+
+- **One action, three entry points.** ⇧F12 was the only door, and it needed a click first. The editor toolbar now carries a **⌖** button (LSP-backed files only), the Command Centre gains **Find references** (⇧F12) and **Go to definition** (F12), and ⇧F12 routes through the same action — a single `findReferences` callback computes the position (snapping to the identifier under it, so a click that lands on the space beside a symbol still means the symbol) and opens the peek.
+- **No more silent no-ops.** Opening a `.md`/`.json`/`.rs` file and asking for references used to return without a word; it now says this file type has no language server. A jump without a cursor says to click an identifier first — including the definition path, which used to return silently too.
+- **A route that answers "no server covers this file" is surfaced.** The peek used to render "defs 0 · refs 0" for that case, which reads as "nothing here" rather than "nothing ran"; the route's `note` now becomes the panel's message.
+- Verified against real gopls on a two-file module: references at a call site return the declaration and every use, across files.
+- Regressions: the toolbar exposes the action, the palette lists it, running it issues exactly one `references` request at the cursor and opens the peek with the returned rows, and a note-only answer is shown as a message.
+
 ## Unreleased — 空白页签：旧的 gRPC 页没有标题，也没搬进工作台
 
 合并后截图里出现了一个**没有标题的页签**。原因是合并只改了入口，没有处理**合并前保存的布局**：旧会话里还存着一个 `code-rpc` 页，宿主照旧把它恢复出来，而它的标题槽 `RpcTitle` 返回 `null`——一个渲染空的标题槽不会回退到页签自带的标题，于是只剩一个空白 chip。

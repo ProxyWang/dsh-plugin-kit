@@ -1138,8 +1138,13 @@ export function CodeBody(props) {
 
 	const openPeek = useCallback(
 		async (symbol, line, col) => {
-			if (!cwd || !LSP_RE.test(docRef.current?.path ?? "")) return;
-			const path = docRef.current.path;
+			// Silence here is what made "find references" look broken: say why
+			// nothing will happen instead of returning.
+			if (!cwd) { say(t("editor.noSession"), "error"); return; }
+			const open = docRef.current;
+			if (!open) return;
+			if (!LSP_RE.test(open.path)) { say(t("jump.unsupportedFile"), "error"); return; }
+			const path = open.path;
 			const nonce = ++peekNonce.current;
 			setPeek({ symbol, anchorLine: line, busy: true, def: [], refs: [] });
 			const [dres, rres] = await Promise.all([
@@ -1152,17 +1157,43 @@ export function CodeBody(props) {
 				setPeek({ symbol, anchorLine: line, busy: false, def: [], refs: [], error: dres.error ?? rres.error });
 				return;
 			}
+			// A route that answered "no server covers this file" is not an empty
+			// result: the panel has to show the reason.
+			const note = (dres.ok ? dres.value.note : "") || (rres.ok ? rres.value.note : "");
 			setPeek({
 				symbol,
 				anchorLine: line,
 				busy: false,
 				def: dres.ok ? dres.value.targets ?? [] : [],
 				refs: rres.ok ? rres.value.targets ?? [] : [],
-				error: !dres.ok ? dres.error : !rres.ok ? rres.error : undefined,
+				error: note !== "" ? note : (!dres.ok ? dres.error : !rres.ok ? rres.error : undefined),
 			});
 		},
 		[cwd],
 	);
+
+	/**
+	 * Find references at the cursor (or the given position).
+	 *
+	 * One action behind every entry point — the ⇧F12 key, the command palette
+	 * and the toolbar's ⌖ button — so the three cannot drift apart. The position
+	 * is snapped to the identifier under it, because a click that lands on the
+	 * space next to a symbol still means that symbol.
+	 */
+	const findReferences = useCallback((pos) => {
+		const open = docRef.current;
+		if (!open) { say(t("jump.noCursor"), "error"); return; }
+		if (!LSP_RE.test(open.path)) { say(t("jump.unsupportedFile"), "error"); return; }
+		const at = pos ?? cursorRef.current;
+		if (!at) { say(t("jump.noCursor"), "error"); return; }
+		const line = open.lines[at.line - 1] ?? "";
+		const hit = wordAt(line, at.col);
+		const col = hit?.col ?? at.col;
+		// A keyword is not a reference: LSP would answer with the whole file.
+		const word = hit?.word ?? at.word ?? "";
+		if (word === "") { say(t("jump.noCursor"), "error"); return; }
+		void openPeek(word, at.line, col);
+	}, [openPeek, say, t]);
 
 	const closePeek = useCallback(() => {
 		peekNonce.current++;
@@ -1488,7 +1519,11 @@ export function CodeBody(props) {
 
 	const doJump = useCallback(
 		async (kind, pos) => {
-			if (!cwd || !docRef.current || !LSP_RE.test(docRef.current.path)) return;
+			// Same rule as find-references: a jump that cannot happen explains
+			// itself instead of doing nothing.
+			if (!cwd) { say(t("editor.noSession"), "error"); return; }
+			if (!docRef.current) return;
+			if (!LSP_RE.test(docRef.current.path)) { say(t("jump.unsupportedFile"), "error"); return; }
 			const cur = pos ?? cursorRef.current;
 			if (!cur) {
 				say(t("jump.noCursor"));
@@ -1528,13 +1563,8 @@ export function CodeBody(props) {
 			const mod = event.metaKey || event.ctrlKey;
 			if (event.key === "F12") {
 				event.preventDefault();
-				if (event.shiftKey) {
-					const cur = cursorRef.current;
-					if (cur) void openPeek(cur.word || "", cur.line, cur.col);
-					else say(t("jump.noCursor"));
-				} else {
-					void doJump("definition");
-				}
+				if (event.shiftKey) findReferences();
+				else void doJump("definition");
 				return;
 			}
 			if (event.altKey && event.key === "ArrowLeft") {
@@ -1558,7 +1588,7 @@ export function CodeBody(props) {
 				return;
 			}
 		},
-		[doJump, openPeek, say, t, goBack, goForward, hover, overlay],
+		[doJump, openPeek, findReferences, say, t, goBack, goForward, hover, overlay],
 	);
 
 	/** Cancel any pending hover request and hide the tooltip. */
@@ -1768,6 +1798,8 @@ export function CodeBody(props) {
 		{ id: "tasks", icon: "▶", label: t("command.tasks"), run: () => void openTasks() },
 		{ id: "quick-open", icon: "↗", label: t("command.quickOpen"), hint: "⌘P", run: () => openPalette() },
 		{ id: "outline", icon: "☷", label: t("command.outline"), hint: "⌘⇧O", run: () => { if (LSP_RE.test(docRef.current?.path ?? "")) setSymPalette({}); else say(t("command.outlineUnavailable"), "error"); } },
+		{ id: "definition", icon: "⇢", label: t("command.definition"), hint: "F12", run: () => void doJump("definition") },
+		{ id: "references", icon: "⌖", label: t("command.references"), hint: "⇧F12", run: () => findReferences() },
 		{ id: "wsym", icon: "#", label: t("command.wsym"), hint: "⌘⇧#", run: () => { if (!cwd) return; dismissPanels(); setWsym({ query: "", results: [], busy: false, error: "", seq: 0 }); } },
 		{ id: "replace", icon: "⇄", label: t("command.replace"), hint: "⌘⌥F", run: () => { if (modeRef.current === "code" && docRef.current && !editing && !docRef.current.image) { setFindOpen(true); setReplaceOpen(true); } else say(t("command.replaceUnavailable"), "error"); } },
 		{ id: "problems", icon: "⚠", label: t("command.problems"), hint: "⇧⌘M", run: toggleProblems },
@@ -1790,7 +1822,7 @@ export function CodeBody(props) {
 		} },
 		...(builtinAvailable() ? [{ id: "terminal", icon: "‣", label: t("command.terminal"), run: () => { if (!openBuiltin()) void openTerminal(); } }] : []),
 		...(terminalEntry.available() ? [{ id: "terminal-external", icon: "↗", label: t("command.externalTerminal"), run: () => void openTerminal() }] : []),
-	], [t, refreshGit, openSearch, openPalette, toggleWrap, say, loadFile, dismissPanels, openTerminal, openBuiltin, terminalEntry, builtinTerminal, openBuiltinTerminal, editing, toggleProblems, reopenClosedTab, closeTabs, tabs, liveOn, cwd, formatOnSave, openCompare, openTasks]);
+	], [t, refreshGit, openSearch, openPalette, toggleWrap, say, loadFile, dismissPanels, openTerminal, openBuiltin, terminalEntry, builtinTerminal, openBuiltinTerminal, editing, toggleProblems, reopenClosedTab, closeTabs, tabs, liveOn, cwd, formatOnSave, openCompare, openTasks, findReferences, doJump]);
 
 	const startRailDrag = useCallback((event) => {
 		event.preventDefault();
@@ -2124,6 +2156,7 @@ export function CodeBody(props) {
 							doc && !diff && !doc.image ? h("button", { type: "button", className: `ce-tool ce-tiny${findOpen ? " ce-tool-on" : ""}`, title: `${t("editor.find")} (⌘F / Ctrl+F)`, onClick: () => setFindOpen((v) => !v) }, "⌕") : null,
 							doc && !diff && !doc.image ? h("button", { type: "button", className: `ce-tool ce-tiny${wrapOn ? " ce-tool-on" : ""}`, title: `${t("editor.wrap")} (⌥Z / Alt+Z)`, onClick: toggleWrap }, "↩") : null,
 							doc && !diff && !doc.image ? h("button", { type: "button", className: `ce-tool ce-tiny${blameOn ? " ce-tool-on" : ""}`, title: t("blame.toggle"), disabled: wrapOn, onClick: () => { setBlameOn((v) => !v); setBlame(null); } }, "B") : null,
+							doc && !diff && !doc.image && LSP_RE.test(doc.path) ? h("button", { type: "button", className: "ce-tool ce-tiny", title: `${t("jump.refsTitle")} (⇧F12)`, "aria-label": t("jump.refsTitle"), onClick: () => findReferences() }, "⌖") : null,
 							doc && !diff && !doc.image ? h("button", { type: "button", className: `ce-tool ce-tiny${fileHist ? " ce-tool-on" : ""}`, title: t("history.title"), onClick: openFileHistory }, "🕘") : null,
 							h("span", { className: "ce-spacer" }),
 							cursor ? h("button", { type: "button", className: "ce-pos ce-pos-btn", title: t("goto.title"), onClick: () => setGotoOpen(true) }, `Ln ${cursor.line}, Col ${cursor.col}${cursor.word ? ` · ${cursor.word}` : ""}`) : null,

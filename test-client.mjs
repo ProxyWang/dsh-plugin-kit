@@ -4029,6 +4029,71 @@ message HelloReply { string message = 1; int32 count = 2; }
 	})(), groupMethods(methods));
 }
 
+// --- find references: one action, every entry point ------------------------------------
+{
+	const refGlobals = { fetch: globalThis.fetch, requestAnimationFrame: globalThis.requestAnimationFrame, cancelAnimationFrame: globalThis.cancelAnimationFrame, setTimeout: globalThis.setTimeout, clearTimeout: globalThis.clearTimeout, window: globalThis.window, document: globalThis.document };
+	const calls = [];
+	let referencesAnswer = { targets: [{ path: "main.go", line: 3, col: 6, snippet: "helper()" }] };
+	globalThis.fetch = async (url, options) => {
+		const body = JSON.parse(options?.body ?? "{}");
+		if (url.endsWith("/fs.read")) return { json: async () => ({ ok: true, value: { kind: "text", content: "package main\n\nfunc helper() {}\n\nfunc main() { helper() }\n", mtimeMs: 1 } }) };
+		if (url.endsWith("/lsp.request")) {
+			calls.push(body);
+			if (body.kind === "references") return { json: async () => ({ ok: true, value: referencesAnswer }) };
+			if (body.kind === "definition") return { json: async () => ({ ok: true, value: { targets: [] } }) };
+			return { json: async () => ({ ok: true, value: { hover: "" } }) };
+		}
+		if (url.endsWith("/lsp.diagnostics")) return { json: async () => ({ ok: true, value: { items: [] } }) };
+		if (url.endsWith("/lsp.status")) return { json: async () => ({ ok: true, value: { state: "ready", label: "gopls" } }) };
+		if (url.endsWith("/git.status")) return { json: async () => ({ ok: true, value: { repo: false } }) };
+		return { json: async () => ({ ok: true, value: {} }) };
+	};
+	globalThis.requestAnimationFrame = (fn) => { fn(); return 0; };
+	globalThis.cancelAnimationFrame = () => {};
+	globalThis.setTimeout = () => 0;
+	globalThis.clearTimeout = () => {};
+	globalThis.window = { innerWidth: 1200, innerHeight: 900 };
+	globalThis.document = { addEventListener() {}, removeEventListener() {} };
+	try {
+		const render = createHookRenderer(CodeBody, { sessionId: "refs", useSessions: (select) => select({ byId: { refs: { cwd: "/w" } } }), t: (k) => k }, { effects: true });
+		let tree = render();
+		render.flushEffects();
+		const paint = () => { tree = render(); render.flushEffects(); };
+		const tick = async () => { for (let i = 0; i < 6; i++) await new Promise((r) => setImmediate(r)); paint(); };
+		const get = (test) => collect(tree).find(test);
+		await tick();
+		get((n) => n.type === TreePanelCmp).props.onOpenFile("main.go", 1, 1);
+		await tick();
+
+		// The toolbar carries a visible entry, so the feature is discoverable.
+		const toolbar = get((n) => n.type === "button" && n.props.title === "jump.refsTitle (⇧F12)");
+		check("the editor toolbar exposes find-references", Boolean(toolbar), null);
+
+		// The command palette reaches the same action.
+		tree.props.onKeyDown({ code: "KeyP", metaKey: true, shiftKey: true, preventDefault() {} });
+		paint();
+		const palette = get((n) => n.type.name === "CommandPalette");
+		check("the command palette lists find-references", Boolean(palette) && (palette.props.commands ?? []).some((command) => command.id === "references"), (palette?.props.commands ?? []).map((command) => command.id));
+		const command = (palette.props.commands ?? []).find((entry) => entry.id === "references");
+		command.run();
+		await tick();
+
+		const requests = calls.filter((call) => call.kind === "references");
+		check("running it asks the server for references at the cursor", requests.length === 1 && requests[0].line === 1, requests);
+		const peek = get((n) => n.type.name === "RefsPeek");
+		check("the references peek opens with the returned rows", Boolean(peek) && (peek.props.peek.refs ?? []).length === 1, peek?.props.peek);
+
+		// A route that reports "no server covers this file" must say so rather
+		// than read as "zero references".
+		referencesAnswer = { targets: [], note: "No language server covers this file type" };
+		get((n) => n.type === "button" && n.props.title === "jump.refsTitle (⇧F12)").props.onClick();
+		await tick();
+		const noted = get((n) => n.type.name === "RefsPeek");
+		check("a route note is surfaced in the peek", Boolean(noted) && String(noted.props.peek.error ?? "").includes("No language server"), noted?.props.peek);
+		render.unmount();
+	} finally { Object.assign(globalThis, refGlobals); }
+}
+
 // --- DB panel helpers ------------------------------------------------------------------
 {
 	const { toCsv, tableSql, formatCell, truncateCell } = await import("./src/client/db.js");

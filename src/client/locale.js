@@ -171,6 +171,10 @@ export const zh = {
 	"editor.placeholder": "从左侧文件树选择文件，或在“变更”中查看 diff",
 	"editor.noSession": "没有可用会话：代码 IDE 需要当前会话的工作目录。",
 	"jump.noCursor": "先点击一个标识符（函数/变量/类型），再触发跳转",
+	"command.definition": "转到定义",
+	"command.references": "查找引用",
+	"jump.unsupportedFile": "这个文件类型没有语言服务器（支持 Go / TypeScript / JavaScript / Python）",
+
 	"jump.noTarget": "未找到定义",
 	"jump.busy": "语言服务器正在索引，稍后重试…",
 	"jump.peekTitle": "定义",
@@ -889,6 +893,10 @@ export const en = {
 	"editor.placeholder": "Pick a file in the tree, or open a diff under Changes",
 	"editor.noSession": "No session: the code explorer needs the current session workspace.",
 	"jump.noCursor": "Click an identifier first, then jump",
+	"command.definition": "Go to definition",
+	"command.references": "Find references",
+	"jump.unsupportedFile": "No language server covers this file type (Go / TypeScript / JavaScript / Python)",
+
 	"jump.noTarget": "no definition found",
 	"jump.busy": "language server is indexing; retry shortly…",
 	"jump.peekTitle": "Definition",
