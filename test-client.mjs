@@ -1722,6 +1722,13 @@ const peekListeners = new Map();
 globalThis.document = { addEventListener: (name, handler, capture) => peekListeners.set(name, { handler, capture }), removeEventListener: () => {} };
 try {
 	let peekClosed = 0;
+	// A peek opened near the bottom of a long file must stay inside the code
+	// area, or its rows cannot be clicked at all.
+	const bottomPeek = RefsPeek({ t: (k) => k, cwd: "/w", peek: { symbol: "deep", anchorLine: 900, busy: false, def: [], refs: [] }, scroll: 0, totalLines: 1000, viewport: 600, onPick: () => {}, onClose: () => {} });
+	check("a peek near the end of the file is clamped into the viewport", bottomPeek.props.style.top === 600 - 390 - 8, bottomPeek.props.style.top);
+	const highPeek = RefsPeek({ t: (k) => k, cwd: "/w", peek: { symbol: "top", anchorLine: 1, busy: false, def: [], refs: [] }, scroll: 0, totalLines: 1000, viewport: 600, onPick: () => {}, onClose: () => {} });
+	check("a peek at the top keeps its anchor", highPeek.props.style.top === 6 + 22, highPeek.props.style.top);
+
 	const peekPanel = RefsPeek({ t: (k) => k, cwd: "/w", peek: { symbol: "example", anchorLine: 1, busy: true, def: [], refs: [] }, scroll: 0, totalLines: 10, onPick: () => {}, onClose: () => peekClosed++ });
 	const insideTarget = {};
 	peekPanel.props.ref.current = { contains: (target) => target === insideTarget };

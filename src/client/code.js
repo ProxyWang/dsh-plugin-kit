@@ -2300,7 +2300,7 @@ export function CodeBody(props) {
 									onClick: () => jumpToLine(b.start),
 								}, null)))
 								: null,
-							peek ? h(RefsPeek, { t, cwd, peek, scroll, totalLines: doc.lines.length, onPick: pickPeek, onClose: closePeek }) : null,
+							peek ? h(RefsPeek, { t, cwd, peek, scroll, viewport, totalLines: doc.lines.length, onPick: pickPeek, onClose: closePeek }) : null,
 							hover && !editing
 								? h("div", {
 									className: "ce-hover",

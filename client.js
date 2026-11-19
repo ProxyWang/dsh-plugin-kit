@@ -4166,7 +4166,8 @@ function QuickOpen({ t, state, onQuery, onPick, onClose }) {
     )
   );
 }
-function RefsPeek({ t, cwd, peek, scroll, totalLines, onPick, onClose }) {
+var PEEK_MAX_HEIGHT = 390;
+function RefsPeek({ t, cwd, peek, scroll, totalLines, viewport = 600, onPick, onClose }) {
   const defs = peek.def ?? [];
   const refs = (peek.refs ?? []).filter((r) => !defs.some((d) => d.path === r.path && d.line === r.line && d.col === r.col));
   const groups = [];
@@ -4185,6 +4186,9 @@ function RefsPeek({ t, cwd, peek, scroll, totalLines, onPick, onClose }) {
   const [sel, setSel] = useState(0);
   const bodyRef = useRef(null);
   const panelRef = useDismissLayer({ onDismiss: onClose });
+  useEffect(() => {
+    panelRef.current?.focus?.({ preventScroll: true });
+  }, []);
   useEffect(() => {
     setSel(0);
   }, [peek.symbol, peek.busy]);
@@ -4206,11 +4210,13 @@ function RefsPeek({ t, cwd, peek, scroll, totalLines, onPick, onClose }) {
       if (flat[sel]) onPick(flat[sel]);
     }
   };
-  const top = Math.max(6, Math.min(peek.anchorLine * ROW + 6 - scroll, totalLines * ROW));
+  const anchored = peek.anchorLine * ROW + 6 - scroll;
+  const ceiling = Math.max(6, viewport - PEEK_MAX_HEIGHT - 8);
+  const top = Math.max(6, Math.min(anchored, ceiling, totalLines * ROW));
   let ri = 0;
   return h(
     "div",
-    { className: "ce-peek", ref: panelRef, style: { top }, onKeyDown, onMouseDown: (event) => event.stopPropagation() },
+    { className: "ce-peek", ref: panelRef, tabIndex: -1, style: { top }, onKeyDown, onMouseDown: (event) => event.stopPropagation() },
     h(
       "div",
       { className: "ce-peek-head" },
@@ -8180,7 +8186,7 @@ function CodeBody(props) {
               },
               onClick: () => jumpToLine(b.start)
             }, null))) : null,
-            peek ? h(RefsPeek, { t, cwd, peek, scroll, totalLines: doc.lines.length, onPick: pickPeek, onClose: closePeek }) : null,
+            peek ? h(RefsPeek, { t, cwd, peek, scroll, viewport, totalLines: doc.lines.length, onPick: pickPeek, onClose: closePeek }) : null,
             hover && !editing ? h("div", {
               className: "ce-hover",
               role: "tooltip",
