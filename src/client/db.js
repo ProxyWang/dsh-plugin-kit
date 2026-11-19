@@ -111,13 +111,20 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 	const [notice, setNotice] = useState("");
 	// Saved connections: the profile list (passwords stay in the Host vault).
 	const [profiles, setProfiles] = useState([]);
+	// The revision the list was read at: a save carries it so the Host can
+	// refuse to overwrite a newer list written by another window.
+	const profileRevision = useRef(0);
 	const [saveProfile, setSaveProfile] = useState(true);
 	const [historyOpen, setHistoryOpen] = useState(false);
 	const detailRef = useDismissLayer({ open: Boolean(cellDetail), onDismiss: () => setCellDetail(null) });
 	const connectRef = useDismissLayer({ open: connectOpen, onDismiss: () => setConnectOpen(false) });
 
 	useEffect(() => {
-		api("db.profile.list", {}).then((res) => { if (res.ok) setProfiles(res.value.profiles ?? []); }).catch(() => {});
+		api("db.profile.list", {}).then((res) => {
+			if (!res.ok) return;
+			profileRevision.current = res.value.revision ?? 0;
+			setProfiles(res.value.profiles ?? []);
+		}).catch(() => {});
 	}, []);
 
 	useEffect(() => {
@@ -202,11 +209,17 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 		const label = draft.driver === "sqlite"
 			? (String(draft.path).split(/[\\/]/).pop() || draft.path)
 			: `${draft.host}:${Number(draft.port) || defaultPort}${draft.database ? `/${draft.database}` : ""}`;
+		// A relative file path is stored absolute: the profile outlives this
+		// session, and its meaning must not change with the next workspace.
+		const absolute = draft.driver === "sqlite" && draft.path !== "" && !/^(\/|~|[A-Za-z]:[\\/])/.test(draft.path) && cwd
+			? `${cwd.replace(/\/+$/, "")}/${draft.path.replace(/^\.\//, "")}`
+			: draft.path;
 		const res = await api("db.profile.save", {
+			baseRevision: profileRevision.current,
 			label,
 			driver: draft.driver,
 			address: draft.address,
-			path: draft.path,
+			path: absolute,
 			host: draft.host,
 			port: Number(draft.port) || defaultPort,
 			user: draft.user,
@@ -214,18 +227,19 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 			...(draft.password ? { password: draft.password } : {}),
 		});
 		if (!res.ok) { setNotice(res.error); return; }
+		profileRevision.current = res.value.revision ?? profileRevision.current;
 		setProfiles((current) => [res.value.profile, ...current.filter((entry) => entry.id !== res.value.profile.id)]);
-	}, []);
+	}, [cwd]);
 
 	/** Open a saved connection. The password never reaches this side. */
 	const connectProfile = useCallback(async (profile) => {
-		const res = await api("db.connect", { profileId: profile.id });
+		const res = await api("db.connect", { profileId: profile.id, cwd });
 		if (!res.ok) { setNotice(res.error); return; }
 		setConnections((current) => [...current.filter((entry) => entry.id !== res.value.id), res.value]);
 		setActiveConn(res.value.id);
 		setNotice("");
 		await refreshSchema(res.value.id);
-	}, [refreshSchema]);
+	}, [refreshSchema, cwd]);
 
 	const forgetProfile = useCallback(async (profile) => {
 		await api("db.profile.delete", { id: profile.id });

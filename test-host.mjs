@@ -925,6 +925,17 @@ for (const cleanup of cleanups) cleanup();
 
 		check("SQLite runs in a worker so the Host stays responsive", conn.mode === "worker", conn.mode);
 
+		// A relative path belongs to the session workspace, never to the Host's
+		// own working directory.
+		const relFile = `${cwd}-rel.sqlite`;
+		rmSync(relFile, { force: true });
+		const rel = await db.connect({ driver: "sqlite", path: "../ce-test-rel.sqlite", cwd });
+		check("a relative SQLite path resolves against the session workspace", rel.path === relFile && existsSync(relFile), rel.path);
+		db.disconnect(rel.id);
+		const noBase = await db.connect({ driver: "sqlite", path: "rel.sqlite" }).then(() => null, (error) => error);
+		check("a relative path without a workspace is refused", noBase !== null && /absolute path/.test(noBase.message), String(noBase));
+		rmSync(relFile, { force: true });
+
 		// A second connection for the cancellation path (cancelling ends it).
 		const slowConn = await db.connect({ driver: "sqlite", path: file });
 		let ticks = 0;
@@ -1253,6 +1264,7 @@ service HelloService {
 		check("rpc.discover builds the method list", found.ok && found.value.methods?.some((method) => method.name === "SayHello" && method.path === "/hello.HelloService/SayHello"), found.value?.methods);
 		check("rpc.discover hands back an editable sample body", found.ok && found.value.methods[0]?.sample?.greeting === "", found.value?.methods?.[0]?.sample);
 		check("rpc.discover keeps a schema id for the call route", typeof found.value?.schemaId === "string" && found.value.schemaId !== "", found.value?.schemaId);
+		check("rpc.discover reports the services it could not describe", Array.isArray(found.value.skipped), found.value.skipped);
 		const unknown = await call("rpc.call", { url: `grpc://127.0.0.1:${port}`, schemaId: "gone", method: "/hello.HelloService/SayHello" });
 		check("rpc.call reports an expired discovered schema", unknown.ok && /Discover/.test(unknown.value.error ?? ""), unknown.value);
 	} finally {

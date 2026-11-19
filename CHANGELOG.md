@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased — review fixes: discovery, relative database paths, address inference
+
+A pass over the unreleased work found four defects worth fixing and two non-defects worth recording.
+
+- **Discovery no longer dies on one undescribable service.** `file_containing_symbol` failing for a single advertised service (a health check, a plugin-registered service) aborted the whole reflection call, so a server that could be described was reported as "reflection failed". A failed service is now recorded in `skipped` and the rest of the server is returned.
+- **A relative SQLite path means "in this workspace".** `data/app.db` was resolved against the Host process's own working directory — the app bundle, for a Desktop launch — so it silently opened a different file (or failed with "cannot open"). It now resolves against the session workspace, `~` expands, an absolute path is untouched, and a relative path with no workspace is refused with that reason. Saved profiles store the absolute form, and connecting a profile passes the workspace too.
+- **`localhost:5432/app` is no longer mistaken for a file.** The address parser treated any `scheme:` that was really a host as a path, so a missing `postgres://` produced a bogus SQLite target named after the whole string. A `host:port/…` shape is now rejected as an unrecognised address, which is what the dialog already knows how to explain.
+- **Saved-connection writes carry their revision.** The Host has always refused a save against a stale list, but the panel never sent `baseRevision`, so the guard could not fire. It is sent now, and the returned revision is remembered.
+- **Recorded, not fixed:** a MySQL write statement reports no affected-row count (the CLI prints nothing in batch mode and `ROW_COUNT()` belongs to a different process than the next query); the result grid still renders every returned row as DOM; cancelling a query on a connection shared by two tabs kills whichever child was last registered; and a worker thread inherits the Host's `execArgv`, so a Node-only flag such as `--input-type` breaks SQLite connections (tooling only — the Desktop runtime passes none).
+- Also recorded: the earlier suspicion that a language server installed mid-session stays "not installed" is **not** a bug — the candidate list holds paths, so a server dropped into `node_modules/.bin` is picked up on the next retry (verified).
+- Regressions: a relative SQLite path resolving into the workspace and the refusal without one, `skipped` reported by discovery, a `host:port` address rejected while `app.db` still reads as SQLite.
+
 ## Unreleased — language servers are found where they actually are
 
 References and definition jumps still failed on files whose server was installed, because the launcher only knew a short list of absolute paths and a bare name resolved against the Host's PATH — and a Desktop Host started from Finder has neither `node` nor an npm bin directory on it:

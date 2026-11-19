@@ -3094,6 +3094,8 @@ check("docAction reloads clean drafts, flags dirty ones, ignores others", docAct
 		return parsed.driver === "postgres" && parsed.host === "db.example" && parsed.port === "6543" && parsed.user === "alice" && parsed.password === "s3cret" && parsed.database === "app" && parsed.error === "";
 	})(), parseConnectionAddress("postgres://alice:s3cret@db.example:6543/app"));
 	check("postgresql:// and mariadb:// are the same drivers", inferDriver("postgresql://h/d") === "postgres" && inferDriver("mariadb://h/d") === "mysql", null);
+	check("a host:port address is not mistaken for a file path", inferDriver("localhost:5432/app") === "" && parseConnectionAddress("localhost:5432/app").error !== "", parseConnectionAddress("localhost:5432/app"));
+	check("a bare file name still reads as SQLite", inferDriver("app.db") === "sqlite" && inferDriver("notes.txt") === "", [inferDriver("app.db"), inferDriver("notes.txt")]);
 	check("a server URL without a port gets the driver default", (() => {
 		const pg = parseConnectionAddress("postgres://db.example/app");
 		const my = parseConnectionAddress("mysql://db.example/app");

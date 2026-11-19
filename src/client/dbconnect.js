@@ -81,7 +81,10 @@ export function inferDriver(input) {
 	if (scheme !== null && !WINDOWS_PATH.test(value)) {
 		const driver = SCHEMES[scheme[1].toLowerCase()];
 		if (driver !== undefined) return driver;
-		// `host:5432/db` has a "scheme" that is really a host name.
+		// `host:5432/db` has a "scheme" that is really a host name and a port.
+		// It is NOT a file path: treating it as one opened a file literally
+		// named "host:5432/db" and failed with a confusing "cannot open".
+		if (scheme[2] !== "//" && /^\d+(\/|$)/u.test(value.slice(scheme[0].length))) return "";
 		if (scheme[2] !== "//" && looksLikePath(value)) return "sqlite";
 		return "";
 	}

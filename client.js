@@ -12721,6 +12721,7 @@ function inferDriver(input) {
   if (scheme !== null && !WINDOWS_PATH.test(value)) {
     const driver = SCHEMES[scheme[1].toLowerCase()];
     if (driver !== void 0) return driver;
+    if (scheme[2] !== "//" && /^\d+(\/|$)/u.test(value.slice(scheme[0].length))) return "";
     if (scheme[2] !== "//" && looksLikePath(value)) return "sqlite";
     return "";
   }
@@ -12818,13 +12819,16 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
   const [cellDetail, setCellDetail] = useState(null);
   const [notice, setNotice] = useState("");
   const [profiles, setProfiles] = useState([]);
+  const profileRevision = useRef(0);
   const [saveProfile, setSaveProfile] = useState(true);
   const [historyOpen, setHistoryOpen] = useState(false);
   const detailRef = useDismissLayer({ open: Boolean(cellDetail), onDismiss: () => setCellDetail(null) });
   const connectRef = useDismissLayer({ open: connectOpen, onDismiss: () => setConnectOpen(false) });
   useEffect(() => {
     api("db.profile.list", {}).then((res) => {
-      if (res.ok) setProfiles(res.value.profiles ?? []);
+      if (!res.ok) return;
+      profileRevision.current = res.value.revision ?? 0;
+      setProfiles(res.value.profiles ?? []);
     }).catch(() => {
     });
   }, []);
@@ -12889,11 +12893,13 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
   const rememberConnection = useCallback(async (draft) => {
     const defaultPort = draft.driver === "mysql" ? 3306 : draft.driver === "postgres" ? 5432 : 0;
     const label = draft.driver === "sqlite" ? String(draft.path).split(/[\\/]/).pop() || draft.path : `${draft.host}:${Number(draft.port) || defaultPort}${draft.database ? `/${draft.database}` : ""}`;
+    const absolute = draft.driver === "sqlite" && draft.path !== "" && !/^(\/|~|[A-Za-z]:[\\/])/.test(draft.path) && cwd ? `${cwd.replace(/\/+$/, "")}/${draft.path.replace(/^\.\//, "")}` : draft.path;
     const res = await api("db.profile.save", {
+      baseRevision: profileRevision.current,
       label,
       driver: draft.driver,
       address: draft.address,
-      path: draft.path,
+      path: absolute,
       host: draft.host,
       port: Number(draft.port) || defaultPort,
       user: draft.user,
@@ -12904,10 +12910,11 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
       setNotice(res.error);
       return;
     }
+    profileRevision.current = res.value.revision ?? profileRevision.current;
     setProfiles((current) => [res.value.profile, ...current.filter((entry) => entry.id !== res.value.profile.id)]);
-  }, []);
+  }, [cwd]);
   const connectProfile = useCallback(async (profile) => {
-    const res = await api("db.connect", { profileId: profile.id });
+    const res = await api("db.connect", { profileId: profile.id, cwd });
     if (!res.ok) {
       setNotice(res.error);
       return;
@@ -12916,7 +12923,7 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
     setActiveConn(res.value.id);
     setNotice("");
     await refreshSchema(res.value.id);
-  }, [refreshSchema]);
+  }, [refreshSchema, cwd]);
   const forgetProfile = useCallback(async (profile) => {
     await api("db.profile.delete", { id: profile.id });
     setProfiles((current) => current.filter((entry) => entry.id !== profile.id));
