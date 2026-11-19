@@ -1043,5 +1043,108 @@ service HelloService {
 	}
 }
 
+// --- gRPC reflection: discover a schema without a .proto --------------------------------
+{
+	const http2 = await import("node:http2");
+	const { encodeMessage, decodeMessage } = await import("./lib/host/protobuf.js");
+	const { REFLECTION_SCHEMA } = await import("./lib/host/grpc-reflect.js");
+	const { schemaFromDescriptors } = await import("./lib/host/grpc-reflect.js");
+
+	// The descriptor set a server would hand out, encoded exactly as protoc would.
+	const descriptor = {
+		name: "hello.proto",
+		package: "hello",
+		syntax: "proto3",
+		message_type: [
+			{ name: "HelloRequest", field: [{ name: "greeting", number: 1, label: 1, type: 9 }] },
+			{ name: "HelloReply", field: [{ name: "message", number: 1, label: 1, type: 9 }] },
+		],
+		service: [{
+			name: "HelloService",
+			method: [{ name: "SayHello", input_type: ".hello.HelloRequest", output_type: ".hello.HelloReply" }],
+		}],
+	};
+	const descriptorBytes = encodeMessage(REFLECTION_SCHEMA, "google.protobuf.FileDescriptorProto", descriptor);
+
+	const reply = (stream, message) => {
+		const payload = encodeMessage(REFLECTION_SCHEMA, "grpc.reflection.v1alpha.ServerReflectionResponse", message);
+		const header = Buffer.alloc(5);
+		header.writeUInt32BE(payload.length, 1);
+		stream.respond({ ":status": 200, "content-type": "application/grpc" }, { waitForTrailers: true });
+		stream.on("wantTrailers", () => stream.sendTrailers({ "grpc-status": "0" }));
+		stream.write(Buffer.concat([header, payload]));
+		stream.end();
+	};
+
+	const server = http2.createServer();
+	server.on("stream", (stream) => {
+		const chunks = [];
+		stream.on("data", (chunk) => chunks.push(chunk));
+		stream.on("end", () => {
+			const body = Buffer.concat(chunks);
+			const payload = body.subarray(5, 5 + body.readUInt32BE(1));
+			const request = decodeMessage(REFLECTION_SCHEMA, "grpc.reflection.v1alpha.ServerReflectionRequest", payload);
+			if (request.list_services !== undefined) {
+				reply(stream, { list_services_response: { service: [{ name: "hello.HelloService" }] } });
+				return;
+			}
+			if (request.file_containing_symbol === "hello.HelloService") {
+				reply(stream, { file_descriptor_response: { file_descriptor_proto: [descriptorBytes] } });
+				return;
+			}
+			reply(stream, { error_response: { error_code: 5, error_message: "not found" } });
+		});
+	});
+	const port = await new Promise((resolvePromise) => server.listen(0, "127.0.0.1", () => resolvePromise(server.address().port)));
+	try {
+		const found = await call("rpc.discover", { url: `grpc://127.0.0.1:${port}` });
+		check("rpc.discover lists the server's services", found.ok && found.value.services?.includes("hello.HelloService"), found.value ?? found.error);
+		check("rpc.discover reports the reflection version it used", /^grpc\.reflection\.v1\./.test(String(found.value?.reflection)), found.value?.reflection);
+		check("rpc.discover builds the method list", found.ok && found.value.methods?.some((method) => method.name === "SayHello" && method.path === "/hello.HelloService/SayHello"), found.value?.methods);
+		check("rpc.discover hands back an editable sample body", found.ok && found.value.methods[0]?.sample?.greeting === "", found.value?.methods?.[0]?.sample);
+		check("rpc.discover keeps a schema id for the call route", typeof found.value?.schemaId === "string" && found.value.schemaId !== "", found.value?.schemaId);
+		const unknown = await call("rpc.call", { url: `grpc://127.0.0.1:${port}`, schemaId: "gone", method: "/hello.HelloService/SayHello" });
+		check("rpc.call reports an expired discovered schema", unknown.ok && /Discover/.test(unknown.value.error ?? ""), unknown.value);
+	} finally {
+		await new Promise((resolvePromise) => server.close(resolvePromise));
+	}
+
+	// The descriptor fold itself: nested types, enums, maps and streaming flags.
+	const folded = schemaFromDescriptors([
+		{
+			name: "svc.proto",
+			package: "demo",
+			message_type: [
+				{
+					name: "Outer",
+					field: [
+						{ name: "inner", number: 1, label: 1, type: 11, type_name: ".demo.Outer.Inner" },
+						{ name: "tags", number: 2, label: 3, type: 9 },
+						{ name: "attrs", number: 3, label: 3, type: 11, type_name: ".demo.Outer.AttrsEntry" },
+					],
+					nested_type: [
+						{ name: "Inner", field: [{ name: "id", number: 1, label: 1, type: 5 }] },
+						{
+							name: "AttrsEntry",
+							options: { map_entry: true },
+							field: [
+								{ name: "key", number: 1, label: 1, type: 9 },
+								{ name: "value", number: 2, label: 1, type: 5 },
+							],
+						},
+					],
+				},
+			],
+			enum_type: [{ name: "Kind", value: [{ name: "A", number: 0 }, { name: "B", number: 1 }] }],
+			service: [{ name: "Svc", method: [{ name: "Watch", input_type: ".demo.Outer", output_type: ".demo.Outer", server_streaming: true }] }],
+		},
+	]);
+	check("descriptor fold keeps nested messages", Boolean(folded.messages["demo.Outer.Inner"]), Object.keys(folded.messages));
+	check("descriptor fold declares a map field as a map", folded.messages["demo.Outer"].fields.attrs.map === true && folded.messages["demo.Outer"].fields.attrs.mapValue === "int32", folded.messages["demo.Outer"].fields.attrs);
+	check("descriptor fold keeps repeated-ness", folded.messages["demo.Outer"].fields.tags.repeated === true, folded.messages["demo.Outer"].fields.tags);
+	check("descriptor fold keeps enums", folded.enums["demo.Kind"]?.values?.B === 1, folded.enums["demo.Kind"]);
+	check("descriptor fold keeps streaming flags", folded.services["demo.Svc"].methods[0].serverStreaming === true, folded.services["demo.Svc"]);
+}
+
 console.log(`\n${pass} passed, ${fail} failed${skipped ? `, ${skipped} skipped` : ""}`);
 process.exit(fail ? 1 : 0);

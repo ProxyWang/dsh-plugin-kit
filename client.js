@@ -420,6 +420,10 @@ var zh = {
   "rpc.proto": ".proto 文件",
   "rpc.load": "加载",
   "rpc.protoRequired": "请先填写 .proto 路径",
+  "rpc.discover": "反射发现",
+  "rpc.discoverHint": "向服务器索取 schema，不需要 .proto 文件",
+  "rpc.addressRequired": "请先填写服务地址",
+  "rpc.reflectionUnavailable": "该服务未开启反射，请改用 .proto 文件",
   "rpc.noMethods": "还没有解析出方法。填写 .proto 路径后点「加载」。",
   "rpc.request": "请求消息",
   "rpc.response": "响应",
@@ -1123,6 +1127,10 @@ var en = {
   "rpc.proto": ".proto file",
   "rpc.load": "Load",
   "rpc.protoRequired": "Enter a .proto path first",
+  "rpc.discover": "Discover",
+  "rpc.discoverHint": "Ask the server for its schema instead of reading a .proto file",
+  "rpc.addressRequired": "Enter the server address first",
+  "rpc.reflectionUnavailable": "This server does not expose reflection; use a .proto file instead",
   "rpc.noMethods": "No methods yet. Fill in the .proto path and press Load.",
   "rpc.request": "Request message",
   "rpc.response": "Response",
@@ -13416,6 +13424,7 @@ function RpcView({ t, useTabInfo, sessionId, useSessions, incoming }) {
   const [protoError, setProtoError] = useState("");
   const [protoFiles, setProtoFiles] = useState([]);
   const [protoBusy, setProtoBusy] = useState(false);
+  const [schemaId, setSchemaId] = useState("");
   const [selected, setSelected] = useState("");
   const [requestText, setRequestText] = useState("{}");
   const [metadata, setMetadata] = useState([]);
@@ -13511,12 +13520,37 @@ function RpcView({ t, useTabInfo, sessionId, useSessions, incoming }) {
     }
     setMethods(res.value.methods ?? []);
     setProtoFiles(res.value.files ?? []);
+    setSchemaId("");
     const first = res.value.methods?.[0];
     if (first) {
       setSelected(first.path);
       setRequestText(JSON.stringify(first.sample ?? {}, null, 2));
     }
   }, [cwd, protoPath, t]);
+  const discoverSchema = useCallback(async () => {
+    const target = address.trim();
+    if (target === "") {
+      setProtoError(t("rpc.addressRequired"));
+      return;
+    }
+    setProtoBusy(true);
+    setProtoError("");
+    const res = await api("rpc.discover", { url: target, insecureTls, timeoutMs });
+    setProtoBusy(false);
+    const value = res.ok ? res.value : { error: res.error };
+    if (value.error) {
+      setProtoError(`${t("rpc.reflectionUnavailable")}: ${value.error}`);
+      return;
+    }
+    setMethods(value.methods ?? []);
+    setProtoFiles(value.files ?? []);
+    setSchemaId(value.schemaId ?? "");
+    const first = value.methods?.[0];
+    if (first) {
+      setSelected(first.path);
+      setRequestText(JSON.stringify(first.sample ?? {}, null, 2));
+    }
+  }, [address, insecureTls, timeoutMs, t]);
   const chooseMethod = useCallback((method) => {
     setSelected(method.path);
     if (requestText.trim() === "{}" || requestText.trim() === "") setRequestText(JSON.stringify(method.sample ?? {}, null, 2));
@@ -13537,6 +13571,7 @@ function RpcView({ t, useTabInfo, sessionId, useSessions, incoming }) {
     const res = await api("rpc.call", {
       cwd,
       proto: protoPath.trim(),
+      ...schemaId ? { schemaId } : {},
       method: selectedMethod.path,
       url: target,
       messages: [body],
@@ -13616,6 +13651,13 @@ function RpcView({ t, useTabInfo, sessionId, useSessions, incoming }) {
         h("input", { className: "ce-input cerpc-input", value: protoPath, spellCheck: false, placeholder: "proto/hello.proto", onChange: (event) => setProtoPath(event.target.value) })
       ),
       h("button", { type: "button", className: "ce-sk-btn", disabled: protoBusy, onClick: () => void loadProto() }, protoBusy ? t("loading") : t("rpc.load")),
+      h("button", {
+        type: "button",
+        className: "ce-sk-btn ce-sk-btn-ghost",
+        disabled: protoBusy || address.trim() === "",
+        title: t("rpc.discoverHint"),
+        onClick: () => void discoverSchema()
+      }, t("rpc.discover")),
       h("button", {
         type: "button",
         className: `ce-sk-btn ce-sk-btn-ghost${drawerOpen ? " cea-btn-on" : ""}`,

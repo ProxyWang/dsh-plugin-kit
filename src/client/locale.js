@@ -351,6 +351,11 @@ export const zh = {
 	"rpc.proto": ".proto 文件",
 	"rpc.load": "加载",
 	"rpc.protoRequired": "请先填写 .proto 路径",
+	"rpc.discover": "反射发现",
+	"rpc.discoverHint": "向服务器索取 schema，不需要 .proto 文件",
+	"rpc.addressRequired": "请先填写服务地址",
+	"rpc.reflectionUnavailable": "该服务未开启反射，请改用 .proto 文件",
+
 	"rpc.noMethods": "还没有解析出方法。填写 .proto 路径后点「加载」。",
 	"rpc.request": "请求消息",
 	"rpc.response": "响应",
@@ -1059,6 +1064,11 @@ export const en = {
 	"rpc.proto": ".proto file",
 	"rpc.load": "Load",
 	"rpc.protoRequired": "Enter a .proto path first",
+	"rpc.discover": "Discover",
+	"rpc.discoverHint": "Ask the server for its schema instead of reading a .proto file",
+	"rpc.addressRequired": "Enter the server address first",
+	"rpc.reflectionUnavailable": "This server does not expose reflection; use a .proto file instead",
+
 	"rpc.noMethods": "No methods yet. Fill in the .proto path and press Load.",
 	"rpc.request": "Request message",
 	"rpc.response": "Response",

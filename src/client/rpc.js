@@ -66,6 +66,9 @@ export function RpcView({ t, useTabInfo, sessionId, useSessions, incoming }) {
 	const [protoError, setProtoError] = useState("");
 	const [protoFiles, setProtoFiles] = useState([]);
 	const [protoBusy, setProtoBusy] = useState(false);
+	// Set when the methods came from server reflection instead of a file: the
+	// call then carries this id rather than a .proto path.
+	const [schemaId, setSchemaId] = useState("");
 	const [selected, setSelected] = useState(""); // method path
 	const [requestText, setRequestText] = useState("{}");
 	const [metadata, setMetadata] = useState([]);
@@ -165,6 +168,7 @@ export function RpcView({ t, useTabInfo, sessionId, useSessions, incoming }) {
 		if (res.value?.error) { setProtoError(res.value.error); setMethods([]); return; }
 		setMethods(res.value.methods ?? []);
 		setProtoFiles(res.value.files ?? []);
+		setSchemaId("");
 		const first = res.value.methods?.[0];
 		if (first) {
 			setSelected(first.path);
@@ -174,8 +178,36 @@ export function RpcView({ t, useTabInfo, sessionId, useSessions, incoming }) {
 		}
 	}, [cwd, protoPath, t]);
 
-	const chooseMethod = useCallback((method) => {
-		setSelected(method.path);
+	/**
+	 * Ask the server for its schema (gRPC reflection) instead of reading a file.
+	 * The panel then calls with the returned schema id, so a server that exposes
+	 * reflection needs no `.proto` at all.
+	 */
+	const discoverSchema = useCallback(async () => {
+		const target = address.trim();
+		if (target === "") { setProtoError(t("rpc.addressRequired")); return; }
+		setProtoBusy(true);
+		setProtoError("");
+		const res = await api("rpc.discover", { url: target, insecureTls, timeoutMs });
+		setProtoBusy(false);
+		const value = res.ok ? res.value : { error: res.error };
+		if (value.error) {
+			// A server without reflection is a normal state, not a crash: say so
+			// and keep whatever the panel already had.
+			setProtoError(`${t("rpc.reflectionUnavailable")}: ${value.error}`);
+			return;
+		}
+		setMethods(value.methods ?? []);
+		setProtoFiles(value.files ?? []);
+		setSchemaId(value.schemaId ?? "");
+		const first = value.methods?.[0];
+		if (first) {
+			setSelected(first.path);
+			setRequestText(JSON.stringify(first.sample ?? {}, null, 2));
+		}
+	}, [address, insecureTls, timeoutMs, t]);
+
+	const chooseMethod = useCallback((method) => {		setSelected(method.path);
 		if (requestText.trim() === "{}" || requestText.trim() === "") setRequestText(JSON.stringify(method.sample ?? {}, null, 2));
 	}, [requestText]);
 
@@ -197,6 +229,7 @@ export function RpcView({ t, useTabInfo, sessionId, useSessions, incoming }) {
 		const res = await api("rpc.call", {
 			cwd,
 			proto: protoPath.trim(),
+			...(schemaId ? { schemaId } : {}),
 			method: selectedMethod.path,
 			url: target,
 			messages: [body],
@@ -272,6 +305,13 @@ export function RpcView({ t, useTabInfo, sessionId, useSessions, incoming }) {
 				h("span", { className: "cerpc-label" }, t("rpc.proto")),
 				h("input", { className: "ce-input cerpc-input", value: protoPath, spellCheck: false, placeholder: "proto/hello.proto", onChange: (event) => setProtoPath(event.target.value) })),
 			h("button", { type: "button", className: "ce-sk-btn", disabled: protoBusy, onClick: () => void loadProto() }, protoBusy ? t("loading") : t("rpc.load")),
+			h("button", {
+				type: "button",
+				className: "ce-sk-btn ce-sk-btn-ghost",
+				disabled: protoBusy || address.trim() === "",
+				title: t("rpc.discoverHint"),
+				onClick: () => void discoverSchema(),
+			}, t("rpc.discover")),
 			h("button", {
 				type: "button",
 				className: `ce-sk-btn ce-sk-btn-ghost${drawerOpen ? " cea-btn-on" : ""}`,
