@@ -531,7 +531,7 @@ export const CSS = `
 .cerpc-picker-input{height:30px;font-size:13px}
 .cerpc-picker-list{max-height:340px;overflow:auto;display:flex;flex-direction:column;gap:1px}
 .cerpc-picker-row{display:flex;align-items:baseline;gap:0;width:100%;min-height:26px;text-align:left;padding:5px 8px;border:0;border-radius:5px;background:transparent;color:var(--dsw-alias-label-primary,#dde);font-size:12.5px;line-height:1.5;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;cursor:pointer}
-.cerpc-picker-dir{color:var(--dsw-alias-label-tertiary,#889);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;direction:rtl;text-align:left;flex:0 1 auto;min-width:0}
+.cerpc-picker-dir{color:var(--dsw-alias-label-tertiary,#889);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:0 1 auto;min-width:0}
 .cerpc-picker-name{color:var(--dsw-alias-label-primary,#dde);flex:0 0 auto;white-space:nowrap}
 .cerpc-picker-row:hover,.cerpc-picker-row-on{background:var(--dsw-alias-interactive-bg-hover,#2a2e35)}
 .cerpc-picker-empty{font-size:12px;color:var(--dsw-alias-label-tertiary,#889);padding:6px 8px}
@@ -1100,6 +1100,14 @@ export const CSS = `
 .ce-wb-drawer-hint{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-tertiary,#778);font-size:11px}
 .ce-wb-drawer-list{min-height:0;overflow:auto;padding:0 4px 4px}
 .ce-wb-drawer-empty{padding:10px 12px;font-size:12px;color:var(--dsw-alias-label-tertiary,#778)}
+.cea-hist-item{display:flex;align-items:center;gap:4px}
+.cea-hist-item .cea-hist-row{flex:1 1 auto;min-width:0}
+.cea-hist-del{opacity:0}
+.cea-hist-item:hover .cea-hist-del,.cea-hist-del:focus-visible{opacity:1}
+.ce-wb-drawer-item{display:flex;align-items:center;gap:4px}
+.ce-wb-drawer-item .ce-wb-drawer-row{flex:1 1 auto;min-width:0}
+.ce-wb-drawer-del{opacity:0}
+.ce-wb-drawer-item:hover .ce-wb-drawer-del,.ce-wb-drawer-del:focus-visible{opacity:1}
 .ce-wb-drawer-row{display:flex;align-items:center;gap:8px;width:100%;border:0;background:transparent;color:inherit;font:inherit;font-size:12px;text-align:left;padding:4px 6px;border-radius:5px;cursor:pointer}
 .ce-wb-drawer-row:hover{background:var(--dsw-alias-interactive-bg-hover,#26292e)}
 .ce-wb-proto{flex:none;font-size:9.5px;font-weight:700;letter-spacing:.04em;padding:1px 5px;border-radius:4px;background:var(--dsw-alias-interactive-bg-hover,#2b3038);color:var(--dsw-alias-label-secondary,#aaa)}

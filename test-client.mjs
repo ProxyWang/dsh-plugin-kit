@@ -3026,7 +3026,8 @@ check("docAction reloads clean drafts, flags dirty ones, ignores others", docAct
 		const body = JSON.parse(options?.body ?? "{}");
 		calls.push({ url: String(url), body });
 		if (String(url).endsWith("/search.files")) {
-			return { json: async () => ({ ok: true, value: { matches: [{ path: "proto/hello.proto" }, { path: "proto/ads.proto" }] } }) };
+			// An older host may ignore `suffix`; the panel must still show only .proto.
+			return { json: async () => ({ ok: true, value: { matches: [{ path: "proto/hello.proto" }, { path: "proto/ads.proto" }, { path: "README.md" }, { path: ".gitignore" }] } }) };
 		}
 		if (String(url).endsWith("/rpc.proto")) {
 			return { json: async () => ({ ok: true, value: { methods: [{ path: "/ads.Ads/Get", name: "Get", service: "ads.Ads", request: "Req", response: "Res", sample: {} }], files: ["ads.proto"] } }) };
@@ -3058,12 +3059,15 @@ check("docAction reloads clean drafts, flags dirty ones, ignores others", docAct
 		check("the search asks the host for .proto files only", calls.some((call) => call.url.endsWith("/search.files") && call.body?.suffix === ".proto"), calls.at(-1));
 		const rows = flatten(tree).filter((n) => n.type === "button" && String(n.props?.className ?? "").includes("cerpc-picker-row"));
 		check("every match is clickable", rows.length === 2, rows.length);
+		check("non-.proto files never reach the list", rows.every((row) => !JSON.stringify(row).includes("README") && !JSON.stringify(row).includes("gitignore")), null);
+		check("the footer counts the filtered matches", Boolean(flatten(tree).find((n) => String(n.props?.className ?? "").includes("cerpc-picker-foot"))) && String(flatten(tree).find((n) => String(n.props?.className ?? "").includes("cerpc-picker-foot")).children?.[0]).startsWith("2 "), null);
 		const { splitProtoPath } = await import("./src/client/rpc.js");
 		check("a deep path keeps its file name and dims only the directory", (() => {
 			const parts = splitProtoPath("proto/ads/v1/ads.proto");
 			return parts.dir === "proto/ads/v1/" && parts.name === "ads.proto" && splitProtoPath("a.proto").dir === "";
 		})(), splitProtoPath("proto/ads/v1/ads.proto"));
-		rows[1].props.onClick();
+		// Sorted alphabetically when no query is typed, so pick by title.
+		(rows.find((row) => row.props.title === "proto/ads.proto") ?? rows[1]).props.onClick();
 		await new Promise((resolve) => setTimeout(resolve, 50));
 		draw.flushEffects();
 		const loaded = calls.filter((call) => call.url.endsWith("/rpc.proto"));

@@ -19,7 +19,7 @@
 import { h, useCallback, useEffect, useMemo, useRef, useState } from "./react.js";
 import { apiKey } from "./apistore.js";
 import { useDismissLayer } from "./dismiss.js";
-import { entryLabel, entryProtocol, filterByProtocol, mergeProtocols } from "./apientries.js";
+import { clearHistoryEntries, entryLabel, entryProtocol, filterByProtocol, mergeProtocols, removeHistoryEntry } from "./apientries.js";
 
 /** Preference key for the last protocol used. */
 export const PROTOCOL_KEY = "dsh.plugin-kit.workbench.protocol";
@@ -116,6 +116,8 @@ export function WorkbenchView({ t, http, grpc, initialProtocol, sessionId, useSe
 	}, [readHistory]);
 
 	const [drawerOpen, setDrawerOpen] = useState(false);
+	// Clearing everything is a two-step action: the first click arms it.
+	const [confirmClear, setConfirmClear] = useState(false);
 	// The drawer is a transient layer like every other popup in the plugin:
 	// clicking outside it (or Escape) closes it.
 	const drawerRef = useDismissLayer({ open: drawerOpen, onDismiss: () => setDrawerOpen(false), ignoreSelector: '[data-ce-popup-trigger="workbench-history"]' });
@@ -127,6 +129,21 @@ export function WorkbenchView({ t, http, grpc, initialProtocol, sessionId, useSe
 		setIncoming({ protocol: target, entry, nonce: Date.now() + Math.random() });
 		setDrawerOpen(false);
 	};
+	/** Drop one row from the shared store, then re-read it. */
+	const removeEntry = (entry) => {
+		removeHistoryEntry(historyKey, entry.id);
+		lastHistory.current = "";
+		readHistory();
+	};
+	/** Clear the shared history (both protocols live in one key). */
+	const clearAll = () => {
+		if (!confirmClear) { setConfirmClear(true); return; }
+		clearHistoryEntries(historyKey);
+		lastHistory.current = "";
+		readHistory();
+		setConfirmClear(false);
+	};
+
 	return h(
 		"div",
 		{ className: "ce-wb" },
@@ -162,19 +179,30 @@ export function WorkbenchView({ t, http, grpc, initialProtocol, sessionId, useSe
 				h("div", { className: "ce-wb-drawer-head" },
 					h("span", null, t("workbench.history")),
 					h("span", { className: "ce-wb-drawer-hint" }, t("workbench.historyHint")),
-					h("button", { type: "button", className: "ce-tool ce-tiny", title: t("close"), onClick: () => setDrawerOpen(false) }, "✕")),
+					h("span", { className: "ce-spacer" }),
+					history.length > 0
+						? h("button", { type: "button", className: "ce-link", title: t("api.clear"), onClick: clearAll }, confirmClear ? t("api.clearConfirm") : t("api.clear"))
+						: null,
+					h("button", { type: "button", className: "ce-tool ce-tiny", title: t("close"), onClick: () => { setDrawerOpen(false); setConfirmClear(false); } }, "✕")),
 				history.length === 0
 					? h("div", { className: "ce-wb-drawer-empty" }, t("api.histEmpty"))
-					: h("div", { className: "ce-wb-drawer-list ce-scroll" }, history.map((entry) => h("button", {
-						key: entry.id,
-						type: "button",
-						className: "ce-wb-drawer-row",
-						title: entryLabel(entry),
-						onClick: () => openEntry(entry),
-					},
-					h("span", { className: `ce-wb-proto ce-wb-proto-${entryProtocol(entry)}` }, entryProtocol(entry) === "grpc" ? "gRPC" : "HTTP"),
-					h("span", { className: "ce-wb-drawer-label" }, entryLabel(entry)),
-					h("span", { className: "ce-wb-drawer-ms" }, entry.status === undefined ? "" : String(entry.status))))))
+					: h("div", { className: "ce-wb-drawer-list ce-scroll" }, history.map((entry) => h("div", { key: entry.id, className: "ce-wb-drawer-item" },
+						h("button", {
+							type: "button",
+							className: "ce-wb-drawer-row",
+							title: entryLabel(entry),
+							onClick: () => openEntry(entry),
+						},
+						h("span", { className: `ce-wb-proto ce-wb-proto-${entryProtocol(entry)}` }, entryProtocol(entry) === "grpc" ? "gRPC" : "HTTP"),
+						h("span", { className: "ce-wb-drawer-label" }, entryLabel(entry)),
+						h("span", { className: "ce-wb-drawer-ms" }, entry.status === undefined ? "" : String(entry.status))),
+						h("button", {
+							type: "button",
+							className: "ce-tool ce-tiny ce-wb-drawer-del",
+							title: t("api.delete"),
+							"aria-label": t("api.delete"),
+							onClick: () => removeEntry(entry),
+						}, "✕")))))
 			: null,
 		h("div", { className: "ce-wb-pane", hidden: protocol !== "http" }, seen.current.http ? clonePane(http, incoming) : null),
 		h("div", { className: "ce-wb-pane", hidden: protocol !== "grpc" }, seen.current.grpc ? clonePane(grpc, incoming) : null),

@@ -139,3 +139,56 @@ export function activeVariables(envStore) {
 	}
 	return vars;
 }
+
+/**
+ * Delete one record from a JSON-array store.
+ *
+ * Both protocols share one key, so the write must be a read-filter-write over
+ * the raw array rather than over a filtered view: deleting a gRPC row must not
+ * drop the HTTP rows the other pane owns.
+ *
+ * @param key - storage key
+ * @param id - id of the record to remove
+ * @param storage - Web Storage-like area
+ * @returns the remaining rows (as read back), or null when storage failed
+ */
+export function removeHistoryEntry(key, id, storage = globalThis.localStorage) {
+	const rows = readArray(key, storage);
+	if (rows === null) return null;
+	const next = rows.filter((entry) => entry?.id !== String(id));
+	writeArray(key, next, storage);
+	return next;
+}
+
+/**
+ * Empty a store.
+ *
+ * @param key - storage key
+ * @param storage - Web Storage-like area
+ * @returns the empty list, or null when storage failed
+ */
+export function clearHistoryEntries(key, storage = globalThis.localStorage) {
+	writeArray(key, [], storage);
+	return [];
+}
+
+/** Rows of a store; `null` when the value is not an array. */
+function readArray(key, storage) {
+	try {
+		const raw = storage?.getItem?.(key);
+		if (raw === null || raw === undefined) return [];
+		const value = JSON.parse(raw);
+		return Array.isArray(value) ? value : null;
+	} catch {
+		return null;
+	}
+}
+
+/** Write rows back, pretending success when storage is unavailable (private mode). */
+function writeArray(key, rows, storage) {
+	try {
+		storage?.setItem?.(key, JSON.stringify(rows));
+	} catch {
+		// Storage can be denied; the panel still reflects the change in memory.
+	}
+}

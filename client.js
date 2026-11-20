@@ -497,6 +497,7 @@ var zh = {
   "api.histEmpty": "暂无请求历史",
   "api.savedEmpty": "暂无收藏",
   "api.clear": "清空",
+  "api.clearConfirm": "再点一次清空",
   "api.restoreTitle": "点击回填到编辑器",
   "api.delete": "删除",
   "api.copyCurl": "复制为 curl",
@@ -1220,6 +1221,7 @@ var en = {
   "api.histEmpty": "No requests yet",
   "api.savedEmpty": "No favorites yet",
   "api.clear": "Clear",
+  "api.clearConfirm": "Click again to clear",
   "api.restoreTitle": "Click to load into the editor",
   "api.delete": "Delete",
   "api.copyCurl": "Copy as curl",
@@ -8864,7 +8866,7 @@ var CSS2 = `
 .cerpc-picker-input{height:30px;font-size:13px}
 .cerpc-picker-list{max-height:340px;overflow:auto;display:flex;flex-direction:column;gap:1px}
 .cerpc-picker-row{display:flex;align-items:baseline;gap:0;width:100%;min-height:26px;text-align:left;padding:5px 8px;border:0;border-radius:5px;background:transparent;color:var(--dsw-alias-label-primary,#dde);font-size:12.5px;line-height:1.5;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;cursor:pointer}
-.cerpc-picker-dir{color:var(--dsw-alias-label-tertiary,#889);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;direction:rtl;text-align:left;flex:0 1 auto;min-width:0}
+.cerpc-picker-dir{color:var(--dsw-alias-label-tertiary,#889);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:0 1 auto;min-width:0}
 .cerpc-picker-name{color:var(--dsw-alias-label-primary,#dde);flex:0 0 auto;white-space:nowrap}
 .cerpc-picker-row:hover,.cerpc-picker-row-on{background:var(--dsw-alias-interactive-bg-hover,#2a2e35)}
 .cerpc-picker-empty{font-size:12px;color:var(--dsw-alias-label-tertiary,#889);padding:6px 8px}
@@ -9433,6 +9435,14 @@ var CSS2 = `
 .ce-wb-drawer-hint{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-tertiary,#778);font-size:11px}
 .ce-wb-drawer-list{min-height:0;overflow:auto;padding:0 4px 4px}
 .ce-wb-drawer-empty{padding:10px 12px;font-size:12px;color:var(--dsw-alias-label-tertiary,#778)}
+.cea-hist-item{display:flex;align-items:center;gap:4px}
+.cea-hist-item .cea-hist-row{flex:1 1 auto;min-width:0}
+.cea-hist-del{opacity:0}
+.cea-hist-item:hover .cea-hist-del,.cea-hist-del:focus-visible{opacity:1}
+.ce-wb-drawer-item{display:flex;align-items:center;gap:4px}
+.ce-wb-drawer-item .ce-wb-drawer-row{flex:1 1 auto;min-width:0}
+.ce-wb-drawer-del{opacity:0}
+.ce-wb-drawer-item:hover .ce-wb-drawer-del,.ce-wb-drawer-del:focus-visible{opacity:1}
 .ce-wb-drawer-row{display:flex;align-items:center;gap:8px;width:100%;border:0;background:transparent;color:inherit;font:inherit;font-size:12px;text-align:left;padding:4px 6px;border-radius:5px;cursor:pointer}
 .ce-wb-drawer-row:hover{background:var(--dsw-alias-interactive-bg-hover,#26292e)}
 .ce-wb-proto{flex:none;font-size:9.5px;font-weight:700;letter-spacing:.04em;padding:1px 5px;border-radius:4px;background:var(--dsw-alias-interactive-bg-hover,#2b3038);color:var(--dsw-alias-label-secondary,#aaa)}
@@ -12579,6 +12589,33 @@ function activeVariables(envStore) {
   }
   return vars;
 }
+function removeHistoryEntry(key, id, storage = globalThis.localStorage) {
+  const rows = readArray(key, storage);
+  if (rows === null) return null;
+  const next = rows.filter((entry) => entry?.id !== String(id));
+  writeArray(key, next, storage);
+  return next;
+}
+function clearHistoryEntries(key, storage = globalThis.localStorage) {
+  writeArray(key, [], storage);
+  return [];
+}
+function readArray(key, storage) {
+  try {
+    const raw = storage?.getItem?.(key);
+    if (raw === null || raw === void 0) return [];
+    const value = JSON.parse(raw);
+    return Array.isArray(value) ? value : null;
+  } catch {
+    return null;
+  }
+}
+function writeArray(key, rows, storage) {
+  try {
+    storage?.setItem?.(key, JSON.stringify(rows));
+  } catch {
+  }
+}
 
 // src/client/workbench.js
 var PROTOCOL_KEY = "dsh.plugin-kit.workbench.protocol";
@@ -12636,6 +12673,7 @@ function WorkbenchView({ t, http, grpc, initialProtocol, sessionId, useSessions 
     return () => clearInterval(timer);
   }, [readHistory]);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [confirmClear, setConfirmClear] = useState(false);
   const drawerRef = useDismissLayer({ open: drawerOpen, onDismiss: () => setDrawerOpen(false), ignoreSelector: '[data-ce-popup-trigger="workbench-history"]' });
   const [incoming, setIncoming] = useState(null);
   const openEntry = (entry) => {
@@ -12643,6 +12681,21 @@ function WorkbenchView({ t, http, grpc, initialProtocol, sessionId, useSessions 
     choose(target);
     setIncoming({ protocol: target, entry, nonce: Date.now() + Math.random() });
     setDrawerOpen(false);
+  };
+  const removeEntry = (entry) => {
+    removeHistoryEntry(historyKey, entry.id);
+    lastHistory.current = "";
+    readHistory();
+  };
+  const clearAll = () => {
+    if (!confirmClear) {
+      setConfirmClear(true);
+      return;
+    }
+    clearHistoryEntries(historyKey);
+    lastHistory.current = "";
+    readHistory();
+    setConfirmClear(false);
   };
   return h(
     "div",
@@ -12685,20 +12738,35 @@ function WorkbenchView({ t, http, grpc, initialProtocol, sessionId, useSessions 
         { className: "ce-wb-drawer-head" },
         h("span", null, t("workbench.history")),
         h("span", { className: "ce-wb-drawer-hint" }, t("workbench.historyHint")),
-        h("button", { type: "button", className: "ce-tool ce-tiny", title: t("close"), onClick: () => setDrawerOpen(false) }, "✕")
+        h("span", { className: "ce-spacer" }),
+        history.length > 0 ? h("button", { type: "button", className: "ce-link", title: t("api.clear"), onClick: clearAll }, confirmClear ? t("api.clearConfirm") : t("api.clear")) : null,
+        h("button", { type: "button", className: "ce-tool ce-tiny", title: t("close"), onClick: () => {
+          setDrawerOpen(false);
+          setConfirmClear(false);
+        } }, "✕")
       ),
       history.length === 0 ? h("div", { className: "ce-wb-drawer-empty" }, t("api.histEmpty")) : h("div", { className: "ce-wb-drawer-list ce-scroll" }, history.map((entry) => h(
-        "button",
-        {
-          key: entry.id,
+        "div",
+        { key: entry.id, className: "ce-wb-drawer-item" },
+        h(
+          "button",
+          {
+            type: "button",
+            className: "ce-wb-drawer-row",
+            title: entryLabel(entry),
+            onClick: () => openEntry(entry)
+          },
+          h("span", { className: `ce-wb-proto ce-wb-proto-${entryProtocol(entry)}` }, entryProtocol(entry) === "grpc" ? "gRPC" : "HTTP"),
+          h("span", { className: "ce-wb-drawer-label" }, entryLabel(entry)),
+          h("span", { className: "ce-wb-drawer-ms" }, entry.status === void 0 ? "" : String(entry.status))
+        ),
+        h("button", {
           type: "button",
-          className: "ce-wb-drawer-row",
-          title: entryLabel(entry),
-          onClick: () => openEntry(entry)
-        },
-        h("span", { className: `ce-wb-proto ce-wb-proto-${entryProtocol(entry)}` }, entryProtocol(entry) === "grpc" ? "gRPC" : "HTTP"),
-        h("span", { className: "ce-wb-drawer-label" }, entryLabel(entry)),
-        h("span", { className: "ce-wb-drawer-ms" }, entry.status === void 0 ? "" : String(entry.status))
+          className: "ce-tool ce-tiny ce-wb-drawer-del",
+          title: t("api.delete"),
+          "aria-label": t("api.delete"),
+          onClick: () => removeEntry(entry)
+        }, "✕")
       )))
     ) : null,
     h("div", { className: "ce-wb-pane", hidden: protocol !== "http" }, seen.current.http ? clonePane(http, incoming) : null),
@@ -13778,10 +13846,11 @@ function ProtoPicker({ t, cwd, onPick, onClose }) {
     let alive = true;
     setBusy(true);
     const timer = setTimeout(() => {
-      api("search.files", { cwd, query, suffix: ".proto", limit: 100 }).then((res) => {
+      api("search.files", { cwd, query, suffix: ".proto", limit: 200 }).then((res) => {
         if (!alive) return;
         setBusy(false);
-        setMatches(res.ok ? res.value.matches ?? [] : []);
+        const paths2 = (res.ok ? res.value.matches ?? [] : []).map((entry) => entry.path).filter((path) => typeof path === "string" && path.toLowerCase().endsWith(".proto"));
+        setMatches(query.trim() === "" ? paths2.sort((a, b) => a.localeCompare(b)) : paths2);
         setIndex(0);
       });
     }, 120);
@@ -13799,7 +13868,7 @@ function ProtoPicker({ t, cwd, onPick, onClose }) {
       setIndex((value) => Math.max(0, value - 1));
     } else if (event.key === "Enter") {
       event.preventDefault();
-      if (matches[index]) onPick(matches[index].path);
+      if (matches[index]) onPick(matches[index]);
     } else if (event.key === "Escape") {
       event.preventDefault();
       onClose();
@@ -13819,17 +13888,17 @@ function ProtoPicker({ t, cwd, onPick, onClose }) {
     matches.length === 0 ? h("div", { className: "cerpc-picker-empty" }, busy ? t("loading") : t("rpc.noProto")) : h(
       Fragment,
       null,
-      h("div", { className: "cerpc-picker-list ce-scroll" }, matches.map((entry, position) => {
-        const parts = splitProtoPath(entry.path);
+      h("div", { className: "cerpc-picker-list ce-scroll" }, matches.map((path, position) => {
+        const parts = splitProtoPath(path);
         return h(
           "button",
           {
-            key: entry.path,
+            key: path,
             type: "button",
             className: `cerpc-picker-row${position === index ? " cerpc-picker-row-on" : ""}`,
-            title: entry.path,
+            title: path,
             onMouseEnter: () => setIndex(position),
-            onClick: () => onPick(entry.path)
+            onClick: () => onPick(path)
           },
           h("span", { className: "cerpc-picker-dir" }, parts.dir),
           h("span", { className: "cerpc-picker-name" }, parts.name)
@@ -13861,6 +13930,7 @@ function RpcView({ t, useTabInfo, sessionId, useSessions, incoming }) {
   const [envStore, setEnvStore] = useState({ envs: [], activeId: null });
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerTab, setDrawerTab] = useState("history");
+  const [confirmClear, setConfirmClear] = useState(false);
   const drawerRef = useDismissLayer({ open: drawerOpen, onDismiss: () => setDrawerOpen(false), ignoreSelector: '[data-ce-popup-trigger="rpc-history"]' });
   const keys = useMemo(() => ({
     history: apiKey("history", cwd ?? ""),
@@ -13987,6 +14057,19 @@ function RpcView({ t, useTabInfo, sessionId, useSessions, incoming }) {
     setProtoPath(path);
     void loadProto(path);
   }, [loadProto]);
+  const removeEntry = useCallback((entry) => {
+    removeHistoryEntry(drawerTab === "history" ? keys.history : keys.saved, entry.id);
+    readStored();
+  }, [drawerTab, keys.history, keys.saved, readStored]);
+  const clearEntries = useCallback(() => {
+    if (!confirmClear) {
+      setConfirmClear(true);
+      return;
+    }
+    clearHistoryEntries(drawerTab === "history" ? keys.history : keys.saved);
+    readStored();
+    setConfirmClear(false);
+  }, [confirmClear, drawerTab, keys.history, keys.saved, readStored]);
   const chooseMethod = useCallback((method) => {
     setSelected(method.path);
     if (requestText.trim() === "{}" || requestText.trim() === "") setRequestText(JSON.stringify(method.sample ?? {}, null, 2));
@@ -14143,26 +14226,40 @@ function RpcView({ t, useTabInfo, sessionId, useSessions, incoming }) {
         h("button", { type: "button", className: `cea-tab${drawerTab === "history" ? " cea-tab-on" : ""}`, onClick: () => setDrawerTab("history") }, `${t("api.history")} · ${history.length}`),
         h("button", { type: "button", className: `cea-tab${drawerTab === "saved" ? " cea-tab-on" : ""}`, onClick: () => setDrawerTab("saved") }, `${t("api.saved")} · ${saved.length}`),
         h("span", { className: "ce-spacer" }),
-        h("button", { type: "button", className: "ce-tool ce-tiny", title: t("close"), onClick: () => setDrawerOpen(false) }, "✕")
+        (drawerTab === "history" ? history : saved).length > 0 ? h("button", { type: "button", className: "ce-link", title: t("api.clear"), onClick: clearEntries }, confirmClear ? t("api.clearConfirm") : t("api.clear")) : null,
+        h("button", { type: "button", className: "ce-tool ce-tiny", title: t("close"), onClick: () => {
+          setDrawerOpen(false);
+          setConfirmClear(false);
+        } }, "✕")
       ),
       h(
         "div",
         { className: "cea-hist-list ce-scroll" },
-        (drawerTab === "history" ? history : saved).length === 0 ? h("div", { className: "cea-he" }, t(drawerTab === "history" ? "api.histEmpty" : "api.histEmpty")) : (drawerTab === "history" ? history : saved).map((entry) => h(
-          "button",
-          {
-            key: entry.id,
+        (drawerTab === "history" ? history : saved).length === 0 ? h("div", { className: "cea-he" }, t("api.histEmpty")) : (drawerTab === "history" ? history : saved).map((entry) => h(
+          "div",
+          { key: entry.id, className: "cea-hist-item" },
+          h(
+            "button",
+            {
+              type: "button",
+              className: "cea-hist-row",
+              title: entryLabel(entry),
+              onClick: () => {
+                applyEntry(entry);
+                setDrawerTab("history");
+              }
+            },
+            h("span", { className: "cedb-chip" }, entry.status ?? "—"),
+            h("span", { className: "cea-hist-url" }, entryLabel(entry)),
+            h("span", { className: "cea-hist-ms" }, entry.ms === void 0 ? "" : `${entry.ms} ms`)
+          ),
+          h("button", {
             type: "button",
-            className: "cea-hist-row",
-            title: entryLabel(entry),
-            onClick: () => {
-              applyEntry(entry);
-              setDrawerTab("history");
-            }
-          },
-          h("span", { className: "cedb-chip" }, entry.status ?? "—"),
-          h("span", { className: "cea-hist-url" }, `${t("api.tabSaved") === drawerTab ? "" : ""}${entryLabel(entry)}`),
-          h("span", { className: "cea-hist-ms" }, entry.ms === void 0 ? "" : `${entry.ms} ms`)
+            className: "ce-tool ce-tiny cea-hist-del",
+            title: t("api.delete"),
+            "aria-label": t("api.delete"),
+            onClick: () => removeEntry(entry)
+          }, "✕")
         ))
       )
     ) : null,

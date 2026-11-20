@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased — the chooser only offers `.proto` files
+
+The list was showing `.gitignore`, `README.md` and every other file, because the running Host predates the `suffix` parameter — the panel asked, the Host ignored it.
+
+- **The filter is applied on both sides.** The Host still filters before its limit (so 200 `.proto` files are not lost to unrelated matches), and the panel filters what it receives as well: an older Host can no longer fill the list with the wrong files.
+- **Directory paths render correctly again**: the right-to-left truncation trick mangled the separators (`/docs/assets/…` came out as `/docsassets…`); the directory is now truncated on the right, with the file name always intact.
+- With no query the list is sorted (walk order looked random); a real query keeps the host's relevance ranking, so path-fuzzy search behaves as before.
+- Regressions: non-`.proto` rows never reach the list even when the host returns them, and the footer counts the filtered matches.
+
+
 ## Unreleased — the proto chooser is readable
 
 The picker inherited the width of the field it hung from (about 280px), so every path was clipped and the list read as noise.
