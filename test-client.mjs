@@ -2903,10 +2903,13 @@ check("docAction reloads clean drafts, flags dirty ones, ignores others", docAct
 		const kwTarget = { dataset: { ceL: "2", ceC: "1", ceW: "func" }, classList: { contains: (c) => c === "ce-kw" }, closest: (sel) => (sel === "[data-ce-l]" ? kwTarget : null) };
 		const callsBefore = lspCalls.length;
 		const hoverCalls = () => lspCalls.filter((c) => c.kind === "hover" && c.line === 2 && c.col === 6).length;
-		// Plain click places the cursor without any LSP request or peek.
+		// Plain click places the cursor and asks only for the reference COUNT (the
+		// lens); it never fires a definition request or opens the peek.
 		area().props.onClick({ target: tokenTarget, metaKey: false, ctrlKey: false });
 		await tick();
-		check("plain click fires no LSP request", lspCalls.length === callsBefore, [lspCalls.length, callsBefore]);
+		const afterClick = lspCalls.slice(callsBefore);
+		check("plain click asks only for references (the lens)", afterClick.length === 1 && afterClick[0].kind === "references", afterClick.map((c) => c.kind));
+		check("plain click opens no peek", get((n) => n.type.name === "RefsPeek") === undefined, null);
 		check("plain click opens no refs peek", !get((n) => n.type.name === "RefsPeek"), null);
 		// Hover: resting on a token for 350ms asks for the hover document.
 		const hoverBefore = hoverCalls();
@@ -4438,6 +4441,19 @@ message HelloReply { string message = 1; int32 count = 2; }
 		await tick();
 		const noted = get((n) => n.type.name === "RefsPeek");
 		check("a route note is surfaced in the peek", Boolean(noted) && String(noted.props.peek.error ?? "").includes("No language server"), noted?.props.peek);
+
+		// Clicking an identifier answers "how many references?" right there.
+		const codeArea = get((n) => String(n.props?.className ?? "").includes("ce-code") && typeof n.props.onClick === "function");
+		const token = { dataset: { ceL: "5", ceC: "16", ceW: "helper" }, classList: { contains: () => false } };
+		const clickEvent = { target: { closest: (selector) => (selector === "[data-ce-l]" ? token : null) }, metaKey: false, ctrlKey: false };
+		referencesAnswer = { targets: [{ path: "main.go", line: 5, col: 16 }, { path: "main.go", line: 3, col: 6 }] };
+		codeArea.props.onClick(clickEvent);
+		await tick();
+		const lens = get((n) => n.props?.className === "ce-lens");
+		check("clicking an identifier shows a reference-count lens", Boolean(lens) && String(lens.children?.[0]) === "2 jump.refsShort", lens?.children);
+		lens.props.onClick();
+		await tick();
+		check("clicking the lens opens the reference list", Boolean(get((n) => n.type.name === "RefsPeek")), null);
 		render.unmount();
 	} finally { Object.assign(globalThis, refGlobals); }
 }

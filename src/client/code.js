@@ -80,6 +80,10 @@ export function CodeBody(props) {
 	const [search, setSearch] = useState(null); // {query, include, results, engine, truncated, busy, error}
 	const [searchOpen, setSearchOpen] = useState(false);
 	const [peek, setPeek] = useState(null);
+	// VS Code's CodeLens, in miniature: after a click on an identifier, say how
+	// many references it has — the entry point people actually look for.
+	const [lens, setLens] = useState(null);
+	const lensNonce = useRef(0);
 	const [editing, setEditing] = useState(false);
 	const [editText, setEditText] = useState("");
 	const [findOpen, setFindOpen] = useState(false);
@@ -306,7 +310,10 @@ export function CodeBody(props) {
 	const loadFile = useCallback(
 		async (path, line, col, mark, opts) => {
 			if (!cwd || (!opts?.background && !canNavigate())) return null;
-			if (!opts?.background) dismissPanels();
+			if (!opts?.background) { dismissPanels(); }
+			// A lens belongs to the line it was measured on: a new file invalidates it.
+			lensNonce.current++;
+			setLens(null);
 			const res = await api("fs.read", { cwd, path });
 			if (!res.ok) {
 				// Watch-triggered check: deleted/unreadable keeps the buffer.
@@ -1198,6 +1205,8 @@ export function CodeBody(props) {
 	const closePeek = useCallback(() => {
 		peekNonce.current++;
 		setPeek(null);
+		lensNonce.current++;
+		setLens(null);
 	}, []);
 
 	const pickPeek = useCallback(
@@ -1477,7 +1486,7 @@ export function CodeBody(props) {
 				return;
 			}
 			if (event.key === "Escape") {
-				if (searchOpen || palette || commandOpen || branchPickOpen || fileHist || gotoOpen || symPalette || wsym || compareOpen || peek || overlay || problemsOpen || tabMenu) {
+				if (searchOpen || palette || commandOpen || branchPickOpen || fileHist || gotoOpen || symPalette || wsym || compareOpen || peek || overlay || problemsOpen || tabMenu || lens) {
 					event.preventDefault();
 					event.stopPropagation();
 					dismissPanels();
@@ -1603,7 +1612,7 @@ export function CodeBody(props) {
 		(event) => {
 			const target = event.target?.closest?.("[data-ce-l]");
 			cancelHover();
-			if (!target || !docRef.current) { closePeek(); return; }
+			if (!target || !docRef.current) { closePeek(); setLens(null); return; }
 			const line = Number(target.dataset.ceL);
 			const col = Number(target.dataset.ceC);
 			const text = docRef.current.lines[line - 1] ?? "";
@@ -1615,18 +1624,28 @@ export function CodeBody(props) {
 			if (!LSP_RE.test(docRef.current.path) || !word) {
 				// VSCode-style: clicking blank space dismisses the reference overlay.
 				setPeek(null);
+				setLens(null);
 				return;
 			}
 			if (target.classList?.contains("ce-kw")) {
 				setPeek(null);
+				setLens(null);
 				return;
 			}
 			const mod = event.metaKey || event.ctrlKey;
 			// VS Code click model: plain click only places the cursor (selecting
-			// text to copy must not pop a panel or fire LSP requests); ⌘/Ctrl+click
-			// jumps to definition; the refs peek lives on ⇧F12 / hover / palette.
-			if (mod) void doJump("definition", at);
-			else setPeek(null);
+			// text to copy must not pop a panel); ⌘/Ctrl+click jumps to definition.
+			// A plain click still answers "how many references?" with a lens chip,
+			// because that is what people look for after clicking a function.
+			if (mod) { void doJump("definition", at); setLens(null); return; }
+			setPeek(null);
+			const nonce = ++lensNonce.current;
+			setLens({ line: at.line, col: at.col, word, busy: true, count: null });
+			api("lsp.request", { cwd, path: docRef.current.path, kind: "references", line: at.line, col: at.col }).then((res) => {
+				if (lensNonce.current !== nonce) return;
+				const count = res.ok ? (res.value.targets ?? []).length : 0;
+				setLens({ line: at.line, col: at.col, word, busy: false, count, note: res.ok ? res.value.note ?? "" : res.error });
+			});
 		},
 		[doJump, closePeek, cancelHover],
 	);
@@ -2300,6 +2319,13 @@ export function CodeBody(props) {
 									onClick: () => jumpToLine(b.start),
 								}, null)))
 								: null,
+							lens ? h("button", {
+								type: "button",
+								className: "ce-lens",
+								style: { top: `${Math.max(2, (lens.line - 1) * ROW - scroll - 1)}px` },
+								title: lens.note ? `${t("jump.refsTitle")} — ${lens.note}` : t("jump.refsTitle"),
+								onClick: () => { setLens(null); void openPeek(lens.word, lens.line, lens.col); },
+							}, lens.busy ? t("loading") : `${lens.count ?? 0} ${t("jump.refsShort")}`) : null,
 							peek ? h(RefsPeek, { t, cwd, peek, scroll, viewport, totalLines: doc.lines.length, onPick: pickPeek, onClose: closePeek }) : null,
 							hover && !editing
 								? h("div", {

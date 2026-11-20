@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased — clicking a function tells you how many references it has
+
+"Click the function and I get no reference list" was half true: the peek existed, but a plain click only placed the cursor, so nothing answered the question the click was asking.
+
+- **A reference-count lens** now appears on the clicked line (`N 个引用`), like VS Code's CodeLens. One click → one count; clicking the chip opens the reference list, and it disappears on Escape, on a scroll-free click elsewhere, or when another file loads.
+- The click still does not open a panel on its own — selecting text to copy must stay quiet — so the pattern is: click to see the count, click the count to see the list. ⌘/Ctrl-click still jumps to the definition, ⇧F12 and the toolbar ⌖ open the list directly.
+- A keyword or a file type with no language server clears the lens instead of showing a stale number.
+- Regressions: a plain click fires exactly one `references` request and opens no peek; the lens renders the count; clicking it opens the list.
+
 ## Unreleased — the inline create row has a way out
 
 Clicking "+" in the file tree by accident left a name field with no visible escape: Escape only worked while that input held focus, and clicking elsewhere did nothing.

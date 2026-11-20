@@ -247,6 +247,7 @@ var zh = {
   "jump.busy": "语言服务器正在索引，稍后重试…",
   "jump.peekTitle": "定义",
   "jump.refsTitle": "引用",
+  "jump.refsShort": "个引用",
   "jump.implTitle": "实现",
   "jump.typeTitle": "类型定义",
   nodiag: "无诊断",
@@ -1005,6 +1006,7 @@ var en = {
   "jump.busy": "language server is indexing; retry shortly…",
   "jump.peekTitle": "Definition",
   "jump.refsTitle": "References",
+  "jump.refsShort": "references",
   "jump.implTitle": "Implementation",
   "jump.typeTitle": "Type definition",
   nodiag: "No diagnostics",
@@ -6111,6 +6113,8 @@ function CodeBody(props) {
   const [search, setSearch] = useState(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const [peek, setPeek] = useState(null);
+  const [lens, setLens] = useState(null);
+  const lensNonce = useRef(0);
   const [editing, setEditing] = useState(false);
   const [editText, setEditText] = useState("");
   const [findOpen, setFindOpen] = useState(false);
@@ -6318,7 +6322,11 @@ function CodeBody(props) {
   const loadFile = useCallback(
     async (path, line, col, mark, opts) => {
       if (!cwd || !opts?.background && !canNavigate()) return null;
-      if (!opts?.background) dismissPanels();
+      if (!opts?.background) {
+        dismissPanels();
+      }
+      lensNonce.current++;
+      setLens(null);
       const res = await api("fs.read", { cwd, path });
       if (!res.ok) {
         if (opts?.checkExternal) say(t("watch.fileGone"), "error");
@@ -7134,6 +7142,8 @@ function CodeBody(props) {
   const closePeek = useCallback(() => {
     peekNonce.current++;
     setPeek(null);
+    lensNonce.current++;
+    setLens(null);
   }, []);
   const pickPeek = useCallback(
     (loc) => {
@@ -7386,7 +7396,7 @@ function CodeBody(props) {
         return;
       }
       if (event.key === "Escape") {
-        if (searchOpen || palette || commandOpen || branchPickOpen || fileHist || gotoOpen || symPalette || wsym || compareOpen || peek || overlay || problemsOpen || tabMenu) {
+        if (searchOpen || palette || commandOpen || branchPickOpen || fileHist || gotoOpen || symPalette || wsym || compareOpen || peek || overlay || problemsOpen || tabMenu || lens) {
           event.preventDefault();
           event.stopPropagation();
           dismissPanels();
@@ -7516,6 +7526,7 @@ function CodeBody(props) {
       cancelHover();
       if (!target || !docRef.current) {
         closePeek();
+        setLens(null);
         return;
       }
       const line = Number(target.dataset.ceL);
@@ -7528,15 +7539,28 @@ function CodeBody(props) {
       if (codeRef.current) codeRef.current.focus({ preventScroll: true });
       if (!LSP_RE.test(docRef.current.path) || !word) {
         setPeek(null);
+        setLens(null);
         return;
       }
       if (target.classList?.contains("ce-kw")) {
         setPeek(null);
+        setLens(null);
         return;
       }
       const mod = event.metaKey || event.ctrlKey;
-      if (mod) void doJump("definition", at);
-      else setPeek(null);
+      if (mod) {
+        void doJump("definition", at);
+        setLens(null);
+        return;
+      }
+      setPeek(null);
+      const nonce = ++lensNonce.current;
+      setLens({ line: at.line, col: at.col, word, busy: true, count: null });
+      api("lsp.request", { cwd, path: docRef.current.path, kind: "references", line: at.line, col: at.col }).then((res) => {
+        if (lensNonce.current !== nonce) return;
+        const count = res.ok ? (res.value.targets ?? []).length : 0;
+        setLens({ line: at.line, col: at.col, word, busy: false, count, note: res.ok ? res.value.note ?? "" : res.error });
+      });
     },
     [doJump, closePeek, cancelHover]
   );
@@ -8305,6 +8329,16 @@ function CodeBody(props) {
               },
               onClick: () => jumpToLine(b.start)
             }, null))) : null,
+            lens ? h("button", {
+              type: "button",
+              className: "ce-lens",
+              style: { top: `${Math.max(2, (lens.line - 1) * ROW - scroll - 1)}px` },
+              title: lens.note ? `${t("jump.refsTitle")} — ${lens.note}` : t("jump.refsTitle"),
+              onClick: () => {
+                setLens(null);
+                void openPeek(lens.word, lens.line, lens.col);
+              }
+            }, lens.busy ? t("loading") : `${lens.count ?? 0} ${t("jump.refsShort")}`) : null,
             peek ? h(RefsPeek, { t, cwd, peek, scroll, viewport, totalLines: doc.lines.length, onPick: pickPeek, onClose: closePeek }) : null,
             hover && !editing ? h("div", {
               className: "ce-hover",
@@ -8559,6 +8593,9 @@ var CSS2 = `
 .ce-empty{flex:1;display:flex;align-items:center;justify-content:center;color:var(--dsw-alias-label-tertiary,#7a8490);padding:24px;text-align:center}
 .ce-statusbar{flex:none;display:flex;gap:8px;align-items:center;padding:3px 10px;border-top:.5px solid var(--dsw-alias-border-l1,#333);font-size:11px;color:var(--dsw-alias-label-tertiary,#889);min-height:22px}
 .ce-title-ico{display:inline-flex;margin-right:2px}
+.ce-lens{position:absolute;right:14px;z-index:4;padding:0 6px;height:18px;line-height:18px;border-radius:9px;border:.5px solid var(--dsw-alias-border-l1,#39414a);background:var(--dsw-alias-bg-layer-1,#1d2126);color:var(--dsw-alias-label-secondary,#aab);font-size:10px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;cursor:pointer}
+.ce-lens:hover{color:var(--dsw-alias-button-info-fill,#58a6ff);border-color:var(--dsw-alias-button-info-fill,#58a6ff)}
+.ce-lens{box-shadow:0 1px 6px rgba(0,0,0,.35)}
 .ce-peek{position:absolute;left:12px;width:min(720px,calc(100% - 24px));z-index:6;background:var(--dsw-alias-bg-layer-1,#1d2126);border:.5px solid var(--dsw-alias-border-l2,#454a52);border-radius:10px;box-shadow:0 16px 48px rgba(0,0,0,.45),0 0 0 1px rgba(0,0,0,.18);display:flex;flex-direction:column;max-height:390px;overflow:hidden}
 .ce-peek-head{display:flex;align-items:center;gap:8px;padding:8px 10px 8px 14px;border-bottom:.5px solid var(--dsw-alias-border-l1,#333);flex:none;background:var(--dsw-alias-bg-layer-1,#1d2126)}
 .ce-peek-sym{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-weight:700;font-size:13px;color:var(--dsw-alias-label-primary,#eee);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:42%}
