@@ -378,6 +378,7 @@ export const zh = {
 	"rpc.pickPlaceholder": "搜索 .proto 文件…",
 	"rpc.noProto": "工作区里没有 .proto 文件",
 	"rpc.protoCount": "个 .proto 文件",
+	"rpc.noProtoHint": "可以直接在输入框粘贴路径，或用「反射发现」向服务器索取 schema",
 
 	"rpc.noMethods": "还没有解析出方法。填写 .proto 路径后点「加载」。",
 	"rpc.onboardTitle": "先加载一个 .proto",
@@ -1119,6 +1120,7 @@ export const en = {
 	"rpc.pickPlaceholder": "Search .proto files…",
 	"rpc.noProto": "No .proto files in this workspace",
 	"rpc.protoCount": ".proto files",
+	"rpc.noProtoHint": "Paste a path in the field, or use Discover to ask the server for its schema",
 
 	"rpc.noMethods": "No methods yet. Fill in the .proto path and press Load.",
 	"rpc.onboardTitle": "Load a .proto to start",

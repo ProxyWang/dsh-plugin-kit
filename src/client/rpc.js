@@ -83,7 +83,7 @@ export function splitProtoPath(path) {
  *
  * @param props - `{ t, cwd, onPick, onClose }`
  */
-export function ProtoPicker({ t, cwd, onPick, onClose }) {
+export function ProtoPicker({ t, cwd, box, onPick, onClose }) {
 	const [query, setQuery] = useState("");
 	const [matches, setMatches] = useState([]);
 	const [busy, setBusy] = useState(true);
@@ -119,7 +119,14 @@ export function ProtoPicker({ t, cwd, onPick, onClose }) {
 		else if (event.key === "Escape") { event.preventDefault(); onClose(); }
 	};
 
-	return h("div", { className: "cerpc-picker", ref: panelRef, role: "dialog", "aria-label": t("rpc.pickProto"), onKeyDown },
+	return h("div", {
+		className: "cerpc-picker cerpc-picker-floating",
+		ref: panelRef,
+		role: "dialog",
+		"aria-label": t("rpc.pickProto"),
+		style: box ? { left: `${box.left}px`, top: `${box.top}px`, width: `${box.width}px` } : undefined,
+		onKeyDown,
+	},
 		h("input", {
 			className: "ce-input cerpc-picker-input",
 			value: query,
@@ -129,7 +136,10 @@ export function ProtoPicker({ t, cwd, onPick, onClose }) {
 			onChange: (event) => setQuery(event.target.value),
 		}),
 		matches.length === 0
-			? h("div", { className: "cerpc-picker-empty" }, busy ? t("loading") : t("rpc.noProto"))
+			? h("div", { className: "cerpc-picker-empty" },
+				busy ? t("loading") : h(Fragment, null,
+					h("div", { className: "cerpc-picker-empty-title" }, t("rpc.noProto")),
+					h("div", { className: "cerpc-picker-empty-hint" }, t("rpc.noProtoHint"))))
 			: h(Fragment, null,
 				h("div", { className: "cerpc-picker-list ce-scroll" }, matches.map((path, position) => {
 				const parts = splitProtoPath(path);
@@ -311,6 +321,33 @@ export function RpcView({ t, useTabInfo, sessionId, useSessions, incoming }) {
 
 	const [pickerOpen, setPickerOpen] = useState(false);
 
+	useEffect(() => {
+		if (!pickerOpen) return undefined;
+		const close = () => setPickerOpen(false);
+		globalThis.addEventListener?.("resize", close);
+		globalThis.addEventListener?.("scroll", close, true);
+		return () => {
+			globalThis.removeEventListener?.("resize", close);
+			globalThis.removeEventListener?.("scroll", close, true);
+		};
+	}, [pickerOpen]);
+
+	// The list is positioned against the viewport: a 560px panel anchored inside
+	// a narrow toolbar made the whole workspace scroll sideways.
+	const protoAnchor = useRef(null);
+	const [pickerBox, setPickerBox] = useState(null);
+
+	/** Open the chooser under its field, clamped to the window. */
+	const openPicker = useCallback(() => {
+		const rect = protoAnchor.current?.getBoundingClientRect?.();
+		if (rect) {
+			const viewport = Number(globalThis.innerWidth) || 1200;
+			const left = Math.max(8, Math.min(rect.left, viewport - 320));
+			setPickerBox({ left, top: rect.bottom + 6, width: Math.min(560, Math.max(320, viewport - left - 16)) });
+		}
+		setPickerOpen(true);
+	}, []);
+
 	// Distinct .proto files this session already called, newest first — the
 	// fastest way back into a service you were debugging a minute ago.
 	const recentProtos = useMemo(() => {
@@ -458,7 +495,7 @@ export function RpcView({ t, useTabInfo, sessionId, useSessions, incoming }) {
 					}))),
 			h("div", { className: "cerpc-field cerpc-proto" },
 				h("span", { className: "cerpc-label" }, t("rpc.proto")),
-				h("div", { className: "cerpc-proto-row" },
+				h("div", { className: "cerpc-proto-row", ref: protoAnchor },
 					h("input", { className: "ce-input cerpc-input", value: protoPath, spellCheck: false, placeholder: "proto/hello.proto", onChange: (event) => setProtoPath(event.target.value) }),
 					h("button", {
 						type: "button",
@@ -466,9 +503,9 @@ export function RpcView({ t, useTabInfo, sessionId, useSessions, incoming }) {
 						"data-ce-popup-trigger": "rpc-proto",
 						"aria-expanded": pickerOpen,
 						title: t("rpc.browseHint"),
-						onClick: () => setPickerOpen((open) => !open),
+						onClick: () => (pickerOpen ? setPickerOpen(false) : openPicker()),
 					}, t("rpc.browse"))),
-				pickerOpen ? h(ProtoPicker, { t, cwd, onPick: pickProto, onClose: () => setPickerOpen(false) }) : null),
+				pickerOpen ? h(ProtoPicker, { t, cwd, box: pickerBox, onPick: pickProto, onClose: () => setPickerOpen(false) }) : null),
 			h("button", { type: "button", className: "ce-sk-btn", disabled: protoBusy, onClick: () => void loadProto() }, protoBusy ? t("loading") : t("rpc.load")),
 			h("button", {
 				type: "button",
@@ -532,7 +569,7 @@ export function RpcView({ t, useTabInfo, sessionId, useSessions, incoming }) {
 				h("h3", { className: "cerpc-onboard-title" }, t("rpc.onboardTitle")),
 				h("p", { className: "cerpc-onboard-body" }, t("rpc.onboardBody")),
 				h("div", { className: "cerpc-onboard-actions" },
-					h("button", { type: "button", className: "ce-sk-btn ce-sk-primary", onClick: () => setPickerOpen(true) }, t("rpc.browse")),
+					h("button", { type: "button", className: "ce-sk-btn ce-sk-primary", onClick: openPicker }, t("rpc.browse")),
 					h("button", { type: "button", className: "ce-sk-btn", disabled: address.trim() === "" || protoBusy, title: t("rpc.discoverHint"), onClick: () => void discoverSchema() }, t("rpc.discover"))),
 				recentProtos.length === 0
 					? null

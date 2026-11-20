@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased — the chooser floats instead of shoving the workspace sideways
+
+Opening the `.proto` list shifted the whole app: a 560px absolutely-positioned panel inside a ~280px toolbar cell made the workspace overflow horizontally, and the layout scrolled to reveal it.
+
+- The list is now **fixed to the viewport**, measured from the field's rectangle when it opens and clamped so its right edge stays inside the window (`width = min(560, viewport - left - 16)`).
+- It closes on scroll or resize, so it can never drift away from the field it belongs to.
+- The "no `.proto` files here" state now says what to do instead: paste a path, or use Discover to ask the server for its schema.
+- Regressions: the panel carries the floating class with the computed geometry, and the empty state names both alternatives.
+
 ## Unreleased — the dialog stops shouting, and the empty gRPC pane becomes one card
 
 Two interaction problems, both visible in one screenshot: a connection dialog that displayed every field and an error before anything was typed, and a gRPC pane that spent a whole screen showing three separate "nothing here" messages.

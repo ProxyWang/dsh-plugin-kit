@@ -445,6 +445,7 @@ var zh = {
   "rpc.pickPlaceholder": "搜索 .proto 文件…",
   "rpc.noProto": "工作区里没有 .proto 文件",
   "rpc.protoCount": "个 .proto 文件",
+  "rpc.noProtoHint": "可以直接在输入框粘贴路径，或用「反射发现」向服务器索取 schema",
   "rpc.noMethods": "还没有解析出方法。填写 .proto 路径后点「加载」。",
   "rpc.onboardTitle": "先加载一个 .proto",
   "rpc.onboardBody": "从工作区挑一个 proto 文件，或让服务器自己报出 schema。地址只需要填 host:port。",
@@ -1178,6 +1179,7 @@ var en = {
   "rpc.pickPlaceholder": "Search .proto files…",
   "rpc.noProto": "No .proto files in this workspace",
   "rpc.protoCount": ".proto files",
+  "rpc.noProtoHint": "Paste a path in the field, or use Discover to ask the server for its schema",
   "rpc.noMethods": "No methods yet. Fill in the .proto path and press Load.",
   "rpc.onboardTitle": "Load a .proto to start",
   "rpc.onboardBody": "Pick a proto file from the workspace, or ask the server for its schema. The address only needs host:port.",
@@ -8898,13 +8900,17 @@ var CSS2 = `
 .cerpc-proto-row{display:flex;gap:4px;align-items:center}
 /* Wider than the field it hangs from: a path list at field width is unreadable. */
 .cerpc-picker{position:absolute;top:100%;left:0;z-index:30;margin-top:4px;padding:8px;display:flex;flex-direction:column;gap:8px;width:min(600px,calc(100vw - 40px));background:var(--dsw-alias-bg-layer-1,#1d2126);border:.5px solid var(--dsw-alias-border-l1,#39414a);border-radius:8px;box-shadow:0 12px 32px rgba(0,0,0,.45)}
+/* Fixed to the viewport so a wide list cannot make the workspace scroll. */
+.cerpc-picker-floating{position:fixed;margin:0}
 .cerpc-picker-input{height:30px;font-size:13px}
 .cerpc-picker-list{max-height:340px;overflow:auto;display:flex;flex-direction:column;gap:1px}
 .cerpc-picker-row{display:flex;align-items:baseline;gap:0;width:100%;min-height:26px;text-align:left;padding:5px 8px;border:0;border-radius:5px;background:transparent;color:var(--dsw-alias-label-primary,#dde);font-size:12.5px;line-height:1.5;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;cursor:pointer}
 .cerpc-picker-dir{color:var(--dsw-alias-label-tertiary,#889);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:0 1 auto;min-width:0}
 .cerpc-picker-name{color:var(--dsw-alias-label-primary,#dde);flex:0 0 auto;white-space:nowrap}
 .cerpc-picker-row:hover,.cerpc-picker-row-on{background:var(--dsw-alias-interactive-bg-hover,#2a2e35)}
-.cerpc-picker-empty{font-size:12px;color:var(--dsw-alias-label-tertiary,#889);padding:6px 8px}
+.cerpc-picker-empty{font-size:12px;color:var(--dsw-alias-label-tertiary,#889);padding:6px 8px;display:flex;flex-direction:column;gap:4px}
+.cerpc-picker-empty-title{color:var(--dsw-alias-label-secondary,#aab)}
+.cerpc-picker-empty-hint{font-size:11px;line-height:1.6}
 .cerpc-picker-foot{font-size:11px;color:var(--dsw-alias-label-tertiary,#778);padding:0 4px}
 .cerpc-inline{display:flex;align-items:center;gap:4px;font-size:11px;cursor:pointer}
 .cerpc-timeout{width:70px;height:22px;font-size:11px;padding:0 4px}
@@ -13911,7 +13917,7 @@ function splitProtoPath(path) {
   const cut = text.lastIndexOf("/");
   return cut < 0 ? { dir: "", name: text } : { dir: text.slice(0, cut + 1), name: text.slice(cut + 1) };
 }
-function ProtoPicker({ t, cwd, onPick, onClose }) {
+function ProtoPicker({ t, cwd, box, onPick, onClose }) {
   const [query, setQuery] = useState("");
   const [matches, setMatches] = useState([]);
   const [busy, setBusy] = useState(true);
@@ -13951,7 +13957,14 @@ function ProtoPicker({ t, cwd, onPick, onClose }) {
   };
   return h(
     "div",
-    { className: "cerpc-picker", ref: panelRef, role: "dialog", "aria-label": t("rpc.pickProto"), onKeyDown },
+    {
+      className: "cerpc-picker cerpc-picker-floating",
+      ref: panelRef,
+      role: "dialog",
+      "aria-label": t("rpc.pickProto"),
+      style: box ? { left: `${box.left}px`, top: `${box.top}px`, width: `${box.width}px` } : void 0,
+      onKeyDown
+    },
     h("input", {
       className: "ce-input cerpc-picker-input",
       value: query,
@@ -13960,7 +13973,16 @@ function ProtoPicker({ t, cwd, onPick, onClose }) {
       placeholder: t("rpc.pickPlaceholder"),
       onChange: (event) => setQuery(event.target.value)
     }),
-    matches.length === 0 ? h("div", { className: "cerpc-picker-empty" }, busy ? t("loading") : t("rpc.noProto")) : h(
+    matches.length === 0 ? h(
+      "div",
+      { className: "cerpc-picker-empty" },
+      busy ? t("loading") : h(
+        Fragment,
+        null,
+        h("div", { className: "cerpc-picker-empty-title" }, t("rpc.noProto")),
+        h("div", { className: "cerpc-picker-empty-hint" }, t("rpc.noProtoHint"))
+      )
+    ) : h(
       Fragment,
       null,
       h("div", { className: "cerpc-picker-list ce-scroll" }, matches.map((path, position) => {
@@ -14126,6 +14148,27 @@ function RpcView({ t, useTabInfo, sessionId, useSessions, incoming }) {
     }
   }, [address, insecureTls, timeoutMs, t]);
   const [pickerOpen, setPickerOpen] = useState(false);
+  useEffect(() => {
+    if (!pickerOpen) return void 0;
+    const close = () => setPickerOpen(false);
+    globalThis.addEventListener?.("resize", close);
+    globalThis.addEventListener?.("scroll", close, true);
+    return () => {
+      globalThis.removeEventListener?.("resize", close);
+      globalThis.removeEventListener?.("scroll", close, true);
+    };
+  }, [pickerOpen]);
+  const protoAnchor = useRef(null);
+  const [pickerBox, setPickerBox] = useState(null);
+  const openPicker = useCallback(() => {
+    const rect = protoAnchor.current?.getBoundingClientRect?.();
+    if (rect) {
+      const viewport = Number(globalThis.innerWidth) || 1200;
+      const left = Math.max(8, Math.min(rect.left, viewport - 320));
+      setPickerBox({ left, top: rect.bottom + 6, width: Math.min(560, Math.max(320, viewport - left - 16)) });
+    }
+    setPickerOpen(true);
+  }, []);
   const recentProtos = useMemo(() => {
     const seen = /* @__PURE__ */ new Set();
     const out = [];
@@ -14272,7 +14315,7 @@ function RpcView({ t, useTabInfo, sessionId, useSessions, incoming }) {
         h("span", { className: "cerpc-label" }, t("rpc.proto")),
         h(
           "div",
-          { className: "cerpc-proto-row" },
+          { className: "cerpc-proto-row", ref: protoAnchor },
           h("input", { className: "ce-input cerpc-input", value: protoPath, spellCheck: false, placeholder: "proto/hello.proto", onChange: (event) => setProtoPath(event.target.value) }),
           h("button", {
             type: "button",
@@ -14280,10 +14323,10 @@ function RpcView({ t, useTabInfo, sessionId, useSessions, incoming }) {
             "data-ce-popup-trigger": "rpc-proto",
             "aria-expanded": pickerOpen,
             title: t("rpc.browseHint"),
-            onClick: () => setPickerOpen((open) => !open)
+            onClick: () => pickerOpen ? setPickerOpen(false) : openPicker()
           }, t("rpc.browse"))
         ),
-        pickerOpen ? h(ProtoPicker, { t, cwd, onPick: pickProto, onClose: () => setPickerOpen(false) }) : null
+        pickerOpen ? h(ProtoPicker, { t, cwd, box: pickerBox, onPick: pickProto, onClose: () => setPickerOpen(false) }) : null
       ),
       h("button", { type: "button", className: "ce-sk-btn", disabled: protoBusy, onClick: () => void loadProto() }, protoBusy ? t("loading") : t("rpc.load")),
       h("button", {
@@ -14370,7 +14413,7 @@ function RpcView({ t, useTabInfo, sessionId, useSessions, incoming }) {
       h(
         "div",
         { className: "cerpc-onboard-actions" },
-        h("button", { type: "button", className: "ce-sk-btn ce-sk-primary", onClick: () => setPickerOpen(true) }, t("rpc.browse")),
+        h("button", { type: "button", className: "ce-sk-btn ce-sk-primary", onClick: openPicker }, t("rpc.browse")),
         h("button", { type: "button", className: "ce-sk-btn", disabled: address.trim() === "" || protoBusy, title: t("rpc.discoverHint"), onClick: () => void discoverSchema() }, t("rpc.discover"))
       ),
       recentProtos.length === 0 ? null : h(

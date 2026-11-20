@@ -3016,6 +3016,30 @@ check("docAction reloads clean drafts, flags dirty ones, ignores others", docAct
 	check("truncateCell null → NULL", truncateCell(null) === "NULL", null);
 }
 
+// --- proto chooser floats in the viewport, not inside the toolbar ----------------------
+{
+	const fetchBackup = globalThis.fetch;
+	const documentBackup = globalThis.document;
+	globalThis.document = { addEventListener() {}, removeEventListener() {} };
+	globalThis.fetch = async () => ({ json: async () => ({ ok: true, value: { matches: [] } }) });
+	try {
+		const { ProtoPicker } = await import("./src/client/rpc.js");
+		const draw = createHookRenderer(ProtoPicker, { t: (key) => key, cwd: "/w", box: { left: 420, top: 96, width: 540 }, onPick: () => {}, onClose: () => {} }, { effects: true });
+		const tree = draw();
+		draw.flushEffects();
+		check("the chooser is positioned against the viewport", String(tree.props.className).includes("cerpc-picker-floating") && tree.props.style.left === "420px" && tree.props.style.top === "96px" && tree.props.style.width === "540px", tree.props.style);
+		await new Promise((resolve) => setTimeout(resolve, 200));
+		const loaded = draw();
+		draw.flushEffects();
+		const empty = (loaded.children ?? []).flatMap((child) => (Array.isArray(child) ? child : [child])).find((child) => String(child?.props?.className ?? "").includes("cerpc-picker-empty"));
+		check("an empty workspace explains the alternatives", Boolean(empty) && JSON.stringify(empty).includes("rpc.noProtoHint"), null);
+		draw.unmount();
+	} finally {
+		globalThis.fetch = fetchBackup;
+		globalThis.document = documentBackup;
+	}
+}
+
 // --- gRPC onboarding: one card instead of three empty panes ---------------------------
 {
 	const fetchBackup = globalThis.fetch;
