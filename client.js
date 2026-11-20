@@ -355,6 +355,8 @@ var zh = {
   "tree.deleted": "已删除",
   "tree.badName": "名称非法（不能为空、含 / 或为 . / ..）",
   "tree.newFilePlaceholder": "新文件名…",
+  "tree.confirmCreate": "创建（Enter）",
+  "tree.cancelCreate": "取消",
   "tree.newDirPlaceholder": "新文件夹名…",
   "tree.renamePlaceholder": "新名称…",
   "tree.fileWord": "文件",
@@ -1111,6 +1113,8 @@ var en = {
   "tree.deleted": "Deleted",
   "tree.badName": "Invalid name (empty, contains /, or . / ..)",
   "tree.newFilePlaceholder": "new file name…",
+  "tree.confirmCreate": "Create (Enter)",
+  "tree.cancelCreate": "Cancel",
   "tree.newDirPlaceholder": "new folder name…",
   "tree.renamePlaceholder": "new name…",
   "tree.fileWord": "file",
@@ -3422,28 +3426,25 @@ function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshKey, sta
     setAction({ kind, path: contextMenu.path, value: "" });
     setContextMenu(null);
   };
-  const inputRow = (dirPath, kind, placeholder) => h(
-    "div",
-    {
-      key: `inp:${dirPath}:${kind}`,
-      className: "ce-row ctp-inputrow",
-      style: { paddingLeft: 6 + depthOf(dirPath) * 14 }
+  const inputRef = useDismissLayer({
+    open: action?.kind === "newfile" || action?.kind === "newdir" || action?.kind === "rename",
+    onDismiss: () => setAction(null)
+  });
+  const inputRow = (dirPath, kind, placeholder) => h(TreeInputRow, {
+    t,
+    nodeRef: inputRef,
+    kind,
+    placeholder,
+    value: action?.value ?? "",
+    indent: 6 + depthOf(dirPath) * 14,
+    onChange: (value) => setAction({ ...action, value }),
+    onConfirm: () => {
+      const value = String(action?.value ?? "");
+      if (kind === "rename") runRename(action.path, value);
+      else runCreate(dirPath, value, kind);
     },
-    h("input", {
-      className: "ce-input",
-      placeholder,
-      autoFocus: true,
-      value: action?.value ?? "",
-      onChange: (e) => setAction({ ...action, value: e.target.value }),
-      onKeyDown: (e) => {
-        e.stopPropagation();
-        if (e.key === "Enter") {
-          if (kind === "rename") runRename(action.path, e.target.value);
-          else runCreate(dirPath, e.target.value, kind);
-        } else if (e.key === "Escape") setAction(null);
-      }
-    })
-  );
+    onCancel: () => setAction(null)
+  });
   const acts = (path, isDir) => h(
     "span",
     { className: "ctp-acts" },
@@ -3609,6 +3610,40 @@ function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshKey, sta
       h("button", { type: "button", role: "menuitem", onClick: contextRename }, t("tree.rename")),
       h("button", { type: "button", role: "menuitem", className: "cet-context-danger", onClick: contextDelete }, t("tree.delete"))
     ) : null
+  );
+}
+function TreeInputRow({ t, kind, placeholder, value, indent, onChange, onConfirm, onCancel, nodeRef }) {
+  return h(
+    "div",
+    { className: "ce-row ctp-inputrow", ref: nodeRef, style: { paddingLeft: indent } },
+    h("input", {
+      className: "ce-input",
+      placeholder,
+      autoFocus: true,
+      value,
+      onChange: (event) => onChange(event.target.value),
+      onKeyDown: (event) => {
+        event.stopPropagation();
+        if (event.key === "Enter") onConfirm();
+        else if (event.key === "Escape") onCancel();
+      }
+    }),
+    h("button", {
+      type: "button",
+      className: "ce-tool ce-tiny ctp-input-ok",
+      title: t("tree.confirmCreate"),
+      "aria-label": t("tree.confirmCreate"),
+      onMouseDown: (event) => event.preventDefault(),
+      onClick: onConfirm
+    }, "✓"),
+    h("button", {
+      type: "button",
+      className: "ce-tool ce-tiny ctp-input-cancel",
+      title: `${t("tree.cancelCreate")} (Esc)`,
+      "aria-label": t("tree.cancelCreate"),
+      onMouseDown: (event) => event.preventDefault(),
+      onClick: onCancel
+    }, "×")
   );
 }
 

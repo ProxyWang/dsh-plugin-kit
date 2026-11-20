@@ -290,25 +290,27 @@ export function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshK
 		setAction({ kind, path: contextMenu.path, value: "" });
 		setContextMenu(null);
 	};
-	const inputRow = (dirPath, kind, placeholder) => h("div", {		key: `inp:${dirPath}:${kind}`,
-		className: "ce-row ctp-inputrow",
-		style: { paddingLeft: 6 + depthOf(dirPath) * 14 },
-	},
-	h("input", {
-		className: "ce-input",
+	// An open create/rename row is a transient layer: Escape or a click outside
+	// cancels it, so an accidental "+" never leaves an input with no way out.
+	const inputRef = useDismissLayer({
+		open: action?.kind === "newfile" || action?.kind === "newdir" || action?.kind === "rename",
+		onDismiss: () => setAction(null),
+	});
+	const inputRow = (dirPath, kind, placeholder) => h(TreeInputRow, {
+		t,
+		nodeRef: inputRef,
+		kind,
 		placeholder,
-		autoFocus: true,
 		value: action?.value ?? "",
-		onChange: (e) => setAction({ ...action, value: e.target.value }),
-		onKeyDown: (e) => {
-			e.stopPropagation();
-			if (e.key === "Enter") {
-				if (kind === "rename") runRename(action.path, e.target.value);
-				else runCreate(dirPath, e.target.value, kind);
-			} else if (e.key === "Escape") setAction(null);
+		indent: 6 + depthOf(dirPath) * 14,
+		onChange: (value) => setAction({ ...action, value }),
+		onConfirm: () => {
+			const value = String(action?.value ?? "");
+			if (kind === "rename") runRename(action.path, value);
+			else runCreate(dirPath, value, kind);
 		},
-	}),
-	);
+		onCancel: () => setAction(null),
+	});
 	const acts = (path, isDir) => h("span", { className: "ctp-acts" },
 		isDir ? h(HintButton, {
 			type: "button",
@@ -452,4 +454,44 @@ export function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshK
 				h("button", { type: "button", role: "menuitem", className: "cet-context-danger", onClick: contextDelete }, t("tree.delete")),
 			) : null,
 	);
+}
+
+/**
+ * The inline row used to create a file/folder or rename one.
+ *
+ * Exported so its contract — Enter confirms, Escape cancels, and both are also
+ * visible buttons — can be tested without a rendered tree.
+ *
+ * @param props - `{t, kind, placeholder, value, indent, onChange, onConfirm, onCancel, nodeRef}`
+ */
+export function TreeInputRow({ t, kind, placeholder, value, indent, onChange, onConfirm, onCancel, nodeRef }) {
+	return h("div", { className: "ce-row ctp-inputrow", ref: nodeRef, style: { paddingLeft: indent } },
+		h("input", {
+			className: "ce-input",
+			placeholder,
+			autoFocus: true,
+			value,
+			onChange: (event) => onChange(event.target.value),
+			onKeyDown: (event) => {
+				event.stopPropagation();
+				if (event.key === "Enter") onConfirm();
+				else if (event.key === "Escape") onCancel();
+			},
+		}),
+		h("button", {
+			type: "button",
+			className: "ce-tool ce-tiny ctp-input-ok",
+			title: t("tree.confirmCreate"),
+			"aria-label": t("tree.confirmCreate"),
+			onMouseDown: (event) => event.preventDefault(),
+			onClick: onConfirm,
+		}, "✓"),
+		h("button", {
+			type: "button",
+			className: "ce-tool ce-tiny ctp-input-cancel",
+			title: `${t("tree.cancelCreate")} (Esc)`,
+			"aria-label": t("tree.cancelCreate"),
+			onMouseDown: (event) => event.preventDefault(),
+			onClick: onCancel,
+		}, "×"));
 }

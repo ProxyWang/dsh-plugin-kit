@@ -797,6 +797,52 @@ try { retryBrowser(); } catch {}
 retryBrowser();
 check("failed browser open can retry immediately", browserAttempts === 2, browserAttempts);
 
+// --- the tree's inline create row can be cancelled -----------------------------------
+{
+	const { createHookRenderer } = await import("./test-support/react-stub.mjs");
+	const { TreeInputRow } = await import("./src/client/tree.js");
+	const events = [];
+	const render = (value) => {
+		const draw = createHookRenderer(TreeInputRow, {
+			t: (key) => key,
+			kind: "newfile",
+			placeholder: "tree.newFilePlaceholder",
+			value,
+			indent: 20,
+			onChange: (next) => events.push({ change: next }),
+			onConfirm: () => events.push({ confirm: value }),
+			onCancel: () => events.push({ cancel: true }),
+		}, { effects: true, expand: true });
+		const tree = draw();
+		draw.flushEffects();
+		return tree;
+	};
+	const flatten = (node) => {
+		if (!node || typeof node !== "object") return [];
+		if (Array.isArray(node)) return node.flatMap(flatten);
+		return [node, ...(node.children ?? []).flatMap(flatten)];
+	};
+
+	const tree = render("a.txt");
+	const input = flatten(tree).find((node) => node.type === "input");
+	const buttons = flatten(tree).filter((node) => node.type === "button");
+	check("the create row shows the name field and two buttons", Boolean(input) && input.props.placeholder === "tree.newFilePlaceholder" && buttons.length === 2, buttons.map((node) => node.children?.[0]));
+	check("the buttons are labelled, not just glyphs", buttons.every((node) => typeof node.props["aria-label"] === "string" && node.props["aria-label"] !== ""), buttons.map((node) => node.props["aria-label"]));
+
+	const cancel = buttons.find((node) => node.children?.[0] === "×");
+	const confirm = buttons.find((node) => node.children?.[0] === "✓");
+	cancel.props.onClick();
+	check("clicking × cancels the create", events.some((entry) => entry.cancel === true), events);
+	confirm.props.onClick();
+	check("clicking ✓ confirms with the typed value", events.some((entry) => entry.confirm === "a.txt"), events);
+	input.props.onKeyDown({ key: "Escape", stopPropagation() {} });
+	check("Escape also cancels", events.filter((entry) => entry.cancel === true).length === 2, events);
+	input.props.onKeyDown({ key: "Enter", stopPropagation() {} });
+	check("Enter confirms", events.filter((entry) => entry.confirm !== undefined).length === 2, events);
+	input.props.onChange({ target: { value: "b.txt" } });
+	check("typing reports the new value", events.some((entry) => entry.change === "b.txt"), events);
+}
+
 // --- curl parser -----------------------------------------------------------------------------
 const { parseCurl, toCurl, shellQuote, tokenizeCurl, expandShortFlags } = await import("./src/client/curl.js");
 const { substituteVars, buildEnvMap } = await import("./src/client/reqmodel.js");

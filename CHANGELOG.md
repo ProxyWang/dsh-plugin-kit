@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased — the inline create row has a way out
+
+Clicking "+" in the file tree by accident left a name field with no visible escape: Escape only worked while that input held focus, and clicking elsewhere did nothing.
+
+- The row now carries **✓ and × buttons** with real labels (`创建（Enter）` / `取消`), so the way out is visible, not memorised.
+- It is a **transient layer**: clicking anywhere outside, or pressing Escape with focus elsewhere, cancels it — the same dismissal every other popup in the plugin uses.
+- `TreeInputRow` is exported so the contract is tested directly: both buttons render with labels, × and Escape cancel, ✓ and Enter confirm with the typed value, and typing is reported.
+
 ## Unreleased — the module rung is real
 
 The driver ladder described a project-local `mysql2` / `pg` but only the catalog knew about it: a connection always went through the CLI. Now it connects through the module when the user allows it.
