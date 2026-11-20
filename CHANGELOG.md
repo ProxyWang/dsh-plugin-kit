@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased — the dialog stops shouting, and the empty gRPC pane becomes one card
+
+Two interaction problems, both visible in one screenshot: a connection dialog that displayed every field and an error before anything was typed, and a gRPC pane that spent a whole screen showing three separate "nothing here" messages.
+
+### Connect dialog
+
+- **Half-typed addresses are not errors.** The verdict ("unrecognised address") now appears when the field is left, not on the first keystroke — typing `postgres://` character by character used to flash an error the whole way.
+- **Manual fields are progressive again.** They appear when "fill the fields by hand" is chosen, instead of expanding because the address was momentarily unparseable.
+- **Opening the dialog starts clean**: a stale error or test result from a previous attempt no longer greets you.
+- **Saved connections are offered at the top** as chips; picking one fills the form, so reconnecting is one click instead of retyping an address.
+- **Three labels were rendering as raw keys** (`db.clientPath`, `db.testAction`, `db.testOk`) because the strings were never added to the locale; both languages are back to 728 keys with exact parity.
+
+### gRPC pane
+
+- **One onboarding card replaces the empty rail, the empty request box and the empty response pane**: what to do, two buttons (choose a file / discover the schema) and the `.proto` files this session already called.
+- The response pane's own empty state is an inline note instead of a paragraph floating at the bottom of a blank area.
+- Regressions: the onboarding card replaces the panes, offers both entry points, opens the chooser, and the dialog keeps manual fields hidden until asked for while delaying the address verdict to blur.
+
 ## 2.2.0 (2026-11-20)
 
 The gRPC field becomes something you can use without knowing its syntax — pick the scheme, pick the `.proto` file — the editors grow with their content, and the driver layer gains the catalog that makes a project-local `mysql2`/`pg` the preferred implementation.

@@ -130,6 +130,9 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 	const [saveProfile, setSaveProfile] = useState(true);
 	// The dialog's "Test" result: a connection proven without being kept.
 	const [testState, setTestState] = useState({ busy: false, ok: null, text: "" });
+	// "Unrecognised address" belongs on blur, not on every keystroke: half a URL
+	// is not an error, it is a URL being typed.
+	const [addressTouched, setAddressTouched] = useState(false);
 	const [historyOpen, setHistoryOpen] = useState(false);
 	const detailRef = useDismissLayer({ open: Boolean(cellDetail), onDismiss: () => setCellDetail(null) });
 	const connectRef = useDismissLayer({ open: connectOpen, onDismiss: () => setConnectOpen(false) });
@@ -205,6 +208,33 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 	 * file. Unknown input clears the driver so Connect stays disabled, and the
 	 * reason is shown instead of being swallowed.
 	 */
+	/** Open the dialog in a clean state: no stale error from a previous attempt. */
+	const openConnect = useCallback(() => {
+		setNotice("");
+		setAddressTouched(false);
+		setTestState({ busy: false, ok: null, text: "" });
+		setConnectOpen(true);
+	}, []);
+
+	/** Fill the form from a saved connection (the dialog's quick pick). */
+	const useSavedProfile = useCallback((profile) => {
+		const parsed = parseConnectionAddress(profile.address || profile.path || "");
+		setForm({
+			address: profile.address || profile.path || "",
+			driver: profile.driver,
+			path: profile.path ?? parsed.path,
+			host: profile.host || parsed.host || "localhost",
+			port: profile.port ? String(profile.port) : parsed.port,
+			user: profile.user ?? parsed.user,
+			password: "",
+			database: profile.database ?? parsed.database,
+			clientPath: "",
+		});
+		setAddressTouched(true);
+		setNotice(parsed.error ?? "");
+		setTestState({ busy: false, ok: null, text: "" });
+	}, []);
+
 	const applyAddress = useCallback((value) => {
 		const parsed = parseConnectionAddress(value);
 		setForm((current) => ({
@@ -218,10 +248,10 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 			password: parsed.password,
 			database: parsed.database,
 		}));
-		setNotice(parsed.error);
+		if (addressTouched) setNotice(parsed.error);
 		// Any edit invalidates a previous test: it proved a different target.
 		setTestState({ busy: false, ok: null, text: "" });
-	}, []);
+	}, [addressTouched]);
 
 	const driverReady = drivers.find((entry) => entry.id === form.driver)?.ready ?? true;
 	// A driver whose CLI is not on PATH can still be chosen: the binary may be
@@ -515,7 +545,7 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 	return h("div", { className: "ce-root cedb-root", onKeyDown },
 		// ---- toolbar -------------------------------------------------------------------
 		h("div", { className: "cedb-toolbar" },
-			h("button", { type: "button", className: "ce-sk-btn ce-sk-primary", onClick: () => setConnectOpen(true) }, `＋ ${t("db.connect")}`),
+			h("button", { type: "button", className: "ce-sk-btn ce-sk-primary", onClick: openConnect }, `＋ ${t("db.connect")}`),
 			h("button", { type: "button", className: "ce-sk-btn", onClick: () => openQueryTab("") }, t("db.newQuery")),
 			activeConn ? h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost", title: t("db.refresh"), onClick: () => void refreshSchema() }, "⟳") : null,
 			h("span", { className: "ce-spacer" }),
@@ -708,6 +738,17 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 		connectOpen
 			? h("div", { className: "cedb-dialog", ref: connectRef, role: "dialog", "aria-label": t("db.newConnection") },
 				h("h3", { className: "cedb-dialog-title" }, t("db.newConnection")),
+				profiles.length === 0
+					? null
+					: h("div", { className: "cedb-saved-pick" },
+						h("span", { className: "cedb-saved-pick-title" }, `${t("db.recentConnections")} · ${t("db.useSaved")}`),
+						profiles.map((profile) => h("button", {
+							key: profile.id,
+							type: "button",
+							className: "cedb-saved-chip",
+							title: profile.address || profile.path,
+							onClick: () => useSavedProfile(profile),
+						}, h("span", { className: `cedb-driver cedb-driver-${profile.driver}` }, profile.driver), profile.label))),
 				h("label", { className: "cedb-field" }, t("db.address"),
 					h("input", {
 						className: "ce-input",
@@ -717,6 +758,10 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 						spellcheck: false,
 						autoComplete: "off",
 						onChange: (event) => applyAddress(event.target.value),
+						onBlur: () => {
+							setAddressTouched(true);
+							setNotice(parseConnectionAddress(form.address).error);
+						},
 					})),
 				h("div", { className: `cedb-detect${form.driver === "" ? " cedb-detect-miss" : ""}` },
 					h("span", null, form.driver === ""
@@ -737,7 +782,7 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 							? `${t("db.clientBin")}: ${drivers.find((entry) => entry.id === form.driver).bin}`
 							: t("db.clientBinMissing"))
 					: null,
-				advanced || form.driver === ""
+				advanced
 					? h(Fragment, null,
 						h("label", { className: "cedb-field" }, t("db.driver"),
 							h("select", {

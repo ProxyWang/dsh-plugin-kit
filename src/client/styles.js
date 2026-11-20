@@ -415,6 +415,11 @@ export const CSS = `
 .cedb-rail-head-sub{padding-top:8px;border-top:.5px solid var(--dsw-alias-border-l1,#2a2e35);margin-top:4px}
 .cedb-saved .cedb-driver{opacity:.75}
 .cedb-conn-bad{color:var(--dsw-alias-label-error,#f88);font-size:10px;flex:0 0 auto}
+.cedb-saved-pick{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:2px 0 4px}
+.cedb-saved-pick-title{font-size:11px;color:var(--dsw-alias-label-tertiary,#889);width:100%}
+.cedb-saved-chip{display:inline-flex;align-items:center;gap:5px;padding:3px 8px;border:.5px solid var(--dsw-alias-border-l1,#39414a);border-radius:999px;background:var(--dsw-alias-bg-layer-1,#1d2126);color:var(--dsw-alias-label-primary,#dde);font-size:11px;cursor:pointer;max-width:100%}
+.cedb-saved-chip:hover{border-color:var(--dsw-alias-button-info-fill,#58a6ff)}
+.cedb-saved-chip .cedb-driver{font-size:9px}
 .cedb-dialog-test{font-size:11px;padding:4px 6px;border-radius:4px;background:var(--dsw-alias-bg-layer-1,#1d2126)}
 .cedb-dialog-test-ok{color:var(--dsw-alias-label-primary,#dde)}
 .cedb-dialog-test-bad{color:var(--dsw-alias-label-error,#f88)}
@@ -503,6 +508,18 @@ export const CSS = `
 .cerpc-field{flex:1 1 200px;min-width:140px;display:flex;flex-direction:column;gap:3px}
 .cerpc-label{font-size:10px;letter-spacing:.3px;text-transform:uppercase;color:var(--dsw-alias-label-tertiary,#778)}
 .cerpc-input{height:26px;font-size:12px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+/* Onboarding: one card instead of an empty rail + empty request + empty response. */
+.cerpc-onboard{flex:1;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:32px 24px;text-align:center;background:var(--dsw-alias-bg-base,#141618)}
+.cerpc-onboard-icon{display:flex;align-items:center;justify-content:center;width:56px;height:56px;border-radius:16px;background:var(--dsw-alias-bg-layer-1,#1d2126);border:.5px solid var(--dsw-alias-border-l1,#39414a);color:var(--dsw-alias-label-secondary,#aab)}
+.cerpc-onboard-title{margin:2px 0 0;font-size:15px;font-weight:600;color:var(--dsw-alias-label-primary,#eee)}
+.cerpc-onboard-body{margin:0;max-width:440px;font-size:12px;line-height:1.7;color:var(--dsw-alias-label-tertiary,#889)}
+.cerpc-onboard-actions{display:flex;gap:8px;margin-top:6px}
+.cerpc-onboard-recent{display:flex;flex-direction:column;gap:2px;margin-top:14px;padding-top:12px;border-top:.5px solid var(--dsw-alias-border-l1,#2a2e35);width:min(440px,100%)}
+.cerpc-onboard-recent-title{font-size:11px;color:var(--dsw-alias-label-tertiary,#778);margin-bottom:4px;text-align:left}
+.cerpc-onboard-recent-row{display:flex;align-items:baseline;width:100%;padding:4px 8px;border:0;border-radius:5px;background:transparent;color:var(--dsw-alias-label-secondary,#ccd);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;text-align:left;cursor:pointer;overflow:hidden}
+.cerpc-onboard-recent-row:hover{background:var(--dsw-alias-interactive-bg-hover,#2a2e35)}
+.cerpc-resp-empty{display:flex;align-items:center;gap:6px;padding:8px 10px;font-size:12px;color:var(--dsw-alias-label-tertiary,#889)}
+.cerpc-resp-empty-icon{font-size:14px}
 .cerpc-body{flex:1;min-height:0;display:flex;overflow:hidden}
 .cerpc-rail{flex:none;width:230px;min-width:150px;display:flex;flex-direction:column;gap:2px;overflow-y:auto;border-right:.5px solid var(--dsw-alias-border-l1,#333);background:var(--dsw-alias-bg-layer-1,#181b1f);padding:6px 0}
 .cerpc-service{padding:0 0 4px}

@@ -379,6 +379,11 @@ var zh = {
   "db.detected": "自动识别",
   "db.notDetected": "无法识别：粘贴 postgres:// / mysql:// 开头的地址，或指向一个数据库文件",
   "db.advanced": "手动填写字段（高级）",
+  "db.clientPath": "客户端路径（可选，keg-only / 自定义安装时填）",
+  "db.testAction": "测试连接",
+  "db.testOk": "连接成功 · {ms} ms",
+  "db.recentConnections": "已保存的连接",
+  "db.useSaved": "点一个填入表单",
   "db.needAddress": "先填连接地址",
   "db.path": "数据库文件",
   "db.host": "主机",
@@ -441,6 +446,10 @@ var zh = {
   "rpc.noProto": "工作区里没有 .proto 文件",
   "rpc.protoCount": "个 .proto 文件",
   "rpc.noMethods": "还没有解析出方法。填写 .proto 路径后点「加载」。",
+  "rpc.onboardTitle": "先加载一个 .proto",
+  "rpc.onboardBody": "从工作区挑一个 proto 文件，或让服务器自己报出 schema。地址只需要填 host:port。",
+  "rpc.recentProtos": "最近用过",
+  "rpc.noResponse": "调用后响应会显示在这里",
   "rpc.request": "请求消息",
   "rpc.response": "响应",
   "rpc.metadata": "元数据",
@@ -1103,6 +1112,11 @@ var en = {
   "db.detected": "Detected",
   "db.notDetected": "Not recognised: paste a postgres:// or mysql:// address, or point at a database file",
   "db.advanced": "Fill the fields by hand (advanced)",
+  "db.clientPath": "Client path (optional — keg-only or custom install)",
+  "db.testAction": "Test connection",
+  "db.testOk": "Connected · {ms} ms",
+  "db.recentConnections": "Saved connections",
+  "db.useSaved": "Pick one to fill the form",
   "db.needAddress": "Enter a connection address first",
   "db.path": "Database file",
   "db.host": "Host",
@@ -1165,6 +1179,10 @@ var en = {
   "rpc.noProto": "No .proto files in this workspace",
   "rpc.protoCount": ".proto files",
   "rpc.noMethods": "No methods yet. Fill in the .proto path and press Load.",
+  "rpc.onboardTitle": "Load a .proto to start",
+  "rpc.onboardBody": "Pick a proto file from the workspace, or ask the server for its schema. The address only needs host:port.",
+  "rpc.recentProtos": "Recently used",
+  "rpc.noResponse": "Responses appear here after a call",
   "rpc.request": "Request message",
   "rpc.response": "Response",
   "rpc.metadata": "Metadata",
@@ -8750,6 +8768,11 @@ var CSS2 = `
 .cedb-rail-head-sub{padding-top:8px;border-top:.5px solid var(--dsw-alias-border-l1,#2a2e35);margin-top:4px}
 .cedb-saved .cedb-driver{opacity:.75}
 .cedb-conn-bad{color:var(--dsw-alias-label-error,#f88);font-size:10px;flex:0 0 auto}
+.cedb-saved-pick{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:2px 0 4px}
+.cedb-saved-pick-title{font-size:11px;color:var(--dsw-alias-label-tertiary,#889);width:100%}
+.cedb-saved-chip{display:inline-flex;align-items:center;gap:5px;padding:3px 8px;border:.5px solid var(--dsw-alias-border-l1,#39414a);border-radius:999px;background:var(--dsw-alias-bg-layer-1,#1d2126);color:var(--dsw-alias-label-primary,#dde);font-size:11px;cursor:pointer;max-width:100%}
+.cedb-saved-chip:hover{border-color:var(--dsw-alias-button-info-fill,#58a6ff)}
+.cedb-saved-chip .cedb-driver{font-size:9px}
 .cedb-dialog-test{font-size:11px;padding:4px 6px;border-radius:4px;background:var(--dsw-alias-bg-layer-1,#1d2126)}
 .cedb-dialog-test-ok{color:var(--dsw-alias-label-primary,#dde)}
 .cedb-dialog-test-bad{color:var(--dsw-alias-label-error,#f88)}
@@ -8838,6 +8861,18 @@ var CSS2 = `
 .cerpc-field{flex:1 1 200px;min-width:140px;display:flex;flex-direction:column;gap:3px}
 .cerpc-label{font-size:10px;letter-spacing:.3px;text-transform:uppercase;color:var(--dsw-alias-label-tertiary,#778)}
 .cerpc-input{height:26px;font-size:12px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+/* Onboarding: one card instead of an empty rail + empty request + empty response. */
+.cerpc-onboard{flex:1;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:32px 24px;text-align:center;background:var(--dsw-alias-bg-base,#141618)}
+.cerpc-onboard-icon{display:flex;align-items:center;justify-content:center;width:56px;height:56px;border-radius:16px;background:var(--dsw-alias-bg-layer-1,#1d2126);border:.5px solid var(--dsw-alias-border-l1,#39414a);color:var(--dsw-alias-label-secondary,#aab)}
+.cerpc-onboard-title{margin:2px 0 0;font-size:15px;font-weight:600;color:var(--dsw-alias-label-primary,#eee)}
+.cerpc-onboard-body{margin:0;max-width:440px;font-size:12px;line-height:1.7;color:var(--dsw-alias-label-tertiary,#889)}
+.cerpc-onboard-actions{display:flex;gap:8px;margin-top:6px}
+.cerpc-onboard-recent{display:flex;flex-direction:column;gap:2px;margin-top:14px;padding-top:12px;border-top:.5px solid var(--dsw-alias-border-l1,#2a2e35);width:min(440px,100%)}
+.cerpc-onboard-recent-title{font-size:11px;color:var(--dsw-alias-label-tertiary,#778);margin-bottom:4px;text-align:left}
+.cerpc-onboard-recent-row{display:flex;align-items:baseline;width:100%;padding:4px 8px;border:0;border-radius:5px;background:transparent;color:var(--dsw-alias-label-secondary,#ccd);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;text-align:left;cursor:pointer;overflow:hidden}
+.cerpc-onboard-recent-row:hover{background:var(--dsw-alias-interactive-bg-hover,#2a2e35)}
+.cerpc-resp-empty{display:flex;align-items:center;gap:6px;padding:8px 10px;font-size:12px;color:var(--dsw-alias-label-tertiary,#889)}
+.cerpc-resp-empty-icon{font-size:14px}
 .cerpc-body{flex:1;min-height:0;display:flex;overflow:hidden}
 .cerpc-rail{flex:none;width:230px;min-width:150px;display:flex;flex-direction:column;gap:2px;overflow-y:auto;border-right:.5px solid var(--dsw-alias-border-l1,#333);background:var(--dsw-alias-bg-layer-1,#181b1f);padding:6px 0}
 .cerpc-service{padding:0 0 4px}
@@ -12954,6 +12989,7 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
   const [profileErrors, setProfileErrors] = useState({});
   const [saveProfile, setSaveProfile] = useState(true);
   const [testState, setTestState] = useState({ busy: false, ok: null, text: "" });
+  const [addressTouched, setAddressTouched] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const detailRef = useDismissLayer({ open: Boolean(cellDetail), onDismiss: () => setCellDetail(null) });
   const connectRef = useDismissLayer({ open: connectOpen, onDismiss: () => setConnectOpen(false) });
@@ -13010,6 +13046,29 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
       setSchemaError(res.error);
     }
   }, [activeConn]);
+  const openConnect = useCallback(() => {
+    setNotice("");
+    setAddressTouched(false);
+    setTestState({ busy: false, ok: null, text: "" });
+    setConnectOpen(true);
+  }, []);
+  const useSavedProfile = useCallback((profile) => {
+    const parsed = parseConnectionAddress(profile.address || profile.path || "");
+    setForm({
+      address: profile.address || profile.path || "",
+      driver: profile.driver,
+      path: profile.path ?? parsed.path,
+      host: profile.host || parsed.host || "localhost",
+      port: profile.port ? String(profile.port) : parsed.port,
+      user: profile.user ?? parsed.user,
+      password: "",
+      database: profile.database ?? parsed.database,
+      clientPath: ""
+    });
+    setAddressTouched(true);
+    setNotice(parsed.error ?? "");
+    setTestState({ busy: false, ok: null, text: "" });
+  }, []);
   const applyAddress = useCallback((value) => {
     const parsed = parseConnectionAddress(value);
     setForm((current) => ({
@@ -13023,9 +13082,9 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
       password: parsed.password,
       database: parsed.database
     }));
-    setNotice(parsed.error);
+    if (addressTouched) setNotice(parsed.error);
     setTestState({ busy: false, ok: null, text: "" });
-  }, []);
+  }, [addressTouched]);
   const driverReady = drivers.find((entry) => entry.id === form.driver)?.ready ?? true;
   const canConnect = form.driver !== "" && (form.driver === "sqlite" ? form.path.trim() !== "" : form.host.trim() !== "");
   const rememberConnection = useCallback(async (draft) => {
@@ -13287,7 +13346,7 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
     h(
       "div",
       { className: "cedb-toolbar" },
-      h("button", { type: "button", className: "ce-sk-btn ce-sk-primary", onClick: () => setConnectOpen(true) }, `＋ ${t("db.connect")}`),
+      h("button", { type: "button", className: "ce-sk-btn ce-sk-primary", onClick: openConnect }, `＋ ${t("db.connect")}`),
       h("button", { type: "button", className: "ce-sk-btn", onClick: () => openQueryTab("") }, t("db.newQuery")),
       activeConn ? h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost", title: t("db.refresh"), onClick: () => void refreshSchema() }, "⟳") : null,
       h("span", { className: "ce-spacer" }),
@@ -13546,6 +13605,18 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
       "div",
       { className: "cedb-dialog", ref: connectRef, role: "dialog", "aria-label": t("db.newConnection") },
       h("h3", { className: "cedb-dialog-title" }, t("db.newConnection")),
+      profiles.length === 0 ? null : h(
+        "div",
+        { className: "cedb-saved-pick" },
+        h("span", { className: "cedb-saved-pick-title" }, `${t("db.recentConnections")} · ${t("db.useSaved")}`),
+        profiles.map((profile) => h("button", {
+          key: profile.id,
+          type: "button",
+          className: "cedb-saved-chip",
+          title: profile.address || profile.path,
+          onClick: () => useSavedProfile(profile)
+        }, h("span", { className: `cedb-driver cedb-driver-${profile.driver}` }, profile.driver), profile.label))
+      ),
       h(
         "label",
         { className: "cedb-field" },
@@ -13557,7 +13628,11 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
           autoFocus: true,
           spellcheck: false,
           autoComplete: "off",
-          onChange: (event) => applyAddress(event.target.value)
+          onChange: (event) => applyAddress(event.target.value),
+          onBlur: () => {
+            setAddressTouched(true);
+            setNotice(parseConnectionAddress(form.address).error);
+          }
         })
       ),
       h(
@@ -13579,7 +13654,7 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
         { className: "cedb-bin" },
         drivers.find((entry) => entry.id === form.driver)?.bin ? `${t("db.clientBin")}: ${drivers.find((entry) => entry.id === form.driver).bin}` : t("db.clientBinMissing")
       ) : null,
-      advanced || form.driver === "" ? h(
+      advanced ? h(
         Fragment,
         null,
         h(
@@ -14051,6 +14126,18 @@ function RpcView({ t, useTabInfo, sessionId, useSessions, incoming }) {
     }
   }, [address, insecureTls, timeoutMs, t]);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const recentProtos = useMemo(() => {
+    const seen = /* @__PURE__ */ new Set();
+    const out = [];
+    for (const entry of history) {
+      const path = entry?.request?.proto;
+      if (typeof path !== "string" || path === "" || seen.has(path)) continue;
+      seen.add(path);
+      out.push(path);
+      if (out.length >= 4) break;
+    }
+    return out;
+  }, [history]);
   const addressParts = splitAddress(address);
   const pickProto = useCallback((path) => {
     setPickerOpen(false);
@@ -14263,7 +14350,42 @@ function RpcView({ t, useTabInfo, sessionId, useSessions, incoming }) {
         ))
       )
     ) : null,
-    h(
+    methods.length === 0 && !protoBusy ? h(
+      "div",
+      { className: "cerpc-onboard" },
+      h(
+        "div",
+        { className: "cerpc-onboard-icon", "aria-hidden": "true" },
+        h(
+          "svg",
+          { viewBox: "0 0 24 24", width: 30, height: 30, fill: "none", stroke: "currentColor", strokeWidth: 1.5, strokeLinecap: "round", strokeLinejoin: "round" },
+          h("path", { d: "M6 4v6a4 4 0 0 0 4 4h4" }),
+          h("path", { d: "M18 4v6a4 4 0 0 1-4 4h-4" }),
+          h("circle", { cx: 6, cy: 3, r: 1.6 }),
+          h("circle", { cx: 18, cy: 3, r: 1.6 })
+        )
+      ),
+      h("h3", { className: "cerpc-onboard-title" }, t("rpc.onboardTitle")),
+      h("p", { className: "cerpc-onboard-body" }, t("rpc.onboardBody")),
+      h(
+        "div",
+        { className: "cerpc-onboard-actions" },
+        h("button", { type: "button", className: "ce-sk-btn ce-sk-primary", onClick: () => setPickerOpen(true) }, t("rpc.browse")),
+        h("button", { type: "button", className: "ce-sk-btn", disabled: address.trim() === "" || protoBusy, title: t("rpc.discoverHint"), onClick: () => void discoverSchema() }, t("rpc.discover"))
+      ),
+      recentProtos.length === 0 ? null : h(
+        "div",
+        { className: "cerpc-onboard-recent" },
+        h("div", { className: "cerpc-onboard-recent-title" }, t("rpc.recentProtos")),
+        recentProtos.map((path) => h("button", {
+          key: path,
+          type: "button",
+          className: "cerpc-onboard-recent-row",
+          title: path,
+          onClick: () => pickProto(path)
+        }, splitProtoPath(path).dir, h("span", { className: "cerpc-picker-name" }, splitProtoPath(path).name)))
+      )
+    ) : h(
       "div",
       { className: "cerpc-body" },
       // ---- method rail ------------------------------------------------------------
@@ -14379,7 +14501,12 @@ function RpcView({ t, useTabInfo, sessionId, useSessions, incoming }) {
               h("div", { className: "cerpc-message-head" }, `#${index + 1}`),
               h("pre", { className: "cerpc-message-body" }, JSON.stringify(message, null, 2))
             )),
-            (response.messages ?? []).length === 0 ? h("div", { className: "cedb-placeholder-small" }, t("rpc.emptyResponse")) : null,
+            (response.messages ?? []).length === 0 ? h(
+              "div",
+              { className: "cerpc-resp-empty" },
+              h("span", { className: "cerpc-resp-empty-icon", "aria-hidden": "true" }, "◌"),
+              h("span", null, t("rpc.emptyResponse"))
+            ) : null,
             Object.keys(response.trailers ?? {}).length > 0 ? h(
               "div",
               { className: "cerpc-trailers" },

@@ -310,6 +310,21 @@ export function RpcView({ t, useTabInfo, sessionId, useSessions, incoming }) {
 	}, [address, insecureTls, timeoutMs, t]);
 
 	const [pickerOpen, setPickerOpen] = useState(false);
+
+	// Distinct .proto files this session already called, newest first — the
+	// fastest way back into a service you were debugging a minute ago.
+	const recentProtos = useMemo(() => {
+		const seen = new Set();
+		const out = [];
+		for (const entry of history) {
+			const path = entry?.request?.proto;
+			if (typeof path !== "string" || path === "" || seen.has(path)) continue;
+			seen.add(path);
+			out.push(path);
+			if (out.length >= 4) break;
+		}
+		return out;
+	}, [history]);
 	// The field shows `host:port`; the scheme is the selector beside it.
 	const addressParts = splitAddress(address);
 
@@ -506,7 +521,31 @@ export function RpcView({ t, useTabInfo, sessionId, useSessions, incoming }) {
 							}, "✕")))),
 			)
 			: null,
-		h("div", { className: "cerpc-body" },
+		methods.length === 0 && !protoBusy
+			? h("div", { className: "cerpc-onboard" },
+				h("div", { className: "cerpc-onboard-icon", "aria-hidden": "true" },
+					h("svg", { viewBox: "0 0 24 24", width: 30, height: 30, fill: "none", stroke: "currentColor", strokeWidth: 1.5, strokeLinecap: "round", strokeLinejoin: "round" },
+						h("path", { d: "M6 4v6a4 4 0 0 0 4 4h4" }),
+						h("path", { d: "M18 4v6a4 4 0 0 1-4 4h-4" }),
+						h("circle", { cx: 6, cy: 3, r: 1.6 }),
+						h("circle", { cx: 18, cy: 3, r: 1.6 }))),
+				h("h3", { className: "cerpc-onboard-title" }, t("rpc.onboardTitle")),
+				h("p", { className: "cerpc-onboard-body" }, t("rpc.onboardBody")),
+				h("div", { className: "cerpc-onboard-actions" },
+					h("button", { type: "button", className: "ce-sk-btn ce-sk-primary", onClick: () => setPickerOpen(true) }, t("rpc.browse")),
+					h("button", { type: "button", className: "ce-sk-btn", disabled: address.trim() === "" || protoBusy, title: t("rpc.discoverHint"), onClick: () => void discoverSchema() }, t("rpc.discover"))),
+				recentProtos.length === 0
+					? null
+					: h("div", { className: "cerpc-onboard-recent" },
+						h("div", { className: "cerpc-onboard-recent-title" }, t("rpc.recentProtos")),
+						recentProtos.map((path) => h("button", {
+							key: path,
+							type: "button",
+							className: "cerpc-onboard-recent-row",
+							title: path,
+							onClick: () => pickProto(path),
+						}, splitProtoPath(path).dir, h("span", { className: "cerpc-picker-name" }, splitProtoPath(path).name)))))
+			: h("div", { className: "cerpc-body" },
 			// ---- method rail ------------------------------------------------------------
 			h("aside", { className: "cerpc-rail" },
 				methods.length === 0
@@ -597,7 +636,11 @@ export function RpcView({ t, useTabInfo, sessionId, useSessions, incoming }) {
 								(response.messages ?? []).map((message, index) => h("div", { key: index, className: "cerpc-message" },
 									h("div", { className: "cerpc-message-head" }, `#${index + 1}`),
 									h("pre", { className: "cerpc-message-body" }, JSON.stringify(message, null, 2)))),
-								(response.messages ?? []).length === 0 ? h("div", { className: "cedb-placeholder-small" }, t("rpc.emptyResponse")) : null,
+								(response.messages ?? []).length === 0
+									? h("div", { className: "cerpc-resp-empty" },
+										h("span", { className: "cerpc-resp-empty-icon", "aria-hidden": "true" }, "◌"),
+										h("span", null, t("rpc.emptyResponse")))
+									: null,
 								Object.keys(response.trailers ?? {}).length > 0
 									? h("div", { className: "cerpc-trailers" },
 										h("div", { className: "cerpc-pane-title" }, t("rpc.trailers")),

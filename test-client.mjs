@@ -3016,6 +3016,46 @@ check("docAction reloads clean drafts, flags dirty ones, ignores others", docAct
 	check("truncateCell null → NULL", truncateCell(null) === "NULL", null);
 }
 
+// --- gRPC onboarding: one card instead of three empty panes ---------------------------
+{
+	const fetchBackup = globalThis.fetch;
+	const documentBackup = globalThis.document;
+	const calls = [];
+	globalThis.document = { addEventListener() {}, removeEventListener() {} };
+	globalThis.fetch = async (url, options) => {
+		const body = JSON.parse(options?.body ?? "{}");
+		calls.push({ url: String(url), body });
+		if (String(url).endsWith("/search.files")) return { json: async () => ({ ok: true, value: { matches: [] } }) };
+		return { json: async () => ({ ok: true, value: {} }) };
+	};
+	try {
+		const { RpcView } = await import("./src/client/rpc.js");
+		const draw = createHookRenderer(RpcView, { t: (key) => key, sessionId: "s1", useSessions: (select) => select({ byId: { s1: { cwd: "/w" } } }) }, { effects: true, expand: true });
+		const flatten = (node) => {
+			if (!node || typeof node !== "object") return [];
+			if (Array.isArray(node)) return node.flatMap(flatten);
+			return [node, ...(node.children ?? []).flatMap(flatten)];
+		};
+		let tree = draw();
+		draw.flushEffects();
+		const find = (test) => flatten(tree).find(test);
+		check("an empty gRPC pane shows one onboarding card", Boolean(find((n) => n.props?.className === "cerpc-onboard")), null);
+		check("onboarding hides the empty panes", find((n) => n.props?.className === "cerpc-body") === undefined && find((n) => n.props?.className === "cerpc-rail") === undefined, null);
+		check("onboarding offers the two ways in", (() => {
+			const labels = flatten(tree).map((n) => n.children?.[0]).filter((child) => typeof child === "string");
+			return labels.includes("rpc.browse") && labels.includes("rpc.discover");
+		})(), null);
+		const browse = find((n) => n.type === "button" && n.children?.[0] === "rpc.browse");
+		browse.props.onClick();
+		tree = draw();
+		draw.flushEffects();
+		check("the onboarding action opens the chooser", Boolean(find((n) => n.props?.role === "dialog" && n.props?.["aria-label"] === "rpc.pickProto")), null);
+	} finally {
+		globalThis.fetch = fetchBackup;
+		globalThis.document = documentBackup;
+	}
+}
+
 // --- gRPC proto picker: choose a file instead of typing its path ----------------------
 {
 	const fetchBackup = globalThis.fetch;
@@ -3161,7 +3201,9 @@ check("docAction reloads clean drafts, flags dirty ones, ignores others", docAct
 		check("the connect dialog asks for a connection address first", Boolean(dialog()) && Boolean(find((n) => n.props?.placeholder === "db.addressPlaceholder")), null);
 		const allOptions = (select) => (select?.children ?? []).flatMap((child) => (Array.isArray(child) ? child : [child]));
 		check("an empty address asks for one instead of guessing", chip() === "db.notDetected", chip());
-		check("the manual driver menu is populated even before the probe answers", allOptions(find((n) => n.type === "select")).length === 3, null);
+		// Manual fields are progressive: they appear when asked for, not because an
+		// address is half-typed. The block below opens them through the toggle.
+		check("manual fields stay hidden until requested", find((n) => n.type === "select") === undefined, null);
 		check("connect stays disabled until the address makes sense", find((n) => n.type === "button" && n.children?.[0] === "db.connectAction").props.disabled === true, null);
 
 		const address = () => find((n) => n.props?.placeholder === "db.addressPlaceholder");
@@ -3179,7 +3221,11 @@ check("docAction reloads clean drafts, flags dirty ones, ignores others", docAct
 
 		address().props.onChange({ target: { value: "notes.txt" } });
 		tree = draw();
-		check("an unrecognised address blocks connecting and says why", find((n) => n.type === "button" && n.children?.[0] === "db.connectAction").props.disabled === true && Boolean(find((n) => n.props?.className === "cedb-dialog-error")), null);
+		check("an unrecognised address blocks connecting", find((n) => n.type === "button" && n.children?.[0] === "db.connectAction").props.disabled === true, null);
+		check("half-typed addresses are not errors yet", find((n) => n.props?.className === "cedb-dialog-error") === undefined, null);
+		address().props.onBlur();
+		tree = draw();
+		check("leaving the field explains an unrecognised address", Boolean(find((n) => n.props?.className === "cedb-dialog-error")), null);
 
 		address().props.onChange({ target: { value: "./data/app.sqlite" } });
 		tree = draw();
