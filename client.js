@@ -12822,7 +12822,7 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
   const [activeTabId, setActiveTabId] = useState("");
   const [history, setHistory] = useState([]);
   const [connectOpen, setConnectOpen] = useState(false);
-  const [form, setForm] = useState({ address: "", driver: "", path: "", host: "localhost", port: "", user: "", password: "", database: "" });
+  const [form, setForm] = useState({ address: "", driver: "", path: "", host: "localhost", port: "", user: "", password: "", database: "", clientPath: "" });
   const [advanced, setAdvanced] = useState(false);
   const [cellDetail, setCellDetail] = useState(null);
   const [notice, setNotice] = useState("");
@@ -12897,7 +12897,7 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
     setNotice(parsed.error);
   }, []);
   const driverReady = drivers.find((entry) => entry.id === form.driver)?.ready ?? true;
-  const canConnect = form.driver !== "" && driverReady && (form.driver === "sqlite" ? form.path.trim() !== "" : form.host.trim() !== "");
+  const canConnect = form.driver !== "" && (form.driver === "sqlite" ? form.path.trim() !== "" : form.host.trim() !== "");
   const rememberConnection = useCallback(async (draft) => {
     const defaultPort = draft.driver === "mysql" ? 3306 : draft.driver === "postgres" ? 5432 : 0;
     const label = draft.driver === "sqlite" ? String(draft.path).split(/[\\/]/).pop() || draft.path : `${draft.host}:${Number(draft.port) || defaultPort}${draft.database ? `/${draft.database}` : ""}`;
@@ -12946,6 +12946,7 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
       params.user = form.user;
       params.password = form.password;
       params.database = form.database.trim();
+      if (String(form.clientPath ?? "").trim() !== "") params.clientPath = form.clientPath.trim();
     }
     const res = await api("db.connect", params);
     if (!res.ok) {
@@ -13422,7 +13423,7 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
             // drivers it could open, instead of an empty box.
           }, DRIVERS.map((id) => {
             const known = drivers.find((entry) => entry.id === id);
-            return h("option", { key: id, value: id, disabled: known ? !known.ready : false }, known && !known.ready ? `${known.label} — ${known.note}` : driverLabel(id));
+            return h("option", { key: id, value: id }, known && !known.ready ? `${known.label} — ${known.note}` : driverLabel(id));
           }))
         ),
         form.driver === "sqlite" ? h(
@@ -13445,6 +13446,18 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
             { className: "cedb-field-row" },
             h("label", { className: "cedb-field" }, t("db.user"), h("input", { className: "ce-input", value: form.user, onChange: (event) => setForm({ ...form, user: event.target.value }) })),
             h("label", { className: "cedb-field" }, t("db.password"), h("input", { className: "ce-input", type: "password", value: form.password, onChange: (event) => setForm({ ...form, password: event.target.value }) }))
+          ),
+          h(
+            "label",
+            { className: "cedb-field" },
+            t("db.clientPath"),
+            h("input", {
+              className: "ce-input",
+              value: form.clientPath,
+              placeholder: form.driver === "mysql" ? "/opt/homebrew/opt/mysql-client/bin/mysql" : "/opt/homebrew/opt/postgresql@16/bin/psql",
+              spellCheck: false,
+              onChange: (event) => setForm({ ...form, clientPath: event.target.value })
+            })
           )
         )
       ) : h("button", {

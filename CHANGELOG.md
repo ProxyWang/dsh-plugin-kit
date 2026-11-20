@@ -93,6 +93,15 @@ The plugin's terminal could run a shell and a full-screen TUI, but it could not 
 
 The first database panel was a connection list, one SQL box and a result table. It did the three things a database tool has to do and none of the things that make one usable: no schema columns, no way to browse a table, no paging, no history, nothing to click. This replaces it, and adds the RPC half the request workbench was missing.
 
+#### Choosing a driver that is not on PATH
+
+The connect dialog greyed out MySQL and PostgreSQL whenever their CLI was not found, which made the option look broken on any machine where the client exists but PATH does not know it — and keg-only installs are exactly that case.
+
+- **Keg-only layouts are searched** ([lib/host/binpath.js](<lib/host/binpath.js>)): Homebrew keeps `mysql-client` and `postgresql@N` out of `/opt/homebrew/bin`, so `opt/<formula>/bin`, `Cellar/<formula>/<version>/bin` and `/Applications/Postgres.app/Contents/Versions/*/bin` are now candidates, alongside the per-user dirs and PATH.
+- **A driver can be chosen even when its client is missing.** The note stays as a warning (with the install command), the Connect button is no longer disabled for it, and the attempt reports the real reason.
+- **A connection can name its own client binary** (`clientPath`, an "Advanced" field). `connect` then uses that path instead of a PATH lookup, which also covers containers and custom builds; the host-side probe is skipped because the user is asserting the location.
+- Regressions: keg-only discovery and its place in the candidate order, `kegOnlyBins` tolerating missing prefixes, a fake `mysql` at an explicit path answering `connect` and `query`, a missing client refused with the install hint, and every driver note offering either an install command or the client-path escape hatch.
+
 #### Database batch ([lib/host/db.js](<lib/host/db.js>), [src/client/db.js](<src/client/db.js>))
 
 - **Schema, not a table list**: `db.schema` reports every database, table and view with its columns (type, NOT NULL, primary key, default) and its indexes; the rail renders that as an expandable tree with a name filter and `PK` / `NN` badges. SQLite reads `sqlite_master` + `PRAGMA table_info` / `index_list` / `index_info`; MySQL and PostgreSQL read `information_schema` through the CLI adapters and introspect the current database (other databases list by name only, so a server with fifty schemas does not spawn fifty queries on connect).

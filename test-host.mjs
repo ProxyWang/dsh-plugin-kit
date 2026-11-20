@@ -1071,6 +1071,43 @@ process.stdin.on("data", (chunk) => {
 	rmSync(root, { recursive: true, force: true });
 }
 
+// --- CLI drivers: keg-only discovery and an explicit client path -----------------------
+{
+	// Homebrew keeps mysql-client and postgresql@N out of the normal bin dir, so a
+	// PATH scan alone reports "not installed" on a machine that has them.
+	const brew = `${cwd}-brew`;
+	rmSync(brew, { recursive: true, force: true });
+	mkdirSync(`${brew}/opt/mysql-client/bin`, { recursive: true });
+	writeFileSync(`${brew}/opt/mysql-client/bin/mysql`, "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+	const { binaryCandidates, findBinary, clearBinaryCache, kegOnlyBins } = await import("./lib/host/binpath.js");
+	clearBinaryCache();
+	check("a keg-only Homebrew binary is discovered", findBinary("mysql", { env: { PATH: "" }, brewRoots: [brew] }) === `${brew}/opt/mysql-client/bin/mysql`, findBinary("mysql", { env: { PATH: "" }, brewRoots: [brew] }));
+	check("keg-only candidates are tried before the bare PATH fallback", (() => {
+		const list = binaryCandidates("mysql", { env: { PATH: "" }, brewRoots: [brew] });
+		const keg = list.indexOf(`${brew}/opt/mysql-client/bin/mysql`);
+		return keg !== -1 && keg < list.indexOf("mysql");
+	})(), binaryCandidates("mysql", { env: { PATH: "" }, brewRoots: [brew] }).slice(0, 3));
+	check("kegOnlyBins scans opt, Cellar and Postgres.app without throwing", Array.isArray(kegOnlyBins("psql", [brew])), null);
+
+	// A client the dialog names by path is used instead of a PATH lookup: this is
+	// what makes a keg-only or custom install (or a container's client) work.
+	const fakeBin = `${brew}/fake-mysql`;
+	writeFileSync(fakeBin, "#!/bin/sh\nprintf 'answer\\n1\\n'\n", { mode: 0o755 });
+	const db = await import("./lib/host/db.js");
+	const conn = await db.connect({ driver: "mysql", host: "example.test", user: "u", database: "d", clientPath: fakeBin });
+	check("a connection can name its own client binary", conn?.driver === "mysql", conn);
+	const queried = await db.query(conn.id, "SELECT 1");
+	check("a path-backed client answers queries", queried.columns?.[0] === "answer" && queried.rows?.[0]?.[0] === "1", queried);
+	db.disconnect(conn.id);
+
+	const refused = await db.connect({ driver: "mysql", host: "example.test" }).then(() => null, (error) => error);
+	check("a missing client is refused with an install hint", refused !== null && /install it/.test(refused.message) && /client path/.test(refused.message), String(refused));
+	const drivers = await db.listDrivers();
+	check("driver notes name the install command and the escape hatch", drivers.every((entry) => entry.ready || /client path/.test(entry.note) || /Node/.test(entry.note)), drivers);
+	rmSync(brew, { recursive: true, force: true });
+	clearBinaryCache();
+}
+
 // --- saved database connections (profiles + vault-held passwords) ------------------------
 {
 	const { createVaultService } = await import("./lib/host/vault.js");

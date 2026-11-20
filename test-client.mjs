@@ -3035,8 +3035,8 @@ check("docAction reloads clean drafts, flags dirty ones, ignores others", docAct
 		if (String(url).endsWith("/db.drivers")) {
 			return { json: async () => ({ ok: true, value: [
 				{ id: "sqlite", label: "SQLite", ready: true, note: "" },
-				{ id: "mysql", label: "MySQL", ready: false, note: "mysql CLI not on PATH" },
-				{ id: "postgres", label: "PostgreSQL", ready: false, note: "psql CLI not on PATH" },
+				{ id: "mysql", label: "MySQL", ready: false, note: "mysql client not found — install it (brew install mysql-client) or set a client path" },
+				{ id: "postgres", label: "PostgreSQL", ready: false, note: "psql client not found — install it (brew install postgresql@16) or set a client path" },
 			] }) };
 		}
 		if (String(url).endsWith("/db.connect")) return { json: async () => ({ ok: true, value: { id: "c1", driver: body.driver, label: "app" } }) };
@@ -3076,7 +3076,9 @@ check("docAction reloads clean drafts, flags dirty ones, ignores others", docAct
 		address().props.onChange({ target: { value: "postgres://alice:secret@db.example:6543/app" } });
 		tree = draw();
 		check("pasting a URL names the driver it recognised", chip() === "db.detected: PostgreSQL", chip());
-		check("an address for an unavailable driver stays blocked and says why", find((n) => n.type === "button" && n.children?.[0] === "db.connectAction").props.disabled === true && Boolean(find((n) => n.props?.className === "cedb-detect-note")), null);
+		// A keg-only or not-yet-installed client is a warning, not a dead end:
+		// the attempt is allowed and the reason is shown next to the chip.
+		check("an address for an unavailable driver still explains the gap", find((n) => n.type === "button" && n.children?.[0] === "db.connectAction").props.disabled === false && Boolean(find((n) => n.props?.className === "cedb-detect-note")), null);
 
 		address().props.onChange({ target: { value: "notes.txt" } });
 		tree = draw();
@@ -3095,7 +3097,7 @@ check("docAction reloads clean drafts, flags dirty ones, ignores others", docAct
 		const select = find((n) => n.type === "select");
 		const options = (select?.children ?? []).flatMap((child) => (Array.isArray(child) ? child : [child]));
 		check("the driver menu is never empty", options.length === 3 && options.map((option) => option.props.value).join() === "sqlite,mysql,postgres", options.map((option) => option.props.value));
-		check("an unavailable driver is listed with its reason instead of vanishing", options[1].props.disabled === true && options[1].children?.[0] === "MySQL — mysql CLI not on PATH", options[1].children);
+		check("an unavailable driver is selectable and names the missing client", options[1].props.disabled === undefined && String(options[1].children?.[0]).startsWith("MySQL — "), options[1].children);
 
 		find((n) => n.type === "button" && n.children?.[0] === "db.connectAction").props.onClick();
 		await new Promise((resolve) => setImmediate(resolve));
