@@ -410,6 +410,11 @@ var zh = {
   "db.sqlPlaceholder": "输入 SQL…（⌘/Ctrl+Enter 执行）",
   "db.run": "执行",
   "db.runHint": "执行后结果会显示在这里。",
+  "db.columns": "列",
+  "db.refresh": "刷新",
+  "db.reloadTable": "表数据需要重新加载",
+  "db.reloadTableHint": "连接可能已断开，或页面刚刚切换。",
+  "db.noConnectionCtx": "未选择连接",
   "db.stop": "停止",
   "db.savedConnections": "已保存",
   "db.connectSaved": "连接这个保存的连接",
@@ -1144,6 +1149,11 @@ var en = {
   "db.sqlPlaceholder": "Enter SQL… (⌘/Ctrl+Enter to run)",
   "db.run": "Run",
   "db.runHint": "Results appear here after a statement runs.",
+  "db.columns": "columns",
+  "db.refresh": "Refresh",
+  "db.reloadTable": "Table data needs a reload",
+  "db.reloadTableHint": "The connection may have dropped, or the tab just switched.",
+  "db.noConnectionCtx": "No connection",
   "db.stop": "Stop",
   "db.savedConnections": "Saved",
   "db.connectSaved": "Connect to this saved connection",
@@ -8812,6 +8822,14 @@ var CSS2 = `
 .cedb-conn-select{height:26px;font-size:12px;max-width:240px;background:var(--dsw-alias-bg-layer-2,#22262c);color:var(--dsw-alias-label-primary,#dde);border:.5px solid var(--dsw-alias-border-l1,#333);border-radius:5px;padding:0 6px}
 .cedb-run{flex:none}
 .cedb-kbd{font-size:10px;color:var(--dsw-alias-label-tertiary,#667);font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.cedb-ctx-row{display:flex;align-items:center;gap:6px;padding:5px 10px 0;flex-wrap:wrap}
+.cedb-ctx{padding:1px 7px;border-radius:4px;background:var(--dsw-alias-bg-layer-1,#1d2126);border:.5px solid var(--dsw-alias-border-l1,#2a2e35);font-size:11px;color:var(--dsw-alias-label-secondary,#aab);max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cedb-ctx-strong{color:var(--dsw-alias-label-primary,#dde);font-weight:600}
+.cedb-ctx-dim{color:var(--dsw-alias-label-tertiary,#889)}
+.cedb-empty-result{flex:1;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:24px;text-align:center}
+.cedb-empty-icon{font-size:22px;color:var(--dsw-alias-label-tertiary,#667)}
+.cedb-empty-title{font-size:12px;color:var(--dsw-alias-label-secondary,#aab)}
+.cedb-empty-hint{font-size:11px;color:var(--dsw-alias-label-tertiary,#778)}
 .cedb-sql{min-height:88px;max-height:34vh;resize:vertical;margin:0 10px 8px;padding:8px 10px;border:.5px solid var(--dsw-alias-border-l1,#333);border-radius:6px;background:var(--dsw-alias-bg-base,#141618);color:var(--dsw-alias-label-primary,#dde);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;line-height:1.5;outline:none;tab-size:2}
 .cedb-sql:focus{border-color:var(--dsw-alias-button-info-fill,#58a6ff)}
 .cedb-result-head{flex:none;display:flex;align-items:center;gap:6px;padding:4px 10px;font-size:11px;color:var(--dsw-alias-label-tertiary,#889);min-height:24px}
@@ -13499,6 +13517,16 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
         ) : h(
           "div",
           { className: "cedb-tabbody" },
+          // ---- context chips: what this tab is pointed at ----------------
+          h(
+            "div",
+            { className: "cedb-ctx-row" },
+            h("span", { className: "cedb-ctx" }, connections.find((entry) => entry.id === (activeTab.conn || activeConn))?.label ?? t("db.noConnectionCtx")),
+            activeTab.database ? h("span", { className: "cedb-ctx" }, activeTab.database) : null,
+            activeTab.table ? h("span", { className: "cedb-ctx cedb-ctx-strong" }, activeTab.table) : null,
+            activeTab.result?.columns?.length ? h("span", { className: "cedb-ctx cedb-ctx-dim" }, `${activeTab.result.columns.length} ${t("db.columns")}`) : null,
+            activeTab.result ? h("span", { className: "cedb-ctx cedb-ctx-dim" }, `${activeTab.result.rows?.length ?? 0} ${t("db.rows")}`) : null
+          ),
           // ---- query tab ----
           activeTab.kind === "query" ? h(
             Fragment,
@@ -13549,7 +13577,13 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
               ) : h("span", { className: "cedb-result-hint" }, t("db.runHint"))
             ),
             activeTab.error ? h("div", { className: "cedb-error" }, activeTab.error) : null,
-            activeTab.result ? h(ResultGrid, { t, result: activeTab.result, onCell: setCellDetail }) : h("div", { className: "cedb-placeholder-small" }, t("db.runHint"))
+            activeTab.result ? h(ResultGrid, { t, result: activeTab.result, onCell: setCellDetail }) : h(
+              "div",
+              { className: "cedb-empty-result" },
+              h("span", { className: "cedb-empty-icon", "aria-hidden": "true" }, "▤"),
+              h("div", { className: "cedb-empty-title" }, t("db.runHint")),
+              activeTab.loading ? null : h("button", { type: "button", className: "ce-sk-btn", disabled: !String(activeTab.sql ?? "").trim(), onClick: () => void runQuery(activeTab.id) }, `▶ ${t("db.run")}`)
+            )
           ) : h(
             Fragment,
             null,
@@ -13572,7 +13606,14 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
               activeTab.result ? h("button", { type: "button", className: "ce-tool ce-tiny", title: t("db.export"), onClick: () => exportResult(activeTab.result, activeTab.table) }, "⤓ CSV") : null
             ),
             activeTab.error ? h("div", { className: "cedb-error" }, activeTab.error) : null,
-            activeTab.result ? h(ResultGrid, { t, result: activeTab.result, onCell: setCellDetail, onSort: (column) => sortBy(activeTab.id, column), order: activeTab.order, dir: activeTab.dir }) : h("div", { className: "cedb-placeholder-small" }, activeTab.loading ? t("loading") : t("db.noRows")),
+            activeTab.result ? h(ResultGrid, { t, result: activeTab.result, onCell: setCellDetail, onSort: (column) => sortBy(activeTab.id, column), order: activeTab.order, dir: activeTab.dir }) : h(
+              "div",
+              { className: "cedb-empty-result" },
+              h("span", { className: "cedb-empty-icon", "aria-hidden": "true" }, "▤"),
+              h("div", { className: "cedb-empty-title" }, activeTab.loading ? t("loading") : t("db.reloadTable")),
+              h("div", { className: "cedb-empty-hint" }, t("db.reloadTableHint")),
+              activeTab.loading ? null : h("button", { type: "button", className: "ce-sk-btn", onClick: () => void loadRows(activeTab.id) }, `⟳ ${t("db.refresh")}`)
+            ),
             h(
               "div",
               { className: "cedb-pager" },

@@ -457,6 +457,14 @@ export const CSS = `
 .cedb-conn-select{height:26px;font-size:12px;max-width:240px;background:var(--dsw-alias-bg-layer-2,#22262c);color:var(--dsw-alias-label-primary,#dde);border:.5px solid var(--dsw-alias-border-l1,#333);border-radius:5px;padding:0 6px}
 .cedb-run{flex:none}
 .cedb-kbd{font-size:10px;color:var(--dsw-alias-label-tertiary,#667);font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.cedb-ctx-row{display:flex;align-items:center;gap:6px;padding:5px 10px 0;flex-wrap:wrap}
+.cedb-ctx{padding:1px 7px;border-radius:4px;background:var(--dsw-alias-bg-layer-1,#1d2126);border:.5px solid var(--dsw-alias-border-l1,#2a2e35);font-size:11px;color:var(--dsw-alias-label-secondary,#aab);max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cedb-ctx-strong{color:var(--dsw-alias-label-primary,#dde);font-weight:600}
+.cedb-ctx-dim{color:var(--dsw-alias-label-tertiary,#889)}
+.cedb-empty-result{flex:1;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:24px;text-align:center}
+.cedb-empty-icon{font-size:22px;color:var(--dsw-alias-label-tertiary,#667)}
+.cedb-empty-title{font-size:12px;color:var(--dsw-alias-label-secondary,#aab)}
+.cedb-empty-hint{font-size:11px;color:var(--dsw-alias-label-tertiary,#778)}
 .cedb-sql{min-height:88px;max-height:34vh;resize:vertical;margin:0 10px 8px;padding:8px 10px;border:.5px solid var(--dsw-alias-border-l1,#333);border-radius:6px;background:var(--dsw-alias-bg-base,#141618);color:var(--dsw-alias-label-primary,#dde);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;line-height:1.5;outline:none;tab-size:2}
 .cedb-sql:focus{border-color:var(--dsw-alias-button-info-fill,#58a6ff)}
 .cedb-result-head{flex:none;display:flex;align-items:center;gap:6px;padding:4px 10px;font-size:11px;color:var(--dsw-alias-label-tertiary,#889);min-height:24px}

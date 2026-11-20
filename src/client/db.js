@@ -645,6 +645,13 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 						h("div", { className: "cedb-placeholder-title" }, t("db.welcome")),
 						h("div", { className: "cedb-placeholder-hint" }, t("db.welcomeHint")))
 					: h("div", { className: "cedb-tabbody" },
+						// ---- context chips: what this tab is pointed at ----------------
+						h("div", { className: "cedb-ctx-row" },
+							h("span", { className: "cedb-ctx" }, connections.find((entry) => entry.id === (activeTab.conn || activeConn))?.label ?? t("db.noConnectionCtx")),
+							activeTab.database ? h("span", { className: "cedb-ctx" }, activeTab.database) : null,
+							activeTab.table ? h("span", { className: "cedb-ctx cedb-ctx-strong" }, activeTab.table) : null,
+							activeTab.result?.columns?.length ? h("span", { className: "cedb-ctx cedb-ctx-dim" }, `${activeTab.result.columns.length} ${t("db.columns")}`) : null,
+							activeTab.result ? h("span", { className: "cedb-ctx cedb-ctx-dim" }, `${activeTab.result.rows?.length ?? 0} ${t("db.rows")}`) : null),
 						// ---- query tab ----
 						activeTab.kind === "query"
 							? h(Fragment, null,
@@ -692,7 +699,10 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 								activeTab.error ? h("div", { className: "cedb-error" }, activeTab.error) : null,
 								activeTab.result
 									? h(ResultGrid, { t, result: activeTab.result, onCell: setCellDetail })
-									: h("div", { className: "cedb-placeholder-small" }, t("db.runHint")),
+									: h("div", { className: "cedb-empty-result" },
+										h("span", { className: "cedb-empty-icon", "aria-hidden": "true" }, "▤"),
+										h("div", { className: "cedb-empty-title" }, t("db.runHint")),
+										activeTab.loading ? null : h("button", { type: "button", className: "ce-sk-btn", disabled: !String(activeTab.sql ?? "").trim(), onClick: () => void runQuery(activeTab.id) }, `▶ ${t("db.run")}`)),
 							)
 							// ---- table tab ----
 							: h(Fragment, null,
@@ -713,7 +723,11 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 								activeTab.error ? h("div", { className: "cedb-error" }, activeTab.error) : null,
 								activeTab.result
 									? h(ResultGrid, { t, result: activeTab.result, onCell: setCellDetail, onSort: (column) => sortBy(activeTab.id, column), order: activeTab.order, dir: activeTab.dir })
-									: h("div", { className: "cedb-placeholder-small" }, activeTab.loading ? t("loading") : t("db.noRows")),
+									: h("div", { className: "cedb-empty-result" },
+										h("span", { className: "cedb-empty-icon", "aria-hidden": "true" }, "▤"),
+										h("div", { className: "cedb-empty-title" }, activeTab.loading ? t("loading") : t("db.reloadTable")),
+										h("div", { className: "cedb-empty-hint" }, t("db.reloadTableHint")),
+										activeTab.loading ? null : h("button", { type: "button", className: "ce-sk-btn", onClick: () => void loadRows(activeTab.id) }, `⟳ ${t("db.refresh")}`)),
 								h("div", { className: "cedb-pager" },
 									h("button", {
 										type: "button",

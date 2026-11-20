@@ -1198,6 +1198,43 @@ process.stdin.on("data", (chunk) => {
 	check("metadata keys are lowercased and pseudo-headers dropped", headers.authorization === "Bearer t" && !(":pseudo" in headers) && !("" in headers), headers);
 }
 
+// --- agent tools for the database panel ------------------------------------------------
+{
+	let sqliteAvailable = false;
+	try { await import("node:sqlite"); sqliteAvailable = true; } catch { /* no node:sqlite */ }
+	if (!sqliteAvailable) {
+		skipped += 4;
+	} else {
+		const db = await import("./lib/host/db.js");
+		const { createToolboxTools } = await import("./lib/host/tools.js");
+		const file = `${cwd}-tools.sqlite`;
+		rmSync(file, { force: true });
+		const conn = await db.connect({ driver: "sqlite", path: file });
+		await db.query(conn.id, "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT NOT NULL)");
+		await db.query(conn.id, "INSERT INTO users (name) VALUES ('ada'), ('grace')");
+		const tools = createToolboxTools({ routes: {}, dbRoutes: db.dbRoutes });
+		const describe = tools.find((tool) => tool.name === "db_describe");
+		const queryTool = tools.find((tool) => tool.name === "db_query");
+
+		check("the database tools are registered for the agent", Boolean(describe) && Boolean(queryTool), tools.map((tool) => tool.name));
+
+		const described = JSON.parse((await describe.execute({})).data);
+		const table = described.databases?.[0]?.tables?.find((entry) => entry.name === "users");
+		check("db_describe reports the schema the agent must use", Boolean(table) && table.columns.some((column) => column.includes("id") && column.includes("PK")), described.databases?.[0]?.tables);
+
+		const read = JSON.parse((await queryTool.execute({ sql: "SELECT id, name FROM users ORDER BY id", limit: 10 })).data);
+		check("db_query reads rows through the open connection", read.rows?.length === 2 && read.rows[0][1] === "ada", read);
+
+		const write = JSON.parse((await queryTool.execute({ sql: "DELETE FROM users" })).data);
+		check("db_query refuses a write", /read-only/.test(write.error ?? "") && (await db.query(conn.id, "SELECT COUNT(*) AS n FROM users")).rows[0][0] === 2, write);
+
+		db.disconnect(conn.id);
+		const closed = JSON.parse((await queryTool.execute({ sql: "SELECT 1" })).data);
+		check("db_query explains that no connection is open", /no database connection/.test(closed.error ?? ""), closed);
+		rmSync(file, { force: true });
+	}
+}
+
 // --- saved database connections (profiles + vault-held passwords) ------------------------
 {
 	const { createVaultService } = await import("./lib/host/vault.js");

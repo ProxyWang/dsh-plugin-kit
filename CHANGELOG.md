@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased — the database panel gets the agent, and the tab says what it points at
+
+dbx's window has a tree, a data workspace with context chips, and an assistant. The first two are layout; the third is where a plugin inside DSH must not copy: dbx ships its own model client and key, while DSH already *is* the assistant.
+
+- **Two read-only agent tools**: `db_describe` (open connections, databases, tables, columns with PK/NOT NULL) and `db_query` (a single `SELECT`/`WITH`/`SHOW`/`DESCRIBE`/`EXPLAIN`/`PRAGMA` against an open connection, default 200 rows). Writes are refused with that reason, and both explain "no connection is open" instead of failing obscurely. So the AI column becomes the conversation you already have: ask it in plain language, it describes the schema first and then queries — same session, same provider, no second chat window.
+- **Context chips above the editor** say what the tab is pointed at: connection, database, table, column count, row count.
+- **Empty results are actionable**: a table page offers "table data needs a reload" with a Refresh button (the dbx message), and a query tab offers Run instead of a bare sentence.
+- Regressions: the tools are registered, describe reports real columns with PK, query reads rows, a write is refused and leaves the data untouched, and no-connection is explained.
+
 ## Unreleased — the chooser floats instead of shoving the workspace sideways
 
 Opening the `.proto` list shifted the whole app: a 560px absolutely-positioned panel inside a ~280px toolbar cell made the workspace overflow horizontally, and the layout scrolled to reveal it.
