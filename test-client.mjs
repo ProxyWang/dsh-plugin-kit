@@ -3002,6 +3002,29 @@ check("docAction reloads clean drafts, flags dirty ones, ignores others", docAct
 	check("truncateCell null → NULL", truncateCell(null) === "NULL", null);
 }
 
+// --- Result grid: a 5000-row result does not put 5000 rows in the DOM ---------------
+{
+	const { ResultGrid, GRID_ROW_H } = await import("./src/client/db.js");
+	const result = { columns: ["id", "name"], rows: Array.from({ length: 5000 }, (_, index) => [index, `row-${index}`]) };
+	const draw = createHookRenderer(ResultGrid, { t: (key) => key, result, onCell: () => {}, onSort: () => {}, order: "", dir: "asc" }, { effects: true });
+	let tree = draw();
+	draw.flushEffects();
+	tree = draw();
+	const flatten = (node) => {
+		if (!node || typeof node !== "object") return [];
+		if (Array.isArray(node)) return node.flatMap(flatten);
+		return [node, ...(node.children ?? []).flatMap(flatten)];
+	};
+	const rows = flatten(tree).filter((node) => node.type === "tr" && node.props?.className === "cedb-grid-row");
+	check("a 5000-row result renders only the visible window", rows.length > 0 && rows.length <= 60, rows.length);
+	check("the first rendered row is numbered from 1", rows[0]?.children?.[0]?.children?.[0] === 1, rows[0]?.children?.[0]?.children?.[0]);
+	check("a bottom spacer keeps the scrollbar proportional", (() => {
+		const spacer = flatten(tree).find((node) => node.type === "tr" && node.props?.className === "cedb-grid-pad");
+		const height = Number(String(spacer?.children?.[0]?.props?.style?.height ?? "0").replace("px", ""));
+		return height >= (5000 - 60) * GRID_ROW_H * 0.9;
+	})(), null);
+}
+
 // --- Database panel: the connect dialog asks for an address, not a driver ----------
 {
 	const dbGlobals = { fetch: globalThis.fetch, document: globalThis.document, window: globalThis.window };

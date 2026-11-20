@@ -767,7 +767,7 @@ export function gridWindow(input = {}) {
 }
 
 /** The result grid: sticky header, sortable columns, row numbers, cell inspection. */
-function ResultGrid({ t, result, onCell, onSort, order, dir }) {
+export function ResultGrid({ t, result, onCell, onSort, order, dir }) {
 	const columns = result.columns ?? [];
 	const rows = result.rows ?? [];
 	const wrapRef = useRef(null);
@@ -776,6 +776,14 @@ function ResultGrid({ t, result, onCell, onSort, order, dir }) {
 
 	// The visible height drives the window, and the panel can be resized by the
 	// splitter at any time, so it is measured rather than assumed.
+	// A new result (or a re-sorted page) starts at the top: keeping the previous
+	// scroll offset against a shorter result put the window past the last row,
+	// which rendered an empty grid under a spacer.
+	useEffect(() => {
+		setScrollTop(0);
+		if (wrapRef.current) wrapRef.current.scrollTop = 0;
+	}, [result]);
+
 	useEffect(() => {
 		const node = wrapRef.current;
 		if (!node) return undefined;

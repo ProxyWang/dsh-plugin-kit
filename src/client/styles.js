@@ -460,8 +460,9 @@ export const CSS = `
 .cedb-grid-sortable:hover{color:var(--dsw-alias-label-primary,#fff)}
 .cedb-grid-sorted{color:var(--dsw-alias-button-info-fill,#58a6ff)}
 .cedb-grid-gutter{color:var(--dsw-alias-label-tertiary,#667);text-align:right;padding-right:8px !important;user-select:none;white-space:nowrap;background:var(--dsw-alias-bg-layer-1,#1d2126)}
-.cedb-grid-row{height:24px}
-.cedb-grid-row td{padding-top:0;padding-bottom:0}
+/* The virtual window (GRID_ROW_H in db.js) assumes exactly this height, so the
+   cell padding is stated with a specificity that wins over the generic cell rule. */
+.cedb-grid .cedb-grid-row td{height:24px;line-height:23px;padding-top:0;padding-bottom:0}
 .cedb-grid-td{padding:3px 8px;border-bottom:.5px solid var(--dsw-alias-border-l1,#2a2e35);color:var(--dsw-alias-label-primary,#dde);max-width:340px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}
 .cedb-grid tr:hover td{background:var(--dsw-alias-interactive-bg-hover,#23272d)}
 .cedb-null{color:var(--dsw-alias-label-tertiary,#667);font-style:italic}

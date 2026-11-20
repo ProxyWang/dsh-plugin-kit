@@ -142,6 +142,14 @@ Cancelling used to mean "stop whatever this connection is running", which is wro
 - A SQLite statement runs in a worker that cannot be interrupted in place, so its cancel still ends the connection — but only when the token names the statement that is actually running.
 - The panel mints a token per run, keeps it on the tab while the request is in flight, and sends it with the Stop button.
 
+#### Grid height, scroll reset, and the packaging/docs audit
+
+- The virtual window assumes a 24px row, but `.cedb-grid-td`'s padding overrode the row rule (same specificity, later in the sheet), so every row was a few pixels taller than the math assumed. The height is now stated with a specificity that wins, and `line-height` is pinned too.
+- A shorter result kept the previous scroll offset: the window started past the last row and rendered an empty grid under a spacer. A new result resets the scroll.
+- `npm pack` carries every new host module (`lib/host/*.js` matches them), verified rather than assumed.
+- CI gained a **Node 24 job**: the main job runs on Node 20, where `node:sqlite` does not exist, so the database assertions and the SQLite worker path never executed there. The README's "6 suites" line is also now accurate (7).
+- The changelog had 31 sections labelled "Unreleased" from an era that shipped before 1.6.0; they are grouped under one historical heading instead of reading as pending work.
+
 #### Virtualized result grid
 
 A query may return up to 10 000 rows, and all of them used to become `<tr>` elements. The grid now renders only the window the viewport shows (plus a little overscan) with proportional spacers above and below, measured against a `ResizeObserver` so resizing the panel re-windows it. `gridWindow` is pure and covered by regressions, including the empty result and a scroll past the end.
@@ -204,7 +212,11 @@ This release closes the eight logic-layer defects identified in the architecture
 - **Single-instance README screenshots** ([scripts/render-readme-previews.mjs](<scripts/render-readme-previews.mjs>)): six Chrome processes → one headless instance over CDP; ~5.9 s total, no Dock flicker. Requires Node ≥ 22 (global WebSocket).
 - **CHANGELOG convergence**: 22 Unreleased sections archived under this 1.6.0 tag.
 
-## Unreleased — the workspace runs its **own** terminal
+## Pre-1.6.0 — features that shipped without a version line
+
+These landed before 1.6.0 and were recorded as "Unreleased" at the time; they are kept here, in one place, rather than pretending to be pending work.
+
+### the workspace runs its **own** terminal
 
 The embedded terminal this workspace used to open was DSH's, and its host renderer dropped row repaints while the pane was off-viewport: backspace left the deleted word painted on screen, and a powerlevel10k prompt redrew in half-finished frames. Two rounds of compensation (a synthetic-blur repaint, then a periodic one) were shipped and removed — they fought the renderer and made typing worse. The fix is to stop borrowing the screen: the plugin renders the terminal itself, over the process and stream DSH already provides.
 
@@ -216,7 +228,7 @@ The embedded terminal this workspace used to open was DSH's, and its host render
 - **Removed**: the host-repaint guard (`refreshHostTerminalScreen`, `installTerminalRefreshGuard`) — there is no borrowed screen left to repair — and the focus handoff that existed only for the borrowed terminal.
 - Regressions: 30 emulator cases (text/CR/LF, backspace+EL, wrap, scrollback, SGR 16/256/truecolor, CUP, ED/EL, DCH/ICH, alternate screen, wide glyphs, combining marks, split sequences, snapshot replay, DEC graphics, resize, CR overwrite), 9 key-encoding cases, 8 renderer cases (span coalescing, trailing blanks, inverse video, escaping, palette, colour resolution), 4 frame-application cases, 8 component cases against a DOM shim (frame→rows, acknowledgement, erase repaint, key bytes, IME input, paste, focus, teardown) and 13 tab-registration cases (definition, capability probe, seats, close handler, hold union, hand-back).
 
-## Unreleased — fix: the built-in terminal could not be typed into
+### fix: the built-in terminal could not be typed into
 
 Opening DSH's own terminal beside the workspace left the keyboard in the editor: the host focuses a terminal's xterm textarea only when its `visible`/`writable` state flips, and an open beside an already-focused pane can leave both unchanged — so keystrokes went to the workspace (or nowhere) instead of the shell. Three focus paths conspired, all fixed on the plugin side; the host terminal package is untouched.
 
@@ -226,7 +238,7 @@ Opening DSH's own terminal beside the workspace left the keyboard in the editor:
 - **Hidden tabs stay quiet** (`src/client/code.js`): `revealPosition` (Problems ⌘⇧M row, symbol-palette pick) returns early while the kept-mounted Code tab is not visible, so a background jump can no longer steal keyboard focus from the terminal pane; visible tabs keep the exact VS Code behavior.
 - Regressions: focus handoff targets/skips (hidden, detached, no-xterm, disabled, missing doc), retry-until-connected, deadline stop, cancel, open-schedules/failed-open-does-not; terminal Escape reaches the shell while the layer closes, non-terminal Escape keeps guard + editor restore, outside-pointer and late-Escape never refocus the workspace; hidden-tab reveal jumps grab no focus while visible ones still do; favorite-dialog Escape restore updated to model the real autoFocus caret.
 
-## Unreleased — Changes: delete untracked files (and stop the misleading revert error)
+### Changes: delete untracked files (and stop the misleading revert error)
 
 Reverting an untracked file was impossible, but the UI offered no alternative and a folder-level revert sent `U` entries into `git checkout HEAD --`, which answers with git's pathspec error — the banner users saw was `pathspec ':(literal)…' did not match any file(s) known to git`. Two separate problems: a missing destructive action, and a folder action silently mixing it in.
 
@@ -235,14 +247,14 @@ Reverting an untracked file was impossible, but the UI offered no alternative an
 - `git.discard` now refuses `ch:"U"` up front with `untracked: true` and a reason that says why, instead of leaking a git pathspec error that reads like a plugin bug. Folder revert skips untracked entries and reports the skipped count (`{n} 个未跟踪文件无法回退——请用删除按钮`).
 - Regressions: host — untracked discard refused with its explicit reason and the file left intact, tracked revert still works, `fs.delete` removes the untracked file through the fence; client — delete only on untracked rows, revert kept on tracked rows, all-untracked folder offers folder delete while a mixed folder does not, arming deletes nothing, the confirm control appears after arming, and confirming deletes exactly the armed file.
 
-## Unreleased — API: collections live on disk (a folder of .bru files)
+### API: collections live on disk (a folder of .bru files)
 
 - The request workbench gains a **collection folder** (workspace-relative, remembered per profile): two host routes make it real. `collection.load` walks the directory recursively (≤200 entries), keeps only `*.bru` outside hidden path segments, caps reads at 256 KiB, and refuses escaping the workspace; `collection.save` writes `<name>.bru` — names with `/`, `..` or leading dots refused, existing directory required (no silent mkdir), fence-checked, optional `baseMtime` for reload-before-overwrite honesty.
 - Loading parses every file with the same brucol reader the import dialog uses and lands the entries **into favorites** (deduped by name); saving a favorite can mirror it to the folder with one checkbox (serialized BEFORE the write, so a serializer failure cannot leave favorite and disk out of sync; the write error blocks the favorite row rather than diverging the two stores). The settings tab holds the folder field + ⇪ load action; without a session workspace the affordances disable with an explanation.
 - Bugs the regression earned its keep for: `readFile` was never imported in routes.js (a swallowed ReferenceError made the walk return an empty list); `requestToBru` was called from the workbench without being imported; and load auto-opening the saved panel made the import row unreachable — load now answers with a quiet count note in the import dialog instead.
 - Regressions: host — recursive walk with nested paths, hidden/non-bru skipping, escape refusal, save creates/round-trips through load, path-shaped names refused, missing directory refused; client — settings-folder → load → favorites rows with their .bru meta names, checkbox-gated write carrying cwd/dir/name/text, favorite row added alongside.
 
-## Unreleased — API: live SSE/EventStream responses
+### API: live SSE/EventStream responses
 
 - `api.send` no longer buffers forever on `text/event-stream`: when the response announces an event stream, the live body is handed to a new host capture (`lib/host/streams.js`) and the send answers immediately with `{streaming:true, id, status, headers, ...}`. The capture keeps a bounded 1 MiB retained tail with a byte cursor and the same long-poll protocol as watch/tasks (`api.streamPoll`, `api.streamStop`); a dead client's closed response releases its waiter, finished captures expire after ten minutes, the job cap evicts finished streams before ever clobbering a live one, and everything aborts on plugin unload.
 - Client `src/client/sse.js` (pure): WHATWG-shaped incremental frame parser — partial frames held across deltas, multi-line `data:` joined, `event`/`id`/`retry` carried, comment keep-alives skipped, CRLF tolerated, `id` persists across frames; `foldStream` folds poll snapshots into the view model with reset-on-evicted-cursor semantics and a 2000-event window.
@@ -250,21 +262,21 @@ Reverting an untracked file was impossible, but the UI offered no alternative an
 - Fixes caught by the own-suite on the way: the first payload object used to be assembled with a spread order that let the snapshot's empty `done:false` mask the real status fields, `trimStreams` counted the just-created stream against its own cap, `stream.snap` was assembled in three inconsistent ways (closure/call/this), the timeout beat returned a bare `beat:true` without current state, and the pump's `!reader` fallback assumed `response.text()` exists.
 - Regressions: host — real-HTTP server end-to-end (switch to capture, frames streamed until close, unknown-stream refusal); client — parser partial/complete/multi-line/CRLF/comment/id-persistence, fold hold/emit/reset, ApiView streaming send tab switch and per-event rows with kind and data.
 
-## Unreleased — API: post-response extracts, OpenAPI & Postman collection import
+### API: post-response extracts, OpenAPI & Postman collection import
 
 - **Extracts tab**: each request carries rules `{name, source, expr, enabled}` with six sources — JSON path (`$.data.items[0].id`, a dot/bracket walker with quoted-key support, no wildcard engine on purpose), response header (case-insensitive), status code, full body, regex capture (group 1 else group 0), and the resolved request's own query. After every settled send `applyExtracts` writes hits into the ACTIVE environment (creating/overwriting rows by name) and reports misses in the tab footer (`uid · gone not found`); an all-miss run never half-writes empty variables, and with no active environment the tab says so instead of silently dropping. Rules ride drafts, history and favorites through the existing v2 snapshot (legacy snapshots normalize to no rules).
 - **Collection import in the same dialog that already eats curl and .bru**: `openimp.js` detects pasted JSON as OpenAPI 3 (`paths × methods` → one request per operation: servers[0] + `{param}` → `:param` path rows + query params with examples, first-content-type bodies sampled from `example ?? schema` one property per type, names from summary/operationId) or Postman v2 (`{info.schema collection}`, folders flattened recursively, raw/urlencoded/formdata bodies, query-object URLs). Imports land as **favorites in bulk** (deduped by name against existing favorites, capped) with the first operation applied to the editor; malformed or empty collections surface through a real in-dialog error line (`setImportError` now actually declared and cleared on retype).
 - Two correctness bugs caught by the own-suite: `runExtract` no longer demands an expression for the status source, and `postmanUrl` referenced an undeclared binding on object-shaped URLs.
 - Regressions: jsonPath walk/miss/quoted-key, every source of runExtract including broken-regex and non-JSON refusal, applyExtracts write+miss+disabled-rule+all-miss-no-write (host-store level), OpenAPI three-operation spec (path-param syntax, query examples, sampled JSON body, form path), Postman folder flatten + urlencoded mapping, shape-detection refusals, the extracts tab render/round-trip (add → name/expr hold → remove empties), OpenAPI import applying the first operation and storing every favorite.
 
-## Unreleased — task runner: run package.json scripts, click a failure, land in the file
+### task runner: run package.json scripts, click a failure, land in the file
 
 - Host `lib/host/tasks.js`: jobs launch `npm run <script>` with no shell, gated twice — the name must be shape-clean AND present in the workspace's own package.json `scripts`, so a hand-built request cannot smuggle a command. Output streams into a per-job ring buffer (1 MiB tail, `dropped` + byte `baseSeq` when the head is evicted); `task.poll` long-polls new bytes with the same cursor protocol as `watch.poll` (response-close drops waiters, `beat` empty answers keep the pipeline warm), `task.kill` SIGTERMs then SIGKILLs after a 3 s grace, jobs are capped at 12 with a 10-minute TTL once finished, and everything dies with the plugin effect. `task.scripts` also reports which scripts are currently running so the palette shows live dots.
 - Client: the Command Center's **Run Tasks…** opens a script palette (name + command + running marker), starting one swaps to an output panel that streams the tail auto-scrolled, distinguishes stdout from stderr, and reports running / exit-code / failure status. `failureAt` recognises go-test, tsc, eslint-colon, pytest-frame and rustc-arrow shapes and renders those lines as jump buttons into the editor; `foldTaskOutput` (pure) folds a poll snapshot into the panel state, honouring `reset` (buffer head evicted → replace the window) and byte cursors otherwise.
 - Correctness caught in its own regression: two poll answers can land before a repaint, so folding happens INSIDE the state updater (prev is the truth, not a render-time ref) — and the fold must carry the job identity fields (script, pollSeq) through, or the next answer is silently rejected as stale.
 - Regressions: host — scripts listing, absent-script and flag-shaped refusal, a real npm run streamed across polls with stdout/stderr split, exit code 3 surfaced, kill-on-finished reporting already, unknown-job refusal, SIGTERM path on a live job (npm-gated, skips cleanly where npm is absent). Client — every failure grammar plus noise refusal, fold append/reset/lineCount, palette rows and running dot, jump button wiring, stop affordance and its disappearance on completion, dropped-tail badge, and a CodeBody end-to-end: command → scripts → run → start → pump folds streamed chunks then stops at done with the exit code.
 
-## Unreleased — Git deepening: compare refs, cherry-pick, conflict sides
+### Git deepening: compare refs, cherry-pick, conflict sides
 
 - **Compare References** (Command Center `≷`): a dialog with base/head fields fed by the live branch list (local then remote, click-to-fill); submitting runs a new read-side `git.compare` route that verifies both refs through `rev-parse --verify --end-of-options` (flag-shaped and unknown refs refused before any git process spawns), diffs the two trees (`--name-status -z`, renames threaded through as `{from,to}`), and reports shortstat + commit count. Results land as a dismissible group on the Changes panel; each row opens a per-file diff through the new `scope:"compare"` of `git.diff`, and live watch refreshes an open compare diff exactly like a working diff.
 - **Cherry-pick from history**: each commit row in the branch-commits list gains a `⤵` control with the repo's established two-step confirmation (first click arms to ✓, second picks). The write-side `git.cherryPick` route refuses non-hex shas before spawning, requires a clean tree with a human-readable reason, and treats the sequencer state — not git's exit code (conflict text on stdout defeats the ok heuristic) — as the authority: conflicts come back as `{conflicted:true}` with the updated status.
@@ -272,14 +284,14 @@ Reverting an untracked file was impossible, but the UI offered no alternative an
 - `parseNameStatusZ` matches git's real `-z` layout — status and path are SEPARATE NUL fields (`R100\0from\0to\0`), caught by its regression on day one.
 - Regressions: host — compare file list with rename status, merge-base/shortstat/count, unknown-ref and flag-injection refusal, compare-scope file diff, conflicting pick opening the sequencer, non-hex refusal, resolve-theirs content + staging, unknown side refusal, continue producing the cherry-picked commit with the original subject, re-conflict + abort cleaning the tree, sequencer kind whitelist, name-status NUL layout. Client — banner with both side buttons wired to callbacks, pick arm/confirm two-step, compare group rows with refs threaded to `onOpenDiff`, dismiss control, and the full CodeBody flow command→dialog→branches→compare→panel→diff→DiffView.
 
-## Unreleased — editor productivity: workspace symbols and format-on-save
+### editor productivity: workspace symbols and format-on-save
 
 - **Search Symbols in Workspace** (`⌥⌘O` or Command Center): a new palette queries `workspace/symbol` through the existing per-root language servers (gopls / typescript-language-server / pyright) with a 220 ms debounce and a local seq guard so slow answers can never land over a newer query. Rows show the kind glyph, `name · container`, and the workspace-relative file:line; picking a row opens the definition with the normal navigation stack and match flash. Without an open document the route probes the workspace root for the first language marker (`go.mod`, `package.json`, `pyproject.toml`…), so the command works before the first file is opened. The client declares `workspace.symbol` (incl. `resolveSupport.properties: ["location.range"]`) in the initialize capabilities; symbols without a resolvable location are dropped rather than shown dead.
 - **Format On Save** (default on, toggle persisted): saving a Go/TS/JS/Python draft now routes through `fs.formatDraft` — the draft is written through the existing `baseMtime` conflict guard first, the server formats what is on disk, and the formatted text is re-written and adopted into the editor buffer. The save notice distinguishes *Saved and formatted* from *Saved (formatter did not run)*; a formatter crash or timeout NEVER loses the save — the draft is already on disk and the reply carries `formatted:false` with the reason. A plain `fs.write` path stays untouched for non-LSP files and when the toggle is off.
 - `applyTextEdits` (host, exported and unit-tested) converts LSP UTF-16 ranges to absolute offsets and applies right-to-left, clamping ends past EOF and defensively skipping overlapping edits; `textDocument/formatting` capability declared in initialize.
 - Regressions: right-to-left multi-edit application, overlap skip, EOF clamp; workspace-symbol fuzzy query through the real gopls, marker probing without a document hint; `fs.formatDraft` writes-then-formats (disk content equals the returned text), advances mtime, refuses blind overwrite via `baseMtime`, and leaves the file intact on a refused format; client palette open→debounce→request→state rows→pick opens the definition; save routes a `.go` draft through `fs.formatDraft` with the guard and adopts the server-formatted text.
 
-## Unreleased — live refresh: the workspace follows the disk
+### live refresh: the workspace follows the disk
 
 The Dev Workspace used to show the disk only as of the moment it loaded a file — an Agent editing in the background, a `go fmt` from the terminal, or a `git checkout` left the editor, tree and Git badges frozen until the manual ⟳. Now the host watches the workspace and streams coalesced change batches to every open workspace tab.
 
@@ -289,20 +301,20 @@ The Dev Workspace used to show the disk only as of the moment it loaded a file �
 - Command Center gains **Toggle Live Refresh** (persisted, default on) and the panel warns once when the platform cannot watch, so manual ⟳ stays the honest fallback.
 - Regressions added: host — baseline cursor, missing-cwd and missing-workspace errors, created-file delivery, per-path coalescing, `.git` ticks staying out of file paths, settled-cursor empty beats, and the pure `snapshotFor` cursor math (retention reset, per-path slicing, git flag, not-ready, unsupported). Client — loop state machine (baseline, streams, backoff, unsupported retry, stop), plus a full CodeBody lifecycle: exactly one baseline per mount, clean reload in place with cursor/scroll preserved, stale-dir invalidation, debounced git refresh, banner-without-buffer-touch for dirty drafts, no extra read on the conflict path, both banner round-trips (keep editing / reload discarding), and "live never writes".
 
-## Unreleased — right sidebar opens at its maximum width
+### right sidebar opens at its maximum width
 
 - The host seeds the right column's width preference at **45% of the frame** on its first opening (`RIGHTBAR_DEFAULT_RATIO` in `@deepseek-ai/dsh-client-ui-layout`), which is too narrow for an editor, an embedded browser and a request workbench. `rightbarwidth.js` now writes the preference once before any opening, so the **first opening takes the widest the frame allows** — the same ceiling the drag handle stops at (`[300px, 70%]` plus the frame's 400px centre reservation). The request is deliberately above the ceiling rather than a copied ratio, so the host keeps ownership of its own maximum.
 - Dragging is unchanged and still wins: the handle writes the host store directly, and once a gesture settles the rendered track is measured and remembered (the host preference is in-memory only), so a later opening — including after a reload — restores the width the user chose instead of jumping back to the maximum. The ceiling is a fraction of the frame, so widening the window before that first choice moves the pending maximum with it; a panel already on screen is never re-widened under the user.
 - The width action lives on the layout service's internal store delegation, not on the published `ILayout` face, so the whole feature is a probe: without a callable `setRightbar` it installs nothing and the host's stock behavior is left untouched.
 - Added regressions: seam probing without assuming the seam exists, ceiling request landing on the host's clamped maximum, a remembered width restoring the first opening, junk/below-floor stored values ignored, a settled drag remembered only for the rightbar handle and only when a track is rendered, the measurement deferred until the gesture settles, the ceiling tracking a wider window before any choice, an already-chosen or already-visible panel left alone, and unload unhooks both listeners.
 
-## Unreleased — copy-path feedback at the click site
+### copy-path feedback at the click site
 
 - Copying a path from Changes (tree and flat views, including deleted files) or the Explorer row actions now flips the button glyph to a green check for ~1.4 s, with the title swapping to "Path copied". The previous success notice only reached the Code view's status bar and was easy to miss next to the rows — the click site itself stayed silent. Explorer context-menu copies flash the same row glyph after the menu closes.
 - Failures keep reporting through the error notice and never show the check, so the feedback cannot fake success. The button clears its timer on unmount.
 - Added regressions: success flips glyph/class/title and writes the expected absolute/relative text, failure keeps the copy glyph, and the Explorer row action flashes ✓ plus notifies.
 
-## Unreleased — source-studied refinements from the Bruno and VS Code repositories
+### source-studied refinements from the Bruno and VS Code repositories
 
 Both upstream repositories were cloned locally and read at the source level; the following behaviors are ported from their actual implementations rather than from documentation summaries.
 
@@ -315,21 +327,21 @@ Both upstream repositories were cloned locally and read at the source level; the
 - **VS Code problems filters**: the Problems panel header shows per-severity counts with error/warning/info toggles (markers view filter model), reporting shown/total while filtered.
 - Regressions added for all of the above: preserve-case matrix and per-match application, path-param sync/substitution/wire resolution, disabled-row retention, `.bru` round-trips (raw/form/multipart/auth/quoted keys/unknown blocks), pin ordering and bulk-close exclusion, current-match highlighting, and severity filtering.
 
-## Unreleased — Bruno-style API request workbench
+### Bruno-style API request workbench
 
 - The curl tool now follows [Bruno](https://github.com/usebruno/bruno)'s request model: **URL ↔ Query-params two-way sync** (typing `?a=1` in the URL fills the Params table; editing the table rebuilds the URL, disabled rows leave it but keep their values), **named environments** with a tool-row selector and Bruno's "No Environment" state (the legacy flat variable list migrates into one active *Default* environment on load), a dedicated **Auth section** (None / Bearer / Basic) that generates the `Authorization` header at send time and overrides a same-named manual header, a response **Timeline** tab showing the exact resolved wire request (post-substitution URL, final headers, body/multipart, timeout) next to Body and Headers, and a **</> Code** menu generating runnable **curl / JavaScript fetch / Python requests** snippets from the resolved request.
 - curl import hardened toward curlconverter (the parser Bruno uses): `$'ANSI-C'` quoting, attached short-flag values (`-XPOST`, `-H'K: V'`, `-d'{}'`), `--flag=value` long forms, `--form-string`, `--url-query`, curl's empty-header form (`-H 'Name;'`), `-u` and `Authorization: Bearer/Basic` headers folding into the Auth section (undecodable values stay headers), and consecutive `k=v` data chunks without a non-form Content-Type importing as **form-urlencoded pairs** instead of a raw body. Imported raw bodies pick their language (json/xml/html/text) from the Content-Type or a shape probe. Export emits `-u` for basic auth and an `Authorization` header for bearer, so `toCurl → parseCurl` round-trips the auth section.
 - Architecture: request-data logic moved out of the 571-line component into two pure modules — `reqmodel.js` (sync, environments, auth, `resolveRequest` as the single builder shared by wire/Timeline/codegen, history helpers) and `codegen.js` (snippet serializers) — leaving `apiclient.js` as UI wiring only; drafts and history/favorite snapshots carry `v: 2` and legacy snapshots are normalized (old send-time param merge) on restore.
 - Added regressions for tokenizer/quoting/attached flags, form & auth import, export round-trips, both sync directions and their stability, environment migration/selection/rename/delete, auth override semantics, resolveRequest substitution, all three generators, and component flows (query sync, environment switching driving `{{host}}`, Timeline content, bearer/basic wire headers, codegen clipboard, curl import mapping); updated the `-u` and `-d k=v` parser expectations to the new Bruno-style shapes.
 
-## Unreleased — VS Code editor ergonomics
+### VS Code editor ergonomics
 
 - Dev Workspace adopts three [VS Code](https://github.com/microsoft/vscode) editor workflows: an **editor-tab context menu** (Close / Close Others / Close to the Right / Close All, with disabled states and the existing dirty guard), **Reopen Closed Editor** (`⌘/Ctrl+Shift+T`, a bounded most-recently-closed stack restoring cursor position), **find & replace** (`⌘/Ctrl+Alt+F` or the find widget's ⇄ toggle: Replace / Replace All with regex `$1`/`$&` expansion; results land in the edit buffer for review and save through the existing ⌘S mtime conflict guard — never written blindly), and a **Problems panel** (`⇧⌘M` or the diagnostics chip: severity-sorted diagnostics, click to jump to the line).
 - The Command Center gains Find and Replace, Toggle Problems, Reopen Closed Editor and Close All Editors entries, keeping keyboard and pointer workflows equivalent.
 - Architecture: tab-list transitions (`tabs.js`) and the replace splice (`codeview.js applyReplace`, right-to-left per line with stale-match refusal) are pure functions; `ProblemsPanel` joins the shared overlays and dismissal registry.
 - Added regressions for close-others/right/all through the real menu, MRU reopen ordering, replace-one/replace-all/regex-group replacement, edit-buffer-only writes, problems open/jump/Escape, and command-center contents, running the workbench with effects enabled.
 
-## Unreleased — terminal entry beside the workspace
+### terminal entry beside the workspace
 
 - Dev Workspace now opens DSH's own terminal beside itself: a **New Terminal** button in the toolbar tool group and a Command Center entry of the same name call `ctx.sidebarRight.openTab('terminal', { preferNewPane: true })`, so the terminal splits the current docked pane under the host's two-pane and room rules and falls back to a tab in that pane. A successful open also clears a stale error banner.
 - The plugin renders no terminal of its own. xterm.js, input ownership, window holds, reload bindings, theme and the permission model stay with `@deepseek-ai/dsh-client-ui-sidebar-terminal` and `@deepseek-ai/dsh-api-terminal-controller`, so a DSH upgrade cannot strand a second terminal implementation here.
@@ -338,7 +350,7 @@ Both upstream repositories were cloned locally and read at the source level; the
 - Added terminal-entry regressions for the registry probe, hidden/unavailable path, split preference, trusted success, missing session, open failure, hostile registry, inert fallback, and zh/en dictionary parity; added left-navigation regressions for the folded terminal row and stale-selection recovery, and moved the multi-instance close semantics onto the remaining multi-instance tool.
 - Verified syntax, full regressions and the host contract (`preferNewPane`, `openTab`, `mounted`). Authenticated live visual inspection remains unavailable in this environment.
 
-## Unreleased — refined browser chrome
+### refined browser chrome
 
 - The browser tab is now a window with its own sub-tab strip: every sub-tab owns a carrier (Desktop webview guest / Web iframe), address history and title; the strip switches, closes per tab and adds tabs with + (new tabs follow the configured start page). Desktop keeps every guest resident; Web keeps only the foreground page alive and restores the others from the per-window checkpoint. Page popups (`window.open` / `target=_blank`) open as background sub-tabs; the host strip keeps the fixed browser label while page titles live on the sub-tab chips. Legacy single-page checkpoints migrate into a one-tab window; up to 10 sub-tabs per window.
 - Grouped back/forward/reload controls and secondary tools around a prominent address field, with bookmark and Go actions inside the field.
@@ -346,25 +358,25 @@ Both upstream repositories were cloned locally and read at the source level; the
 - Refined bookmark/settings hierarchy and empty states; narrow panels use a predictable two-row toolbar. Rendering remains owned by the existing DSH carrier.
 - Verified syntax, full regressions and UI rule scan. Authenticated live visual inspection remains unavailable.
 
-## Unreleased — copy paths from Changes
+### copy paths from Changes
 
 - Added accessible copy-path actions to file and directory rows in Changes tree and flat views, covering staged, working and branch changes, including deleted files. Click copies an absolute path; Alt-click copies the repository-relative path.
 - Paths resolve against the Git repository root for nested/multiple repositories. Clipboard errors surface instead of reporting false success.
 - Split Changes row navigation and actions into sibling controls, preserving drag handles without nesting buttons.
 
-## Unreleased — reliable file-tree deletion
+### reliable file-tree deletion
 
 - Split Explorer row navigation and action buttons into sibling controls, removing nested interactive buttons.
 - Deleting a file or folder now shows a named confirmation below the row, independent of hover actions. Confirming shows progress and refuses duplicate requests; failures remain visible for retry.
 - Added file/folder cancellation, confirmed deletion, duplicate prevention, failure feedback and editor notification regressions.
 
-## Unreleased — Explorer and Changes file dragging
+### Explorer and Changes file dragging
 
 - Added typed internal drag data for Explorer, Changes tree/list and editor tabs, scoped to the workspace and Session.
 - Drop Explorer files into the editor to open source, or Changes files to view their captured repository/scope diff, including deleted files. Editor tab drags reorder views without moving files.
 - Explorer folder moves retain their existing disk-move behavior. Plain text, OS files, directory-to-editor and foreign-session drops are not accepted; unsaved edits remain protected.
 
-## Unreleased — embedded browser bookmarks and settings
+### embedded browser bookmarks and settings
 
 - Added an enhanced Browser page using the DSH lease-scoped Desktop browser bridge (restricted iframe fallback on Web), without bundling another browser engine. Native history, approved popups, Workspace storage isolation, explicit page restore and system-browser escape remain available.
 - Added profile-persistent bookmarks, favorites bar, folders, search, edit/delete, home URL and new-tab start settings. Host persistence serializes writes and rejects stale revisions; UI and `browser_bookmarks` use the same service.
@@ -372,64 +384,64 @@ Both upstream repositories were cloned locally and read at the source level; the
 - Added browser regressions for URL policy, durable data, conflict/retry behavior, guest acquisition/disposal/crash recovery, requested URL preservation, Workspace partitioning and UI settings flows.
 - Verified real Host browser-data initialization; live authenticated Electron page rendering and extension support remain outside automated verification.
 
-## Unreleased — left tool entries toggle workspace tabs
+### left tool entries toggle workspace tabs
 
 - Left entries now close an already open matching tool tab. The last real tool tab also collapses the right workspace; retained guide tabs do not keep it open. Other tools and other sessions remain untouched.
 - A manually collapsed workspace is revealed before any close. With multiple matching instances (such as terminals), the active matching instance is closed first. Browser pages can reopen immediately after a toggle close.
 - Registered native close cleanup guards for unsaved Code IDE and Skills edits, protecting both left-entry closes and native tab closes.
 - Added toggle, final-tab, session-isolation, multi-instance, immediate-reopen and unsaved-close regressions.
 
-## Unreleased — left navigation, right workspace
+### left navigation, right workspace
 
 - Moved all toolbox entry points into native left panel rows alongside Plugins and Automations. Selecting a tool restores Conversation and opens the current session’s right workspace through public layout/sidebar services.
 - Removed owned right guide entries and replaced the duplicate right launcher with a workspace hint. Browser/terminal and other registered tool entries follow the live registry; browser reuse now reveals a collapsed workspace.
 - Added regressions for global-panel navigation, current-session targeting, no-session feedback without delayed cross-session opens, dynamic tools and unload cleanup.
 
-## Unreleased — consistent transient-layer dismissal
+### consistent transient-layer dismissal
 
 - Added one shared, non-modal pointer/Escape dismissal registry for API dialogs, IDE palettes, file menus, skills forms and temporary destructive confirmations. Outside pointer events continue to their destination; Escape affects only the top visible layer, with IME protection and listener cleanup.
 - Favorites and curl import retain drafts when dismissed. Tool-page hiding closes transient UI without cancelling document edits. Trigger buttons toggle without reopening accidentally.
 - Fixed duplicate input/palette keyboard handling in quick open and symbol lists, and duplicate trailing insert rows in legacy request drafts.
 - Added listener-lifecycle and component regressions plus 9 Chrome fixture checks using actual DOM pointer/keyboard events. See [interaction audit](docs/interaction-audit.md) for coverage and verification limits.
 
-## Unreleased — API request builder layout
+### API request builder layout
 
 - Reorganized API debugging around a method/URL/Send row followed by configuration tabs; import/export, favorites and history remain in a compact utility row.
 - Added a shared request-fields table for query parameters, headers, form/multipart bodies and environment variables, with Name/Value/Description columns, enable checkboxes, row deletion and a trailing insert row. Variables are now a configuration tab.
 - Disabled fields remain in drafts/history/favorites but are excluded from HTTP requests and curl exports. Old rows without an enabled flag stay enabled.
 - Verified 452 assertions across all suites; checked light/dark component previews at 1100px and 390px container widths. These previews use fixture data and do not represent a live authenticated DSH session.
 
-## Unreleased — consistent editor navigation
+### consistent editor navigation
 
 - Opening files, Git diffs, commits and chat diffs dismisses transient panels so search cannot cover the selected document. Clicking the current editor tab also dismisses panels without reloading the file.
 - Search, quick open and the command center replace each other. Search inputs survive dismissal; Escape closes navigation panels before cancelling an editor draft.
 - Centralized unsaved-edit checks protect file navigation and refresh. Added regression coverage for file clicks, retained queries, panel switching, Git navigation and draft protection.
 
-## Unreleased — unified Dev Workspace
+### unified Dev Workspace
 
 - Merged the primary file browsing and code editing entry into **Dev Workspace / 开发工作台**. The existing Code IDE `TreePanel` is now the launcher’s single primary workspace explorer, with file operations, previews, search, editing, LSP and Git review in one context.
 - The Start launcher filters the host’s redundant `files` guide entry to avoid presenting two competing workspace file browsers. The host file page remains available through host capabilities for compatibility.
 - Renamed the in-workspace Files control to **Explorer / 资源管理器**, clarified launcher grouping, and added a regression test that prevents the duplicate file entry from returning.
 
-## Unreleased — Code IDE command center
+### Code IDE command center
 
 - Renamed the Code Explorer surface to **Code IDE / 代码 IDE** across the launcher, tab metadata, locale and package documentation.
 - Added a keyboard-first Command Center (`⌘/Ctrl+Shift+P`) that unifies file browsing, source control, workspace search, quick open, current-file symbols, word wrap, side-panel visibility and refresh. Actions reuse existing handlers so navigation state and concurrency guards remain consistent.
 - The interaction direction follows the continuous workbench model documented by [VS Code’s user interface](https://code.visualstudio.com/docs/editing/getting-started/userinterface) and [code navigation](https://code.visualstudio.com/docs/editing/editingevolved): one editor context, discoverable commands, breadcrumbs/symbols and source control close to the file.
 
-## Unreleased — browser launcher reuse
+### browser launcher reuse
 
 - The toolbox Browser launcher now focuses an existing browser in the on-screen session, including older UUID-backed tabs, instead of always creating another page. Existing navigation is preserved; Doubao is only the initial URL when creating a new page.
 - Repeated clicks before the sidebar inventory updates are suppressed. Reuse does not cross sessions or close existing pages.
 - This change belongs to the plugin launcher; links that explicitly open a new browser page and Chromium renderer processes retain their host behavior.
 
-## Unreleased — scoped code search
+### scoped code search
 
 - Files search the workspace by default, with an explicit directory field and a folder context-menu action.
 - Changes keep filename/path filtering separate from code-content search. Content search derives staged, unstaged and untracked files on the Host; empty changes do not widen to the workspace, deleted files skip, and glob filters only narrow the set.
 - Literal Git filenames, nested selected repositories, result batching, and stale scope response handling have regression coverage. Search labels show the active scope.
 
-## Unreleased — task-oriented layouts
+### task-oriented layouts
 
 - Code: full-width list/editor navigation below 620 px, retained document state on Back, search and quick-open grouped in the rail.
 - Changes: review files before expanding the commit composer; branch history becomes a disclosure and expands for filtering.

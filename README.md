@@ -114,7 +114,7 @@ LSP 跳转按语言需要对应 server 在 Host 的 PATH（或常见全局 bin �
 ```sh
 pnpm install
 pnpm run build   # src/client/** -> client.js（DSH 客户端模块格式）
-pnpm test        # host 路由 + client 纯逻辑 + bundle 形状，6 个套件（gopls 缺失时 LSP 用例自动跳过）
+pnpm test        # 构建 + host 路由 + client 纯逻辑 + 浏览器回归 + 搜索/嵌套/父子/远端，7 个套件（gopls 缺失时 LSP 用例自动跳过）
 ```
 
 重新生成文档截图：`node scripts/render-readme-previews.mjs`（需要 Node ≥ 22 与 Chrome，可用 `CHROME_BIN` 指定路径；单个无头 Chrome 实例通过 CDP 依次截取全部场景，仅使用脚本内的虚构数据，不连接真实 DSH 服务）。
@@ -125,7 +125,7 @@ pnpm test        # host 路由 + client 纯逻辑 + bundle 形状，6 个套件�
 ELECTRON_RUN_AS_NODE=1 "$DSH_NODE_EXECUTABLE" test-host.mjs
 ```
 
-CI：`.github/workflows/ci.yml`（Node 20 + pnpm + gopls，push/PR 触发）。
+CI：`.github/workflows/ci.yml`（push/PR 触发）。Node 20 跑完整套件；另有一个 **Node 24** job 专门跑 host + client，用于覆盖 `node:sqlite` 与 SQLite worker 的用例——Node 20 上这些会自动跳过。
 
 Host 路由前缀 `/code-explorer/api`：`fs.list fs.read fs.write fs.create fs.rename fs.delete git.status git.diff git.fetch git.pull git.push git.stage git.unstage git.commit git.discard git.revertHunk git.stash.list git.stash.save git.stash.apply git.stash.pop git.stash.drop git.branches git.checkout git.blame git.history lsp.request lsp.diagnostics lsp.status search.files search.text skills.list skills.read skills.write skills.create skills.delete api.send`。所有文件类路由围栏在会话工作区内（读额外放行父级兄弟目录与 Go 工具链根以供跨仓跳转，但**隐藏目录一律不可读**；写严格限工作区，创建/重命名对符号链接祖先做 realpath 复检，且支持 `baseMtime` 乐观并发守卫——磁盘外部修改后拒绝盲写）；git 索引类路由的路径按**仓库根**解析并双重围栏（`:(literal)` pathspec，通配符文件名安全），支持多仓工作区与已删除文件；**git 写路由**（fetch/pull/checkout/commit/push/stage/unstage/discard/revertHunk/stash 变更）拒绝操作「包围工作区的更大仓库」——此时请以仓库根为工作区打开，读路由（status/diff/branches/blame/history）不受此限。
 

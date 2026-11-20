@@ -111,7 +111,7 @@ LSP jumps require the matching language server on the Host's PATH (or in common 
 ```sh
 pnpm install
 pnpm run build   # src/client/** -> client.js (DSH client module format)
-pnpm test        # host routes + client pure logic + bundle shape, 6 suites (LSP cases auto-skip without gopls)
+pnpm test        # build + host routes + client pure logic + browser regressions + search/nested/parent/remote, 7 suites (LSP cases auto-skip without gopls)
 ```
 
 Regenerate the documentation screenshots with `node scripts/render-readme-previews.mjs` (requires Node ≥ 22 and Chrome; set `CHROME_BIN` to override its path). One headless Chrome instance captures every scene over CDP. The script uses only embedded fictional fixtures and never connects to a real DSH service.
@@ -122,7 +122,7 @@ The database and gRPC host cases need a runtime that ships `node:sqlite` and a f
 ELECTRON_RUN_AS_NODE=1 "$DSH_NODE_EXECUTABLE" test-host.mjs
 ```
 
-CI: `.github/workflows/ci.yml` (Node 20 + pnpm + gopls, runs on push/PR).
+CI: `.github/workflows/ci.yml` (push/PR). Node 20 runs the full suite; a second **Node 24** job runs the host and client suites so the `node:sqlite` and SQLite-worker cases actually execute — on Node 20 they skip.
 
 Host routes are served under `/code-explorer/api`: `fs.list fs.read fs.write fs.create fs.rename fs.delete git.status git.diff git.fetch git.pull git.push git.stage git.unstage git.commit git.discard git.revertHunk git.stash.list git.stash.save git.stash.apply git.stash.pop git.stash.drop git.branches git.checkout git.blame git.history lsp.request lsp.diagnostics lsp.status search.files search.text skills.list skills.read skills.write skills.create skills.delete api.send`. All file routes are fenced to the session workspace (reads additionally allow the parent sibling tree and Go toolchain roots for cross-repo jumps, but **hidden directories are never readable** through extra roots; writes are workspace-only — creates/renames realpath-recheck symlinked ancestors, and `fs.write` supports an optimistic-concurrency `baseMtime` guard that refuses to clobber external edits). Git index routes resolve paths against the **repository root** with a double fence (`:(literal)` pathspecs, so glob-metacharacter filenames are safe), supporting multi-repo workspaces and deleted files. **Git write routes** (fetch/pull/checkout/commit/push/stage/unstage/discard/revertHunk/stash mutations) refuse to operate on a repo that *encloses* the workspace — open the repository root as the workspace instead; read routes (status/diff/branches/blame/history) stay lenient.
 

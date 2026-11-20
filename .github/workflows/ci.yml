@@ -36,3 +36,38 @@ jobs:
 
       - name: Build + test
         run: pnpm test
+
+  # The suite above runs on Node 20, where `node:sqlite` does not exist, so every
+  # database assertion skips and the SQLite worker path is never entered. This job
+  # runs the same host suite on a runtime that has the module, which is the only
+  # place those regressions actually execute in CI.
+  test-node24:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          cache: false
+
+      - name: Install gopls
+        run: go install golang.org/x/tools/gopls@latest
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Host + client suites on a runtime with node:sqlite
+        run: |
+          node scripts/build-client.mjs
+          node test-host.mjs
+          node test-client.mjs
