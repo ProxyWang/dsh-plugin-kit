@@ -1,6 +1,10 @@
 # Changelog
 
-## Unreleased — the chooser only offers `.proto` files
+## 2.2.0 (2026-11-20)
+
+The gRPC field becomes something you can use without knowing its syntax — pick the scheme, pick the `.proto` file — the editors grow with their content, and the driver layer gains the catalog that makes a project-local `mysql2`/`pg` the preferred implementation.
+
+### the chooser only offers `.proto` files
 
 The list was showing `.gitignore`, `README.md` and every other file, because the running Host predates the `suffix` parameter — the panel asked, the Host ignored it.
 
@@ -10,7 +14,7 @@ The list was showing `.gitignore`, `README.md` and every other file, because the
 - Regressions: non-`.proto` rows never reach the list even when the host returns them, and the footer counts the filtered matches.
 
 
-## Unreleased — the proto chooser is readable
+### the proto chooser is readable
 
 The picker inherited the width of the field it hung from (about 280px), so every path was clipped and the list read as noise.
 
@@ -19,7 +23,7 @@ The picker inherited the width of the field it hung from (about 280px), so every
 - A footer reports how many `.proto` files matched, so an empty or short list is explained rather than just short.
 - Regressions: a deep path splits with the name intact, and a bare file name has no directory part.
 
-## Unreleased — the gRPC address is a host and two schemes, not a URL to type
+### the gRPC address is a host and two schemes, not a URL to type
 
 `grpc://` had to be typed (or was silently missing) before the call would work, so a person who knows `10.150.136.155:9000` still had to know the field's syntax.
 
@@ -27,7 +31,7 @@ The picker inherited the width of the field it hung from (about 280px), so every
 - Pasting a full address still works: `grpcs://host:443` switches the selector and leaves the host part in the field. An empty field stays empty instead of becoming a lone scheme.
 - Regressions: split/join for bare and explicit forms, a pasted scheme winning over the selected one, an empty host, and the pane showing the plaintext scheme for a host typed with none.
 
-## Unreleased — the `.proto` field can be browsed
+### the `.proto` field can be browsed
 
 Typing a path only works when you already know it; finding one is what a file tree is for.
 
@@ -36,7 +40,7 @@ Typing a path only works when you already know it; finding one is what a file tr
 - Typing a path still works for a file outside the workspace or a pasted directory.
 - Regressions: the suffix filter keeps only matching files and leaves the unfiltered list alone; the field offers a chooser, the chooser asks for `.proto` only, every match is clickable, and choosing one calls `rpc.proto` with that exact path.
 
-## Unreleased — editors grow with their content
+### editors grow with their content
 
 The RPC request body was a fixed 70px box: a forty-line JSON message was read four lines at a time while most of the pane sat empty, and the metadata/actions were pushed around by nothing in particular.
 
@@ -45,7 +49,7 @@ The RPC request body was a fixed 70px box: a forty-line JSON message was read fo
 - The database SQL editor gets the same treatment — it had the same fixed-slot problem.
 - Regressions: a long message grows past the floor, a short one keeps it.
 
-## Unreleased — driver architecture: a catalog, and the module ladder it implies
+### driver architecture: a catalog, and the module ladder it implies
 
 [The design](<docs/driver-architecture.md>) answers the question "why not just copy dbx": its drivers are Rust crates compiled into a Tauri binary, ours is a JS plugin that must ship as one npm package. The answer is a three-rung ladder per logical driver — **embedded (node:sqlite) → project module (mysql2/pg) → CLI client** — with one contract and a capability table the panel reads.
 
