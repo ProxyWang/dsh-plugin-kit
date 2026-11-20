@@ -3080,6 +3080,11 @@ check("docAction reloads clean drafts, flags dirty ones, ignores others", docAct
 		// the attempt is allowed and the reason is shown next to the chip.
 		check("an address for an unavailable driver still explains the gap", find((n) => n.type === "button" && n.children?.[0] === "db.connectAction").props.disabled === false && Boolean(find((n) => n.props?.className === "cedb-detect-note")), null);
 
+		// The dialog reports which binary will run, and can look again after the
+		// user installs one — the two things dbx's driver manager gives you.
+		check("the dialog offers a re-detect for a client installed meanwhile", Boolean(find((n) => n.type === "button" && n.props?.className === "cedb-redetect")), null);
+		check("the dialog names the client binary that will run", Boolean(find((n) => n.props?.className === "cedb-bin")), null);
+
 		address().props.onChange({ target: { value: "notes.txt" } });
 		tree = draw();
 		check("an unrecognised address blocks connecting and says why", find((n) => n.type === "button" && n.children?.[0] === "db.connectAction").props.disabled === true && Boolean(find((n) => n.props?.className === "cedb-dialog-error")), null);

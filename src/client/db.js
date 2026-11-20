@@ -136,14 +136,19 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 		}).catch(() => {});
 	}, []);
 
-	useEffect(() => {
-		api("db.drivers", {}).then((res) => {
-			// The readiness list only decorates the optional override; a failed
-			// probe must not silence the panel, so it degrades to "assume ready"
-			// and the Host reports the real reason when connecting.
-			if (res.ok) setDrivers(res.value ?? []);
-		});
+	/**
+	 * Read the driver probes. `refresh` asks the Host to look again (a client
+	 * installed while this dialog is open should be picked up without a reload).
+	 */
+	const probeDrivers = useCallback(async (refresh = false) => {
+		const res = await api("db.drivers", refresh ? { refresh: true } : {});
+		// The readiness list only decorates the optional override; a failed
+		// probe must not silence the panel, so it degrades to "assume ready"
+		// and the Host reports the real reason when connecting.
+		if (res.ok) setDrivers(res.value ?? []);
 	}, []);
+
+	useEffect(() => { void probeDrivers(); }, [probeDrivers]);
 
 	const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? null;
 
@@ -672,7 +677,21 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 					})),
 				h("div", { className: `cedb-detect${form.driver === "" ? " cedb-detect-miss" : ""}` },
 					h("span", null, form.driver === "" ? t("db.notDetected") : `${t("db.detected")}: ${driverLabel(form.driver)}`),
-					driverReady || form.driver === "" ? null : h("span", { className: "cedb-detect-note" }, drivers.find((entry) => entry.id === form.driver)?.note ?? "")),
+					driverReady || form.driver === "" ? null : h("span", { className: "cedb-detect-note" }, drivers.find((entry) => entry.id === form.driver)?.note ?? ""),
+					form.driver === "" ? null : h("button", {
+						type: "button",
+						className: "cedb-redetect",
+						title: t("db.redetectHint"),
+						onClick: () => void probeDrivers(true),
+					}, t("db.redetect"))),
+				// Say which binary will actually run: a keg-only install answers
+				// "installed where?" without the user opening a shell.
+				(form.driver === "mysql" || form.driver === "postgres") && String(form.clientPath ?? "").trim() === ""
+					? h("div", { className: "cedb-bin" },
+						drivers.find((entry) => entry.id === form.driver)?.bin
+							? `${t("db.clientBin")}: ${drivers.find((entry) => entry.id === form.driver).bin}`
+							: t("db.clientBinMissing"))
+					: null,
 				advanced || form.driver === ""
 					? h(Fragment, null,
 						h("label", { className: "cedb-field" }, t("db.driver"),

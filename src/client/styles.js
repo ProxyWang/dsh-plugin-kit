@@ -414,6 +414,8 @@ export const CSS = `
 .cedb-driver-sqlite{color:#4ea1ff}.cedb-driver-mysql{color:#e8a13a}.cedb-driver-postgres{color:#6fb3ff}
 .cedb-rail-head-sub{padding-top:8px;border-top:.5px solid var(--dsw-alias-border-l1,#2a2e35);margin-top:4px}
 .cedb-saved .cedb-driver{opacity:.75}
+.cedb-redetect{margin-left:auto;font-size:11px;color:var(--dsw-alias-label-secondary,#99a);background:none;border:0;cursor:pointer;text-decoration:underline}
+.cedb-bin{font-size:11px;color:var(--dsw-alias-label-secondary,#99a);word-break:break-all;margin-top:2px}
 .cedb-remember{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--dsw-alias-label-secondary,#99a);cursor:pointer;margin-top:2px}
 .cedb-db,.cedb-table{padding:0}
 .cedb-db-name{padding:8px 10px 2px;font-size:11px;font-weight:700;color:var(--dsw-alias-label-secondary,#aab);display:flex;align-items:center;gap:6px}

@@ -8731,6 +8731,8 @@ var CSS2 = `
 .cedb-driver-sqlite{color:#4ea1ff}.cedb-driver-mysql{color:#e8a13a}.cedb-driver-postgres{color:#6fb3ff}
 .cedb-rail-head-sub{padding-top:8px;border-top:.5px solid var(--dsw-alias-border-l1,#2a2e35);margin-top:4px}
 .cedb-saved .cedb-driver{opacity:.75}
+.cedb-redetect{margin-left:auto;font-size:11px;color:var(--dsw-alias-label-secondary,#99a);background:none;border:0;cursor:pointer;text-decoration:underline}
+.cedb-bin{font-size:11px;color:var(--dsw-alias-label-secondary,#99a);word-break:break-all;margin-top:2px}
 .cedb-remember{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--dsw-alias-label-secondary,#99a);cursor:pointer;margin-top:2px}
 .cedb-db,.cedb-table{padding:0}
 .cedb-db-name{padding:8px 10px 2px;font-size:11px;font-weight:700;color:var(--dsw-alias-label-secondary,#aab);display:flex;align-items:center;gap:6px}
@@ -12840,11 +12842,13 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
     }).catch(() => {
     });
   }, []);
-  useEffect(() => {
-    api("db.drivers", {}).then((res) => {
-      if (res.ok) setDrivers(res.value ?? []);
-    });
+  const probeDrivers = useCallback(async (refresh = false) => {
+    const res = await api("db.drivers", refresh ? { refresh: true } : {});
+    if (res.ok) setDrivers(res.value ?? []);
   }, []);
+  useEffect(() => {
+    void probeDrivers();
+  }, [probeDrivers]);
   const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? null;
   const patchTab = useCallback((id, patch) => {
     setTabs((current) => current.map((tab) => tab.id === id ? { ...tab, ...typeof patch === "function" ? patch(tab) : patch } : tab));
@@ -13406,8 +13410,21 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
         "div",
         { className: `cedb-detect${form.driver === "" ? " cedb-detect-miss" : ""}` },
         h("span", null, form.driver === "" ? t("db.notDetected") : `${t("db.detected")}: ${driverLabel(form.driver)}`),
-        driverReady || form.driver === "" ? null : h("span", { className: "cedb-detect-note" }, drivers.find((entry) => entry.id === form.driver)?.note ?? "")
+        driverReady || form.driver === "" ? null : h("span", { className: "cedb-detect-note" }, drivers.find((entry) => entry.id === form.driver)?.note ?? ""),
+        form.driver === "" ? null : h("button", {
+          type: "button",
+          className: "cedb-redetect",
+          title: t("db.redetectHint"),
+          onClick: () => void probeDrivers(true)
+        }, t("db.redetect"))
       ),
+      // Say which binary will actually run: a keg-only install answers
+      // "installed where?" without the user opening a shell.
+      (form.driver === "mysql" || form.driver === "postgres") && String(form.clientPath ?? "").trim() === "" ? h(
+        "div",
+        { className: "cedb-bin" },
+        drivers.find((entry) => entry.id === form.driver)?.bin ? `${t("db.clientBin")}: ${drivers.find((entry) => entry.id === form.driver).bin}` : t("db.clientBinMissing")
+      ) : null,
       advanced || form.driver === "" ? h(
         Fragment,
         null,
