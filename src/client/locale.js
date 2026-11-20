@@ -365,6 +365,7 @@ export const zh = {
 	"rpc.discoverHint": "向服务器索取 schema，不需要 .proto 文件",
 	"rpc.addressRequired": "请先填写服务地址",
 	"rpc.reflectionUnavailable": "该服务未开启反射，请改用 .proto 文件",
+	"rpc.skippedServices": "部分服务没有可用的描述符，已跳过",
 
 	"rpc.noMethods": "还没有解析出方法。填写 .proto 路径后点「加载」。",
 	"rpc.request": "请求消息",
@@ -1088,6 +1089,7 @@ export const en = {
 	"rpc.discoverHint": "Ask the server for its schema instead of reading a .proto file",
 	"rpc.addressRequired": "Enter the server address first",
 	"rpc.reflectionUnavailable": "This server does not expose reflection; use a .proto file instead",
+	"rpc.skippedServices": "Some services have no descriptors and were skipped",
 
 	"rpc.noMethods": "No methods yet. Fill in the .proto path and press Load.",
 	"rpc.request": "Request message",

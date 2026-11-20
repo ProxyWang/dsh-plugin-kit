@@ -18,6 +18,7 @@
 
 import { h, useCallback, useEffect, useMemo, useRef, useState } from "./react.js";
 import { apiKey } from "./apistore.js";
+import { useDismissLayer } from "./dismiss.js";
 import { entryLabel, entryProtocol, filterByProtocol, mergeProtocols } from "./apientries.js";
 
 /** Preference key for the last protocol used. */
@@ -115,6 +116,9 @@ export function WorkbenchView({ t, http, grpc, initialProtocol, sessionId, useSe
 	}, [readHistory]);
 
 	const [drawerOpen, setDrawerOpen] = useState(false);
+	// The drawer is a transient layer like every other popup in the plugin:
+	// clicking outside it (or Escape) closes it.
+	const drawerRef = useDismissLayer({ open: drawerOpen, onDismiss: () => setDrawerOpen(false), ignoreSelector: '[data-ce-popup-trigger="workbench-history"]' });
 	const [incoming, setIncoming] = useState(null);
 	/** Hand one row to the pane that owns its protocol, then show that pane. */
 	const openEntry = (entry) => {
@@ -147,13 +151,14 @@ export function WorkbenchView({ t, http, grpc, initialProtocol, sessionId, useSe
 			h("button", {
 				type: "button",
 				className: `ce-wb-hist${drawerOpen ? " ce-wb-on" : ""}`,
+				"data-ce-popup-trigger": "workbench-history",
 				"aria-expanded": drawerOpen,
 				title: t("workbench.historyHint"),
 				onClick: () => { readHistory(); setDrawerOpen((open) => !open); },
 			}, `${t("workbench.history")} ${history.length}`),
 		),
 		drawerOpen
-			? h("div", { className: "ce-wb-drawer", role: "dialog", "aria-label": t("workbench.history") },
+			? h("div", { className: "ce-wb-drawer", ref: drawerRef, role: "dialog", "aria-label": t("workbench.history") },
 				h("div", { className: "ce-wb-drawer-head" },
 					h("span", null, t("workbench.history")),
 					h("span", { className: "ce-wb-drawer-hint" }, t("workbench.historyHint")),

@@ -32,7 +32,7 @@ const FOOTER = `		return module.exports;
 	},
 });`;
 
-const minify = process.env.DSH_MINIFY === "1";
+const minify = process.env.DSH_MINIFY === "1" || process.argv.includes("--min");
 const result = await build({
 	entryPoints: ["src/client/index.js"],
 	outfile: "client.js",

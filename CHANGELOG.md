@@ -1,5 +1,19 @@
 # Changelog
 
+## 2.1.1 (2026-11-20) — the backlog from the review
+
+Every item the previous review listed as "known, not fixed" is now fixed, plus one defect the work uncovered.
+
+- **CLI statements were not cancellable at all.** The token never reached the child process for MySQL/PostgreSQL queries, so Stop looked for a token nobody had registered and answered "not running". It is passed now, and a cancellation kills exactly that child.
+- **MySQL writes report their affected rows.** Batch mode prints nothing, so writes now run with `--verbose` and the `Query OK, N rows affected` tag is parsed (reads are untouched, since `--verbose` decorates their output too).
+- **Binary gRPC metadata stops double-encoding.** `-bin` values are base64-encoded as the protocol requires, and a value written as `base64:<payload>` passes through unchanged — copying one from another client used to encode the base64 again.
+- **Reflection says which services it skipped**, so a server that advertises a service without descriptors no longer looks like a panel that lost half its methods.
+- **A connection can be tested without being kept** (`db.test` + the dialog's "Test connection"), which is how you find out a password is wrong before committing the connection to the rail.
+- **A saved connection that last failed is marked** with a warning on its row, cleared by the next success.
+- **The workbench history drawer dismisses on an outside click**, like every other transient layer in the plugin.
+- **The published package is minified**: `prepack` runs `build:min`, so `npm pack`/`npm publish` ship a 524 KB `client.js` instead of 808 KB (the repository keeps the readable build, and the bundle-shape test runs against both).
+
+
 ## 2.1.0 (2026-11-19)
 
 The database workbench and gRPC debugging arrive, with saved connections, a virtualized result grid, server reflection, and the language-server fixes that make "find references" work at all.

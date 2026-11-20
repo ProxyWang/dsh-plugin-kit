@@ -114,6 +114,8 @@ pnpm run build   # src/client/** -> client.js (DSH client module format)
 pnpm test        # build + host routes + client pure logic + browser regressions + search/nested/parent/remote, 7 suites (LSP cases auto-skip without gopls)
 ```
 
+`npm pack`/`npm publish` build a minified `client.js` via `prepack` (about 524 KB instead of 808 KB); the repository keeps the readable build.
+
 Regenerate the documentation screenshots with `node scripts/render-readme-previews.mjs` (requires Node ≥ 22 and Chrome; set `CHROME_BIN` to override its path). One headless Chrome instance captures every scene over CDP. The script uses only embedded fictional fixtures and never connects to a real DSH service.
 
 The database and gRPC host cases need a runtime that ships `node:sqlite` and a full HTTP/2 stack (Node ≥ 22.5). Run them with DSH's own runtime; on an older Node they skip:

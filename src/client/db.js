@@ -123,7 +123,12 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 	// The revision the list was read at: a save carries it so the Host can
 	// refuse to overwrite a newer list written by another window.
 	const profileRevision = useRef(0);
+	// Last failure per saved connection, shown on its row: a target that stopped
+	// working should not look identical to one that never failed.
+	const [profileErrors, setProfileErrors] = useState({});
 	const [saveProfile, setSaveProfile] = useState(true);
+	// The dialog's "Test" result: a connection proven without being kept.
+	const [testState, setTestState] = useState({ busy: false, ok: null, text: "" });
 	const [historyOpen, setHistoryOpen] = useState(false);
 	const detailRef = useDismissLayer({ open: Boolean(cellDetail), onDismiss: () => setCellDetail(null) });
 	const connectRef = useDismissLayer({ open: connectOpen, onDismiss: () => setConnectOpen(false) });
@@ -210,6 +215,8 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 			database: parsed.database,
 		}));
 		setNotice(parsed.error);
+		// Any edit invalidates a previous test: it proved a different target.
+		setTestState({ busy: false, ok: null, text: "" });
 	}, []);
 
 	const driverReady = drivers.find((entry) => entry.id === form.driver)?.ready ?? true;
@@ -250,7 +257,17 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 	/** Open a saved connection. The password never reaches this side. */
 	const connectProfile = useCallback(async (profile) => {
 		const res = await api("db.connect", { profileId: profile.id, cwd });
-		if (!res.ok) { setNotice(res.error); return; }
+		if (!res.ok) {
+			setNotice(res.error);
+			setProfileErrors((current) => ({ ...current, [profile.id]: res.error }));
+			return;
+		}
+		setProfileErrors((current) => {
+			if (!(profile.id in current)) return current;
+			const next = { ...current };
+			delete next[profile.id];
+			return next;
+		});
 		setConnections((current) => [...current.filter((entry) => entry.id !== res.value.id), res.value]);
 		setActiveConn(res.value.id);
 		setNotice("");
@@ -262,8 +279,8 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 		setProfiles((current) => current.filter((entry) => entry.id !== profile.id));
 	}, []);
 
-	const doConnect = useCallback(async () => {
-		if (!canConnect) return;
+	/** The request body for both "Test" and "Connect". */
+	const connectParams = useCallback(() => {
 		const params = { driver: form.driver, cwd };
 		if (form.driver === "sqlite") params.path = form.path.trim();
 		else {
@@ -274,6 +291,25 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 			params.database = form.database.trim();
 			if (String(form.clientPath ?? "").trim() !== "") params.clientPath = form.clientPath.trim();
 		}
+		return params;
+	}, [form, cwd]);
+
+	/**
+	 * Prove the target without keeping it. dbx has this as a first-class action;
+	 * the point is to get the driver's own error text before committing.
+	 */
+	const doTest = useCallback(async () => {
+		if (!canConnect) return;
+		setTestState({ busy: true, ok: null, text: "" });
+		const res = await api("db.test", connectParams());
+		if (!res.ok) { setTestState({ busy: false, ok: false, text: res.error }); return; }
+		if (res.value?.error) { setTestState({ busy: false, ok: false, text: res.value.error }); return; }
+		setTestState({ busy: false, ok: true, text: t("db.testOk").replace("{ms}", String(res.value.ms ?? 0)) });
+	}, [canConnect, connectParams, t]);
+
+	const doConnect = useCallback(async () => {
+		if (!canConnect) return;
+		const params = connectParams();
 		const res = await api("db.connect", params);
 		if (!res.ok) { setNotice(res.error); return; }
 		setConnections((current) => [...current.filter((entry) => entry.id !== res.value.id), res.value]);
@@ -282,7 +318,7 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 		setNotice("");
 		if (saveProfile) await rememberConnection(form);
 		await refreshSchema(res.value.id);
-	}, [form, refreshSchema, saveProfile, rememberConnection]);
+	}, [connectParams, refreshSchema, saveProfile, rememberConnection]);
 
 	const doDisconnect = useCallback(async (id) => {
 		await api("db.disconnect", { id });
@@ -498,7 +534,8 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 								onClick: () => void connectProfile(profile),
 							},
 							h("span", { className: `cedb-driver cedb-driver-${profile.driver}` }, profile.driver),
-							h("span", { className: "cedb-conn-label" }, profile.label)),
+							h("span", { className: "cedb-conn-label" }, profile.label),
+							profileErrors[profile.id] ? h("span", { className: "cedb-conn-bad", title: profileErrors[profile.id], "aria-label": profileErrors[profile.id] }, "⚠") : null),
 							h("button", { type: "button", className: "ce-tool ce-tiny", title: t("db.forget"), onClick: () => void forgetProfile(profile) }, "✕"),
 						)))
 					: null,
@@ -735,7 +772,11 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 				h("label", { className: "cedb-remember" },
 					h("input", { type: "checkbox", checked: saveProfile, onChange: (event) => setSaveProfile(event.target.checked) }),
 					t("db.remember")),
+				testState.ok !== null || testState.text !== ""
+					? h("div", { className: `cedb-dialog-test${testState.ok === true ? " cedb-dialog-test-ok" : " cedb-dialog-test-bad"}`, role: "status" }, testState.text)
+					: null,
 				h("div", { className: "cedb-dialog-actions" },
+					h("button", { type: "button", className: "ce-sk-btn", disabled: !canConnect || testState.busy, onClick: () => void doTest() }, testState.busy ? t("loading") : t("db.testAction")),
 					h("button", { type: "button", className: "ce-sk-btn ce-sk-primary", disabled: !canConnect, onClick: () => void doConnect() }, t("db.connectAction")),
 					h("button", { type: "button", className: "ce-sk-btn", onClick: () => setConnectOpen(false) }, t("editor.cancel")),
 				),

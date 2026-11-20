@@ -1,6 +1,6 @@
 {
   "name": "dsh-plugin-kit",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "description": "Harness developer workspace: code IDE with a multi-tab editor, LSP navigation, search, Git review, API client, file browser, and skills manager.",
   "license": "MIT",
   "repository": {
@@ -33,7 +33,8 @@
   },
   "scripts": {
     "build": "node scripts/build-client.mjs",
-    "build:min": "DSH_MINIFY=1 node scripts/build-client.mjs",
+    "build:min": "node scripts/build-client.mjs --min",
+    "prepack": "node scripts/build-client.mjs --min",
     "test": "node scripts/build-client.mjs && node test-host.mjs && node test-client.mjs && node test-browser.mjs && node test-search.mjs && node test-nested.mjs && node test-parent.mjs && node test-remote.mjs",
     "test:contract": "ELECTRON_RUN_AS_NODE=1 \"$DSH_NODE_EXECUTABLE\" test-contract.mjs"
   },

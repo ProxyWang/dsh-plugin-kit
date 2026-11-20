@@ -117,6 +117,8 @@ pnpm run build   # src/client/** -> client.js（DSH 客户端模块格式）
 pnpm test        # 构建 + host 路由 + client 纯逻辑 + 浏览器回归 + 搜索/嵌套/父子/远端，7 个套件（gopls 缺失时 LSP 用例自动跳过）
 ```
 
+打包发布时会自动跑 `node scripts/build-client.mjs --min`（`prepack`），发布出去的 `client.js` 是压缩版（约 524 KB，未压缩约 808 KB）；仓库里保留可读版本。
+
 重新生成文档截图：`node scripts/render-readme-previews.mjs`（需要 Node ≥ 22 与 Chrome，可用 `CHROME_BIN` 指定路径；单个无头 Chrome 实例通过 CDP 依次截取全部场景，仅使用脚本内的虚构数据，不连接真实 DSH 服务）。
 
 数据库与 gRPC 相关的 host 用例需要运行时自带 `node:sqlite` 与 HTTP/2 的完整实现（Node ≥ 22.5）；用 DSH 自带的运行时跑可覆盖它们，否则这部分会自动跳过：

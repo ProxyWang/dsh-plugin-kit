@@ -200,6 +200,12 @@ export function RpcView({ t, useTabInfo, sessionId, useSessions, incoming }) {
 		setMethods(value.methods ?? []);
 		setProtoFiles(value.files ?? []);
 		setSchemaId(value.schemaId ?? "");
+		// A server may advertise a service it cannot describe; that is worth
+		// saying, because the missing methods look like a panel bug otherwise.
+		const skipped = value.skipped ?? [];
+		if (skipped.length > 0) {
+			setProtoError(`${t("rpc.skippedServices")}: ${skipped.map((entry) => entry.service ?? entry).join(", ")}`);
+		}
 		const first = value.methods?.[0];
 		if (first) {
 			setSelected(first.path);

@@ -432,6 +432,7 @@ var zh = {
   "rpc.discoverHint": "向服务器索取 schema，不需要 .proto 文件",
   "rpc.addressRequired": "请先填写服务地址",
   "rpc.reflectionUnavailable": "该服务未开启反射，请改用 .proto 文件",
+  "rpc.skippedServices": "部分服务没有可用的描述符，已跳过",
   "rpc.noMethods": "还没有解析出方法。填写 .proto 路径后点「加载」。",
   "rpc.request": "请求消息",
   "rpc.response": "响应",
@@ -1147,6 +1148,7 @@ var en = {
   "rpc.discoverHint": "Ask the server for its schema instead of reading a .proto file",
   "rpc.addressRequired": "Enter the server address first",
   "rpc.reflectionUnavailable": "This server does not expose reflection; use a .proto file instead",
+  "rpc.skippedServices": "Some services have no descriptors and were skipped",
   "rpc.noMethods": "No methods yet. Fill in the .proto path and press Load.",
   "rpc.request": "Request message",
   "rpc.response": "Response",
@@ -8731,6 +8733,10 @@ var CSS2 = `
 .cedb-driver-sqlite{color:#4ea1ff}.cedb-driver-mysql{color:#e8a13a}.cedb-driver-postgres{color:#6fb3ff}
 .cedb-rail-head-sub{padding-top:8px;border-top:.5px solid var(--dsw-alias-border-l1,#2a2e35);margin-top:4px}
 .cedb-saved .cedb-driver{opacity:.75}
+.cedb-conn-bad{color:var(--dsw-alias-label-error,#f88);font-size:10px;flex:0 0 auto}
+.cedb-dialog-test{font-size:11px;padding:4px 6px;border-radius:4px;background:var(--dsw-alias-bg-layer-1,#1d2126)}
+.cedb-dialog-test-ok{color:var(--dsw-alias-label-primary,#dde)}
+.cedb-dialog-test-bad{color:var(--dsw-alias-label-error,#f88)}
 .cedb-redetect{margin-left:auto;font-size:11px;color:var(--dsw-alias-label-secondary,#99a);background:none;border:0;cursor:pointer;text-decoration:underline}
 .cedb-bin{font-size:11px;color:var(--dsw-alias-label-secondary,#99a);word-break:break-all;margin-top:2px}
 .cedb-remember{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--dsw-alias-label-secondary,#99a);cursor:pointer;margin-top:2px}
@@ -12597,6 +12603,7 @@ function WorkbenchView({ t, http, grpc, initialProtocol, sessionId, useSessions 
     return () => clearInterval(timer);
   }, [readHistory]);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const drawerRef = useDismissLayer({ open: drawerOpen, onDismiss: () => setDrawerOpen(false), ignoreSelector: '[data-ce-popup-trigger="workbench-history"]' });
   const [incoming, setIncoming] = useState(null);
   const openEntry = (entry) => {
     const target = entryProtocol(entry);
@@ -12628,6 +12635,7 @@ function WorkbenchView({ t, http, grpc, initialProtocol, sessionId, useSessions 
       h("button", {
         type: "button",
         className: `ce-wb-hist${drawerOpen ? " ce-wb-on" : ""}`,
+        "data-ce-popup-trigger": "workbench-history",
         "aria-expanded": drawerOpen,
         title: t("workbench.historyHint"),
         onClick: () => {
@@ -12638,7 +12646,7 @@ function WorkbenchView({ t, http, grpc, initialProtocol, sessionId, useSessions 
     ),
     drawerOpen ? h(
       "div",
-      { className: "ce-wb-drawer", role: "dialog", "aria-label": t("workbench.history") },
+      { className: "ce-wb-drawer", ref: drawerRef, role: "dialog", "aria-label": t("workbench.history") },
       h(
         "div",
         { className: "ce-wb-drawer-head" },
@@ -12830,7 +12838,9 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
   const [notice, setNotice] = useState("");
   const [profiles, setProfiles] = useState([]);
   const profileRevision = useRef(0);
+  const [profileErrors, setProfileErrors] = useState({});
   const [saveProfile, setSaveProfile] = useState(true);
+  const [testState, setTestState] = useState({ busy: false, ok: null, text: "" });
   const [historyOpen, setHistoryOpen] = useState(false);
   const detailRef = useDismissLayer({ open: Boolean(cellDetail), onDismiss: () => setCellDetail(null) });
   const connectRef = useDismissLayer({ open: connectOpen, onDismiss: () => setConnectOpen(false) });
@@ -12899,6 +12909,7 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
       database: parsed.database
     }));
     setNotice(parsed.error);
+    setTestState({ busy: false, ok: null, text: "" });
   }, []);
   const driverReady = drivers.find((entry) => entry.id === form.driver)?.ready ?? true;
   const canConnect = form.driver !== "" && (form.driver === "sqlite" ? form.path.trim() !== "" : form.host.trim() !== "");
@@ -12929,8 +12940,15 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
     const res = await api("db.connect", { profileId: profile.id, cwd });
     if (!res.ok) {
       setNotice(res.error);
+      setProfileErrors((current) => ({ ...current, [profile.id]: res.error }));
       return;
     }
+    setProfileErrors((current) => {
+      if (!(profile.id in current)) return current;
+      const next = { ...current };
+      delete next[profile.id];
+      return next;
+    });
     setConnections((current) => [...current.filter((entry) => entry.id !== res.value.id), res.value]);
     setActiveConn(res.value.id);
     setNotice("");
@@ -12940,8 +12958,7 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
     await api("db.profile.delete", { id: profile.id });
     setProfiles((current) => current.filter((entry) => entry.id !== profile.id));
   }, []);
-  const doConnect = useCallback(async () => {
-    if (!canConnect) return;
+  const connectParams = useCallback(() => {
     const params = { driver: form.driver, cwd };
     if (form.driver === "sqlite") params.path = form.path.trim();
     else {
@@ -12952,6 +12969,25 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
       params.database = form.database.trim();
       if (String(form.clientPath ?? "").trim() !== "") params.clientPath = form.clientPath.trim();
     }
+    return params;
+  }, [form, cwd]);
+  const doTest = useCallback(async () => {
+    if (!canConnect) return;
+    setTestState({ busy: true, ok: null, text: "" });
+    const res = await api("db.test", connectParams());
+    if (!res.ok) {
+      setTestState({ busy: false, ok: false, text: res.error });
+      return;
+    }
+    if (res.value?.error) {
+      setTestState({ busy: false, ok: false, text: res.value.error });
+      return;
+    }
+    setTestState({ busy: false, ok: true, text: t("db.testOk").replace("{ms}", String(res.value.ms ?? 0)) });
+  }, [canConnect, connectParams, t]);
+  const doConnect = useCallback(async () => {
+    if (!canConnect) return;
+    const params = connectParams();
     const res = await api("db.connect", params);
     if (!res.ok) {
       setNotice(res.error);
@@ -12963,7 +12999,7 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
     setNotice("");
     if (saveProfile) await rememberConnection(form);
     await refreshSchema(res.value.id);
-  }, [form, refreshSchema, saveProfile, rememberConnection]);
+  }, [connectParams, refreshSchema, saveProfile, rememberConnection]);
   const doDisconnect = useCallback(async (id) => {
     await api("db.disconnect", { id });
     setConnections((current) => current.filter((entry) => entry.id !== id));
@@ -13171,7 +13207,8 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
                 onClick: () => void connectProfile(profile)
               },
               h("span", { className: `cedb-driver cedb-driver-${profile.driver}` }, profile.driver),
-              h("span", { className: "cedb-conn-label" }, profile.label)
+              h("span", { className: "cedb-conn-label" }, profile.label),
+              profileErrors[profile.id] ? h("span", { className: "cedb-conn-bad", title: profileErrors[profile.id], "aria-label": profileErrors[profile.id] }, "⚠") : null
             ),
             h("button", { type: "button", className: "ce-tool ce-tiny", title: t("db.forget"), onClick: () => void forgetProfile(profile) }, "✕")
           ))
@@ -13490,9 +13527,11 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
         h("input", { type: "checkbox", checked: saveProfile, onChange: (event) => setSaveProfile(event.target.checked) }),
         t("db.remember")
       ),
+      testState.ok !== null || testState.text !== "" ? h("div", { className: `cedb-dialog-test${testState.ok === true ? " cedb-dialog-test-ok" : " cedb-dialog-test-bad"}`, role: "status" }, testState.text) : null,
       h(
         "div",
         { className: "cedb-dialog-actions" },
+        h("button", { type: "button", className: "ce-sk-btn", disabled: !canConnect || testState.busy, onClick: () => void doTest() }, testState.busy ? t("loading") : t("db.testAction")),
         h("button", { type: "button", className: "ce-sk-btn ce-sk-primary", disabled: !canConnect, onClick: () => void doConnect() }, t("db.connectAction")),
         h("button", { type: "button", className: "ce-sk-btn", onClick: () => setConnectOpen(false) }, t("editor.cancel"))
       )
@@ -13779,6 +13818,10 @@ function RpcView({ t, useTabInfo, sessionId, useSessions, incoming }) {
     setMethods(value.methods ?? []);
     setProtoFiles(value.files ?? []);
     setSchemaId(value.schemaId ?? "");
+    const skipped = value.skipped ?? [];
+    if (skipped.length > 0) {
+      setProtoError(`${t("rpc.skippedServices")}: ${skipped.map((entry) => entry.service ?? entry).join(", ")}`);
+    }
     const first = value.methods?.[0];
     if (first) {
       setSelected(first.path);

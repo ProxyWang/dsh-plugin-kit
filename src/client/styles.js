@@ -414,6 +414,10 @@ export const CSS = `
 .cedb-driver-sqlite{color:#4ea1ff}.cedb-driver-mysql{color:#e8a13a}.cedb-driver-postgres{color:#6fb3ff}
 .cedb-rail-head-sub{padding-top:8px;border-top:.5px solid var(--dsw-alias-border-l1,#2a2e35);margin-top:4px}
 .cedb-saved .cedb-driver{opacity:.75}
+.cedb-conn-bad{color:var(--dsw-alias-label-error,#f88);font-size:10px;flex:0 0 auto}
+.cedb-dialog-test{font-size:11px;padding:4px 6px;border-radius:4px;background:var(--dsw-alias-bg-layer-1,#1d2126)}
+.cedb-dialog-test-ok{color:var(--dsw-alias-label-primary,#dde)}
+.cedb-dialog-test-bad{color:var(--dsw-alias-label-error,#f88)}
 .cedb-redetect{margin-left:auto;font-size:11px;color:var(--dsw-alias-label-secondary,#99a);background:none;border:0;cursor:pointer;text-decoration:underline}
 .cedb-bin{font-size:11px;color:var(--dsw-alias-label-secondary,#99a);word-break:break-all;margin-top:2px}
 .cedb-remember{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--dsw-alias-label-secondary,#99a);cursor:pointer;margin-top:2px}

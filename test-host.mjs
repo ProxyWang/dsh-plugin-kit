@@ -1100,12 +1100,52 @@ process.stdin.on("data", (chunk) => {
 	check("a path-backed client answers queries", queried.columns?.[0] === "answer" && queried.rows?.[0]?.[0] === "1", queried);
 	db.disconnect(conn.id);
 
+	// A write reports its affected rows: batch mode prints nothing, so the client
+	// is asked for --verbose on writes only.
+	const writeBin = `${brew}/write-mysql`;
+	writeFileSync(writeBin, "#!/bin/sh\ncase \"$*\" in\n  *--verbose*) printf 'Query OK, 2 rows affected (0.01 sec)\\n' ;;\n  *) printf 'answer\\n1\\n' ;;\nesac\n", { mode: 0o755 });
+	const writeConn = await db.connect({ driver: "mysql", host: "example.test", clientPath: writeBin });
+	const updated = await db.query(writeConn.id, "UPDATE t SET a = 1");
+	check("a MySQL write reports its affected rows", updated.changes === 2, updated);
+	const readBack = await db.query(writeConn.id, "SELECT 1");
+	check("a MySQL read still parses its result set", readBack.columns?.[0] === "answer", readBack);
+	db.disconnect(writeConn.id);
+
+	check("parseMysqlTag reads both tag shapes", db.parseMysqlTag("Query OK, 3 rows affected") === 3 && db.parseMysqlTag("Rows matched: 7  Changed: 2") === 7 && db.parseMysqlTag("x") === null, null);
+
+	// "Test connection" proves the target and keeps nothing.
+	const tested = await db.testConnection({ driver: "mysql", host: "example.test", clientPath: fakeBin });
+	check("test connection reports the driver and the time", tested.driver === "mysql" && typeof tested.ms === "number" && db.listConnections().length === 0, tested);
+
+	// A CLI statement can be cancelled by token (it could not, before the token
+	// reached the child process).
+	const slowBin = `${brew}/slow-mysql`;
+	writeFileSync(slowBin, "#!/bin/sh\nsleep 5\nprintf 'answer\\n1\\n'\n", { mode: 0o755 });
+	const slowConn = await db.connect({ driver: "mysql", host: "example.test", clientPath: slowBin });
+	const slowQuery = db.query(slowConn.id, "SELECT 1", 5000, "slow-1").then(() => null, (error) => error);
+	await new Promise((resolve) => setTimeout(resolve, 150));
+	const staleCancel = await db.cancel(slowConn.id, "other");
+	check("a stale token does not kill a CLI statement", staleCancel.cancelled === false, staleCancel);
+	const killed = await db.cancel(slowConn.id, "slow-1");
+	check("a CLI statement can be cancelled by its token", killed.cancelled === true && killed.connectionClosed === false, killed);
+	check("the cancelled CLI statement rejects", (await slowQuery) !== null, null);
+	db.disconnect(slowConn.id);
+
 	const refused = await db.connect({ driver: "mysql", host: "example.test" }).then(() => null, (error) => error);
 	check("a missing client is refused with an install hint", refused !== null && /install it/.test(refused.message) && /client path/.test(refused.message), String(refused));
 	const drivers = await db.listDrivers();
 	check("driver notes name the install command and the escape hatch", drivers.every((entry) => entry.ready || /client path/.test(entry.note) || /Node/.test(entry.note)), drivers);
 	rmSync(brew, { recursive: true, force: true });
 	clearBinaryCache();
+}
+
+// --- gRPC metadata encoding ------------------------------------------------------------
+{
+	const { metadataHeaders } = await import("./lib/host/grpc.js");
+	const headers = metadataHeaders({ "X-Trace-Bin": "AQID", "x-raw-bin": "base64:AQID", Authorization: "Bearer t", ":pseudo": "x", "": "y" });
+	check("a -bin value is base64-encoded", headers["x-trace-bin"] === "QVFJRA==", headers);
+	check("an already-encoded -bin value is passed through", headers["x-raw-bin"] === "AQID", headers);
+	check("metadata keys are lowercased and pseudo-headers dropped", headers.authorization === "Bearer t" && !(":pseudo" in headers) && !("" in headers), headers);
 }
 
 // --- saved database connections (profiles + vault-held passwords) ------------------------
