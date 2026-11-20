@@ -690,7 +690,7 @@ disposeWidth();
 check("plugin unload unhooks the drag memory and the resize pin", unloadFrame.doc.pointerUp() === 0 && unloadFrame.view.resize() === 0 && unloadStorage.getItem(WIDTH_KEY) === null, unloadStorage.getItem(WIDTH_KEY));
 
 
-// --- Tool toggle closes exact current-session tabs; sole guide is not a tool -----------------
+// --- The left rail reveals a tool; it never closes the page it points at -------------------
 let toggleSession = "A", togglePanel = null, toggleBlocked = false;
 let toggleSerial = 0;
 const toggleSessions = new Map([["A", [{ id: "guide-A", kind: "guide" }]], ["B", [{ id: "foreign-code", kind: "code" }]]]);
@@ -720,35 +720,49 @@ const toggleSidebar = {
 };
 const routeToggle = makeLeftToolRouter({ layout: toggleLayout, sidebarRight: toggleSidebar, getTools: () => leftTools, report: (text) => toggleNotices.push(text), t: (key) => key });
 const clickToggle = (kind) => { togglePanel = leftTools.find((tool) => tool.kind === kind).id; routeToggle(); };
+const closes = () => toggleCalls.filter((call) => call.close !== undefined).length;
+
 clickToggle("code");
 const firstToggleCode = toggleSidebar.tabsIn("A").find((tab) => tab.kind === "code").id;
-check("first tool click opens and expands workspace", toggleSidebar.isExpanded() && toggleCalls.at(-1)?.open === "code", toggleCalls);
+check("first tool click opens and expands the workspace", toggleSidebar.isExpanded() && toggleCalls.at(-1)?.open === "code", toggleCalls);
+
+// The reported bug: opening B and then clicking A's tool used to CLOSE A's page,
+// so the tab the user asked for disappeared instead of becoming visible.
 clickToggle("code-api");
+toggleActive.set("A", toggleSidebar.tabsIn("A").find((tab) => tab.kind === "code-api").id);
 clickToggle("code");
-check("clicking existing inactive tool closes only its tab", toggleCalls.at(-1)?.close === firstToggleCode && toggleSidebar.tabsIn("A").some((tab) => tab.kind === "code-api") && toggleSidebar.isExpanded(), toggleCalls);
-clickToggle("code-api");
-check("last tool close collapses sidebar despite retained guide", !toggleSidebar.isExpanded() && toggleSidebar.tabsIn("A").every((tab) => tab.kind === "guide"), toggleSidebar.tabsIn("A"));
-check("tool close never affects another session", toggleSidebar.tabsIn("B")[0]?.id === "foreign-code", toggleSidebar.tabsIn("B"));
+check("clicking a tool whose page is open focuses it instead of closing it", toggleCalls.at(-1)?.focus === firstToggleCode && closes() === 0 && toggleSidebar.tabsIn("A").some((tab) => tab.kind === "code") && toggleSidebar.tabsIn("A").some((tab) => tab.kind === "code-api"), toggleCalls);
+check("the tool that was open stays open while switching", toggleSidebar.tabsIn("A").filter((tab) => tab.kind !== "guide").length === 2, toggleSidebar.tabsIn("A"));
+
 clickToggle("code");
-toggleSidebar.toggleExpanded(); const beforeHiddenToggle = toggleCalls.length;
+check("clicking the already-active tool keeps it (no toggle-close)", toggleCalls.at(-1)?.focus === firstToggleCode && closes() === 0, toggleCalls);
+
+// Collapsed workspace: the click reveals it and lands on the right tab.
+toggleSidebar.tabsIn("A").length && clickToggle("code-api");
+toggleSidebar.toggleExpanded();
+check("collapse the workspace for the reveal case", toggleSidebar.isExpanded() === false, null);
 clickToggle("code");
-check("clicking hidden tool reveals it instead of deleting it", toggleSidebar.isExpanded() && toggleCalls.length === beforeHiddenToggle + 1 && Boolean(toggleCalls.at(-1)?.focus) && toggleSidebar.tabsIn("A").some((tab) => tab.kind === "code"), toggleCalls);
-toggleBlocked = true; const tabsBeforeVeto = toggleSidebar.tabsIn("A");
+check("clicking a tool in a collapsed workspace reveals and focuses it", toggleSidebar.isExpanded() && Boolean(toggleCalls.at(-1)?.focus) && closes() === 0, toggleCalls);
+
+check("tool navigation never touches another session", toggleSidebar.tabsIn("B")[0]?.id === "foreign-code", toggleSidebar.tabsIn("B"));
+
+// A close veto must never be reachable from the rail: nothing to veto when the
+// rail cannot close tabs.
+toggleBlocked = true;
+const beforeVeto = toggleCalls.length;
 clickToggle("code");
-check("close veto preserves tab and expanded workspace", toggleSidebar.tabsIn("A") === tabsBeforeVeto && toggleSidebar.isExpanded() && toggleNotices.at(-1)?.includes("unsaved changes"), toggleNotices);
-toggleBlocked = false; clickToggle("code");
-clickToggle("browser"); clickToggle("browser"); const browserBeforeReopen = toggleSerial;
-clickToggle("browser");
-check("browser can reopen immediately after being toggled closed", toggleSerial === browserBeforeReopen + 1 && toggleSidebar.tabsIn("A").some((tab) => tab.kind === "browser"), toggleCalls);
-clickToggle("browser");
-// Multi-instance close semantics, now exercised through browser: the terminal
-// kind left the left rail when its entry moved into Dev Workspace.
+check("a vetoed close is never attempted from the rail", toggleCalls.length === beforeVeto + 1 && closes() === 0, toggleCalls);
+toggleBlocked = false;
+
+// Several instances of one kind: the ACTIVE one is focused when it matches,
+// otherwise the most recent — and again, nothing is closed.
 toggleSessions.set("A", [{ id: "guide-A", kind: "guide" }, { id: "browser-one", kind: "browser" }, { id: "browser-two", kind: "browser" }]);
 toggleExpanded.set("A", true); toggleActive.set("A", "browser-one");
 clickToggle("browser");
-check("multiple tool instances close the active matching instance only", toggleCalls.at(-1)?.close === "browser-one" && toggleSidebar.tabsIn("A").some((tab) => tab.id === "browser-two") && toggleSidebar.isExpanded(), toggleSidebar.tabsIn("A"));
+check("multiple instances focus the active one", toggleCalls.at(-1)?.focus === "browser-one" && closes() === 0, toggleCalls);
+toggleActive.set("A", "guide-A");
 clickToggle("browser");
-check("closing final tool tab collapses workspace", !toggleSidebar.isExpanded(), null);
+check("with no active instance the most recent one is focused", toggleCalls.at(-1)?.focus === "browser-two" && closes() === 0, toggleCalls);
 
 // --- browser launch reuse, including existing multi-instance tabs ------------------------------
 const { makeBrowserOpener } = await import("./src/client/launcher.js");

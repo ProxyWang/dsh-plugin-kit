@@ -112,17 +112,12 @@ export function makeLeftToolRouter({ layout, sidebarRight, getTools, report, t }
 			const existing = matching.find((tab) => (tab.id ?? tab.tabId) === (active?.id ?? active?.tabId)) ?? matching.at(-1);
 			if (existing) {
 				const tabId = existing.id ?? existing.tabId;
-				// A manually collapsed workspace is first revealed, rather than
-				// silently deleting a tool that the user cannot currently see.
-				if (sidebarRight.isExpanded() === false) {
-					sidebarRight.toggleExpanded();
-					sidebarRight.focus(tabId);
-					return;
-				}
-				// Exact tab close runs native cleanup and unsaved-document guards.
-				sidebarRight.close(tabId);
-				const remaining = inventory().filter((tab) => tab.kind !== "guide" && (tab.id ?? tab.tabId) !== tabId);
-				if (remaining.length === 0 && sidebarRight.isExpanded()) sidebarRight.toggleExpanded();
+				// The rail is how a person REACHES a tool, not a toggle. Clicking a
+				// tool whose page is already open used to close that page, so
+				// "switch to the tab I was looking at" made it vanish instead —
+				// which reads as the tool not being wired. Reveal and focus it.
+				if (sidebarRight.isExpanded() === false) sidebarRight.toggleExpanded();
+				sidebarRight.focus(tabId);
 				if (tool.kind === "browser") openBrowser = makeBrowserOpener(sidebarRight);
 				return;
 			}

@@ -152,6 +152,14 @@ Cancelling used to mean "stop whatever this connection is running", which is wro
 - A SQLite statement runs in a worker that cannot be interrupted in place, so its cancel still ends the connection — but only when the token names the statement that is actually running.
 - The panel mints a token per run, keeps it on the tab while the request is in flight, and sends it with the Stop button.
 
+#### The left rail reveals a tool instead of closing it
+
+"Sometimes switching to a tool does not work and the page is just not there" was exact: the rail was wired as a **toggle**. Clicking a tool whose page was already open closed that page (and if it was the last one, collapsed the workspace), so asking to switch to the tab you were just on made it disappear.
+
+- The rail now reveals and focuses: an open page is brought back (and the workspace expanded if it was collapsed), nothing is closed, and several instances of one kind resolve to the active tab, otherwise the most recent.
+- Closing stays where it belongs: the tab's own ✕, which keeps the host's unsaved-document guards.
+- Regressions rewritten around the reported case: open A, open B, click A → A is focused and both tabs survive; a second click on the active tool keeps it; a collapsed workspace is revealed; a close veto is unreachable from the rail.
+
 #### Grid height, scroll reset, and the packaging/docs audit
 
 - The virtual window assumes a 24px row, but `.cedb-grid-td`'s padding overrode the row rule (same specificity, later in the sheet), so every row was a few pixels taller than the math assumed. The height is now stated with a specificity that wins, and `line-height` is pinned too.

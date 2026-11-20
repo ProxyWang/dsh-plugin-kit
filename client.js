@@ -14237,14 +14237,8 @@ function makeLeftToolRouter({ layout, sidebarRight, getTools, report, t }) {
       const existing = matching.find((tab) => (tab.id ?? tab.tabId) === (active?.id ?? active?.tabId)) ?? matching.at(-1);
       if (existing) {
         const tabId = existing.id ?? existing.tabId;
-        if (sidebarRight.isExpanded() === false) {
-          sidebarRight.toggleExpanded();
-          sidebarRight.focus(tabId);
-          return;
-        }
-        sidebarRight.close(tabId);
-        const remaining = inventory().filter((tab) => tab.kind !== "guide" && (tab.id ?? tab.tabId) !== tabId);
-        if (remaining.length === 0 && sidebarRight.isExpanded()) sidebarRight.toggleExpanded();
+        if (sidebarRight.isExpanded() === false) sidebarRight.toggleExpanded();
+        sidebarRight.focus(tabId);
         if (tool.kind === "browser") openBrowser = makeBrowserOpener(sidebarRight);
         return;
       }
