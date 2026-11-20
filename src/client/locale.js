@@ -344,6 +344,7 @@ export const zh = {
 	"db.remember": "保存这个连接（密码存进凭据库）",
 
 	"db.cancelled": "已取消执行",
+	"db.notRunning": "这条语句已经结束，无需取消",
 	"db.cancelledClosed": "已取消：SQLite 查询无法中途中断，该连接随之关闭。",
 	"db.history": "历史",
 	"db.export": "导出 CSV",
@@ -1066,6 +1067,7 @@ export const en = {
 	"db.remember": "Remember this connection (password goes to the secret vault)",
 
 	"db.cancelled": "Cancelled",
+	"db.notRunning": "That statement already finished",
 	"db.cancelledClosed": "Cancelled. A SQLite statement cannot be interrupted in place, so that connection was closed.",
 	"db.history": "History",
 	"db.export": "Export CSV",

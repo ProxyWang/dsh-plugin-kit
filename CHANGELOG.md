@@ -146,6 +146,7 @@ Cancelling used to mean "stop whatever this connection is running", which is wro
 
 - The virtual window assumes a 24px row, but `.cedb-grid-td`'s padding overrode the row rule (same specificity, later in the sheet), so every row was a few pixels taller than the math assumed. The height is now stated with a specificity that wins, and `line-height` is pinned too.
 - A shorter result kept the previous scroll offset: the window started past the last row and rendered an empty grid under a spacer. A new result resets the scroll.
+- Stop on a statement that had already finished reported "cancelled" over a result that had actually arrived; it now says the statement finished.
 - `npm pack` carries every new host module (`lib/host/*.js` matches them), verified rather than assumed.
 - CI gained a **Node 24 job**: the main job runs on Node 20, where `node:sqlite` does not exist, so the database assertions and the SQLite worker path never executed there. The README's "6 suites" line is also now accurate (7).
 - The changelog had 31 sections labelled "Unreleased" from an era that shipped before 1.6.0; they are grouped under one historical heading instead of reading as pending work.

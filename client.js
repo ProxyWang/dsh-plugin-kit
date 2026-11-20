@@ -411,6 +411,7 @@ var zh = {
   "db.forget": "删除保存的连接",
   "db.remember": "保存这个连接（密码存进凭据库）",
   "db.cancelled": "已取消执行",
+  "db.notRunning": "这条语句已经结束，无需取消",
   "db.cancelledClosed": "已取消：SQLite 查询无法中途中断，该连接随之关闭。",
   "db.history": "历史",
   "db.export": "导出 CSV",
@@ -1125,6 +1126,7 @@ var en = {
   "db.forget": "Forget this saved connection",
   "db.remember": "Remember this connection (password goes to the secret vault)",
   "db.cancelled": "Cancelled",
+  "db.notRunning": "That statement already finished",
   "db.cancelledClosed": "Cancelled. A SQLite statement cannot be interrupted in place, so that connection was closed.",
   "db.history": "History",
   "db.export": "Export CSV",
@@ -13068,8 +13070,14 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
     const conn = tab.conn || activeConn;
     if (!conn) return;
     const res = await api("db.cancel", { id: conn, ...tab.runToken ? { token: tab.runToken } : {} });
+    const value = res.ok ? res.value : null;
+    if (!value?.cancelled) {
+      patchTab(tab.id, { loading: false, error: "" });
+      setNotice(res.ok ? t("db.notRunning") : res.error);
+      return;
+    }
     patchTab(tab.id, { loading: false, error: t("db.cancelled") });
-    if (res.ok && res.value?.connectionClosed) {
+    if (value.connectionClosed) {
       setConnections((current) => current.filter((entry) => entry.id !== conn));
       setTabs((current) => current.filter((entry) => entry.conn !== conn));
       if (activeConn === conn) {

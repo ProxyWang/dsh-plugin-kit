@@ -402,8 +402,16 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 		const conn = tab.conn || activeConn;
 		if (!conn) return;
 		const res = await api("db.cancel", { id: conn, ...(tab.runToken ? { token: tab.runToken } : {}) });
+		const value = res.ok ? res.value : null;
+		// A statement that already finished is not a cancellation: saying so would
+		// show "cancelled" over a result that actually arrived.
+		if (!value?.cancelled) {
+			patchTab(tab.id, { loading: false, error: "" });
+			setNotice(res.ok ? t("db.notRunning") : res.error);
+			return;
+		}
 		patchTab(tab.id, { loading: false, error: t("db.cancelled") });
-		if (res.ok && res.value?.connectionClosed) {
+		if (value.connectionClosed) {
 			setConnections((current) => current.filter((entry) => entry.id !== conn));
 			setTabs((current) => current.filter((entry) => entry.conn !== conn));
 			if (activeConn === conn) { setActiveConn(""); setSchema(null); }
