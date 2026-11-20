@@ -1198,6 +1198,32 @@ process.stdin.on("data", (chunk) => {
 	check("metadata keys are lowercased and pseudo-headers dropped", headers.authorization === "Bearer t" && !(":pseudo" in headers) && !("" in headers), headers);
 }
 
+// --- foreign keys and execution plans --------------------------------------------------
+{
+	let sqliteAvailable = false;
+	try { await import("node:sqlite"); sqliteAvailable = true; } catch { /* no node:sqlite */ }
+	if (!sqliteAvailable) {
+		skipped += 3;
+	} else {
+		const db = await import("./lib/host/db.js");
+		const file = `${cwd}-fk.sqlite`;
+		rmSync(file, { force: true });
+		const conn = await db.connect({ driver: "sqlite", path: file });
+		await db.query(conn.id, "CREATE TABLE parent (id INTEGER PRIMARY KEY)");
+		await db.query(conn.id, "CREATE TABLE child (id INTEGER PRIMARY KEY, parent_id INTEGER REFERENCES parent(id), note TEXT)");
+		const schema = await db.schema(conn.id);
+		const child = schema.databases[0].tables.find((table) => table.name === "child");
+		check("the schema carries foreign keys for the ER diagram", child?.foreignKeys?.[0]?.refTable === "parent" && child.foreignKeys[0].columns.includes("parent_id"), child?.foreignKeys);
+
+		const plan = await db.explain(conn.id, "SELECT * FROM child WHERE parent_id = 1");
+		check("explain returns a plan tree without running the statement", plan.tree === true && plan.columns.includes("detail") && plan.rows.length > 0, plan);
+		const counted = await db.query(conn.id, "SELECT COUNT(*) AS n FROM child");
+		check("explain does not execute the statement", counted.rows[0][0] === 0, counted);
+		db.disconnect(conn.id);
+		rmSync(file, { force: true });
+	}
+}
+
 // --- agent tools for the database panel ------------------------------------------------
 {
 	let sqliteAvailable = false;

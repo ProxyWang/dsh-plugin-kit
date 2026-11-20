@@ -605,7 +605,7 @@ export function RpcView({ t, useTabInfo, sessionId, useSessions, incoming }) {
 			),
 			// ---- request / response -----------------------------------------------------
 			h("section", { className: "cerpc-main" },
-				h("div", { className: "cerpc-pane" },
+				h("div", { className: "cerpc-pane cerpc-request" },
 					h("div", { className: "cerpc-pane-head" },
 						h("span", { className: "cerpc-pane-title" }, t("rpc.request")),
 						selectedMethod ? h("span", { className: "cedb-chip" }, selectedMethod.request) : null,

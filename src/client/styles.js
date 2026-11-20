@@ -457,6 +457,33 @@ export const CSS = `
 .cedb-conn-select{height:26px;font-size:12px;max-width:240px;background:var(--dsw-alias-bg-layer-2,#22262c);color:var(--dsw-alias-label-primary,#dde);border:.5px solid var(--dsw-alias-border-l1,#333);border-radius:5px;padding:0 6px}
 .cedb-run{flex:none}
 .cedb-kbd{font-size:10px;color:var(--dsw-alias-label-tertiary,#667);font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.cedb-dialog-wide{width:min(920px,calc(100vw - 48px));max-height:86vh;overflow:auto}
+.cedb-dialog-hint{margin:0;font-size:11px;color:var(--dsw-alias-label-tertiary,#889)}
+.cedb-driver-list{display:flex;flex-direction:column;gap:8px;max-height:56vh;overflow:auto}
+.cedb-driver-card{border:.5px solid var(--dsw-alias-border-l1,#2a2e35);border-radius:8px;padding:8px 10px;display:flex;flex-direction:column;gap:6px}
+.cedb-driver-head{display:flex;align-items:center;gap:8px;font-size:12px}
+.cedb-driver-caps{display:flex;flex-wrap:wrap;gap:4px}
+.cedb-cap{font-size:10px;padding:1px 6px;border-radius:4px;background:var(--dsw-alias-bg-base,#141618);color:var(--dsw-alias-label-tertiary,#889);border:.5px solid var(--dsw-alias-border-l1,#2a2e35)}
+.cedb-cap-on{color:var(--dsw-alias-label-primary,#dde)}
+.cedb-driver-alts{display:flex;flex-direction:column;gap:2px}
+.cedb-driver-alt{display:flex;gap:8px;font-size:11px;align-items:baseline}
+.cedb-driver-impl{flex:0 0 64px;color:var(--dsw-alias-label-secondary,#aab)}
+.cedb-driver-ok{color:var(--dsw-alias-label-secondary,#aab);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cedb-driver-no{color:var(--dsw-alias-label-tertiary,#778);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cedb-er-scroll{overflow:auto;max-height:60vh;border:.5px solid var(--dsw-alias-border-l1,#2a2e35);border-radius:8px;background:var(--dsw-alias-bg-base,#141618)}
+.cedb-er-link{fill:none;stroke:var(--dsw-alias-border-l1,#4a5560);stroke-width:1.2}
+.cedb-er-box{cursor:pointer}
+.cedb-er-box rect{fill:var(--dsw-alias-bg-layer-1,#1d2126);stroke:var(--dsw-alias-border-l1,#39414a)}
+.cedb-er-box:hover rect{stroke:var(--dsw-alias-button-info-fill,#58a6ff)}
+.cedb-er-title{fill:var(--dsw-alias-label-primary,#dde);font-size:12px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.cedb-er-cols{fill:var(--dsw-alias-label-tertiary,#889);font-size:10px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.cedb-plan{max-height:56vh;overflow:auto;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px}
+.cedb-plan-row{padding:3px 0;border-bottom:.5px solid var(--dsw-alias-border-l1,#22262b);color:var(--dsw-alias-label-secondary,#ccd)}
+.cedb-import-text{width:100%;box-sizing:border-box}
+.cedb-export{position:relative;display:inline-flex}
+.cedb-menu{position:absolute;top:100%;right:0;z-index:20;margin-top:4px;display:flex;flex-direction:column;min-width:130px;padding:4px;background:var(--dsw-alias-bg-layer-1,#1d2126);border:.5px solid var(--dsw-alias-border-l1,#39414a);border-radius:6px;box-shadow:0 8px 24px rgba(0,0,0,.4)}
+.cedb-menu-row{text-align:left;padding:4px 8px;border:0;background:transparent;color:var(--dsw-alias-label-primary,#dde);font-size:12px;border-radius:4px;cursor:pointer}
+.cedb-menu-row:hover{background:var(--dsw-alias-interactive-bg-hover,#2a2e35)}
 .cedb-ctx-row{display:flex;align-items:center;gap:6px;padding:5px 10px 0;flex-wrap:wrap}
 .cedb-ctx{padding:1px 7px;border-radius:4px;background:var(--dsw-alias-bg-layer-1,#1d2126);border:.5px solid var(--dsw-alias-border-l1,#2a2e35);font-size:11px;color:var(--dsw-alias-label-secondary,#aab);max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cedb-ctx-strong{color:var(--dsw-alias-label-primary,#dde);font-weight:600}
@@ -541,7 +568,10 @@ export const CSS = `
 .cerpc-file{font-size:10px;color:var(--dsw-alias-label-tertiary,#667);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cerpc-main{flex:1;min-width:0;display:flex;flex-direction:column;overflow:hidden}
 .cerpc-pane{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden}
-.cerpc-request{flex:0 0 auto;overflow:visible}
+/* A content-sized request pane, capped so the response keeps room: the actions
+   must stay reachable, so only the body shrinks when space runs out. */
+.cerpc-request{flex:0 1 auto;max-height:62%;overflow:hidden}
+.cerpc-request .cerpc-actions{flex:none}
 .cerpc-response{flex:1 1 auto}
 .cerpc-response{border-top:.5px solid var(--dsw-alias-border-l1,#333);background:var(--dsw-alias-bg-base,#141618)}
 .cerpc-pane-head{flex:none;display:flex;align-items:center;gap:6px;padding:5px 10px;font-size:11px;color:var(--dsw-alias-label-tertiary,#889);min-height:26px;flex-wrap:wrap}
@@ -569,7 +599,7 @@ export const CSS = `
 .cerpc-timeout{width:70px;height:22px;font-size:11px;padding:0 4px}
 /* The request pane is content-sized: the body grows with the message, the
    response keeps whatever is left, and the ceiling keeps the split usable. */
-.cerpc-json{min-height:96px;max-height:52vh;overflow:auto;resize:vertical}
+.cerpc-json{flex:0 1 auto;min-height:96px;max-height:52vh;overflow:auto;resize:vertical}
 .cerpc-json-bad{border-color:var(--dsw-alias-state-error-primary,#f85149) !important}
 .cerpc-json-error{padding:0 10px 6px;font-size:11px;color:var(--dsw-alias-state-error-primary,#f85149);font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
 .cerpc-meta-head{flex:none;display:flex;align-items:center;gap:8px;padding:4px 10px}

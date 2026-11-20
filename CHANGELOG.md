@@ -1,5 +1,26 @@
 # Changelog
 
+## Unreleased — the invoke button stays put, and the database panel gains transfer, drivers, ER and plans
+
+### gRPC: invoke disappeared after the first call
+
+The request pane was rendered as a plain `.cerpc-pane`, so the CSS that makes it content-sized (`.cerpc-request{flex:0 1 auto}`) never applied. It shared the body 50/50 with the response and clipped its own overflow — the metadata row and the **调用** button were the part that fell off once a response arrived. The pane now carries the class, is capped at 62% with only the body shrinking, and its actions are `flex:none`, so the button is always reachable.
+
+### Data transfer (`.cedb-export` menu + Import)
+
+- **JSON / SQL INSERT / CSV**: the result menu exports rows as objects, as driver-correct `INSERT` statements (backticks for MySQL, `''` escaping, chunked every 100 rows) or CSV; JSON and SQL go straight to the clipboard.
+- **Import** takes pasted CSV (first line is the header, quoting honoured) or a JSON array, previews `N columns · M rows`, and inserts through the ordinary query path — so a write is still visible to the user and still reports its error.
+
+### Driver manager (`db.driversButton`)
+
+A dialog listing every logical driver with the implementation that will actually run, its **capability chips** (`transactions`, `changes`, `typedValues`, `streaming`, `cancel`), and each implementation's location or install note — plus the existing re-detect.
+
+### ER diagram and execution plans
+
+- The schema now carries **foreign keys** for all three drivers (`PRAGMA foreign_key_list`, `information_schema` for MySQL and PostgreSQL), so the ER dialog draws real edges: tables as boxes on a grid, foreign keys as curves, a box opens its table.
+- **执行计划** runs `EXPLAIN QUERY PLAN` on SQLite and renders the parent/child tree, or a tabular `EXPLAIN` on MySQL/PostgreSQL. The statement is never executed.
+- Regressions: schema foreign keys, a plan that returns a tree without running anything, export formats and quoting, CSV/JSON parsing, the ER graph dropping an edge to a missing table, layout edges, plan nesting, and the request pane class.
+
 ## Unreleased — the database panel gets the agent, and the tab says what it points at
 
 dbx's window has a tree, a data workspace with context chips, and an assistant. The first two are layout; the third is where a plugin inside DSH must not copy: dbx ships its own model client and key, while DSH already *is* the assistant.

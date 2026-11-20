@@ -415,6 +415,22 @@ var zh = {
   "db.reloadTable": "表数据需要重新加载",
   "db.reloadTableHint": "连接可能已断开，或页面刚刚切换。",
   "db.noConnectionCtx": "未选择连接",
+  "db.driversButton": "驱动",
+  "db.driversHint": "每个驱动的实现、能力与位置",
+  "db.notReady": "不可用",
+  "db.erButton": "ER 图",
+  "db.erHint": "按外键画出表之间的关系",
+  "db.erEmpty": "这个库里没有可画关系的表",
+  "db.explain": "执行计划",
+  "db.explainHint": "不执行，只看数据库会怎么跑",
+  "db.exportSql": "SQL INSERT",
+  "db.copied": "已复制到剪贴板",
+  "db.copyFailed": "复制失败（浏览器可能不允许）",
+  "db.import": "导入",
+  "db.importHint": "粘贴 CSV（首行是列名）或 JSON 数组，按表列插入",
+  "db.importRun": "插入",
+  "db.importEmpty": "没有可插入的数据",
+  "db.imported": "已导入 {n} 行",
   "db.stop": "停止",
   "db.savedConnections": "已保存",
   "db.connectSaved": "连接这个保存的连接",
@@ -1154,6 +1170,22 @@ var en = {
   "db.reloadTable": "Table data needs a reload",
   "db.reloadTableHint": "The connection may have dropped, or the tab just switched.",
   "db.noConnectionCtx": "No connection",
+  "db.driversButton": "Drivers",
+  "db.driversHint": "Every driver implementation, its capabilities and its location",
+  "db.notReady": "unavailable",
+  "db.erButton": "ER diagram",
+  "db.erHint": "Draw the tables and their foreign keys",
+  "db.erEmpty": "No related tables to draw in this database",
+  "db.explain": "Execution plan",
+  "db.explainHint": "See how the database would run it, without running it",
+  "db.exportSql": "SQL INSERT",
+  "db.copied": "Copied to the clipboard",
+  "db.copyFailed": "Copy failed (the browser may block it)",
+  "db.import": "Import",
+  "db.importHint": "Paste CSV (first line is the header) or a JSON array, inserted into the table",
+  "db.importRun": "Insert",
+  "db.importEmpty": "Nothing to insert",
+  "db.imported": "Imported {n} rows",
   "db.stop": "Stop",
   "db.savedConnections": "Saved",
   "db.connectSaved": "Connect to this saved connection",
@@ -8822,6 +8854,33 @@ var CSS2 = `
 .cedb-conn-select{height:26px;font-size:12px;max-width:240px;background:var(--dsw-alias-bg-layer-2,#22262c);color:var(--dsw-alias-label-primary,#dde);border:.5px solid var(--dsw-alias-border-l1,#333);border-radius:5px;padding:0 6px}
 .cedb-run{flex:none}
 .cedb-kbd{font-size:10px;color:var(--dsw-alias-label-tertiary,#667);font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.cedb-dialog-wide{width:min(920px,calc(100vw - 48px));max-height:86vh;overflow:auto}
+.cedb-dialog-hint{margin:0;font-size:11px;color:var(--dsw-alias-label-tertiary,#889)}
+.cedb-driver-list{display:flex;flex-direction:column;gap:8px;max-height:56vh;overflow:auto}
+.cedb-driver-card{border:.5px solid var(--dsw-alias-border-l1,#2a2e35);border-radius:8px;padding:8px 10px;display:flex;flex-direction:column;gap:6px}
+.cedb-driver-head{display:flex;align-items:center;gap:8px;font-size:12px}
+.cedb-driver-caps{display:flex;flex-wrap:wrap;gap:4px}
+.cedb-cap{font-size:10px;padding:1px 6px;border-radius:4px;background:var(--dsw-alias-bg-base,#141618);color:var(--dsw-alias-label-tertiary,#889);border:.5px solid var(--dsw-alias-border-l1,#2a2e35)}
+.cedb-cap-on{color:var(--dsw-alias-label-primary,#dde)}
+.cedb-driver-alts{display:flex;flex-direction:column;gap:2px}
+.cedb-driver-alt{display:flex;gap:8px;font-size:11px;align-items:baseline}
+.cedb-driver-impl{flex:0 0 64px;color:var(--dsw-alias-label-secondary,#aab)}
+.cedb-driver-ok{color:var(--dsw-alias-label-secondary,#aab);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cedb-driver-no{color:var(--dsw-alias-label-tertiary,#778);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cedb-er-scroll{overflow:auto;max-height:60vh;border:.5px solid var(--dsw-alias-border-l1,#2a2e35);border-radius:8px;background:var(--dsw-alias-bg-base,#141618)}
+.cedb-er-link{fill:none;stroke:var(--dsw-alias-border-l1,#4a5560);stroke-width:1.2}
+.cedb-er-box{cursor:pointer}
+.cedb-er-box rect{fill:var(--dsw-alias-bg-layer-1,#1d2126);stroke:var(--dsw-alias-border-l1,#39414a)}
+.cedb-er-box:hover rect{stroke:var(--dsw-alias-button-info-fill,#58a6ff)}
+.cedb-er-title{fill:var(--dsw-alias-label-primary,#dde);font-size:12px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.cedb-er-cols{fill:var(--dsw-alias-label-tertiary,#889);font-size:10px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.cedb-plan{max-height:56vh;overflow:auto;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px}
+.cedb-plan-row{padding:3px 0;border-bottom:.5px solid var(--dsw-alias-border-l1,#22262b);color:var(--dsw-alias-label-secondary,#ccd)}
+.cedb-import-text{width:100%;box-sizing:border-box}
+.cedb-export{position:relative;display:inline-flex}
+.cedb-menu{position:absolute;top:100%;right:0;z-index:20;margin-top:4px;display:flex;flex-direction:column;min-width:130px;padding:4px;background:var(--dsw-alias-bg-layer-1,#1d2126);border:.5px solid var(--dsw-alias-border-l1,#39414a);border-radius:6px;box-shadow:0 8px 24px rgba(0,0,0,.4)}
+.cedb-menu-row{text-align:left;padding:4px 8px;border:0;background:transparent;color:var(--dsw-alias-label-primary,#dde);font-size:12px;border-radius:4px;cursor:pointer}
+.cedb-menu-row:hover{background:var(--dsw-alias-interactive-bg-hover,#2a2e35)}
 .cedb-ctx-row{display:flex;align-items:center;gap:6px;padding:5px 10px 0;flex-wrap:wrap}
 .cedb-ctx{padding:1px 7px;border-radius:4px;background:var(--dsw-alias-bg-layer-1,#1d2126);border:.5px solid var(--dsw-alias-border-l1,#2a2e35);font-size:11px;color:var(--dsw-alias-label-secondary,#aab);max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cedb-ctx-strong{color:var(--dsw-alias-label-primary,#dde);font-weight:600}
@@ -8906,7 +8965,10 @@ var CSS2 = `
 .cerpc-file{font-size:10px;color:var(--dsw-alias-label-tertiary,#667);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cerpc-main{flex:1;min-width:0;display:flex;flex-direction:column;overflow:hidden}
 .cerpc-pane{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden}
-.cerpc-request{flex:0 0 auto;overflow:visible}
+/* A content-sized request pane, capped so the response keeps room: the actions
+   must stay reachable, so only the body shrinks when space runs out. */
+.cerpc-request{flex:0 1 auto;max-height:62%;overflow:hidden}
+.cerpc-request .cerpc-actions{flex:none}
 .cerpc-response{flex:1 1 auto}
 .cerpc-response{border-top:.5px solid var(--dsw-alias-border-l1,#333);background:var(--dsw-alias-bg-base,#141618)}
 .cerpc-pane-head{flex:none;display:flex;align-items:center;gap:6px;padding:5px 10px;font-size:11px;color:var(--dsw-alias-label-tertiary,#889);min-height:26px;flex-wrap:wrap}
@@ -8934,7 +8996,7 @@ var CSS2 = `
 .cerpc-timeout{width:70px;height:22px;font-size:11px;padding:0 4px}
 /* The request pane is content-sized: the body grows with the message, the
    response keeps whatever is left, and the ceiling keeps the split usable. */
-.cerpc-json{min-height:96px;max-height:52vh;overflow:auto;resize:vertical}
+.cerpc-json{flex:0 1 auto;min-height:96px;max-height:52vh;overflow:auto;resize:vertical}
 .cerpc-json-bad{border-color:var(--dsw-alias-state-error-primary,#f85149) !important}
 .cerpc-json-error{padding:0 10px 6px;font-size:11px;color:var(--dsw-alias-state-error-primary,#f85149);font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
 .cerpc-meta-head{flex:none;display:flex;align-items:center;gap:8px;padding:4px 10px}
@@ -12873,6 +12935,176 @@ function useAutoHeight(ref, value, options = {}) {
   }, [value, min, extra]);
 }
 
+// src/client/dbtools.js
+function quoteIdent(driver2, name) {
+  return driver2 === "mysql" ? `\`${String(name).replace(/`/g, "``")}\`` : `"${String(name).replace(/"/g, '""')}"`;
+}
+function sqlLiteral(driver2, value) {
+  if (value === null || value === void 0) return "NULL";
+  if (typeof value === "number") return Number.isFinite(value) ? String(value) : "NULL";
+  if (typeof value === "boolean") return value ? driver2 === "sqlite" ? "1" : "TRUE" : driver2 === "sqlite" ? "0" : "FALSE";
+  const text = String(value).replace(/'/g, "''");
+  return `'${text}'`;
+}
+function toJsonRows(result) {
+  const columns = result?.columns ?? [];
+  const rows = result?.rows ?? [];
+  const objects = rows.map((row) => Object.fromEntries(columns.map((column, index) => [column, row[index] ?? null])));
+  return JSON.stringify(objects, null, 2);
+}
+function toInsertSql(result, table, driver2, options = {}) {
+  const columns = result?.columns ?? [];
+  const rows = result?.rows ?? [];
+  if (columns.length === 0 || rows.length === 0) return "";
+  const chunk = Math.max(1, Number(options.chunk) || 100);
+  const target = quoteIdent(driver2, table);
+  const head = `INSERT INTO ${target} (${columns.map((column) => quoteIdent(driver2, column)).join(", ")}) VALUES`;
+  const statements = [];
+  for (let start = 0; start < rows.length; start += chunk) {
+    const values = rows.slice(start, start + chunk).map((row) => `  (${columns.map((_, index) => sqlLiteral(driver2, row[index])).join(", ")})`).join(",\n");
+    statements.push(`${head}
+${values};`);
+  }
+  return statements.join("\n\n");
+}
+function erGraph(schema) {
+  const database = (schema?.databases ?? []).find((entry) => entry.name === schema?.current) ?? (schema?.databases ?? [])[0];
+  const tables = (database?.tables ?? []).filter((table) => table.kind !== "view");
+  const names = new Set(tables.map((table) => table.name));
+  const edges = [];
+  for (const table of tables) {
+    for (const fk of table.foreignKeys ?? []) {
+      if (!names.has(fk.refTable)) continue;
+      edges.push({
+        from: table.name,
+        to: fk.refTable,
+        columns: (fk.columns ?? []).join(", "),
+        refColumns: (fk.refColumns ?? []).join(", ")
+      });
+    }
+  }
+  return { database: database?.name ?? "", tables, edges };
+}
+function erLayout(graph, options = {}) {
+  const boxWidth = Number(options.boxWidth) || 190;
+  const boxHeight = Number(options.boxHeight) || 74;
+  const gapX = Number(options.gapX) || 56;
+  const gapY = Number(options.gapY) || 46;
+  const width = Number(options.width) || 900;
+  const perRow = Math.max(1, Math.floor((width + gapX) / (boxWidth + gapX)));
+  const tables = graph?.tables ?? [];
+  const positions = /* @__PURE__ */ new Map();
+  const boxes = tables.map((table, index) => {
+    const column = index % perRow;
+    const row = Math.floor(index / perRow);
+    const box = {
+      name: table.name,
+      columns: (table.columns ?? []).map((entry) => entry.name),
+      x: 24 + column * (boxWidth + gapX),
+      y: 24 + row * (boxHeight + gapY),
+      width: boxWidth,
+      height: boxHeight
+    };
+    positions.set(table.name, box);
+    return box;
+  });
+  const links = (graph?.edges ?? []).flatMap((edge) => {
+    const from = positions.get(edge.from);
+    const to = positions.get(edge.to);
+    if (!from || !to) return [];
+    const x1 = from.x + from.width / 2;
+    const y1 = from.y + from.height;
+    const x2 = to.x + to.width / 2;
+    const y2 = to.y;
+    const mid = (y1 + y2) / 2;
+    return [{ ...edge, path: `M ${x1} ${y1} C ${x1} ${mid}, ${x2} ${mid}, ${x2} ${y2}` }];
+  });
+  const rows = Math.ceil(boxes.length / perRow);
+  return { width, height: 48 + rows * (boxHeight + gapY), boxes, links };
+}
+function planTree(columns, rows) {
+  const idIndex = (columns ?? []).indexOf("id");
+  const parentIndex = (columns ?? []).indexOf("parent");
+  const detailIndex = (columns ?? []).findIndex((column) => String(column).toLowerCase() === "detail");
+  if (idIndex < 0 || parentIndex < 0 || detailIndex < 0) return [];
+  const children = /* @__PURE__ */ new Map();
+  const roots = [];
+  for (const row of rows ?? []) {
+    const entry = { id: row[idIndex], parent: row[parentIndex], detail: String(row[detailIndex] ?? "") };
+    if (entry.parent === null || entry.parent === void 0 || entry.parent === 0) roots.push(entry);
+    else {
+      if (!children.has(entry.parent)) children.set(entry.parent, []);
+      children.get(entry.parent).push(entry);
+    }
+  }
+  const flat = [];
+  const walk = (nodes, depth) => {
+    for (const node of nodes) {
+      flat.push({ depth, detail: node.detail });
+      walk(children.get(node.id) ?? [], depth + 1);
+    }
+  };
+  walk(roots, 0);
+  if (flat.length === 0) return (rows ?? []).map((row) => ({ depth: 0, detail: String(row[detailIndex] ?? "") }));
+  return flat;
+}
+function parseDataText(text) {
+  const source = String(text ?? "").trim();
+  if (source === "") return { columns: [], rows: [], error: "empty" };
+  if (source.startsWith("[") || source.startsWith("{")) {
+    try {
+      const parsed = JSON.parse(source);
+      const list = Array.isArray(parsed) ? parsed : [parsed];
+      const columns2 = [...new Set(list.flatMap((entry) => Object.keys(entry ?? {})))];
+      return { columns: columns2, rows: list.map((entry) => columns2.map((column) => (entry ?? {})[column] ?? null)), error: "" };
+    } catch (error) {
+      return { columns: [], rows: [], error: String(error?.message ?? error) };
+    }
+  }
+  const rows = [];
+  let row = [];
+  let field = "";
+  let quoted = false;
+  const delimiter = source.includes("	") && !source.includes(",") ? "	" : ",";
+  for (let i = 0; i < source.length; i++) {
+    const ch = source[i];
+    if (quoted) {
+      if (ch === '"') {
+        if (source[i + 1] === '"') {
+          field += '"';
+          i++;
+        } else quoted = false;
+      } else field += ch;
+      continue;
+    }
+    if (ch === '"') {
+      quoted = true;
+      continue;
+    }
+    if (ch === delimiter) {
+      row.push(field);
+      field = "";
+      continue;
+    }
+    if (ch === "\n") {
+      row.push(field);
+      rows.push(row);
+      row = [];
+      field = "";
+      continue;
+    }
+    if (ch === "\r") continue;
+    field += ch;
+  }
+  if (field !== "" || row.length > 0) {
+    row.push(field);
+    rows.push(row);
+  }
+  if (rows.length < 2) return { columns: rows[0] ?? [], rows: [], error: "no data rows" };
+  const columns = rows[0];
+  return { columns, rows: rows.slice(1), error: "" };
+}
+
 // src/client/dbconnect.js
 var DRIVERS = ["sqlite", "mysql", "postgres"];
 var DEFAULT_PORT = { mysql: 3306, postgres: 5432 };
@@ -12906,8 +13138,8 @@ function inferDriver(input) {
   if (value === "") return "";
   const scheme = /^([a-z][a-z0-9+.-]*):(\/\/)?/iu.exec(value);
   if (scheme !== null && !WINDOWS_PATH.test(value)) {
-    const driver = SCHEMES[scheme[1].toLowerCase()];
-    if (driver !== void 0) return driver;
+    const driver2 = SCHEMES[scheme[1].toLowerCase()];
+    if (driver2 !== void 0) return driver2;
     if (scheme[2] !== "//" && /^\d+(\/|$)/u.test(value.slice(scheme[0].length))) return "";
     if (scheme[2] !== "//" && looksLikePath(value)) return "sqlite";
     return "";
@@ -12918,33 +13150,33 @@ function parseConnectionAddress(input) {
   const value = String(input ?? "").trim();
   const empty = { driver: "", path: "", host: "", port: "", user: "", password: "", database: "", error: "" };
   if (value === "") return empty;
-  const driver = inferDriver(value);
-  if (driver === "") return { ...empty, error: "unrecognised address" };
-  if (driver === "sqlite") {
+  const driver2 = inferDriver(value);
+  if (driver2 === "") return { ...empty, error: "unrecognised address" };
+  if (driver2 === "sqlite") {
     const scheme = /^(?:sqlite3?|file):(?:\/\/)?/iu.exec(value);
     const path = scheme === null ? value : value.slice(scheme[0].length);
-    return { ...empty, driver, path: path === "" ? "" : path };
+    return { ...empty, driver: driver2, path: path === "" ? "" : path };
   }
   let url;
   try {
     url = new URL(value);
   } catch {
-    return { ...empty, driver, error: "malformed URL" };
+    return { ...empty, driver: driver2, error: "malformed URL" };
   }
-  const port = url.port === "" ? DEFAULT_PORT[driver] : Number(url.port);
+  const port = url.port === "" ? DEFAULT_PORT[driver2] : Number(url.port);
   return {
-    driver,
+    driver: driver2,
     path: "",
     host: url.hostname,
-    port: Number.isFinite(port) ? String(port) : String(DEFAULT_PORT[driver]),
+    port: Number.isFinite(port) ? String(port) : String(DEFAULT_PORT[driver2]),
     user: decode(url.username),
     password: decode(url.password),
     database: decode(url.pathname.replace(/^\//u, "")),
     error: ""
   };
 }
-function driverLabel(driver) {
-  return { sqlite: "SQLite", mysql: "MySQL", postgres: "PostgreSQL" }[driver] ?? String(driver ?? "");
+function driverLabel(driver2) {
+  return { sqlite: "SQLite", mysql: "MySQL", postgres: "PostgreSQL" }[driver2] ?? String(driver2 ?? "");
 }
 
 // src/client/db.js
@@ -12969,8 +13201,8 @@ function toCsv(columns, rows) {
   for (const row of rows) lines2.push(row.map(quote).join(","));
   return lines2.join("\n");
 }
-function tableSql(table, { order, dir, limit, offset, filter, columns, driver }) {
-  const q = (name) => driver === "mysql" ? `\`${String(name).replace(/`/g, "``")}\`` : `"${String(name).replace(/"/g, '""')}"`;
+function tableSql(table, { order, dir, limit, offset, filter, columns, driver: driver2 }) {
+  const q = (name) => driver2 === "mysql" ? `\`${String(name).replace(/`/g, "``")}\`` : `"${String(name).replace(/"/g, '""')}"`;
   const quote = q(table);
   const where = filter && filter.trim() && columns?.length ? ` WHERE (${columns.map((column) => `CAST(${q(column.name)} AS TEXT) LIKE '%${filter.trim().replace(/'/g, "''")}%'`).join(" OR ")})` : "";
   const sorting = order ? ` ORDER BY ${q(order)} ${dir === "desc" ? "DESC" : "ASC"}` : "";
@@ -13008,6 +13240,9 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
   const [advanced, setAdvanced] = useState(false);
   const [cellDetail, setCellDetail] = useState(null);
   const [notice, setNotice] = useState("");
+  const [modal, setModal] = useState(null);
+  const [explainState, setExplainState] = useState({ busy: false, result: null, error: "" });
+  const [exportOpen, setExportOpen] = useState(false);
   const [profiles, setProfiles] = useState([]);
   const profileRevision = useRef(0);
   const [profileErrors, setProfileErrors] = useState({});
@@ -13326,6 +13561,16 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
       setNotice(t("db.cancelledClosed"));
     }
   }, [activeConn, patchTab, t]);
+  const copyResult = useCallback(async (tab, kind) => {
+    const driver2 = connections.find((entry) => entry.id === (tab.conn || activeConn))?.driver;
+    const text = kind === "json" ? toJsonRows(tab.result) : toInsertSql(tab.result, tab.table ?? tab.title, driver2);
+    try {
+      await navigator.clipboard.writeText(text);
+      setNotice(t("db.copied"));
+    } catch {
+      setNotice(t("db.copyFailed"));
+    }
+  }, [connections, activeConn, t]);
   const exportResult = useCallback((result, name) => {
     if (!result?.columns?.length) return;
     const csv = toCsv(result.columns, result.rows ?? []);
@@ -13371,6 +13616,8 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
       "div",
       { className: "cedb-toolbar" },
       h("button", { type: "button", className: "ce-sk-btn ce-sk-primary", onClick: openConnect }, `＋ ${t("db.connect")}`),
+      h("button", { type: "button", className: "ce-sk-btn", title: t("db.driversHint"), onClick: () => setModal({ kind: "drivers" }) }, t("db.driversButton")),
+      h("button", { type: "button", className: "ce-sk-btn", disabled: !schema, title: t("db.erHint"), onClick: () => setModal({ kind: "er" }) }, t("db.erButton")),
       h("button", { type: "button", className: "ce-sk-btn", onClick: () => openQueryTab("") }, t("db.newQuery")),
       activeConn ? h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost", title: t("db.refresh"), onClick: () => void refreshSchema() }, "⟳") : null,
       h("span", { className: "ce-spacer" }),
@@ -13549,6 +13796,23 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
                   disabled: !String(activeTab.sql ?? "").trim(),
                   onClick: () => void runQuery(activeTab.id)
                 }, `▶ ${t("db.run")}`),
+                h("button", {
+                  type: "button",
+                  className: "ce-sk-btn",
+                  disabled: !String(activeTab.sql ?? "").trim() || activeTab.loading,
+                  title: t("db.explainHint"),
+                  onClick: () => {
+                    const conn = activeTab.conn || activeConn;
+                    const sql = activeTab.sql ?? "";
+                    setModal({ kind: "explain" });
+                    setExplainState({ busy: true, result: null, error: "" });
+                    api("db.explain", { id: conn, sql }).then((res) => {
+                      const value = res.ok ? res.value : null;
+                      if (!value || value.error) setExplainState({ busy: false, result: null, error: value?.error ?? res.error ?? "" });
+                      else setExplainState({ busy: false, result: value, error: "" });
+                    });
+                  }
+                }, t("db.explain")),
                 h("button", { type: "button", className: "ce-sk-btn", title: t("db.history"), onClick: () => setHistoryOpen((v) => !v) }, t("db.history")),
                 h("span", { className: "ce-spacer" }),
                 h("span", { className: "cedb-kbd" }, "⌘/Ctrl+Enter")
@@ -13573,7 +13837,27 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
                 h("span", { className: "cedb-chip" }, `${activeTab.ms || activeTab.result.ms || 0} ms`),
                 activeTab.result.truncated ? h("span", { className: "cedb-chip cedb-chip-warn" }, t("db.truncated")) : null,
                 activeTab.result.changes !== void 0 ? h("span", { className: "cedb-chip" }, `${activeTab.result.changes} ${t("db.affected")}`) : null,
-                activeTab.result.columns?.length ? h("button", { type: "button", className: "ce-tool ce-tiny", title: t("db.export"), onClick: () => exportResult(activeTab.result, activeTab.title) }, "⤓ CSV") : null
+                activeTab.result.columns?.length ? h(
+                  "span",
+                  { className: "cedb-export" },
+                  h("button", { type: "button", className: "ce-tool ce-tiny", title: t("db.export"), onClick: () => setExportOpen((open) => !open) }, `⤓ ${t("db.export")}`),
+                  exportOpen ? h(
+                    "div",
+                    { className: "cedb-menu" },
+                    h("button", { type: "button", className: "cedb-menu-row", onClick: () => {
+                      exportResult(activeTab.result, activeTab.title);
+                      setExportOpen(false);
+                    } }, "CSV"),
+                    h("button", { type: "button", className: "cedb-menu-row", onClick: () => {
+                      copyResult(activeTab, "json");
+                      setExportOpen(false);
+                    } }, "JSON"),
+                    h("button", { type: "button", className: "cedb-menu-row", onClick: () => {
+                      copyResult(activeTab, "sql");
+                      setExportOpen(false);
+                    } }, t("db.exportSql"))
+                  ) : null
+                ) : null
               ) : h("span", { className: "cedb-result-hint" }, t("db.runHint"))
             ),
             activeTab.error ? h("div", { className: "cedb-error" }, activeTab.error) : null,
@@ -13603,7 +13887,13 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
               h("button", { type: "button", className: "ce-sk-btn", disabled: activeTab.loading, onClick: () => void loadRows(activeTab.id) }, activeTab.loading ? t("loading") : "⟳"),
               h("button", { type: "button", className: "ce-sk-btn", title: t("db.sqlForTable"), onClick: () => openQueryTab(`${tableSql(activeTab.table, { ...activeTab, limit: PAGE_SIZE, driver: connections.find((entry) => entry.id === activeTab.conn)?.driver }).replace(/;\s*$/, "")};`) }, "SQL"),
               h("span", { className: "ce-spacer" }),
-              activeTab.result ? h("button", { type: "button", className: "ce-tool ce-tiny", title: t("db.export"), onClick: () => exportResult(activeTab.result, activeTab.table) }, "⤓ CSV") : null
+              activeTab.result ? h("button", { type: "button", className: "ce-tool ce-tiny", title: t("db.export"), onClick: () => exportResult(activeTab.result, activeTab.table) }, "⤓ CSV") : null,
+              h("button", {
+                type: "button",
+                className: "ce-sk-btn",
+                title: t("db.importHint"),
+                onClick: () => setModal({ kind: "import", table: activeTab.table, conn: activeTab.conn || activeConn, onDone: () => void loadRows(activeTab.id) })
+              }, t("db.import"))
             ),
             activeTab.error ? h("div", { className: "cedb-error" }, activeTab.error) : null,
             activeTab.result ? h(ResultGrid, { t, result: activeTab.result, onCell: setCellDetail, onSort: (column) => sortBy(activeTab.id, column), order: activeTab.order, dir: activeTab.dir }) : h(
@@ -13647,6 +13937,28 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
         )
       )
     ),
+    // ---- modal layer: drivers / ER / plan / import ------------------------------------
+    modal === null ? null : modal.kind === "drivers" ? h(DriverManager, { t, drivers, onRedetect: () => void probeDrivers(true), onClose: () => setModal(null) }) : modal.kind === "er" ? h(ErDiagram, { t, schema, onOpenTable: (table) => {
+      setModal(null);
+      openTableTab(table);
+    }, onClose: () => setModal(null) }) : modal.kind === "explain" ? h(ExplainPanel, { t, state: explainState, onClose: () => setModal(null) }) : h(ImportDialog, {
+      t,
+      table: modal.table,
+      driver: connections.find((entry) => entry.id === modal.conn)?.driver,
+      onClose: () => setModal(null),
+      onInsert: async (text) => {
+        const parsed = parseDataText(text);
+        if (parsed.error !== "") return parsed.error;
+        const sql = toInsertSql(parsed, modal.table, connections.find((entry) => entry.id === modal.conn)?.driver);
+        if (sql === "") return t("db.importEmpty");
+        const res = await api("db.query", { id: modal.conn, sql, limit: 1 });
+        if (!res.ok || res.value?.error) return res.value?.error ?? res.error;
+        setModal(null);
+        setNotice(t("db.imported").replace("{n}", String(parsed.rows.length)));
+        if (modal.onDone) modal.onDone();
+        return "";
+      }
+    }),
     // ---- connect dialog ---------------------------------------------------------------
     connectOpen ? h(
       "div",
@@ -13819,10 +14131,10 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
 function DbTitle() {
   return null;
 }
-function implSuffix(driver, t) {
-  if (!driver || !driver.impl) return "";
-  if (driver.impl === "module") return ` · ${driver.version || t("db.implModule")}`;
-  if (driver.impl === "cli") return ` · ${t("db.implCli")}`;
+function implSuffix(driver2, t) {
+  if (!driver2 || !driver2.impl) return "";
+  if (driver2.impl === "module") return ` · ${driver2.version || t("db.implModule")}`;
+  if (driver2.impl === "cli") return ` · ${t("db.implCli")}`;
   return ` · ${t("db.implEmbedded")}`;
 }
 var GRID_ROW_H = 24;
@@ -13906,6 +14218,139 @@ function ResultGrid({ t, result, onCell, onSort, order, dir }) {
         }),
         pad(window_.bottomPad, "pad-bottom")
       )
+    )
+  );
+}
+function DriverManager({ t, drivers, onRedetect, onClose }) {
+  return h(
+    "div",
+    { className: "cedb-dialog cedb-dialog-wide", role: "dialog", "aria-label": t("db.driversButton") },
+    h("h3", { className: "cedb-dialog-title" }, t("db.driversButton")),
+    h("div", { className: "cedb-driver-list ce-scroll" }, (drivers ?? []).map(
+      (driver2) => h(
+        "div",
+        { key: driver2.id, className: "cedb-driver-card" },
+        h(
+          "div",
+          { className: "cedb-driver-head" },
+          h("strong", null, driver2.label),
+          driver2.ready ? h("span", { className: "cedb-ctx cedb-ctx-strong" }, driver2.impl === "module" ? driver2.version || "module" : String(driver2.impl).toUpperCase()) : h("span", { className: "cedb-ctx" }, t("db.notReady"))
+        )
+      ),
+      h("div", { className: "cedb-driver-caps" }, Object.entries(driver.capabilities ?? {}).map(([name, value]) => h("span", {
+        key: name,
+        className: `cedb-cap${value === true ? " cedb-cap-on" : ""}`,
+        title: name
+      }, `${name}: ${typeof value === "boolean" ? value ? "✓" : "—" : value}`))),
+      h("div", { className: "cedb-driver-alts" }, (driver.alternatives ?? []).map((alt) => h(
+        "div",
+        { key: alt.impl, className: "cedb-driver-alt" },
+        h("span", { className: "cedb-driver-impl" }, alt.impl),
+        alt.ready ? h("span", { className: "cedb-driver-ok", title: alt.bin || alt.version }, alt.version || alt.bin || "ready") : h("span", { className: "cedb-driver-no", title: alt.note }, alt.note)
+      )))
+    )),
+    h(
+      "div",
+      { className: "cedb-dialog-actions" },
+      h("button", { type: "button", className: "ce-sk-btn", onClick: onRedetect }, t("db.redetect")),
+      h("button", { type: "button", className: "ce-sk-btn ce-sk-primary", onClick: onClose }, t("close"))
+    )
+  );
+}
+function ErDiagram({ t, schema, onOpenTable, onClose }) {
+  const graph = erGraph(schema);
+  const layout = erLayout(graph, { width: 820 });
+  return h(
+    "div",
+    { className: "cedb-dialog cedb-dialog-wide", role: "dialog", "aria-label": t("db.erButton") },
+    h("h3", { className: "cedb-dialog-title" }, `${t("db.erButton")}${graph.database ? ` · ${graph.database}` : ""}`),
+    graph.tables.length === 0 ? h("div", { className: "cedb-empty-result" }, h("div", { className: "cedb-empty-title" }, t("db.erEmpty"))) : h(
+      "div",
+      { className: "cedb-er-scroll ce-scroll" },
+      h(
+        "svg",
+        { className: "cedb-er", viewBox: `0 0 ${layout.width} ${layout.height}`, width: layout.width, height: layout.height, role: "img" },
+        layout.links.map((link) => h("path", { key: `${link.from}->${link.to}`, d: link.path, className: "cedb-er-link" })),
+        layout.boxes.map((box) => h(
+          "g",
+          { key: box.name, className: "cedb-er-box", onClick: () => onOpenTable(box.name) },
+          h("rect", { x: box.x, y: box.y, width: box.width, height: box.height, rx: 8 }),
+          h("text", { x: box.x + 10, y: box.y + 20, className: "cedb-er-title" }, box.name),
+          h(
+            "text",
+            { x: box.x + 10, y: box.y + 38, className: "cedb-er-cols" },
+            box.columns.slice(0, 3).join(", ") + (box.columns.length > 3 ? ", …" : "")
+          )
+        ))
+      )
+    ),
+    h("div", { className: "cedb-dialog-actions" }, h("button", { type: "button", className: "ce-sk-btn ce-sk-primary", onClick: onClose }, t("close")))
+  );
+}
+function ExplainPanel({ t, state, onClose }) {
+  const rows = state.result?.rows ?? [];
+  const tree = state.result?.tree ? planTree(state.result.columns, rows) : [];
+  return h(
+    "div",
+    { className: "cedb-dialog cedb-dialog-wide", role: "dialog", "aria-label": t("db.explain") },
+    h("h3", { className: "cedb-dialog-title" }, t("db.explain")),
+    state.busy ? h("div", { className: "cedb-empty-title" }, t("loading")) : null,
+    state.error ? h("div", { className: "cedb-dialog-error", role: "alert" }, state.error) : null,
+    !state.busy && !state.error ? tree.length > 0 ? h("div", { className: "cedb-plan ce-scroll" }, tree.map((node, index) => h("div", {
+      key: index,
+      className: "cedb-plan-row",
+      style: { paddingLeft: `${10 + node.depth * 18}px` }
+    }, node.depth > 0 ? "└ " : "", node.detail))) : h(
+      "div",
+      { className: "cedb-plan ce-scroll" },
+      h(
+        "table",
+        { className: "cedb-grid" },
+        h("thead", null, h("tr", null, (state.result?.columns ?? []).map((column) => h("th", { key: column }, column)))),
+        h("tbody", null, rows.map((row, index) => h("tr", { key: index }, row.map((cell, cellIndex) => h("td", { key: cellIndex }, String(cell ?? ""))))))
+      )
+    ) : null,
+    h("div", { className: "cedb-dialog-actions" }, h("button", { type: "button", className: "ce-sk-btn ce-sk-primary", onClick: onClose }, t("close")))
+  );
+}
+function ImportDialog({ t, table, driver: driver2, onInsert, onClose }) {
+  const [text, setText] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const parsed = useMemo(() => parseDataText(text), [text]);
+  return h(
+    "div",
+    { className: "cedb-dialog cedb-dialog-wide", role: "dialog", "aria-label": t("db.import") },
+    h("h3", { className: "cedb-dialog-title" }, `${t("db.import")} · ${table}`),
+    h("p", { className: "cedb-dialog-hint" }, t("db.importHint")),
+    h("textarea", {
+      className: "cedb-sql cedb-import-text",
+      value: text,
+      rows: 6,
+      spellCheck: false,
+      placeholder: "id,name\n1,ada",
+      onChange: (event) => {
+        setText(event.target.value);
+        setError("");
+      }
+    }),
+    parsed.error === "" && parsed.rows.length > 0 ? h("div", { className: "cedb-dialog-hint" }, `${parsed.columns.length} ${t("db.columns")} · ${parsed.rows.length} ${t("db.rows")}`) : null,
+    error ? h("div", { className: "cedb-dialog-error", role: "alert" }, error) : null,
+    h(
+      "div",
+      { className: "cedb-dialog-actions" },
+      h("button", {
+        type: "button",
+        className: "ce-sk-btn ce-sk-primary",
+        disabled: busy || parsed.rows.length === 0,
+        onClick: async () => {
+          setBusy(true);
+          const message = await onInsert(text);
+          setBusy(false);
+          if (message) setError(message);
+        }
+      }, busy ? t("loading") : t("db.importRun")),
+      h("button", { type: "button", className: "ce-sk-btn", onClick: onClose }, t("close"))
     )
   );
 }
@@ -14501,7 +14946,7 @@ function RpcView({ t, useTabInfo, sessionId, useSessions, incoming }) {
         { className: "cerpc-main" },
         h(
           "div",
-          { className: "cerpc-pane" },
+          { className: "cerpc-pane cerpc-request" },
           h(
             "div",
             { className: "cerpc-pane-head" },

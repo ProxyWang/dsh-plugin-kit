@@ -3158,6 +3158,51 @@ check("docAction reloads clean drafts, flags dirty ones, ignores others", docAct
 	check("a short message keeps the floor height", measure(20, 96) === "96px", measure(20, 96));
 }
 
+// --- database tools: export formats, ER layout, plan tree ----------------------------
+{
+	const { toJsonRows, toInsertSql, parseDataText, erGraph, erLayout, planTree, sqlLiteral } = await import("./src/client/dbtools.js");
+	const result = { columns: ["id", "name", "note"], rows: [[1, "ada", null], [2, "O'Brien", "x"]] };
+
+	check("JSON export maps rows to objects", (() => {
+		const rows = JSON.parse(toJsonRows(result));
+		return rows.length === 2 && rows[1].name === "O'Brien" && rows[0].note === null;
+	})(), toJsonRows(result));
+
+	check("SQL export quotes identifiers and escapes quotes", (() => {
+		const sql = toInsertSql(result, "users", "sqlite");
+		return sql.includes('INSERT INTO "users" ("id", "name", "note")') && sql.includes("'O''Brien'") && sql.includes("NULL");
+	})(), toInsertSql(result, "users", "sqlite"));
+	check("SQL export uses backticks for MySQL", toInsertSql({ columns: ["a"], rows: [[1]] }, "t", "mysql").includes("INSERT INTO `t` (`a`)"), null);
+	check("SQL export chunks long results", toInsertSql({ columns: ["a"], rows: Array.from({ length: 250 }, (_, i) => [i]) }, "t", "sqlite", { chunk: 100 }).split("INSERT INTO").length - 1 === 3, null);
+	check("booleans become the driver's literal", sqlLiteral("sqlite", true) === "1" && sqlLiteral("postgres", false) === "FALSE", null);
+
+	check("pasted CSV keeps quoted commas", (() => {
+		const parsed = parseDataText('id,name\n1,"grace, hopper"');
+		return parsed.error === "" && parsed.rows[0][1] === "grace, hopper";
+	})(), parseDataText('id,name\n1,"grace, hopper"'));
+	check("pasted JSON becomes columns and rows", (() => {
+		const parsed = parseDataText('[{"a":1},{"a":2,"b":"x"}]');
+		return parsed.columns.join() === "a,b" && parsed.rows[1][1] === "x";
+	})(), parseDataText('[{"a":1},{"a":2,"b":"x"}]'));
+
+	const schema = {
+		current: "main",
+		databases: [{ name: "main", tables: [
+			{ name: "parent", kind: "table", columns: [{ name: "id" }], foreignKeys: [] },
+			{ name: "child", kind: "table", columns: [{ name: "id" }, { name: "parent_id" }], foreignKeys: [{ refTable: "parent", columns: ["parent_id"], refColumns: ["id"] }] },
+			{ name: "orphan", kind: "table", columns: [{ name: "id" }], foreignKeys: [{ refTable: "missing", columns: ["x"], refColumns: ["id"] }] },
+			{ name: "v", kind: "view", columns: [{ name: "id" }], foreignKeys: [] },
+		] }],
+	};
+	const graph = erGraph(schema);
+	check("the ER graph keeps tables and only resolvable edges", graph.tables.length === 3 && graph.edges.length === 1 && graph.edges[0].from === "child" && graph.edges[0].to === "parent", graph.edges);
+	const layout = erLayout(graph, { width: 800 });
+	check("the ER layout positions every table and links them", layout.boxes.length === 3 && layout.links.length === 1 && layout.links[0].path.startsWith("M ") && layout.height > 0, layout);
+
+	const tree = planTree(["id", "parent", "notused", "detail"], [[2, 0, 0, "SCAN child"], [3, 2, 0, "USE INDEX"], [4, 0, 0, "SCAN parent"]]);
+	check("the plan tree restores the nesting", tree.length === 3 && tree[0].depth === 0 && tree[1].depth === 1 && tree[1].detail === "USE INDEX", tree);
+}
+
 // --- Result grid: a 5000-row result does not put 5000 rows in the DOM ---------------
 {
 	const { ResultGrid, GRID_ROW_H } = await import("./src/client/db.js");
@@ -3407,6 +3452,9 @@ check("docAction reloads clean drafts, flags dirty ones, ignores others", docAct
 		tree = draw();
 		const invoke = () => find((n) => n.type === "button" && String(n.children?.[0]).includes("rpc.invoke"));
 		check("loading a proto selects its first method", Boolean(invoke()) && invoke().props.disabled === false, invoke()?.props.disabled);
+		// The request pane must be the content-sized one, or its actions are
+		// clipped once a long response arrives (the invoke button disappeared).
+		check("the request pane is content-sized so invoke stays visible", Boolean(find((n) => String(n.props?.className ?? "") === "cerpc-pane cerpc-request")), flatten(tree).map((n) => n.props?.className).filter(Boolean).slice(0, 8));
 		invoke().props.onClick();
 		await new Promise((resolve) => setImmediate(resolve));
 

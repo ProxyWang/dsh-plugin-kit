@@ -19,6 +19,7 @@
 import { Fragment, h, useCallback, useEffect, useMemo, useRef, useState } from "./react.js";
 import { api } from "./api.js";
 import { useAutoHeight } from "./autosize.js";
+import { erGraph, erLayout, parseDataText, planTree, toInsertSql, toJsonRows } from "./dbtools.js";
 import { DRIVERS, driverLabel, parseConnectionAddress } from "./dbconnect.js";
 import { useDismissLayer } from "./dismiss.js";
 import { DB_TAB_KIND, DB_TAB_ID } from "./constants.js";
@@ -119,6 +120,10 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 	const [advanced, setAdvanced] = useState(false);
 	const [cellDetail, setCellDetail] = useState(null); // {title, value}
 	const [notice, setNotice] = useState("");
+	// Modal layer: driver manager, ER diagram, execution plan, import.
+	const [modal, setModal] = useState(null);
+	const [explainState, setExplainState] = useState({ busy: false, result: null, error: "" });
+	const [exportOpen, setExportOpen] = useState(false);
 	// Saved connections: the profile list (passwords stay in the Host vault).
 	const [profiles, setProfiles] = useState([]);
 	// The revision the list was read at: a save carries it so the Host can
@@ -497,6 +502,18 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 		}
 	}, [activeConn, patchTab, t]);
 
+	/** Copy the current result as JSON or as INSERT statements. */
+	const copyResult = useCallback(async (tab, kind) => {
+		const driver = connections.find((entry) => entry.id === (tab.conn || activeConn))?.driver;
+		const text = kind === "json" ? toJsonRows(tab.result) : toInsertSql(tab.result, tab.table ?? tab.title, driver);
+		try {
+			await navigator.clipboard.writeText(text);
+			setNotice(t("db.copied"));
+		} catch {
+			setNotice(t("db.copyFailed"));
+		}
+	}, [connections, activeConn, t]);
+
 	const exportResult = useCallback((result, name) => {
 		if (!result?.columns?.length) return;
 		const csv = toCsv(result.columns, result.rows ?? []);
@@ -546,6 +563,8 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 		// ---- toolbar -------------------------------------------------------------------
 		h("div", { className: "cedb-toolbar" },
 			h("button", { type: "button", className: "ce-sk-btn ce-sk-primary", onClick: openConnect }, `＋ ${t("db.connect")}`),
+			h("button", { type: "button", className: "ce-sk-btn", title: t("db.driversHint"), onClick: () => setModal({ kind: "drivers" }) }, t("db.driversButton")),
+			h("button", { type: "button", className: "ce-sk-btn", disabled: !schema, title: t("db.erHint"), onClick: () => setModal({ kind: "er" }) }, t("db.erButton")),
 			h("button", { type: "button", className: "ce-sk-btn", onClick: () => openQueryTab("") }, t("db.newQuery")),
 			activeConn ? h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost", title: t("db.refresh"), onClick: () => void refreshSchema() }, "⟳") : null,
 			h("span", { className: "ce-spacer" }),
@@ -671,6 +690,23 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 												disabled: !String(activeTab.sql ?? "").trim(),
 												onClick: () => void runQuery(activeTab.id),
 											}, `▶ ${t("db.run")}`),
+										h("button", {
+											type: "button",
+											className: "ce-sk-btn",
+											disabled: !String(activeTab.sql ?? "").trim() || activeTab.loading,
+											title: t("db.explainHint"),
+											onClick: () => {
+												const conn = activeTab.conn || activeConn;
+												const sql = activeTab.sql ?? "";
+												setModal({ kind: "explain" });
+												setExplainState({ busy: true, result: null, error: "" });
+												api("db.explain", { id: conn, sql }).then((res) => {
+													const value = res.ok ? res.value : null;
+													if (!value || value.error) setExplainState({ busy: false, result: null, error: value?.error ?? res.error ?? "" });
+													else setExplainState({ busy: false, result: value, error: "" });
+												});
+											},
+										}, t("db.explain")),
 										h("button", { type: "button", className: "ce-sk-btn", title: t("db.history"), onClick: () => setHistoryOpen((v) => !v) }, t("db.history")),
 										h("span", { className: "ce-spacer" }),
 										h("span", { className: "cedb-kbd" }, "⌘/Ctrl+Enter"),
@@ -692,7 +728,16 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 											h("span", { className: "cedb-chip" }, `${activeTab.ms || activeTab.result.ms || 0} ms`),
 											activeTab.result.truncated ? h("span", { className: "cedb-chip cedb-chip-warn" }, t("db.truncated")) : null,
 											activeTab.result.changes !== undefined ? h("span", { className: "cedb-chip" }, `${activeTab.result.changes} ${t("db.affected")}`) : null,
-											activeTab.result.columns?.length ? h("button", { type: "button", className: "ce-tool ce-tiny", title: t("db.export"), onClick: () => exportResult(activeTab.result, activeTab.title) }, "⤓ CSV") : null,
+											activeTab.result.columns?.length
+												? h("span", { className: "cedb-export" },
+													h("button", { type: "button", className: "ce-tool ce-tiny", title: t("db.export"), onClick: () => setExportOpen((open) => !open) }, `⤓ ${t("db.export")}`),
+													exportOpen
+														? h("div", { className: "cedb-menu" },
+															h("button", { type: "button", className: "cedb-menu-row", onClick: () => { exportResult(activeTab.result, activeTab.title); setExportOpen(false); } }, "CSV"),
+															h("button", { type: "button", className: "cedb-menu-row", onClick: () => { copyResult(activeTab, "json"); setExportOpen(false); } }, "JSON"),
+															h("button", { type: "button", className: "cedb-menu-row", onClick: () => { copyResult(activeTab, "sql"); setExportOpen(false); } }, t("db.exportSql")))
+														: null)
+												: null,
 										)
 										: h("span", { className: "cedb-result-hint" }, t("db.runHint")),
 								),
@@ -719,6 +764,12 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 									h("button", { type: "button", className: "ce-sk-btn", title: t("db.sqlForTable"), onClick: () => openQueryTab(`${tableSql(activeTab.table, { ...activeTab, limit: PAGE_SIZE, driver: connections.find((entry) => entry.id === activeTab.conn)?.driver }).replace(/;\s*$/, "")};`) }, "SQL"),
 									h("span", { className: "ce-spacer" }),
 									activeTab.result ? h("button", { type: "button", className: "ce-tool ce-tiny", title: t("db.export"), onClick: () => exportResult(activeTab.result, activeTab.table) }, "⤓ CSV") : null,
+									h("button", {
+										type: "button",
+										className: "ce-sk-btn",
+										title: t("db.importHint"),
+										onClick: () => setModal({ kind: "import", table: activeTab.table, conn: activeTab.conn || activeConn, onDone: () => void loadRows(activeTab.id) }),
+									}, t("db.import")),
 								),
 								activeTab.error ? h("div", { className: "cedb-error" }, activeTab.error) : null,
 								activeTab.result
@@ -748,6 +799,33 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 					),
 			),
 		),
+		// ---- modal layer: drivers / ER / plan / import ------------------------------------
+		modal === null
+			? null
+			: modal.kind === "drivers"
+				? h(DriverManager, { t, drivers, onRedetect: () => void probeDrivers(true), onClose: () => setModal(null) })
+				: modal.kind === "er"
+					? h(ErDiagram, { t, schema, onOpenTable: (table) => { setModal(null); openTableTab(table); }, onClose: () => setModal(null) })
+					: modal.kind === "explain"
+						? h(ExplainPanel, { t, state: explainState, onClose: () => setModal(null) })
+						: h(ImportDialog, {
+							t,
+							table: modal.table,
+							driver: connections.find((entry) => entry.id === modal.conn)?.driver,
+							onClose: () => setModal(null),
+							onInsert: async (text) => {
+								const parsed = parseDataText(text);
+								if (parsed.error !== "") return parsed.error;
+								const sql = toInsertSql(parsed, modal.table, connections.find((entry) => entry.id === modal.conn)?.driver);
+								if (sql === "") return t("db.importEmpty");
+								const res = await api("db.query", { id: modal.conn, sql, limit: 1 });
+								if (!res.ok || res.value?.error) return res.value?.error ?? res.error;
+								setModal(null);
+								setNotice(t("db.imported").replace("{n}", String(parsed.rows.length)));
+								if (modal.onDone) modal.onDone();
+								return "";
+							},
+						}),
 		// ---- connect dialog ---------------------------------------------------------------
 		connectOpen
 			? h("div", { className: "cedb-dialog", ref: connectRef, role: "dialog", "aria-label": t("db.newConnection") },
@@ -990,4 +1068,107 @@ export function ResultGrid({ t, result, onCell, onSort, order, dir }) {
 				pad(window_.bottomPad, "pad-bottom")),
 		),
 	);
+}
+
+/** Driver manager: every implementation, its capabilities and where it lives. */
+export function DriverManager({ t, drivers, onRedetect, onClose }) {
+	return h("div", { className: "cedb-dialog cedb-dialog-wide", role: "dialog", "aria-label": t("db.driversButton") },
+		h("h3", { className: "cedb-dialog-title" }, t("db.driversButton")),
+		h("div", { className: "cedb-driver-list ce-scroll" }, (drivers ?? []).map((driver) => h("div", { key: driver.id, className: "cedb-driver-card" },
+			h("div", { className: "cedb-driver-head" },
+				h("strong", null, driver.label),
+				driver.ready
+					? h("span", { className: "cedb-ctx cedb-ctx-strong" }, driver.impl === "module" ? driver.version || "module" : String(driver.impl).toUpperCase())
+					: h("span", { className: "cedb-ctx" }, t("db.notReady")))),
+			h("div", { className: "cedb-driver-caps" }, Object.entries(driver.capabilities ?? {}).map(([name, value]) => h("span", {
+				key: name,
+				className: `cedb-cap${value === true ? " cedb-cap-on" : ""}`,
+				title: name,
+			}, `${name}: ${typeof value === "boolean" ? (value ? "✓" : "—") : value}`))),
+			h("div", { className: "cedb-driver-alts" }, (driver.alternatives ?? []).map((alt) => h("div", { key: alt.impl, className: "cedb-driver-alt" },
+				h("span", { className: "cedb-driver-impl" }, alt.impl),
+				alt.ready
+					? h("span", { className: "cedb-driver-ok", title: alt.bin || alt.version }, alt.version || alt.bin || "ready")
+					: h("span", { className: "cedb-driver-no", title: alt.note }, alt.note)))))),
+		h("div", { className: "cedb-dialog-actions" },
+			h("button", { type: "button", className: "ce-sk-btn", onClick: onRedetect }, t("db.redetect")),
+			h("button", { type: "button", className: "ce-sk-btn ce-sk-primary", onClick: onClose }, t("close"))));
+}
+
+/** ER diagram: tables as boxes, foreign keys as curves; click a box to open it. */
+export function ErDiagram({ t, schema, onOpenTable, onClose }) {
+	const graph = erGraph(schema);
+	const layout = erLayout(graph, { width: 820 });
+	return h("div", { className: "cedb-dialog cedb-dialog-wide", role: "dialog", "aria-label": t("db.erButton") },
+		h("h3", { className: "cedb-dialog-title" }, `${t("db.erButton")}${graph.database ? ` · ${graph.database}` : ""}`),
+		graph.tables.length === 0
+			? h("div", { className: "cedb-empty-result" }, h("div", { className: "cedb-empty-title" }, t("db.erEmpty")))
+			: h("div", { className: "cedb-er-scroll ce-scroll" },
+				h("svg", { className: "cedb-er", viewBox: `0 0 ${layout.width} ${layout.height}`, width: layout.width, height: layout.height, role: "img" },
+					layout.links.map((link) => h("path", { key: `${link.from}->${link.to}`, d: link.path, className: "cedb-er-link" })),
+					layout.boxes.map((box) => h("g", { key: box.name, className: "cedb-er-box", onClick: () => onOpenTable(box.name) },
+						h("rect", { x: box.x, y: box.y, width: box.width, height: box.height, rx: 8 }),
+						h("text", { x: box.x + 10, y: box.y + 20, className: "cedb-er-title" }, box.name),
+						h("text", { x: box.x + 10, y: box.y + 38, className: "cedb-er-cols" },
+							box.columns.slice(0, 3).join(", ") + (box.columns.length > 3 ? ", …" : "")))))),
+		h("div", { className: "cedb-dialog-actions" }, h("button", { type: "button", className: "ce-sk-btn ce-sk-primary", onClick: onClose }, t("close"))));
+}
+
+/** Execution plan: SQLite's tree, or a tabular plan from MySQL/PostgreSQL. */
+export function ExplainPanel({ t, state, onClose }) {
+	const rows = state.result?.rows ?? [];
+	const tree = state.result?.tree ? planTree(state.result.columns, rows) : [];
+	return h("div", { className: "cedb-dialog cedb-dialog-wide", role: "dialog", "aria-label": t("db.explain") },
+		h("h3", { className: "cedb-dialog-title" }, t("db.explain")),
+		state.busy ? h("div", { className: "cedb-empty-title" }, t("loading")) : null,
+		state.error ? h("div", { className: "cedb-dialog-error", role: "alert" }, state.error) : null,
+		!state.busy && !state.error
+			? (tree.length > 0
+				? h("div", { className: "cedb-plan ce-scroll" }, tree.map((node, index) => h("div", {
+					key: index,
+					className: "cedb-plan-row",
+					style: { paddingLeft: `${10 + node.depth * 18}px` },
+				}, node.depth > 0 ? "└ " : "", node.detail)))
+				: h("div", { className: "cedb-plan ce-scroll" },
+					h("table", { className: "cedb-grid" },
+						h("thead", null, h("tr", null, (state.result?.columns ?? []).map((column) => h("th", { key: column }, column)))),
+						h("tbody", null, rows.map((row, index) => h("tr", { key: index }, row.map((cell, cellIndex) => h("td", { key: cellIndex }, String(cell ?? "")))))))))
+			: null,
+		h("div", { className: "cedb-dialog-actions" }, h("button", { type: "button", className: "ce-sk-btn ce-sk-primary", onClick: onClose }, t("close"))));
+}
+
+/** Import: paste CSV or JSON, preview the target, then insert row by row. */
+export function ImportDialog({ t, table, driver, onInsert, onClose }) {
+	const [text, setText] = useState("");
+	const [error, setError] = useState("");
+	const [busy, setBusy] = useState(false);
+	const parsed = useMemo(() => parseDataText(text), [text]);
+	return h("div", { className: "cedb-dialog cedb-dialog-wide", role: "dialog", "aria-label": t("db.import") },
+		h("h3", { className: "cedb-dialog-title" }, `${t("db.import")} · ${table}`),
+		h("p", { className: "cedb-dialog-hint" }, t("db.importHint")),
+		h("textarea", {
+			className: "cedb-sql cedb-import-text",
+			value: text,
+			rows: 6,
+			spellCheck: false,
+			placeholder: "id,name\n1,ada",
+			onChange: (event) => { setText(event.target.value); setError(""); },
+		}),
+		parsed.error === "" && parsed.rows.length > 0
+			? h("div", { className: "cedb-dialog-hint" }, `${parsed.columns.length} ${t("db.columns")} · ${parsed.rows.length} ${t("db.rows")}`)
+			: null,
+		error ? h("div", { className: "cedb-dialog-error", role: "alert" }, error) : null,
+		h("div", { className: "cedb-dialog-actions" },
+			h("button", {
+				type: "button",
+				className: "ce-sk-btn ce-sk-primary",
+				disabled: busy || parsed.rows.length === 0,
+				onClick: async () => {
+					setBusy(true);
+					const message = await onInsert(text);
+					setBusy(false);
+					if (message) setError(message);
+				},
+			}, busy ? t("loading") : t("db.importRun")),
+			h("button", { type: "button", className: "ce-sk-btn", onClick: onClose }, t("close"))));
 }
