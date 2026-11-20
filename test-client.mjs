@@ -3016,6 +3016,22 @@ check("docAction reloads clean drafts, flags dirty ones, ignores others", docAct
 	check("truncateCell null → NULL", truncateCell(null) === "NULL", null);
 }
 
+// --- Growing editors: height follows the content -------------------------------------
+{
+	const { useAutoHeight } = await import("./src/client/autosize.js");
+	const { useRef } = await import("./src/client/react.js");
+	const measure = (scrollHeight, min) => {
+		const node = { style: {}, scrollHeight };
+		const Probe = () => { const ref = useRef(null); ref.current = node; useAutoHeight(ref, "x", { min }); return null; };
+		const draw = createHookRenderer(Probe, {}, { effects: true });
+		draw();
+		draw.flushEffects();
+		return node.style.height;
+	};
+	check("an editor grows to fit a long message", measure(360, 96) === "362px", measure(360, 96));
+	check("a short message keeps the floor height", measure(20, 96) === "96px", measure(20, 96));
+}
+
 // --- Result grid: a 5000-row result does not put 5000 rows in the DOM ---------------
 {
 	const { ResultGrid, GRID_ROW_H } = await import("./src/client/db.js");

@@ -18,6 +18,7 @@
 
 import { Fragment, h, useCallback, useEffect, useMemo, useRef, useState } from "./react.js";
 import { api } from "./api.js";
+import { useAutoHeight } from "./autosize.js";
 import { DRIVERS, driverLabel, parseConnectionAddress } from "./dbconnect.js";
 import { useDismissLayer } from "./dismiss.js";
 import { DB_TAB_KIND, DB_TAB_ID } from "./constants.js";
@@ -156,6 +157,9 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 	useEffect(() => { void probeDrivers(); }, [probeDrivers]);
 
 	const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? null;
+	// A long statement should not be read through an 88px slot.
+	const sqlRef = useRef(null);
+	useAutoHeight(sqlRef, activeTab?.sql ?? "", { min: 88 });
 
 	const patchTab = useCallback((id, patch) => {
 		setTabs((current) => current.map((tab) => (tab.id === id ? { ...tab, ...(typeof patch === "function" ? patch(tab) : patch) } : tab)));
@@ -636,6 +640,8 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 									),
 									h("textarea", {
 										className: "cedb-sql",
+										ref: sqlRef,
+										rows: 4,
 										value: activeTab.sql ?? "",
 										placeholder: t("db.sqlPlaceholder"),
 										spellCheck: false,

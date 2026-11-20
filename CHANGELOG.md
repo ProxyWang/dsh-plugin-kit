@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased — editors grow with their content
+
+The RPC request body was a fixed 70px box: a forty-line JSON message was read four lines at a time while most of the pane sat empty, and the metadata/actions were pushed around by nothing in particular.
+
+- **`useAutoHeight`** ([src/client/autosize.js](<src/client/autosize.js>)) measures the textarea and sets its height from `scrollHeight` after every change, with a floor (96px for a message, 88px for SQL) and the ceiling left to CSS (`max-height:52vh`), so the pane below keeps its space. `resize: vertical` still works for a manual adjustment.
+- The RPC pane is now content-sized (`flex:0 0 auto`) and the response takes the remainder, so a long message pushes results down instead of being clipped.
+- The database SQL editor gets the same treatment — it had the same fixed-slot problem.
+- Regressions: a long message grows past the floor, a short one keeps it.
+
 ## Unreleased — driver architecture: a catalog, and the module ladder it implies
 
 [The design](<docs/driver-architecture.md>) answers the question "why not just copy dbx": its drivers are Rust crates compiled into a Tauri binary, ours is a JS plugin that must ship as one npm package. The answer is a three-rung ladder per logical driver — **embedded (node:sqlite) → project module (mysql2/pg) → CLI client** — with one contract and a capability table the panel reads.

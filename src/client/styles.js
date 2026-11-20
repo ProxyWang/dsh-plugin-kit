@@ -516,12 +516,16 @@ export const CSS = `
 .cerpc-file{font-size:10px;color:var(--dsw-alias-label-tertiary,#667);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cerpc-main{flex:1;min-width:0;display:flex;flex-direction:column;overflow:hidden}
 .cerpc-pane{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden}
+.cerpc-request{flex:0 0 auto;overflow:visible}
+.cerpc-response{flex:1 1 auto}
 .cerpc-response{border-top:.5px solid var(--dsw-alias-border-l1,#333);background:var(--dsw-alias-bg-base,#141618)}
 .cerpc-pane-head{flex:none;display:flex;align-items:center;gap:6px;padding:5px 10px;font-size:11px;color:var(--dsw-alias-label-tertiary,#889);min-height:26px;flex-wrap:wrap}
 .cerpc-pane-title{font-weight:600;color:var(--dsw-alias-label-secondary,#aab)}
 .cerpc-inline{display:flex;align-items:center;gap:4px;font-size:11px;cursor:pointer}
 .cerpc-timeout{width:70px;height:22px;font-size:11px;padding:0 4px}
-.cerpc-json{min-height:70px;max-height:26vh}
+/* The request pane is content-sized: the body grows with the message, the
+   response keeps whatever is left, and the ceiling keeps the split usable. */
+.cerpc-json{min-height:96px;max-height:52vh;overflow:auto;resize:vertical}
 .cerpc-json-bad{border-color:var(--dsw-alias-state-error-primary,#f85149) !important}
 .cerpc-json-error{padding:0 10px 6px;font-size:11px;color:var(--dsw-alias-state-error-primary,#f85149);font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
 .cerpc-meta-head{flex:none;display:flex;align-items:center;gap:8px;padding:4px 10px}

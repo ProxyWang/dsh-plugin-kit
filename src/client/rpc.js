@@ -12,8 +12,9 @@
  * so this component owns state and layout only.
  */
 
-import { Fragment, h, useCallback, useEffect, useMemo, useState } from "./react.js";
+import { Fragment, h, useCallback, useEffect, useMemo, useRef, useState } from "./react.js";
 import { api } from "./api.js";
+import { useAutoHeight } from "./autosize.js";
 import { RPC_TAB_ID, RPC_TAB_KIND } from "./constants.js";
 import { apiKey, migrateLegacyApiStores } from "./apistore.js";
 import { activeVariables, entryLabel, filterByProtocol, HISTORY_CAP, interpolateDeep, interpolateVariables, withProtocol } from "./apientries.js";
@@ -69,6 +70,8 @@ export function RpcView({ t, useTabInfo, sessionId, useSessions, incoming }) {
 	// Set when the methods came from server reflection instead of a file: the
 	// call then carries this id rather than a .proto path.
 	const [schemaId, setSchemaId] = useState("");
+	// The request body grows with its content instead of living in a 70px box.
+	const requestRef = useRef(null);
 	const [selected, setSelected] = useState(""); // method path
 	const [requestText, setRequestText] = useState("{}");
 	const [metadata, setMetadata] = useState([]);
@@ -156,6 +159,7 @@ export function RpcView({ t, useTabInfo, sessionId, useSessions, incoming }) {
 	const selectedMethod = useMemo(() => methods.find((method) => method.path === selected) ?? null, [methods, selected]);
 	const groups = useMemo(() => groupMethods(methods), [methods]);
 	const request = useMemo(() => parseJsonText(requestText), [requestText]);
+	useAutoHeight(requestRef, requestText, { min: 96 });
 
 	const loadProto = useCallback(async () => {
 		const path = protoPath.trim();
@@ -394,6 +398,8 @@ export function RpcView({ t, useTabInfo, sessionId, useSessions, incoming }) {
 					),
 					h("textarea", {
 						className: `cedb-sql cerpc-json${request.error ? " cerpc-json-bad" : ""}`,
+						ref: requestRef,
+						rows: 6,
 						value: requestText,
 						spellCheck: false,
 						onChange: (event) => setRequestText(event.target.value),
