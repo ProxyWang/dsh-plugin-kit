@@ -380,6 +380,7 @@ var zh = {
   "db.notDetected": "无法识别：粘贴 postgres:// / mysql:// 开头的地址，或指向一个数据库文件",
   "db.advanced": "手动填写字段（高级）",
   "db.clientPath": "客户端路径（可选，keg-only / 自定义安装时填）",
+  "db.allowModule": "允许使用项目内的 mysql2 / pg（需要项目已安装；在 worker 中加载）",
   "db.testAction": "测试连接",
   "db.testOk": "连接成功 · {ms} ms",
   "db.recentConnections": "已保存的连接",
@@ -1135,6 +1136,7 @@ var en = {
   "db.notDetected": "Not recognised: paste a postgres:// or mysql:// address, or point at a database file",
   "db.advanced": "Fill the fields by hand (advanced)",
   "db.clientPath": "Client path (optional — keg-only or custom install)",
+  "db.allowModule": "Use the project's own mysql2 / pg when present (loaded in a worker)",
   "db.testAction": "Test connection",
   "db.testOk": "Connected · {ms} ms",
   "db.recentConnections": "Saved connections",
@@ -12936,13 +12938,13 @@ function useAutoHeight(ref, value, options = {}) {
 }
 
 // src/client/dbtools.js
-function quoteIdent(driver2, name) {
-  return driver2 === "mysql" ? `\`${String(name).replace(/`/g, "``")}\`` : `"${String(name).replace(/"/g, '""')}"`;
+function quoteIdent(driver, name) {
+  return driver === "mysql" ? `\`${String(name).replace(/`/g, "``")}\`` : `"${String(name).replace(/"/g, '""')}"`;
 }
-function sqlLiteral(driver2, value) {
+function sqlLiteral(driver, value) {
   if (value === null || value === void 0) return "NULL";
   if (typeof value === "number") return Number.isFinite(value) ? String(value) : "NULL";
-  if (typeof value === "boolean") return value ? driver2 === "sqlite" ? "1" : "TRUE" : driver2 === "sqlite" ? "0" : "FALSE";
+  if (typeof value === "boolean") return value ? driver === "sqlite" ? "1" : "TRUE" : driver === "sqlite" ? "0" : "FALSE";
   const text = String(value).replace(/'/g, "''");
   return `'${text}'`;
 }
@@ -12952,16 +12954,16 @@ function toJsonRows(result) {
   const objects = rows.map((row) => Object.fromEntries(columns.map((column, index) => [column, row[index] ?? null])));
   return JSON.stringify(objects, null, 2);
 }
-function toInsertSql(result, table, driver2, options = {}) {
+function toInsertSql(result, table, driver, options = {}) {
   const columns = result?.columns ?? [];
   const rows = result?.rows ?? [];
   if (columns.length === 0 || rows.length === 0) return "";
   const chunk = Math.max(1, Number(options.chunk) || 100);
-  const target = quoteIdent(driver2, table);
-  const head = `INSERT INTO ${target} (${columns.map((column) => quoteIdent(driver2, column)).join(", ")}) VALUES`;
+  const target = quoteIdent(driver, table);
+  const head = `INSERT INTO ${target} (${columns.map((column) => quoteIdent(driver, column)).join(", ")}) VALUES`;
   const statements = [];
   for (let start = 0; start < rows.length; start += chunk) {
-    const values = rows.slice(start, start + chunk).map((row) => `  (${columns.map((_, index) => sqlLiteral(driver2, row[index])).join(", ")})`).join(",\n");
+    const values = rows.slice(start, start + chunk).map((row) => `  (${columns.map((_, index) => sqlLiteral(driver, row[index])).join(", ")})`).join(",\n");
     statements.push(`${head}
 ${values};`);
   }
@@ -13138,8 +13140,8 @@ function inferDriver(input) {
   if (value === "") return "";
   const scheme = /^([a-z][a-z0-9+.-]*):(\/\/)?/iu.exec(value);
   if (scheme !== null && !WINDOWS_PATH.test(value)) {
-    const driver2 = SCHEMES[scheme[1].toLowerCase()];
-    if (driver2 !== void 0) return driver2;
+    const driver = SCHEMES[scheme[1].toLowerCase()];
+    if (driver !== void 0) return driver;
     if (scheme[2] !== "//" && /^\d+(\/|$)/u.test(value.slice(scheme[0].length))) return "";
     if (scheme[2] !== "//" && looksLikePath(value)) return "sqlite";
     return "";
@@ -13150,33 +13152,33 @@ function parseConnectionAddress(input) {
   const value = String(input ?? "").trim();
   const empty = { driver: "", path: "", host: "", port: "", user: "", password: "", database: "", error: "" };
   if (value === "") return empty;
-  const driver2 = inferDriver(value);
-  if (driver2 === "") return { ...empty, error: "unrecognised address" };
-  if (driver2 === "sqlite") {
+  const driver = inferDriver(value);
+  if (driver === "") return { ...empty, error: "unrecognised address" };
+  if (driver === "sqlite") {
     const scheme = /^(?:sqlite3?|file):(?:\/\/)?/iu.exec(value);
     const path = scheme === null ? value : value.slice(scheme[0].length);
-    return { ...empty, driver: driver2, path: path === "" ? "" : path };
+    return { ...empty, driver, path: path === "" ? "" : path };
   }
   let url;
   try {
     url = new URL(value);
   } catch {
-    return { ...empty, driver: driver2, error: "malformed URL" };
+    return { ...empty, driver, error: "malformed URL" };
   }
-  const port = url.port === "" ? DEFAULT_PORT[driver2] : Number(url.port);
+  const port = url.port === "" ? DEFAULT_PORT[driver] : Number(url.port);
   return {
-    driver: driver2,
+    driver,
     path: "",
     host: url.hostname,
-    port: Number.isFinite(port) ? String(port) : String(DEFAULT_PORT[driver2]),
+    port: Number.isFinite(port) ? String(port) : String(DEFAULT_PORT[driver]),
     user: decode(url.username),
     password: decode(url.password),
     database: decode(url.pathname.replace(/^\//u, "")),
     error: ""
   };
 }
-function driverLabel(driver2) {
-  return { sqlite: "SQLite", mysql: "MySQL", postgres: "PostgreSQL" }[driver2] ?? String(driver2 ?? "");
+function driverLabel(driver) {
+  return { sqlite: "SQLite", mysql: "MySQL", postgres: "PostgreSQL" }[driver] ?? String(driver ?? "");
 }
 
 // src/client/db.js
@@ -13201,8 +13203,8 @@ function toCsv(columns, rows) {
   for (const row of rows) lines2.push(row.map(quote).join(","));
   return lines2.join("\n");
 }
-function tableSql(table, { order, dir, limit, offset, filter, columns, driver: driver2 }) {
-  const q = (name) => driver2 === "mysql" ? `\`${String(name).replace(/`/g, "``")}\`` : `"${String(name).replace(/"/g, '""')}"`;
+function tableSql(table, { order, dir, limit, offset, filter, columns, driver }) {
+  const q = (name) => driver === "mysql" ? `\`${String(name).replace(/`/g, "``")}\`` : `"${String(name).replace(/"/g, '""')}"`;
   const quote = q(table);
   const where = filter && filter.trim() && columns?.length ? ` WHERE (${columns.map((column) => `CAST(${q(column.name)} AS TEXT) LIKE '%${filter.trim().replace(/'/g, "''")}%'`).join(" OR ")})` : "";
   const sorting = order ? ` ORDER BY ${q(order)} ${dir === "desc" ? "DESC" : "ASC"}` : "";
@@ -13238,6 +13240,13 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
   const [connectOpen, setConnectOpen] = useState(false);
   const [form, setForm] = useState({ address: "", driver: "", path: "", host: "localhost", port: "", user: "", password: "", database: "", clientPath: "" });
   const [advanced, setAdvanced] = useState(false);
+  const [allowModule, setAllowModule] = useState(() => {
+    try {
+      return localStorage.getItem("dsh.plugin-kit.db.allowModule") === "on";
+    } catch {
+      return false;
+    }
+  });
   const [cellDetail, setCellDetail] = useState(null);
   const [notice, setNotice] = useState("");
   const [modal, setModal] = useState(null);
@@ -13261,9 +13270,10 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
     });
   }, []);
   const probeDrivers = useCallback(async (refresh = false) => {
-    const res = await api("db.drivers", refresh ? { refresh: true } : {});
+    const body = { allowWorkspace: allowModule === true, ...refresh ? { refresh: true } : {} };
+    const res = await api("db.drivers", body);
     if (res.ok) setDrivers(res.value ?? []);
-  }, []);
+  }, [allowModule]);
   useEffect(() => {
     void probeDrivers();
   }, [probeDrivers]);
@@ -13392,7 +13402,7 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
     setProfiles((current) => current.filter((entry) => entry.id !== profile.id));
   }, []);
   const connectParams = useCallback(() => {
-    const params = { driver: form.driver, cwd };
+    const params = { driver: form.driver, cwd, allowModule: allowModule === true };
     if (form.driver === "sqlite") params.path = form.path.trim();
     else {
       params.host = form.host.trim();
@@ -13403,7 +13413,7 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
       if (String(form.clientPath ?? "").trim() !== "") params.clientPath = form.clientPath.trim();
     }
     return params;
-  }, [form, cwd]);
+  }, [form, cwd, allowModule]);
   const doTest = useCallback(async () => {
     if (!canConnect) return;
     setTestState({ busy: true, ok: null, text: "" });
@@ -13562,8 +13572,8 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
     }
   }, [activeConn, patchTab, t]);
   const copyResult = useCallback(async (tab, kind) => {
-    const driver2 = connections.find((entry) => entry.id === (tab.conn || activeConn))?.driver;
-    const text = kind === "json" ? toJsonRows(tab.result) : toInsertSql(tab.result, tab.table ?? tab.title, driver2);
+    const driver = connections.find((entry) => entry.id === (tab.conn || activeConn))?.driver;
+    const text = kind === "json" ? toJsonRows(tab.result) : toInsertSql(tab.result, tab.table ?? tab.title, driver);
     try {
       await navigator.clipboard.writeText(text);
       setNotice(t("db.copied"));
@@ -13678,7 +13688,8 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
               }
             },
             h("span", { className: `cedb-driver cedb-driver-${connection.driver}` }, connection.driver),
-            h("span", { className: "cedb-conn-label" }, connection.label)
+            h("span", { className: "cedb-conn-label" }, connection.label),
+            connection.impl === "module" ? h("span", { className: "cedb-ctx cedb-ctx-dim" }, "module") : null
           ),
           h("button", { type: "button", className: "ce-tool ce-tiny", title: t("db.disconnect"), onClick: () => void doDisconnect(connection.id) }, "✕")
         )),
@@ -14047,6 +14058,22 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
           ),
           h("label", { className: "cedb-field" }, t("db.database"), h("input", { className: "ce-input", value: form.database, onChange: (event) => setForm({ ...form, database: event.target.value }) })),
           h(
+            "label",
+            { className: "cedb-remember" },
+            h("input", {
+              type: "checkbox",
+              checked: allowModule,
+              onChange: (event) => {
+                setAllowModule(event.target.checked);
+                try {
+                  localStorage.setItem("dsh.plugin-kit.db.allowModule", event.target.checked ? "on" : "off");
+                } catch {
+                }
+              }
+            }),
+            t("db.allowModule")
+          ),
+          h(
             "div",
             { className: "cedb-field-row" },
             h("label", { className: "cedb-field" }, t("db.user"), h("input", { className: "ce-input", value: form.user, onChange: (event) => setForm({ ...form, user: event.target.value }) })),
@@ -14131,10 +14158,10 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
 function DbTitle() {
   return null;
 }
-function implSuffix(driver2, t) {
-  if (!driver2 || !driver2.impl) return "";
-  if (driver2.impl === "module") return ` · ${driver2.version || t("db.implModule")}`;
-  if (driver2.impl === "cli") return ` · ${t("db.implCli")}`;
+function implSuffix(driver, t) {
+  if (!driver || !driver.impl) return "";
+  if (driver.impl === "module") return ` · ${driver.version || t("db.implModule")}`;
+  if (driver.impl === "cli") return ` · ${t("db.implCli")}`;
   return ` · ${t("db.implEmbedded")}`;
 }
 var GRID_ROW_H = 24;
@@ -14222,33 +14249,31 @@ function ResultGrid({ t, result, onCell, onSort, order, dir }) {
   );
 }
 function DriverManager({ t, drivers, onRedetect, onClose }) {
+  const card = (driver) => {
+    const head = h(
+      "div",
+      { className: "cedb-driver-head" },
+      h("strong", null, driver.label),
+      driver.ready ? h("span", { className: "cedb-ctx cedb-ctx-strong" }, driver.impl === "module" ? driver.version || "module" : String(driver.impl ?? "").toUpperCase()) : h("span", { className: "cedb-ctx" }, t("db.notReady"))
+    );
+    const caps = h("div", { className: "cedb-driver-caps" }, Object.entries(driver.capabilities ?? {}).map(([name, value]) => h("span", {
+      key: name,
+      className: `cedb-cap${value === true ? " cedb-cap-on" : ""}`,
+      title: name
+    }, `${name}: ${typeof value === "boolean" ? value ? "✓" : "—" : String(value)}`)));
+    const alts = h("div", { className: "cedb-driver-alts" }, (driver.alternatives ?? []).map((alt) => h(
+      "div",
+      { key: alt.impl, className: "cedb-driver-alt" },
+      h("span", { className: "cedb-driver-impl" }, alt.impl),
+      alt.ready ? h("span", { className: "cedb-driver-ok", title: alt.bin || alt.version }, alt.version || alt.bin || "ready") : h("span", { className: "cedb-driver-no", title: alt.note }, alt.note)
+    )));
+    return h("div", { key: driver.id, className: "cedb-driver-card" }, head, caps, alts);
+  };
   return h(
     "div",
     { className: "cedb-dialog cedb-dialog-wide", role: "dialog", "aria-label": t("db.driversButton") },
     h("h3", { className: "cedb-dialog-title" }, t("db.driversButton")),
-    h("div", { className: "cedb-driver-list ce-scroll" }, (drivers ?? []).map(
-      (driver2) => h(
-        "div",
-        { key: driver2.id, className: "cedb-driver-card" },
-        h(
-          "div",
-          { className: "cedb-driver-head" },
-          h("strong", null, driver2.label),
-          driver2.ready ? h("span", { className: "cedb-ctx cedb-ctx-strong" }, driver2.impl === "module" ? driver2.version || "module" : String(driver2.impl).toUpperCase()) : h("span", { className: "cedb-ctx" }, t("db.notReady"))
-        )
-      ),
-      h("div", { className: "cedb-driver-caps" }, Object.entries(driver.capabilities ?? {}).map(([name, value]) => h("span", {
-        key: name,
-        className: `cedb-cap${value === true ? " cedb-cap-on" : ""}`,
-        title: name
-      }, `${name}: ${typeof value === "boolean" ? value ? "✓" : "—" : value}`))),
-      h("div", { className: "cedb-driver-alts" }, (driver.alternatives ?? []).map((alt) => h(
-        "div",
-        { key: alt.impl, className: "cedb-driver-alt" },
-        h("span", { className: "cedb-driver-impl" }, alt.impl),
-        alt.ready ? h("span", { className: "cedb-driver-ok", title: alt.bin || alt.version }, alt.version || alt.bin || "ready") : h("span", { className: "cedb-driver-no", title: alt.note }, alt.note)
-      )))
-    )),
+    h("div", { className: "cedb-driver-list ce-scroll" }, (drivers ?? []).map(card)),
     h(
       "div",
       { className: "cedb-dialog-actions" },
@@ -14313,7 +14338,7 @@ function ExplainPanel({ t, state, onClose }) {
     h("div", { className: "cedb-dialog-actions" }, h("button", { type: "button", className: "ce-sk-btn ce-sk-primary", onClick: onClose }, t("close")))
   );
 }
-function ImportDialog({ t, table, driver: driver2, onInsert, onClose }) {
+function ImportDialog({ t, table, driver, onInsert, onClose }) {
   const [text, setText] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);

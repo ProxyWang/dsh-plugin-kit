@@ -3158,6 +3158,39 @@ check("docAction reloads clean drafts, flags dirty ones, ignores others", docAct
 	check("a short message keeps the floor height", measure(20, 96) === "96px", measure(20, 96));
 }
 
+// --- database dialogs render (a render crash white-screens the whole workspace) ------
+{
+	const { DriverManager, ErDiagram, ExplainPanel, ImportDialog } = await import("./src/client/db.js");
+	const drivers = [
+		{ id: "sqlite", label: "SQLite", ready: true, impl: "embedded", capabilities: { transactions: true, cancel: "connection" }, alternatives: [{ impl: "embedded", label: "node:sqlite", ready: true }] },
+		{ id: "mysql", label: "MySQL", ready: false, impl: "", capabilities: { transactions: false }, alternatives: [{ impl: "module", label: "mysql2", ready: false, note: "not here" }, { impl: "cli", label: "mysql client", ready: false, note: "not found" }] },
+	];
+	const render = (Component, props) => {
+		const draw = createHookRenderer(Component, props, { effects: true, expand: true });
+		const tree = draw();
+		draw.flushEffects();
+		return tree;
+	};
+	const flat = (node) => {
+		if (!node || typeof node !== "object") return [];
+		if (Array.isArray(node)) return node.flatMap(flat);
+		return [node, ...(node.children ?? []).flatMap(flat)];
+	};
+
+	const manager = render(DriverManager, { t: (key) => key, drivers, onRedetect: () => {}, onClose: () => {} });
+	check("the driver manager renders a card per driver with its capabilities", flat(manager).filter((node) => node.props?.className === "cedb-driver-card").length === 2 && flat(manager).some((node) => String(node.props?.className ?? "").includes("cedb-cap")), null);
+	check("an unavailable implementation shows its reason", flat(manager).some((node) => node.props?.className === "cedb-driver-no"), null);
+
+	const er = render(ErDiagram, { t: (key) => key, schema: { current: "main", databases: [{ name: "main", tables: [{ name: "a", kind: "table", columns: [{ name: "id" }], foreignKeys: [] }, { name: "b", kind: "table", columns: [{ name: "id" }, { name: "a_id" }], foreignKeys: [{ refTable: "a", columns: ["a_id"], refColumns: ["id"] }] }] }] }, onOpenTable: () => {}, onClose: () => {} });
+	check("the ER dialog draws a box per table and a path per edge", flat(er).filter((node) => node.type === "g").length === 2 && flat(er).some((node) => node.type === "path"), null);
+
+	const plan = render(ExplainPanel, { t: (key) => key, state: { busy: false, result: { driver: "sqlite", tree: true, columns: ["id", "parent", "notused", "detail"], rows: [[2, 0, 0, "SCAN b"]] }, error: "" }, onClose: () => {} });
+	check("the plan dialog renders the tree rows", flat(plan).some((node) => node.props?.className === "cedb-plan-row"), null);
+
+	const importer = render(ImportDialog, { t: (key) => key, table: "users", driver: "sqlite", onInsert: async () => "", onClose: () => {} });
+	check("the import dialog renders its editor", flat(importer).some((node) => String(node.props?.className ?? "").includes("cedb-import-text")), null);
+}
+
 // --- database tools: export formats, ER layout, plan tree ----------------------------
 {
 	const { toJsonRows, toInsertSql, parseDataText, erGraph, erLayout, planTree, sqlLiteral } = await import("./src/client/dbtools.js");

@@ -118,6 +118,11 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 	// for the cases where inference is not enough.
 	const [form, setForm] = useState({ address: "", driver: "", path: "", host: "localhost", port: "", user: "", password: "", database: "", clientPath: "" });
 	const [advanced, setAdvanced] = useState(false);
+	// Loading a workspace's `mysql2`/`pg` runs project code in the connection's
+	// worker, so it is opt-in and remembered.
+	const [allowModule, setAllowModule] = useState(() => {
+		try { return localStorage.getItem("dsh.plugin-kit.db.allowModule") === "on"; } catch { return false; }
+	});
 	const [cellDetail, setCellDetail] = useState(null); // {title, value}
 	const [notice, setNotice] = useState("");
 	// Modal layer: driver manager, ER diagram, execution plan, import.
@@ -155,12 +160,15 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 	 * installed while this dialog is open should be picked up without a reload).
 	 */
 	const probeDrivers = useCallback(async (refresh = false) => {
-		const res = await api("db.drivers", refresh ? { refresh: true } : {});
+		// `allowWorkspace` is what turns a resolvable project module from "found"
+		// into "will be used"; the catalog reports the difference.
+		const body = { allowWorkspace: allowModule === true, ...(refresh ? { refresh: true } : {}) };
+		const res = await api("db.drivers", body);
 		// The readiness list only decorates the optional override; a failed
 		// probe must not silence the panel, so it degrades to "assume ready"
 		// and the Host reports the real reason when connecting.
 		if (res.ok) setDrivers(res.value ?? []);
-	}, []);
+	}, [allowModule]);
 
 	useEffect(() => { void probeDrivers(); }, [probeDrivers]);
 
@@ -320,7 +328,7 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 
 	/** The request body for both "Test" and "Connect". */
 	const connectParams = useCallback(() => {
-		const params = { driver: form.driver, cwd };
+		const params = { driver: form.driver, cwd, allowModule: allowModule === true };
 		if (form.driver === "sqlite") params.path = form.path.trim();
 		else {
 			params.host = form.host.trim();
@@ -331,7 +339,7 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 			if (String(form.clientPath ?? "").trim() !== "") params.clientPath = form.clientPath.trim();
 		}
 		return params;
-	}, [form, cwd]);
+	}, [form, cwd, allowModule]);
 
 	/**
 	 * Prove the target without keeping it. dbx has this as a first-class action;
@@ -605,7 +613,8 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 							onClick: () => { setActiveConn(connection.id); void refreshSchema(connection.id); },
 						},
 						h("span", { className: `cedb-driver cedb-driver-${connection.driver}` }, connection.driver),
-						h("span", { className: "cedb-conn-label" }, connection.label)),
+						h("span", { className: "cedb-conn-label" }, connection.label),
+						connection.impl === "module" ? h("span", { className: "cedb-ctx cedb-ctx-dim" }, "module") : null),
 						h("button", { type: "button", className: "ce-tool ce-tiny", title: t("db.disconnect"), onClick: () => void doDisconnect(connection.id) }, "✕"),
 					)),
 				schema ? h(Fragment, null,
@@ -896,6 +905,16 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 									h("label", { className: "cedb-field cedb-field-narrow" }, t("db.port"), h("input", { className: "ce-input", type: "number", value: form.port, placeholder: form.driver === "mysql" ? "3306" : "5432", onChange: (event) => setForm({ ...form, port: event.target.value }) })),
 								),
 								h("label", { className: "cedb-field" }, t("db.database"), h("input", { className: "ce-input", value: form.database, onChange: (event) => setForm({ ...form, database: event.target.value }) })),
+								h("label", { className: "cedb-remember" },
+									h("input", {
+										type: "checkbox",
+										checked: allowModule,
+										onChange: (event) => {
+											setAllowModule(event.target.checked);
+											try { localStorage.setItem("dsh.plugin-kit.db.allowModule", event.target.checked ? "on" : "off"); } catch { /* storage may be denied */ }
+										},
+									}),
+									t("db.allowModule")),
 								h("div", { className: "cedb-field-row" },
 									h("label", { className: "cedb-field" }, t("db.user"), h("input", { className: "ce-input", value: form.user, onChange: (event) => setForm({ ...form, user: event.target.value }) })),
 									h("label", { className: "cedb-field" }, t("db.password"), h("input", { className: "ce-input", type: "password", value: form.password, onChange: (event) => setForm({ ...form, password: event.target.value }) }))),
@@ -1072,24 +1091,27 @@ export function ResultGrid({ t, result, onCell, onSort, order, dir }) {
 
 /** Driver manager: every implementation, its capabilities and where it lives. */
 export function DriverManager({ t, drivers, onRedetect, onClose }) {
+	const card = (driver) => {
+		const head = h("div", { className: "cedb-driver-head" },
+			h("strong", null, driver.label),
+			driver.ready
+				? h("span", { className: "cedb-ctx cedb-ctx-strong" }, driver.impl === "module" ? driver.version || "module" : String(driver.impl ?? "").toUpperCase())
+				: h("span", { className: "cedb-ctx" }, t("db.notReady")));
+		const caps = h("div", { className: "cedb-driver-caps" }, Object.entries(driver.capabilities ?? {}).map(([name, value]) => h("span", {
+			key: name,
+			className: `cedb-cap${value === true ? " cedb-cap-on" : ""}`,
+			title: name,
+		}, `${name}: ${typeof value === "boolean" ? (value ? "✓" : "—") : String(value)}`)));
+		const alts = h("div", { className: "cedb-driver-alts" }, (driver.alternatives ?? []).map((alt) => h("div", { key: alt.impl, className: "cedb-driver-alt" },
+			h("span", { className: "cedb-driver-impl" }, alt.impl),
+			alt.ready
+				? h("span", { className: "cedb-driver-ok", title: alt.bin || alt.version }, alt.version || alt.bin || "ready")
+				: h("span", { className: "cedb-driver-no", title: alt.note }, alt.note))));
+		return h("div", { key: driver.id, className: "cedb-driver-card" }, head, caps, alts);
+	};
 	return h("div", { className: "cedb-dialog cedb-dialog-wide", role: "dialog", "aria-label": t("db.driversButton") },
 		h("h3", { className: "cedb-dialog-title" }, t("db.driversButton")),
-		h("div", { className: "cedb-driver-list ce-scroll" }, (drivers ?? []).map((driver) => h("div", { key: driver.id, className: "cedb-driver-card" },
-			h("div", { className: "cedb-driver-head" },
-				h("strong", null, driver.label),
-				driver.ready
-					? h("span", { className: "cedb-ctx cedb-ctx-strong" }, driver.impl === "module" ? driver.version || "module" : String(driver.impl).toUpperCase())
-					: h("span", { className: "cedb-ctx" }, t("db.notReady")))),
-			h("div", { className: "cedb-driver-caps" }, Object.entries(driver.capabilities ?? {}).map(([name, value]) => h("span", {
-				key: name,
-				className: `cedb-cap${value === true ? " cedb-cap-on" : ""}`,
-				title: name,
-			}, `${name}: ${typeof value === "boolean" ? (value ? "✓" : "—") : value}`))),
-			h("div", { className: "cedb-driver-alts" }, (driver.alternatives ?? []).map((alt) => h("div", { key: alt.impl, className: "cedb-driver-alt" },
-				h("span", { className: "cedb-driver-impl" }, alt.impl),
-				alt.ready
-					? h("span", { className: "cedb-driver-ok", title: alt.bin || alt.version }, alt.version || alt.bin || "ready")
-					: h("span", { className: "cedb-driver-no", title: alt.note }, alt.note)))))),
+		h("div", { className: "cedb-driver-list ce-scroll" }, (drivers ?? []).map(card)),
 		h("div", { className: "cedb-dialog-actions" },
 			h("button", { type: "button", className: "ce-sk-btn", onClick: onRedetect }, t("db.redetect")),
 			h("button", { type: "button", className: "ce-sk-btn ce-sk-primary", onClick: onClose }, t("close"))));

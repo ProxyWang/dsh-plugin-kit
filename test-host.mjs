@@ -1198,6 +1198,58 @@ process.stdin.on("data", (chunk) => {
 	check("metadata keys are lowercased and pseudo-headers dropped", headers.authorization === "Bearer t" && !(":pseudo" in headers) && !("" in headers), headers);
 }
 
+// --- module driver: mysql2 from the workspace, no CLI involved ---------------------------
+{
+	const workspace = `${cwd}-module-driver`;
+	rmSync(workspace, { recursive: true, force: true });
+	mkdirSync(`${workspace}/node_modules/mysql2`, { recursive: true });
+	writeFileSync(`${workspace}/node_modules/mysql2/package.json`, JSON.stringify({ name: "mysql2", version: "3.11.0", type: "module", main: "index.js" }));
+	// The smallest thing that behaves like mysql2 for the calls the adapter makes.
+	writeFileSync(`${workspace}/node_modules/mysql2/index.js`, `
+const fields = (...names) => names.map((name) => ({ name }));
+export async function createConnection(config) {
+  return {
+    config,
+    async query(sqlOrObject) {
+      const sql = typeof sqlOrObject === "string" ? sqlOrObject : sqlOrObject.sql;
+      const text = String(sql).trim();
+      if (/^select 1$/i.test(text)) return [[[1]], fields("1")];
+      if (/^show databases/i.test(text)) return [[["demo"], ["information_schema"]], fields("Database")];
+      if (/information_schema\\.tables/i.test(text)) return [[["users", "BASE TABLE"]], fields("TABLE_NAME", "TABLE_TYPE")];
+      if (/information_schema\\.columns/i.test(text)) return [[["users", "id", "int", "NO", null, "PRI"], ["users", "name", "varchar(32)", "YES", null, ""]], fields("TABLE_NAME", "COLUMN_NAME", "COLUMN_TYPE", "IS_NULLABLE", "COLUMN_DEFAULT", "COLUMN_KEY")];
+      if (/information_schema\\.key_column_usage/i.test(text)) return [[], fields("TABLE_NAME", "COLUMN_NAME", "REFERENCED_TABLE_NAME", "REFERENCED_COLUMN_NAME")];
+      if (/^select count/i.test(text)) return [[[1]], fields("n")];
+      if (/^select \\*/i.test(text)) return [[[1, "ada"]], fields("id", "name")];
+      return [{ affectedRows: 2 }, undefined];
+    },
+    async end() { this.ended = true; },
+    async destroy() {},
+  };
+}
+`);
+	const db = await import("./lib/host/db.js");
+	const conn = await db.connect({ driver: "mysql", host: "example.test", user: "u", database: "demo", cwd: workspace, allowModule: true });
+	check("a project-local mysql2 is used when allowed", conn?.impl === "module" && /^mysql2@/.test(conn.module ?? ""), conn);
+
+	const read = await db.query(conn.id, "SELECT * FROM users");
+	check("the module driver answers a read", read.columns?.join() === "id,name" && read.rows?.[0]?.[1] === "ada", read);
+	const write = await db.query(conn.id, "UPDATE users SET name = 'x'");
+	check("the module driver reports affected rows", write.changes === 2, write);
+
+	const schema = await db.schema(conn.id);
+	const users = schema.databases?.find((entry) => entry.name === "demo")?.tables?.find((table) => table.name === "users");
+	check("the module driver describes the schema", users?.columns?.length === 2 && users.columns.some((column) => column.primaryKey), schema);
+
+	db.disconnect(conn.id);
+	// Without permission the module is not loaded: the CLI path is used instead.
+	const cliBin = `${workspace}/fake-mysql`;
+	writeFileSync(cliBin, "#!/bin/sh\nprintf 'answer\\n1\\n'\n", { mode: 0o755 });
+	const plain = await db.connect({ driver: "mysql", host: "example.test", clientPath: cliBin, cwd: workspace });
+	check("without permission the CLI implementation is used", plain?.impl === undefined && plain?.driver === "mysql", plain);
+	db.disconnect(plain.id);
+	rmSync(workspace, { recursive: true, force: true });
+}
+
 // --- foreign keys and execution plans --------------------------------------------------
 {
 	let sqliteAvailable = false;

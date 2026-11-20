@@ -153,16 +153,18 @@ const handlers = kind === "sqlite"
 
 **验收**：所有现有测试不改一行通过；`db.drivers` 多出的字段不影响旧面板。
 
-### P1 —— MySQL 走 module（~1–2 天）
+### P1 —— MySQL 走 module ✅ 已实现
 
 - `drivers/module-mysql.js`：`mysql2/promise` 的 `createConnection` → Runner（`schema` 用 `information_schema`，`rows` 用 `LIMIT/OFFSET`，`query` 用 `execute`）；
 - `modresolve.js` + 同意开关 + 白名单；
 - `db-worker.js` 支持 `kind: "module"`；
 - 连接对话框显示来源：`驱动：项目内 mysql2@3.11`。
 
+实现位置：[lib/host/drivers/module-runner.js](<lib/host/drivers/module-runner.js>)（两种驱动的 ops）、`db-worker.js` 的 `kind: "module"`、`db.js` 里 `connect` 的阶梯选择与 `allowModule` 开关。
+
 **验收**：装了 `mysql2` 的工作区里，`BEGIN → UPDATE → ROLLBACK` 跨语句生效；没装时行为与今天一致。
 
-### P2 —— PostgreSQL 走 module（~1 天）
+### P2 —— PostgreSQL 走 module ✅ 已实现（与 P1 同一个 runner）
 
 `pg` 的 `Client` 同样适配；注意 `pg` 的 `types` 配置（`int8`/`numeric` 默认返回字符串，正好与 `typedValues` 对齐）。
 

@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased — the module rung is real
+
+The driver ladder described a project-local `mysql2` / `pg` but only the catalog knew about it: a connection always went through the CLI. Now it connects through the module when the user allows it.
+
+- **`lib/host/drivers/module-runner.js`** implements the same `Runner` contract as SQLite: `query` (rows as arrays, writes report affected rows), `rows` (paged, ordered, filtered, with a total), `columns`, `schema` (databases, tables, columns, foreign keys) for both `mysql2` and `pg`. Values arrive as their real types and the connection is a single session, so `BEGIN … COMMIT` spans statements.
+- **It runs in the connection's worker** (`db-worker.js` now takes `kind: "module"`), so a driver that blocks or crashes costs one connection, not the Host. Cancelling ends the connection, same as SQLite.
+- **Opt-in, per design**: the dialog's "use the project's own mysql2 / pg" checkbox (remembered) sets `allowModule`; without it the catalog reports the module as *found but not permitted* and connect uses the CLI.
+- **Every operation now dispatches on the runner, not on the driver id** — that was a real bug the new path exposed: a module-backed MySQL connection still took the CLI branch and tried to spawn `mysql`.
+- Verified with a fake `mysql2` package in a scratch workspace: `impl: "module"`, reads, affected rows, schema with PK, and the CLI fallback when permission is off.
+
+### The 驱动 button no longer white-screens
+
+`DriverManager` had one parenthesis too many: the card's header closed a level early, so `driver` was referenced outside its map callback and the render threw `ReferenceError: driver is not defined`. A render throw blanks the whole plugin panel, which is exactly what "点击驱动就白屏" was. The component is now built from plain locals instead of nested expressions, and **all four dialogs are rendered in tests** (driver manager, ER, plan, import) so a crash in any of them fails the suite instead of the UI.
+
 ## 2.3.0 (2026-11-20)
 
 The database panel reaches dbx parity on everything except its embedded AI chat — data transfer, a driver manager, an ER diagram and execution plans — the agent gets read-only database tools, and the gRPC pane stops clipping its own invoke button.
