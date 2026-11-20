@@ -13446,7 +13446,7 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
       h(
         "div",
         { className: `cedb-detect${form.driver === "" ? " cedb-detect-miss" : ""}` },
-        h("span", null, form.driver === "" ? t("db.notDetected") : `${t("db.detected")}: ${driverLabel(form.driver)}`),
+        h("span", null, form.driver === "" ? t("db.notDetected") : `${t("db.detected")}: ${driverLabel(form.driver)}${implSuffix(drivers.find((entry) => entry.id === form.driver), t)}`),
         driverReady || form.driver === "" ? null : h("span", { className: "cedb-detect-note" }, drivers.find((entry) => entry.id === form.driver)?.note ?? ""),
         form.driver === "" ? null : h("button", {
           type: "button",
@@ -13579,6 +13579,12 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
 }
 function DbTitle() {
   return null;
+}
+function implSuffix(driver, t) {
+  if (!driver || !driver.impl) return "";
+  if (driver.impl === "module") return ` · ${driver.version || t("db.implModule")}`;
+  if (driver.impl === "cli") return ` · ${t("db.implCli")}`;
+  return ` · ${t("db.implEmbedded")}`;
 }
 var GRID_ROW_H = 24;
 function gridWindow(input = {}) {

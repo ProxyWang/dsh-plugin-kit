@@ -3139,6 +3139,13 @@ check("docAction reloads clean drafts, flags dirty ones, ignores others", docAct
 	})(), parseConnectionAddress("postgres://alice:s3cret@db.example:6543/app"));
 	check("postgresql:// and mariadb:// are the same drivers", inferDriver("postgresql://h/d") === "postgres" && inferDriver("mariadb://h/d") === "mysql", null);
 	check("a host:port address is not mistaken for a file path", inferDriver("localhost:5432/app") === "" && parseConnectionAddress("localhost:5432/app").error !== "", parseConnectionAddress("localhost:5432/app"));
+	{
+		const { implSuffix } = await import("./src/client/db.js");
+		const translate = (key) => key;
+		check("the driver chip names a module implementation and its version", implSuffix({ impl: "module", version: "mysql2@3.11" }, translate) === " · mysql2@3.11", implSuffix({ impl: "module", version: "mysql2@3.11" }, translate));
+		check("the driver chip distinguishes the CLI and built-in paths", implSuffix({ impl: "cli" }, translate) === " · db.implCli" && implSuffix({ impl: "embedded" }, translate) === " · db.implEmbedded" && implSuffix({}, translate) === "", null);
+	}
+
 	check("a bare file name still reads as SQLite", inferDriver("app.db") === "sqlite" && inferDriver("notes.txt") === "", [inferDriver("app.db"), inferDriver("notes.txt")]);
 	check("a server URL without a port gets the driver default", (() => {
 		const pg = parseConnectionAddress("postgres://db.example/app");

@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased — driver architecture: a catalog, and the module ladder it implies
+
+[The design](<docs/driver-architecture.md>) answers the question "why not just copy dbx": its drivers are Rust crates compiled into a Tauri binary, ours is a JS plugin that must ship as one npm package. The answer is a three-rung ladder per logical driver — **embedded (node:sqlite) → project module (mysql2/pg) → CLI client** — with one contract and a capability table the panel reads.
+
+The first slice is in, and changes no behaviour:
+
+- **`lib/host/drivers.js`** — the catalog: every logical driver with its ordered implementations, each probed independently, each carrying `capabilities` (`transactions`, `changes`, `typedValues`, `streaming`, `cancel`). `db.drivers` now reports `impl`, `version`, `alternatives` and the capabilities of the implementation that will actually run; `ready`/`note`/`bin` stay for older callers.
+- **`lib/host/modresolve.js`** — optional driver modules resolve from the session workspace the same way `binpath.js` finds language servers, with three guards: a package whitelist (`mysql2`, `pg`, `better-sqlite3`, `sqlite3`), an explicit `allowWorkspace` flag (loading JS runs code in the Host, which is stronger than spawning a binary), and the Host's own tree always allowed.
+- **The dialog names the implementation**: `MySQL · mysql2@3.11` or `MySQL · CLI 客户端`, so "which binary/module will run" is never a guess.
+- Regressions: whitelist enforcement, workspace resolution denied without permission and granted with it, the catalog listing both implementations of a driver, module preferred over CLI, capabilities following the chosen implementation, the old response shape preserved, and the chip suffix.
+- Not yet wired: actually opening a connection through `mysql2`/`pg` (P1/P2 in the design), which is where transactions and typed values arrive.
+
+
 ## 2.1.1 (2026-11-20) — the backlog from the review
 
 Every item the previous review listed as "known, not fixed" is now fixed, plus one defect the work uncovered.

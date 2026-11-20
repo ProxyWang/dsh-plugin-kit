@@ -713,7 +713,9 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 						onChange: (event) => applyAddress(event.target.value),
 					})),
 				h("div", { className: `cedb-detect${form.driver === "" ? " cedb-detect-miss" : ""}` },
-					h("span", null, form.driver === "" ? t("db.notDetected") : `${t("db.detected")}: ${driverLabel(form.driver)}`),
+					h("span", null, form.driver === ""
+						? t("db.notDetected")
+						: `${t("db.detected")}: ${driverLabel(form.driver)}${implSuffix(drivers.find((entry) => entry.id === form.driver), t)}`),
 					driverReady || form.driver === "" ? null : h("span", { className: "cedb-detect-note" }, drivers.find((entry) => entry.id === form.driver)?.note ?? ""),
 					form.driver === "" ? null : h("button", {
 						type: "button",
@@ -812,6 +814,23 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 /** The tab title is the fixed database label; open tabs carry their own names. */
 export function DbTitle() {
 	return null;
+}
+
+/**
+ * Which implementation of a driver will run, in one short suffix.
+ *
+ * The catalog prefers a project module over the CLI, so the dialog has to say
+ * which one it picked — "MySQL" alone no longer identifies what will execute.
+ *
+ * @param driver - one entry from `db.drivers`
+ * @param t - translator
+ * @returns a suffix like ` · mysql2@3.11` or ` · CLI`, or ""
+ */
+export function implSuffix(driver, t) {
+	if (!driver || !driver.impl) return "";
+	if (driver.impl === "module") return ` · ${driver.version || t("db.implModule")}`;
+	if (driver.impl === "cli") return ` · ${t("db.implCli")}`;
+	return ` · ${t("db.implEmbedded")}`;
 }
 
 /** One grid row's height, in px — must match `.cedb-grid-row` in the stylesheet. */

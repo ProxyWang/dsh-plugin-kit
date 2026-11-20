@@ -1139,6 +1139,40 @@ process.stdin.on("data", (chunk) => {
 	clearBinaryCache();
 }
 
+// --- driver catalog and optional module resolution -------------------------------------
+{
+	const { resolveModule, availableModules, DRIVER_MODULES } = await import("./lib/host/modresolve.js");
+	const { driverCatalog } = await import("./lib/host/drivers.js");
+
+	check("only whitelisted packages are loadable", resolveModule("zod") === null && resolveModule("./local.js") === null && resolveModule("mysql2", { allowWorkspace: true, cwd: "/nonexistent" }) === null, DRIVER_MODULES.size);
+
+	// A workspace that already depends on mysql2 is exactly the case the ladder
+	// exists for; without permission it must not be found.
+	const workspace = `${cwd}-modresolve`;
+	rmSync(workspace, { recursive: true, force: true });
+	mkdirSync(`${workspace}/node_modules/mysql2/lib`, { recursive: true });
+	writeFileSync(`${workspace}/node_modules/mysql2/package.json`, JSON.stringify({ name: "mysql2", version: "3.11.0", main: "lib/index.js" }));
+	writeFileSync(`${workspace}/node_modules/mysql2/lib/index.js`, "export const createConnection = () => {};\n");
+	const denied = resolveModule("mysql2", { cwd: workspace });
+	const allowed = resolveModule("mysql2", { cwd: workspace, allowWorkspace: true });
+	check("a workspace module needs explicit permission", denied === null, denied);
+	check("a whitelisted workspace module resolves with permission", allowed?.version === "3.11.0" && allowed?.source === "workspace", allowed);
+
+	const catalog = await driverCatalog({ cwd: workspace, allowWorkspace: true });
+	const mysql = catalog.find((entry) => entry.id === "mysql");
+	check("the catalog lists every implementation of a driver", mysql?.alternatives.length === 2 && mysql.alternatives.some((entry) => entry.impl === "module") && mysql.alternatives.some((entry) => entry.impl === "cli"), mysql?.alternatives.map((entry) => entry.impl));
+	check("a resolvable module is preferred over the CLI", mysql?.impl === "module" && /^mysql2@/.test(mysql.version), { impl: mysql?.impl, version: mysql?.version });
+	check("capabilities describe the chosen implementation", mysql?.capabilities?.transactions === true && mysql?.capabilities?.typedValues === true, mysql?.capabilities);
+	const postgres = catalog.find((entry) => entry.id === "postgres");
+	check("a driver without its module falls back to the CLI probe", postgres?.impl === "" || postgres.impl === "cli", { impl: postgres?.impl, ready: postgres?.ready, note: postgres?.note });
+	check("the catalog still answers the old shape", catalog.every((entry) => typeof entry.ready === "boolean" && typeof entry.note === "string" && typeof entry.bin === "string"), null);
+	check("an unavailable driver offers the install command through its implementation", postgres?.alternatives.every((entry) => entry.ready || entry.note !== ""), postgres?.alternatives);
+
+	const modules = availableModules({ cwd: workspace, allowWorkspace: true });
+	check("availableModules reports only what resolves", modules.mysql2?.version === "3.11.0" && modules.pg === undefined, Object.keys(modules));
+	rmSync(workspace, { recursive: true, force: true });
+}
+
 // --- gRPC metadata encoding ------------------------------------------------------------
 {
 	const { metadataHeaders } = await import("./lib/host/grpc.js");
