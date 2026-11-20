@@ -372,6 +372,7 @@ export const zh = {
 	"rpc.pickProto": "选择 .proto 文件",
 	"rpc.pickPlaceholder": "搜索 .proto 文件…",
 	"rpc.noProto": "工作区里没有 .proto 文件",
+	"rpc.protoCount": "个 .proto 文件",
 
 	"rpc.noMethods": "还没有解析出方法。填写 .proto 路径后点「加载」。",
 	"rpc.request": "请求消息",
@@ -1102,6 +1103,7 @@ export const en = {
 	"rpc.pickProto": "Choose a .proto file",
 	"rpc.pickPlaceholder": "Search .proto files…",
 	"rpc.noProto": "No .proto files in this workspace",
+	"rpc.protoCount": ".proto files",
 
 	"rpc.noMethods": "No methods yet. Fill in the .proto path and press Load.",
 	"rpc.request": "Request message",

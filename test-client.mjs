@@ -3058,6 +3058,11 @@ check("docAction reloads clean drafts, flags dirty ones, ignores others", docAct
 		check("the search asks the host for .proto files only", calls.some((call) => call.url.endsWith("/search.files") && call.body?.suffix === ".proto"), calls.at(-1));
 		const rows = flatten(tree).filter((n) => n.type === "button" && String(n.props?.className ?? "").includes("cerpc-picker-row"));
 		check("every match is clickable", rows.length === 2, rows.length);
+		const { splitProtoPath } = await import("./src/client/rpc.js");
+		check("a deep path keeps its file name and dims only the directory", (() => {
+			const parts = splitProtoPath("proto/ads/v1/ads.proto");
+			return parts.dir === "proto/ads/v1/" && parts.name === "ads.proto" && splitProtoPath("a.proto").dir === "";
+		})(), splitProtoPath("proto/ads/v1/ads.proto"));
 		rows[1].props.onClick();
 		await new Promise((resolve) => setTimeout(resolve, 50));
 		draw.flushEffects();

@@ -60,6 +60,21 @@ export function groupMethods(methods) {
 }
 
 /**
+ * Split a path into the part that may be truncated and the part that must not.
+ *
+ * A picker row is narrow; truncating from the right would eat the file name,
+ * which is the only part that identifies the choice.
+ *
+ * @param path - workspace-relative path
+ * @returns `{dir, name}` with the trailing slash kept on the directory
+ */
+export function splitProtoPath(path) {
+	const text = String(path ?? "");
+	const cut = text.lastIndexOf("/");
+	return cut < 0 ? { dir: "", name: text } : { dir: text.slice(0, cut + 1), name: text.slice(cut + 1) };
+}
+
+/**
  * Workspace `.proto` picker.
  *
  * Typing a path is fine when you know it; finding one is what a file tree is
@@ -107,14 +122,21 @@ export function ProtoPicker({ t, cwd, onPick, onClose }) {
 		}),
 		matches.length === 0
 			? h("div", { className: "cerpc-picker-empty" }, busy ? t("loading") : t("rpc.noProto"))
-			: h("div", { className: "cerpc-picker-list ce-scroll" }, matches.map((entry, position) => h("button", {
-				key: entry.path,
-				type: "button",
-				className: `cerpc-picker-row${position === index ? " cerpc-picker-row-on" : ""}`,
-				title: entry.path,
-				onMouseEnter: () => setIndex(position),
-				onClick: () => onPick(entry.path),
-			}, entry.path))),
+			: h(Fragment, null,
+				h("div", { className: "cerpc-picker-list ce-scroll" }, matches.map((entry, position) => {
+				const parts = splitProtoPath(entry.path);
+				return h("button", {
+					key: entry.path,
+					type: "button",
+					className: `cerpc-picker-row${position === index ? " cerpc-picker-row-on" : ""}`,
+					title: entry.path,
+					onMouseEnter: () => setIndex(position),
+					onClick: () => onPick(entry.path),
+				},
+					h("span", { className: "cerpc-picker-dir" }, parts.dir),
+					h("span", { className: "cerpc-picker-name" }, parts.name));
+				})),
+				h("div", { className: "cerpc-picker-foot" }, `${matches.length} ${t("rpc.protoCount")}`)),
 	);
 }
 

@@ -439,6 +439,7 @@ var zh = {
   "rpc.pickProto": "选择 .proto 文件",
   "rpc.pickPlaceholder": "搜索 .proto 文件…",
   "rpc.noProto": "工作区里没有 .proto 文件",
+  "rpc.protoCount": "个 .proto 文件",
   "rpc.noMethods": "还没有解析出方法。填写 .proto 路径后点「加载」。",
   "rpc.request": "请求消息",
   "rpc.response": "响应",
@@ -1161,6 +1162,7 @@ var en = {
   "rpc.pickProto": "Choose a .proto file",
   "rpc.pickPlaceholder": "Search .proto files…",
   "rpc.noProto": "No .proto files in this workspace",
+  "rpc.protoCount": ".proto files",
   "rpc.noMethods": "No methods yet. Fill in the .proto path and press Load.",
   "rpc.request": "Request message",
   "rpc.response": "Response",
@@ -8857,12 +8859,16 @@ var CSS2 = `
 .cerpc-host{min-width:0;flex:1 1 auto}
 .cerpc-proto{position:relative}
 .cerpc-proto-row{display:flex;gap:4px;align-items:center}
-.cerpc-picker{position:absolute;top:100%;left:0;right:0;z-index:30;margin-top:4px;padding:6px;display:flex;flex-direction:column;gap:6px;background:var(--dsw-alias-bg-layer-1,#1d2126);border:.5px solid var(--dsw-alias-border-l1,#39414a);border-radius:6px;box-shadow:0 8px 24px rgba(0,0,0,.35)}
-.cerpc-picker-input{height:26px;font-size:12px}
-.cerpc-picker-list{max-height:240px;overflow:auto;display:flex;flex-direction:column;gap:1px}
-.cerpc-picker-row{display:block;width:100%;text-align:left;padding:3px 6px;border:0;border-radius:4px;background:transparent;color:var(--dsw-alias-label-primary,#dde);font-size:11px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}
+/* Wider than the field it hangs from: a path list at field width is unreadable. */
+.cerpc-picker{position:absolute;top:100%;left:0;z-index:30;margin-top:4px;padding:8px;display:flex;flex-direction:column;gap:8px;width:min(600px,calc(100vw - 40px));background:var(--dsw-alias-bg-layer-1,#1d2126);border:.5px solid var(--dsw-alias-border-l1,#39414a);border-radius:8px;box-shadow:0 12px 32px rgba(0,0,0,.45)}
+.cerpc-picker-input{height:30px;font-size:13px}
+.cerpc-picker-list{max-height:340px;overflow:auto;display:flex;flex-direction:column;gap:1px}
+.cerpc-picker-row{display:flex;align-items:baseline;gap:0;width:100%;min-height:26px;text-align:left;padding:5px 8px;border:0;border-radius:5px;background:transparent;color:var(--dsw-alias-label-primary,#dde);font-size:12.5px;line-height:1.5;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;cursor:pointer}
+.cerpc-picker-dir{color:var(--dsw-alias-label-tertiary,#889);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;direction:rtl;text-align:left;flex:0 1 auto;min-width:0}
+.cerpc-picker-name{color:var(--dsw-alias-label-primary,#dde);flex:0 0 auto;white-space:nowrap}
 .cerpc-picker-row:hover,.cerpc-picker-row-on{background:var(--dsw-alias-interactive-bg-hover,#2a2e35)}
-.cerpc-picker-empty{font-size:11px;color:var(--dsw-alias-label-tertiary,#889);padding:4px 6px}
+.cerpc-picker-empty{font-size:12px;color:var(--dsw-alias-label-tertiary,#889);padding:6px 8px}
+.cerpc-picker-foot{font-size:11px;color:var(--dsw-alias-label-tertiary,#778);padding:0 4px}
 .cerpc-inline{display:flex;align-items:center;gap:4px;font-size:11px;cursor:pointer}
 .cerpc-timeout{width:70px;height:22px;font-size:11px;padding:0 4px}
 /* The request pane is content-sized: the body grows with the message, the
@@ -13757,6 +13763,11 @@ function groupMethods(methods) {
   }
   return [...groups.entries()].map(([service, entries]) => ({ service, methods: entries }));
 }
+function splitProtoPath(path) {
+  const text = String(path ?? "");
+  const cut = text.lastIndexOf("/");
+  return cut < 0 ? { dir: "", name: text } : { dir: text.slice(0, cut + 1), name: text.slice(cut + 1) };
+}
 function ProtoPicker({ t, cwd, onPick, onClose }) {
   const [query, setQuery] = useState("");
   const [matches, setMatches] = useState([]);
@@ -13805,14 +13816,27 @@ function ProtoPicker({ t, cwd, onPick, onClose }) {
       placeholder: t("rpc.pickPlaceholder"),
       onChange: (event) => setQuery(event.target.value)
     }),
-    matches.length === 0 ? h("div", { className: "cerpc-picker-empty" }, busy ? t("loading") : t("rpc.noProto")) : h("div", { className: "cerpc-picker-list ce-scroll" }, matches.map((entry, position) => h("button", {
-      key: entry.path,
-      type: "button",
-      className: `cerpc-picker-row${position === index ? " cerpc-picker-row-on" : ""}`,
-      title: entry.path,
-      onMouseEnter: () => setIndex(position),
-      onClick: () => onPick(entry.path)
-    }, entry.path)))
+    matches.length === 0 ? h("div", { className: "cerpc-picker-empty" }, busy ? t("loading") : t("rpc.noProto")) : h(
+      Fragment,
+      null,
+      h("div", { className: "cerpc-picker-list ce-scroll" }, matches.map((entry, position) => {
+        const parts = splitProtoPath(entry.path);
+        return h(
+          "button",
+          {
+            key: entry.path,
+            type: "button",
+            className: `cerpc-picker-row${position === index ? " cerpc-picker-row-on" : ""}`,
+            title: entry.path,
+            onMouseEnter: () => setIndex(position),
+            onClick: () => onPick(entry.path)
+          },
+          h("span", { className: "cerpc-picker-dir" }, parts.dir),
+          h("span", { className: "cerpc-picker-name" }, parts.name)
+        );
+      })),
+      h("div", { className: "cerpc-picker-foot" }, `${matches.length} ${t("rpc.protoCount")}`)
+    )
   );
 }
 function RpcView({ t, useTabInfo, sessionId, useSessions, incoming }) {

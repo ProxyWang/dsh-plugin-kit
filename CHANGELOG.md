@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased — the proto chooser is readable
+
+The picker inherited the width of the field it hung from (about 280px), so every path was clipped and the list read as noise.
+
+- The panel is now **wider than its anchor** (`min(600px, 100vw - 40px)`), rows are 12.5px with a 26px minimum, and the list is 340px tall.
+- A row splits into **dimmed directory + full-strength file name**: truncation eats the directory (from the left, via `direction: rtl`), never the name — the name is the only part that identifies the choice.
+- A footer reports how many `.proto` files matched, so an empty or short list is explained rather than just short.
+- Regressions: a deep path splits with the name intact, and a bare file name has no directory part.
+
 ## Unreleased — the gRPC address is a host and two schemes, not a URL to type
 
 `grpc://` had to be typed (or was silently missing) before the call would work, so a person who knows `10.150.136.155:9000` still had to know the field's syntax.
