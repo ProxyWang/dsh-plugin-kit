@@ -1,6 +1,10 @@
 # Changelog
 
-## Unreleased — the invoke button stays put, and the database panel gains transfer, drivers, ER and plans
+## 2.3.0 (2026-11-20)
+
+The database panel reaches dbx parity on everything except its embedded AI chat — data transfer, a driver manager, an ER diagram and execution plans — the agent gets read-only database tools, and the gRPC pane stops clipping its own invoke button.
+
+### the invoke button stays put, and the database panel gains transfer, drivers, ER and plans
 
 ### gRPC: invoke disappeared after the first call
 
@@ -21,7 +25,7 @@ A dialog listing every logical driver with the implementation that will actually
 - **执行计划** runs `EXPLAIN QUERY PLAN` on SQLite and renders the parent/child tree, or a tabular `EXPLAIN` on MySQL/PostgreSQL. The statement is never executed.
 - Regressions: schema foreign keys, a plan that returns a tree without running anything, export formats and quoting, CSV/JSON parsing, the ER graph dropping an edge to a missing table, layout edges, plan nesting, and the request pane class.
 
-## Unreleased — the database panel gets the agent, and the tab says what it points at
+### the database panel gets the agent, and the tab says what it points at
 
 dbx's window has a tree, a data workspace with context chips, and an assistant. The first two are layout; the third is where a plugin inside DSH must not copy: dbx ships its own model client and key, while DSH already *is* the assistant.
 
@@ -30,7 +34,7 @@ dbx's window has a tree, a data workspace with context chips, and an assistant. 
 - **Empty results are actionable**: a table page offers "table data needs a reload" with a Refresh button (the dbx message), and a query tab offers Run instead of a bare sentence.
 - Regressions: the tools are registered, describe reports real columns with PK, query reads rows, a write is refused and leaves the data untouched, and no-connection is explained.
 
-## Unreleased — the chooser floats instead of shoving the workspace sideways
+### the chooser floats instead of shoving the workspace sideways
 
 Opening the `.proto` list shifted the whole app: a 560px absolutely-positioned panel inside a ~280px toolbar cell made the workspace overflow horizontally, and the layout scrolled to reveal it.
 
@@ -39,7 +43,7 @@ Opening the `.proto` list shifted the whole app: a 560px absolutely-positioned p
 - The "no `.proto` files here" state now says what to do instead: paste a path, or use Discover to ask the server for its schema.
 - Regressions: the panel carries the floating class with the computed geometry, and the empty state names both alternatives.
 
-## Unreleased — the dialog stops shouting, and the empty gRPC pane becomes one card
+### the dialog stops shouting, and the empty gRPC pane becomes one card
 
 Two interaction problems, both visible in one screenshot: a connection dialog that displayed every field and an error before anything was typed, and a gRPC pane that spent a whole screen showing three separate "nothing here" messages.
 
