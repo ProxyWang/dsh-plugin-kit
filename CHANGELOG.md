@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased — the gRPC address is a host and two schemes, not a URL to type
+
+`grpc://` had to be typed (or was silently missing) before the call would work, so a person who knows `10.150.136.155:9000` still had to know the field's syntax.
+
+- The field now holds **only `host:port`**, with a scheme selector beside it (`grpc://` plaintext, `grpcs://` TLS). The full address is still what the panel stores, so the call path, history rows and environment interpolation are unchanged.
+- Pasting a full address still works: `grpcs://host:443` switches the selector and leaves the host part in the field. An empty field stays empty instead of becoming a lone scheme.
+- Regressions: split/join for bare and explicit forms, a pasted scheme winning over the selected one, an empty host, and the pane showing the plaintext scheme for a host typed with none.
+
 ## Unreleased — the `.proto` field can be browsed
 
 Typing a path only works when you already know it; finding one is what a file tree is for.

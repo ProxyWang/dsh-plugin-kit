@@ -3250,6 +3250,17 @@ check("docAction reloads clean drafts, flags dirty ones, ignores others", docAct
 	})(), null);
 }
 
+// --- gRPC address: the scheme is a selector, not typing -------------------------------
+{
+	const { splitAddress, joinAddress, schemeOf } = await import("./src/client/grpcaddr.js");
+	check("a bare host gets the plaintext scheme", JSON.stringify(splitAddress("10.0.0.1:50051")) === JSON.stringify({ scheme: "grpc://", host: "10.0.0.1:50051" }), splitAddress("10.0.0.1:50051"));
+	check("an explicit scheme is split off", splitAddress("grpcs://api.test:443").scheme === "grpcs://" && splitAddress("grpcs://api.test:443").host === "api.test:443", splitAddress("grpcs://api.test:443"));
+	check("joining puts the chosen scheme back", joinAddress("grpc://", "h:1") === "grpc://h:1" && joinAddress("grpcs://", "h:1") === "grpcs://h:1", [joinAddress("grpc://", "h:1"), joinAddress("grpcs://", "h:1")]);
+	check("a pasted full address keeps its own scheme", joinAddress("grpc://", "grpcs://h:1") === "grpcs://h:1", joinAddress("grpc://", "grpcs://h:1"));
+	check("an empty host stays empty instead of becoming a lone scheme", joinAddress("grpc://", "  ") === "", joinAddress("grpc://", "  "));
+	check("schemeOf answers for either form", schemeOf("grpc://h:1") === "grpc://" && schemeOf("h:1") === "grpc://" && schemeOf("grpcs://h:1") === "grpcs://", null);
+}
+
 // --- gRPC pane: the shared stores in practice --------------------------------------
 {
 	const storeBackup = globalThis.localStorage;
@@ -3306,8 +3317,10 @@ check("docAction reloads clean drafts, flags dirty ones, ignores others", docAct
 		const rows = () => flatten(tree).filter((n) => n.props?.className === "cea-hist-row");
 		check("its drawer lists the gRPC row and not the HTTP one", rows().length === 1 && rows()[0].props.title === "/old/M → grpc://old:1", rows().map((row) => row.props.title));
 
-		const address = () => find((n) => n.props?.className === "ce-input cerpc-input" && n.props.placeholder === "grpc://host:50051");
-		address().props.onChange({ target: { value: "grpc://{{host}}" } });
+		// The field holds only host:port; the scheme is a selector beside it.
+		const address = () => find((n) => String(n.props?.className ?? "").includes("cerpc-host"));
+		address().props.onChange({ target: { value: "{{host}}" } });
+		check("typing a host alone fills in the scheme", find((n) => n.props?.["aria-label"] === "rpc.scheme")?.props.value === "grpc://", find((n) => n.props?.["aria-label"] === "rpc.scheme")?.props.value);
 		find((n) => n.props?.placeholder === "proto/hello.proto").props.onChange({ target: { value: "proto/hello.proto" } });
 		tree = draw();
 		find((n) => n.type === "button" && n.children?.[0] === "rpc.load").props.onClick();
@@ -3337,7 +3350,7 @@ check("docAction reloads clean drafts, flags dirty ones, ignores others", docAct
 		await new Promise((resolve) => setImmediate(resolve));
 		tree2 = handOff();
 		const find2 = (test) => flatten(tree2).find(test);
-		check("a gRPC row from the merged history fills the editor", find2((n) => n.props?.className === "ce-input cerpc-input" && n.props.placeholder === "grpc://host:50051")?.props.value === "grpc://from-history:1" && find2((n) => n.props?.placeholder === "proto/hello.proto")?.props.value === "p/x.proto", null);
+		check("a gRPC row from the merged history fills the editor", find2((n) => String(n.props?.className ?? "").includes("cerpc-host"))?.props.value === "from-history:1" && find2((n) => n.props?.["aria-label"] === "rpc.scheme")?.props.value === "grpc://" && find2((n) => n.props?.placeholder === "proto/hello.proto")?.props.value === "p/x.proto", null);
 		handOff.unmount();
 	} finally {
 		globalThis.localStorage = storeBackup;

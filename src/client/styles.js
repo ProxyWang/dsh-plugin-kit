@@ -521,6 +521,9 @@ export const CSS = `
 .cerpc-response{border-top:.5px solid var(--dsw-alias-border-l1,#333);background:var(--dsw-alias-bg-base,#141618)}
 .cerpc-pane-head{flex:none;display:flex;align-items:center;gap:6px;padding:5px 10px;font-size:11px;color:var(--dsw-alias-label-tertiary,#889);min-height:26px;flex-wrap:wrap}
 .cerpc-pane-title{font-weight:600;color:var(--dsw-alias-label-secondary,#aab)}
+.cerpc-address{display:flex;gap:4px;align-items:center;min-width:0}
+.cerpc-scheme{width:96px;height:26px;font-size:12px;padding:0 4px;flex:0 0 auto}
+.cerpc-host{min-width:0;flex:1 1 auto}
 .cerpc-proto{position:relative}
 .cerpc-proto-row{display:flex;gap:4px;align-items:center}
 .cerpc-picker{position:absolute;top:100%;left:0;right:0;z-index:30;margin-top:4px;padding:6px;display:flex;flex-direction:column;gap:6px;background:var(--dsw-alias-bg-layer-1,#1d2126);border:.5px solid var(--dsw-alias-border-l1,#39414a);border-radius:6px;box-shadow:0 8px 24px rgba(0,0,0,.35)}

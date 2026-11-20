@@ -348,7 +348,10 @@ async function rpcPreview() {
  draw.flushEffects();
  await tick();
  tree = draw();
- pick(tree, (node) => node.props.className === "ce-input cerpc-input" && node.props.placeholder === "grpc://host:50051").props.onChange({ target: { value: "grpc://api.example.test:443" } });
+ // The field holds host:port only; the scheme is the selector beside it.
+ pick(tree, (node) => String(node.props.className ?? "").includes("cerpc-host")).props.onChange({ target: { value: "api.example.test:443" } });
+ tree = draw();
+ pick(tree, (node) => node.props["aria-label"] === t("rpc.scheme")).props.onChange({ target: { value: "grpcs://" } });
  tree = draw();
  pick(tree, (node) => node.props.className === "ce-input cerpc-input" && node.props.placeholder === "proto/hello.proto").props.onChange({ target: { value: "proto/greeter.proto" } });
  tree = draw();

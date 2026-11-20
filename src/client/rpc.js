@@ -15,6 +15,7 @@
 import { Fragment, h, useCallback, useEffect, useMemo, useRef, useState } from "./react.js";
 import { api } from "./api.js";
 import { useAutoHeight } from "./autosize.js";
+import { GRPC_SCHEMES, joinAddress, splitAddress } from "./grpcaddr.js";
 import { RPC_TAB_ID, RPC_TAB_KIND } from "./constants.js";
 import { apiKey, migrateLegacyApiStores } from "./apistore.js";
 import { activeVariables, entryLabel, filterByProtocol, HISTORY_CAP, interpolateDeep, interpolateVariables, withProtocol } from "./apientries.js";
@@ -277,6 +278,8 @@ export function RpcView({ t, useTabInfo, sessionId, useSessions, incoming }) {
 	}, [address, insecureTls, timeoutMs, t]);
 
 	const [pickerOpen, setPickerOpen] = useState(false);
+	// The field shows `host:port`; the scheme is the selector beside it.
+	const addressParts = splitAddress(address);
 
 	/** A file chosen in the picker is also loaded: one click, methods appear. */
 	const pickProto = useCallback((path) => {
@@ -378,7 +381,20 @@ export function RpcView({ t, useTabInfo, sessionId, useSessions, incoming }) {
 		h("div", { className: "cerpc-toolbar" },
 			h("label", { className: "cerpc-field" },
 				h("span", { className: "cerpc-label" }, t("rpc.address")),
-				h("input", { className: "ce-input cerpc-input", value: address, spellCheck: false, placeholder: "grpc://host:50051", onChange: (event) => setAddress(event.target.value) })),
+				h("div", { className: "cerpc-address" },
+					h("select", {
+						className: "ce-input cerpc-scheme",
+						value: addressParts.scheme,
+						"aria-label": t("rpc.scheme"),
+						onChange: (event) => setAddress(joinAddress(event.target.value, addressParts.host)),
+					}, GRPC_SCHEMES.map((scheme) => h("option", { key: scheme, value: scheme }, scheme))),
+					h("input", {
+						className: "ce-input cerpc-input cerpc-host",
+						value: addressParts.host,
+						spellCheck: false,
+						placeholder: "10.0.0.1:50051",
+						onChange: (event) => setAddress(joinAddress(addressParts.scheme, event.target.value)),
+					}))),
 			h("div", { className: "cerpc-field cerpc-proto" },
 				h("span", { className: "cerpc-label" }, t("rpc.proto")),
 				h("div", { className: "cerpc-proto-row" },

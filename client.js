@@ -434,6 +434,7 @@ var zh = {
   "rpc.reflectionUnavailable": "该服务未开启反射，请改用 .proto 文件",
   "rpc.skippedServices": "部分服务没有可用的描述符，已跳过",
   "rpc.browse": "选择文件",
+  "rpc.scheme": "协议（grpc 明文 / grpcs TLS）",
   "rpc.browseHint": "从工作区里挑一个 .proto 文件",
   "rpc.pickProto": "选择 .proto 文件",
   "rpc.pickPlaceholder": "搜索 .proto 文件…",
@@ -1155,6 +1156,7 @@ var en = {
   "rpc.reflectionUnavailable": "This server does not expose reflection; use a .proto file instead",
   "rpc.skippedServices": "Some services have no descriptors and were skipped",
   "rpc.browse": "Choose file",
+  "rpc.scheme": "Scheme (grpc plaintext / grpcs TLS)",
   "rpc.browseHint": "Pick a .proto file from the workspace",
   "rpc.pickProto": "Choose a .proto file",
   "rpc.pickPlaceholder": "Search .proto files…",
@@ -8850,6 +8852,9 @@ var CSS2 = `
 .cerpc-response{border-top:.5px solid var(--dsw-alias-border-l1,#333);background:var(--dsw-alias-bg-base,#141618)}
 .cerpc-pane-head{flex:none;display:flex;align-items:center;gap:6px;padding:5px 10px;font-size:11px;color:var(--dsw-alias-label-tertiary,#889);min-height:26px;flex-wrap:wrap}
 .cerpc-pane-title{font-weight:600;color:var(--dsw-alias-label-secondary,#aab)}
+.cerpc-address{display:flex;gap:4px;align-items:center;min-width:0}
+.cerpc-scheme{width:96px;height:26px;font-size:12px;padding:0 4px;flex:0 0 auto}
+.cerpc-host{min-width:0;flex:1 1 auto}
 .cerpc-proto{position:relative}
 .cerpc-proto-row{display:flex;gap:4px;align-items:center}
 .cerpc-picker{position:absolute;top:100%;left:0;right:0;z-index:30;margin-top:4px;padding:6px;display:flex;flex-direction:column;gap:6px;background:var(--dsw-alias-bg-layer-1,#1d2126);border:.5px solid var(--dsw-alias-border-l1,#39414a);border-radius:6px;box-shadow:0 8px 24px rgba(0,0,0,.35)}
@@ -13709,6 +13714,25 @@ function ResultGrid({ t, result, onCell, onSort, order, dir }) {
   );
 }
 
+// src/client/grpcaddr.js
+var GRPC_SCHEMES = ["grpc://", "grpcs://"];
+function splitAddress(value) {
+  const text = String(value ?? "").trim();
+  const lower = text.toLowerCase();
+  for (const scheme of GRPC_SCHEMES) {
+    if (lower.startsWith(scheme)) return { scheme, host: text.slice(scheme.length) };
+  }
+  return { scheme: "grpc://", host: text };
+}
+function joinAddress(scheme, host) {
+  const known = GRPC_SCHEMES.includes(scheme) ? scheme : "grpc://";
+  const text = String(host ?? "").trim();
+  if (text === "") return "";
+  const inner = splitAddress(text);
+  if (inner.host !== text) return `${inner.scheme}${inner.host}`;
+  return `${known}${text}`;
+}
+
 // src/client/rpc.js
 function parseJsonText(text) {
   const trimmed = String(text ?? "").trim();
@@ -13933,6 +13957,7 @@ function RpcView({ t, useTabInfo, sessionId, useSessions, incoming }) {
     }
   }, [address, insecureTls, timeoutMs, t]);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const addressParts = splitAddress(address);
   const pickProto = useCallback((path) => {
     setPickerOpen(false);
     setProtoPath(path);
@@ -14029,7 +14054,23 @@ function RpcView({ t, useTabInfo, sessionId, useSessions, incoming }) {
         "label",
         { className: "cerpc-field" },
         h("span", { className: "cerpc-label" }, t("rpc.address")),
-        h("input", { className: "ce-input cerpc-input", value: address, spellCheck: false, placeholder: "grpc://host:50051", onChange: (event) => setAddress(event.target.value) })
+        h(
+          "div",
+          { className: "cerpc-address" },
+          h("select", {
+            className: "ce-input cerpc-scheme",
+            value: addressParts.scheme,
+            "aria-label": t("rpc.scheme"),
+            onChange: (event) => setAddress(joinAddress(event.target.value, addressParts.host))
+          }, GRPC_SCHEMES.map((scheme) => h("option", { key: scheme, value: scheme }, scheme))),
+          h("input", {
+            className: "ce-input cerpc-input cerpc-host",
+            value: addressParts.host,
+            spellCheck: false,
+            placeholder: "10.0.0.1:50051",
+            onChange: (event) => setAddress(joinAddress(addressParts.scheme, event.target.value))
+          })
+        )
       ),
       h(
         "div",
