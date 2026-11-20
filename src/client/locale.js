@@ -366,6 +366,11 @@ export const zh = {
 	"rpc.addressRequired": "请先填写服务地址",
 	"rpc.reflectionUnavailable": "该服务未开启反射，请改用 .proto 文件",
 	"rpc.skippedServices": "部分服务没有可用的描述符，已跳过",
+	"rpc.browse": "选择文件",
+	"rpc.browseHint": "从工作区里挑一个 .proto 文件",
+	"rpc.pickProto": "选择 .proto 文件",
+	"rpc.pickPlaceholder": "搜索 .proto 文件…",
+	"rpc.noProto": "工作区里没有 .proto 文件",
 
 	"rpc.noMethods": "还没有解析出方法。填写 .proto 路径后点「加载」。",
 	"rpc.request": "请求消息",
@@ -1090,6 +1095,11 @@ export const en = {
 	"rpc.addressRequired": "Enter the server address first",
 	"rpc.reflectionUnavailable": "This server does not expose reflection; use a .proto file instead",
 	"rpc.skippedServices": "Some services have no descriptors and were skipped",
+	"rpc.browse": "Choose file",
+	"rpc.browseHint": "Pick a .proto file from the workspace",
+	"rpc.pickProto": "Choose a .proto file",
+	"rpc.pickPlaceholder": "Search .proto files…",
+	"rpc.noProto": "No .proto files in this workspace",
 
 	"rpc.noMethods": "No methods yet. Fill in the .proto path and press Load.",
 	"rpc.request": "Request message",

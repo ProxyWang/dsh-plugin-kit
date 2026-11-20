@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased — the `.proto` field can be browsed
+
+Typing a path only works when you already know it; finding one is what a file tree is for.
+
+- **A chooser next to the field** opens a fuzzy list of the workspace's `.proto` files, keyboard-driven (↑/↓, Enter, Esc) and dismissed by clicking outside. Choosing one loads it immediately — the method list appears without a second click on Load.
+- The host's `search.files` gained an optional `suffix` filter, applied **before** the limit: a picker that only wants `.proto` files must not lose them to 200 unrelated matches.
+- Typing a path still works for a file outside the workspace or a pasted directory.
+- Regressions: the suffix filter keeps only matching files and leaves the unfiltered list alone; the field offers a chooser, the chooser asks for `.proto` only, every match is clickable, and choosing one calls `rpc.proto` with that exact path.
+
 ## Unreleased — editors grow with their content
 
 The RPC request body was a fixed 70px box: a forty-line JSON message was read four lines at a time while most of the pane sat empty, and the metadata/actions were pushed around by nothing in particular.

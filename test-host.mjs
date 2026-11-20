@@ -1139,6 +1139,22 @@ process.stdin.on("data", (chunk) => {
 	clearBinaryCache();
 }
 
+// --- search.files: suffix filter ------------------------------------------------------
+{
+	const root = `${cwd}-files`;
+	rmSync(root, { recursive: true, force: true });
+	mkdirSync(`${root}/proto`, { recursive: true });
+	writeFileSync(`${root}/proto/hello.proto`, 'syntax = "proto3";\n');
+	writeFileSync(`${root}/proto/extra.proto`, 'syntax = "proto3";\n');
+	writeFileSync(`${root}/main.ts`, "export {};\n");
+	const filtered = await call("search.files", { cwd: root, query: "", suffix: ".proto" });
+	const paths = (filtered.value?.matches ?? []).map((entry) => entry.path);
+	check("a suffix filter keeps only matching files", paths.length === 2 && paths.every((path) => path.endsWith(".proto")), paths);
+	const unfiltered = await call("search.files", { cwd: root, query: "" });
+	check("without a suffix every file is offered", (unfiltered.value?.matches ?? []).length === 3, (unfiltered.value?.matches ?? []).length);
+	rmSync(root, { recursive: true, force: true });
+}
+
 // --- driver catalog and optional module resolution -------------------------------------
 {
 	const { resolveModule, availableModules, DRIVER_MODULES } = await import("./lib/host/modresolve.js");

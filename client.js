@@ -433,6 +433,11 @@ var zh = {
   "rpc.addressRequired": "请先填写服务地址",
   "rpc.reflectionUnavailable": "该服务未开启反射，请改用 .proto 文件",
   "rpc.skippedServices": "部分服务没有可用的描述符，已跳过",
+  "rpc.browse": "选择文件",
+  "rpc.browseHint": "从工作区里挑一个 .proto 文件",
+  "rpc.pickProto": "选择 .proto 文件",
+  "rpc.pickPlaceholder": "搜索 .proto 文件…",
+  "rpc.noProto": "工作区里没有 .proto 文件",
   "rpc.noMethods": "还没有解析出方法。填写 .proto 路径后点「加载」。",
   "rpc.request": "请求消息",
   "rpc.response": "响应",
@@ -1149,6 +1154,11 @@ var en = {
   "rpc.addressRequired": "Enter the server address first",
   "rpc.reflectionUnavailable": "This server does not expose reflection; use a .proto file instead",
   "rpc.skippedServices": "Some services have no descriptors and were skipped",
+  "rpc.browse": "Choose file",
+  "rpc.browseHint": "Pick a .proto file from the workspace",
+  "rpc.pickProto": "Choose a .proto file",
+  "rpc.pickPlaceholder": "Search .proto files…",
+  "rpc.noProto": "No .proto files in this workspace",
   "rpc.noMethods": "No methods yet. Fill in the .proto path and press Load.",
   "rpc.request": "Request message",
   "rpc.response": "Response",
@@ -8840,6 +8850,14 @@ var CSS2 = `
 .cerpc-response{border-top:.5px solid var(--dsw-alias-border-l1,#333);background:var(--dsw-alias-bg-base,#141618)}
 .cerpc-pane-head{flex:none;display:flex;align-items:center;gap:6px;padding:5px 10px;font-size:11px;color:var(--dsw-alias-label-tertiary,#889);min-height:26px;flex-wrap:wrap}
 .cerpc-pane-title{font-weight:600;color:var(--dsw-alias-label-secondary,#aab)}
+.cerpc-proto{position:relative}
+.cerpc-proto-row{display:flex;gap:4px;align-items:center}
+.cerpc-picker{position:absolute;top:100%;left:0;right:0;z-index:30;margin-top:4px;padding:6px;display:flex;flex-direction:column;gap:6px;background:var(--dsw-alias-bg-layer-1,#1d2126);border:.5px solid var(--dsw-alias-border-l1,#39414a);border-radius:6px;box-shadow:0 8px 24px rgba(0,0,0,.35)}
+.cerpc-picker-input{height:26px;font-size:12px}
+.cerpc-picker-list{max-height:240px;overflow:auto;display:flex;flex-direction:column;gap:1px}
+.cerpc-picker-row{display:block;width:100%;text-align:left;padding:3px 6px;border:0;border-radius:4px;background:transparent;color:var(--dsw-alias-label-primary,#dde);font-size:11px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}
+.cerpc-picker-row:hover,.cerpc-picker-row-on{background:var(--dsw-alias-interactive-bg-hover,#2a2e35)}
+.cerpc-picker-empty{font-size:11px;color:var(--dsw-alias-label-tertiary,#889);padding:4px 6px}
 .cerpc-inline{display:flex;align-items:center;gap:4px;font-size:11px;cursor:pointer}
 .cerpc-timeout{width:70px;height:22px;font-size:11px;padding:0 4px}
 /* The request pane is content-sized: the body grows with the message, the
@@ -13715,6 +13733,64 @@ function groupMethods(methods) {
   }
   return [...groups.entries()].map(([service, entries]) => ({ service, methods: entries }));
 }
+function ProtoPicker({ t, cwd, onPick, onClose }) {
+  const [query, setQuery] = useState("");
+  const [matches, setMatches] = useState([]);
+  const [busy, setBusy] = useState(true);
+  const [index, setIndex] = useState(0);
+  const panelRef = useDismissLayer({ open: true, onDismiss: onClose, ignoreSelector: '[data-ce-popup-trigger="rpc-proto"]' });
+  useEffect(() => {
+    let alive = true;
+    setBusy(true);
+    const timer = setTimeout(() => {
+      api("search.files", { cwd, query, suffix: ".proto", limit: 100 }).then((res) => {
+        if (!alive) return;
+        setBusy(false);
+        setMatches(res.ok ? res.value.matches ?? [] : []);
+        setIndex(0);
+      });
+    }, 120);
+    return () => {
+      alive = false;
+      clearTimeout(timer);
+    };
+  }, [cwd, query]);
+  const onKeyDown = (event) => {
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setIndex((value) => Math.min(matches.length - 1, value + 1));
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setIndex((value) => Math.max(0, value - 1));
+    } else if (event.key === "Enter") {
+      event.preventDefault();
+      if (matches[index]) onPick(matches[index].path);
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      onClose();
+    }
+  };
+  return h(
+    "div",
+    { className: "cerpc-picker", ref: panelRef, role: "dialog", "aria-label": t("rpc.pickProto"), onKeyDown },
+    h("input", {
+      className: "ce-input cerpc-picker-input",
+      value: query,
+      autoFocus: true,
+      spellCheck: false,
+      placeholder: t("rpc.pickPlaceholder"),
+      onChange: (event) => setQuery(event.target.value)
+    }),
+    matches.length === 0 ? h("div", { className: "cerpc-picker-empty" }, busy ? t("loading") : t("rpc.noProto")) : h("div", { className: "cerpc-picker-list ce-scroll" }, matches.map((entry, position) => h("button", {
+      key: entry.path,
+      type: "button",
+      className: `cerpc-picker-row${position === index ? " cerpc-picker-row-on" : ""}`,
+      title: entry.path,
+      onMouseEnter: () => setIndex(position),
+      onClick: () => onPick(entry.path)
+    }, entry.path)))
+  );
+}
 function RpcView({ t, useTabInfo, sessionId, useSessions, incoming }) {
   const cwd = useSessions ? useSessions((sessions) => sessionId ? sessions.byId[sessionId]?.cwd : void 0) : void 0;
   const [address, setAddress] = useState("");
@@ -13799,8 +13875,8 @@ function RpcView({ t, useTabInfo, sessionId, useSessions, incoming }) {
   const groups = useMemo(() => groupMethods(methods), [methods]);
   const request = useMemo(() => parseJsonText(requestText), [requestText]);
   useAutoHeight(requestRef, requestText, { min: 96 });
-  const loadProto = useCallback(async () => {
-    const path = protoPath.trim();
+  const loadProto = useCallback(async (overridePath) => {
+    const path = String(overridePath ?? protoPath).trim();
     if (path === "") {
       setProtoError(t("rpc.protoRequired"));
       return;
@@ -13856,6 +13932,12 @@ function RpcView({ t, useTabInfo, sessionId, useSessions, incoming }) {
       setRequestText(JSON.stringify(first.sample ?? {}, null, 2));
     }
   }, [address, insecureTls, timeoutMs, t]);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const pickProto = useCallback((path) => {
+    setPickerOpen(false);
+    setProtoPath(path);
+    void loadProto(path);
+  }, [loadProto]);
   const chooseMethod = useCallback((method) => {
     setSelected(method.path);
     if (requestText.trim() === "{}" || requestText.trim() === "") setRequestText(JSON.stringify(method.sample ?? {}, null, 2));
@@ -13950,10 +14032,23 @@ function RpcView({ t, useTabInfo, sessionId, useSessions, incoming }) {
         h("input", { className: "ce-input cerpc-input", value: address, spellCheck: false, placeholder: "grpc://host:50051", onChange: (event) => setAddress(event.target.value) })
       ),
       h(
-        "label",
-        { className: "cerpc-field" },
+        "div",
+        { className: "cerpc-field cerpc-proto" },
         h("span", { className: "cerpc-label" }, t("rpc.proto")),
-        h("input", { className: "ce-input cerpc-input", value: protoPath, spellCheck: false, placeholder: "proto/hello.proto", onChange: (event) => setProtoPath(event.target.value) })
+        h(
+          "div",
+          { className: "cerpc-proto-row" },
+          h("input", { className: "ce-input cerpc-input", value: protoPath, spellCheck: false, placeholder: "proto/hello.proto", onChange: (event) => setProtoPath(event.target.value) }),
+          h("button", {
+            type: "button",
+            className: "ce-sk-btn",
+            "data-ce-popup-trigger": "rpc-proto",
+            "aria-expanded": pickerOpen,
+            title: t("rpc.browseHint"),
+            onClick: () => setPickerOpen((open) => !open)
+          }, t("rpc.browse"))
+        ),
+        pickerOpen ? h(ProtoPicker, { t, cwd, onPick: pickProto, onClose: () => setPickerOpen(false) }) : null
       ),
       h("button", { type: "button", className: "ce-sk-btn", disabled: protoBusy, onClick: () => void loadProto() }, protoBusy ? t("loading") : t("rpc.load")),
       h("button", {

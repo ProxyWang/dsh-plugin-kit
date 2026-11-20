@@ -3016,6 +3016,59 @@ check("docAction reloads clean drafts, flags dirty ones, ignores others", docAct
 	check("truncateCell null → NULL", truncateCell(null) === "NULL", null);
 }
 
+// --- gRPC proto picker: choose a file instead of typing its path ----------------------
+{
+	const fetchBackup = globalThis.fetch;
+	const documentBackup = globalThis.document;
+	const calls = [];
+	globalThis.document = { addEventListener() {}, removeEventListener() {} };
+	globalThis.fetch = async (url, options) => {
+		const body = JSON.parse(options?.body ?? "{}");
+		calls.push({ url: String(url), body });
+		if (String(url).endsWith("/search.files")) {
+			return { json: async () => ({ ok: true, value: { matches: [{ path: "proto/hello.proto" }, { path: "proto/ads.proto" }] } }) };
+		}
+		if (String(url).endsWith("/rpc.proto")) {
+			return { json: async () => ({ ok: true, value: { methods: [{ path: "/ads.Ads/Get", name: "Get", service: "ads.Ads", request: "Req", response: "Res", sample: {} }], files: ["ads.proto"] } }) };
+		}
+		return { json: async () => ({ ok: true, value: {} }) };
+	};
+	try {
+		const { RpcView } = await import("./src/client/rpc.js");
+		// `expand` renders the nested ProtoPicker, which is where the chooser lives.
+		const draw = createHookRenderer(RpcView, { t: (key) => key, sessionId: "s1", useSessions: (select) => select({ byId: { s1: { cwd: "/w" } } }) }, { effects: true, expand: true });
+		const flatten = (node) => {
+			if (!node || typeof node !== "object") return [];
+			if (Array.isArray(node)) return node.flatMap(flatten);
+			return [node, ...(node.children ?? []).flatMap(flatten)];
+		};
+		let tree = draw();
+		draw.flushEffects();
+		const find = (test) => flatten(tree).find(test);
+		const browse = find((n) => n.type === "button" && n.children?.[0] === "rpc.browse");
+		check("the proto field offers a file chooser", Boolean(browse), null);
+		browse.props.onClick();
+		tree = draw();
+		draw.flushEffects();
+		await new Promise((resolve) => setTimeout(resolve, 200));
+		tree = draw();
+		draw.flushEffects();
+		const picker = find((n) => n.props?.role === "dialog" && n.props?.["aria-label"] === "rpc.pickProto");
+		check("the chooser lists .proto files from the workspace", Boolean(picker), null);
+		check("the search asks the host for .proto files only", calls.some((call) => call.url.endsWith("/search.files") && call.body?.suffix === ".proto"), calls.at(-1));
+		const rows = flatten(tree).filter((n) => n.type === "button" && String(n.props?.className ?? "").includes("cerpc-picker-row"));
+		check("every match is clickable", rows.length === 2, rows.length);
+		rows[1].props.onClick();
+		await new Promise((resolve) => setTimeout(resolve, 50));
+		draw.flushEffects();
+		const loaded = calls.filter((call) => call.url.endsWith("/rpc.proto"));
+		check("choosing a file loads it in one click", loaded.length === 1 && loaded[0].body.path === "proto/ads.proto", loaded);
+	} finally {
+		globalThis.fetch = fetchBackup;
+		globalThis.document = documentBackup;
+	}
+}
+
 // --- Growing editors: height follows the content -------------------------------------
 {
 	const { useAutoHeight } = await import("./src/client/autosize.js");

@@ -521,6 +521,14 @@ export const CSS = `
 .cerpc-response{border-top:.5px solid var(--dsw-alias-border-l1,#333);background:var(--dsw-alias-bg-base,#141618)}
 .cerpc-pane-head{flex:none;display:flex;align-items:center;gap:6px;padding:5px 10px;font-size:11px;color:var(--dsw-alias-label-tertiary,#889);min-height:26px;flex-wrap:wrap}
 .cerpc-pane-title{font-weight:600;color:var(--dsw-alias-label-secondary,#aab)}
+.cerpc-proto{position:relative}
+.cerpc-proto-row{display:flex;gap:4px;align-items:center}
+.cerpc-picker{position:absolute;top:100%;left:0;right:0;z-index:30;margin-top:4px;padding:6px;display:flex;flex-direction:column;gap:6px;background:var(--dsw-alias-bg-layer-1,#1d2126);border:.5px solid var(--dsw-alias-border-l1,#39414a);border-radius:6px;box-shadow:0 8px 24px rgba(0,0,0,.35)}
+.cerpc-picker-input{height:26px;font-size:12px}
+.cerpc-picker-list{max-height:240px;overflow:auto;display:flex;flex-direction:column;gap:1px}
+.cerpc-picker-row{display:block;width:100%;text-align:left;padding:3px 6px;border:0;border-radius:4px;background:transparent;color:var(--dsw-alias-label-primary,#dde);font-size:11px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}
+.cerpc-picker-row:hover,.cerpc-picker-row-on{background:var(--dsw-alias-interactive-bg-hover,#2a2e35)}
+.cerpc-picker-empty{font-size:11px;color:var(--dsw-alias-label-tertiary,#889);padding:4px 6px}
 .cerpc-inline{display:flex;align-items:center;gap:4px;font-size:11px;cursor:pointer}
 .cerpc-timeout{width:70px;height:22px;font-size:11px;padding:0 4px}
 /* The request pane is content-sized: the body grows with the message, the

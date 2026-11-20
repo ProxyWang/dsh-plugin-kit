@@ -58,6 +58,65 @@ export function groupMethods(methods) {
 	return [...groups.entries()].map(([service, entries]) => ({ service, methods: entries }));
 }
 
+/**
+ * Workspace `.proto` picker.
+ *
+ * Typing a path is fine when you know it; finding one is what a file tree is
+ * for. The picker searches the session workspace for `.proto` files (the host
+ * filters by suffix before limiting) and loads the choice in one click.
+ *
+ * @param props - `{ t, cwd, onPick, onClose }`
+ */
+export function ProtoPicker({ t, cwd, onPick, onClose }) {
+	const [query, setQuery] = useState("");
+	const [matches, setMatches] = useState([]);
+	const [busy, setBusy] = useState(true);
+	const [index, setIndex] = useState(0);
+	const panelRef = useDismissLayer({ open: true, onDismiss: onClose, ignoreSelector: '[data-ce-popup-trigger="rpc-proto"]' });
+
+	useEffect(() => {
+		let alive = true;
+		setBusy(true);
+		const timer = setTimeout(() => {
+			api("search.files", { cwd, query, suffix: ".proto", limit: 100 }).then((res) => {
+				if (!alive) return;
+				setBusy(false);
+				setMatches(res.ok ? res.value.matches ?? [] : []);
+				setIndex(0);
+			});
+		}, 120);
+		return () => { alive = false; clearTimeout(timer); };
+	}, [cwd, query]);
+
+	const onKeyDown = (event) => {
+		if (event.key === "ArrowDown") { event.preventDefault(); setIndex((value) => Math.min(matches.length - 1, value + 1)); }
+		else if (event.key === "ArrowUp") { event.preventDefault(); setIndex((value) => Math.max(0, value - 1)); }
+		else if (event.key === "Enter") { event.preventDefault(); if (matches[index]) onPick(matches[index].path); }
+		else if (event.key === "Escape") { event.preventDefault(); onClose(); }
+	};
+
+	return h("div", { className: "cerpc-picker", ref: panelRef, role: "dialog", "aria-label": t("rpc.pickProto"), onKeyDown },
+		h("input", {
+			className: "ce-input cerpc-picker-input",
+			value: query,
+			autoFocus: true,
+			spellCheck: false,
+			placeholder: t("rpc.pickPlaceholder"),
+			onChange: (event) => setQuery(event.target.value),
+		}),
+		matches.length === 0
+			? h("div", { className: "cerpc-picker-empty" }, busy ? t("loading") : t("rpc.noProto"))
+			: h("div", { className: "cerpc-picker-list ce-scroll" }, matches.map((entry, position) => h("button", {
+				key: entry.path,
+				type: "button",
+				className: `cerpc-picker-row${position === index ? " cerpc-picker-row-on" : ""}`,
+				title: entry.path,
+				onMouseEnter: () => setIndex(position),
+				onClick: () => onPick(entry.path),
+			}, entry.path))),
+	);
+}
+
 export function RpcView({ t, useTabInfo, sessionId, useSessions, incoming }) {
 	const cwd = useSessions ? useSessions((sessions) => (sessionId ? sessions.byId[sessionId]?.cwd : void 0)) : void 0;
 
@@ -161,8 +220,8 @@ export function RpcView({ t, useTabInfo, sessionId, useSessions, incoming }) {
 	const request = useMemo(() => parseJsonText(requestText), [requestText]);
 	useAutoHeight(requestRef, requestText, { min: 96 });
 
-	const loadProto = useCallback(async () => {
-		const path = protoPath.trim();
+	const loadProto = useCallback(async (overridePath) => {
+		const path = String(overridePath ?? protoPath).trim();
 		if (path === "") { setProtoError(t("rpc.protoRequired")); return; }
 		setProtoBusy(true);
 		setProtoError("");
@@ -216,6 +275,15 @@ export function RpcView({ t, useTabInfo, sessionId, useSessions, incoming }) {
 			setRequestText(JSON.stringify(first.sample ?? {}, null, 2));
 		}
 	}, [address, insecureTls, timeoutMs, t]);
+
+	const [pickerOpen, setPickerOpen] = useState(false);
+
+	/** A file chosen in the picker is also loaded: one click, methods appear. */
+	const pickProto = useCallback((path) => {
+		setPickerOpen(false);
+		setProtoPath(path);
+		void loadProto(path);
+	}, [loadProto]);
 
 	const chooseMethod = useCallback((method) => {		setSelected(method.path);
 		if (requestText.trim() === "{}" || requestText.trim() === "") setRequestText(JSON.stringify(method.sample ?? {}, null, 2));
@@ -311,9 +379,19 @@ export function RpcView({ t, useTabInfo, sessionId, useSessions, incoming }) {
 			h("label", { className: "cerpc-field" },
 				h("span", { className: "cerpc-label" }, t("rpc.address")),
 				h("input", { className: "ce-input cerpc-input", value: address, spellCheck: false, placeholder: "grpc://host:50051", onChange: (event) => setAddress(event.target.value) })),
-			h("label", { className: "cerpc-field" },
+			h("div", { className: "cerpc-field cerpc-proto" },
 				h("span", { className: "cerpc-label" }, t("rpc.proto")),
-				h("input", { className: "ce-input cerpc-input", value: protoPath, spellCheck: false, placeholder: "proto/hello.proto", onChange: (event) => setProtoPath(event.target.value) })),
+				h("div", { className: "cerpc-proto-row" },
+					h("input", { className: "ce-input cerpc-input", value: protoPath, spellCheck: false, placeholder: "proto/hello.proto", onChange: (event) => setProtoPath(event.target.value) }),
+					h("button", {
+						type: "button",
+						className: "ce-sk-btn",
+						"data-ce-popup-trigger": "rpc-proto",
+						"aria-expanded": pickerOpen,
+						title: t("rpc.browseHint"),
+						onClick: () => setPickerOpen((open) => !open),
+					}, t("rpc.browse"))),
+				pickerOpen ? h(ProtoPicker, { t, cwd, onPick: pickProto, onClose: () => setPickerOpen(false) }) : null),
 			h("button", { type: "button", className: "ce-sk-btn", disabled: protoBusy, onClick: () => void loadProto() }, protoBusy ? t("loading") : t("rpc.load")),
 			h("button", {
 				type: "button",
