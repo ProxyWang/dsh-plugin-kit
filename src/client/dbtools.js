@@ -217,3 +217,50 @@ export function parseDataText(text) {
 	const columns = rows[0];
 	return { columns, rows: rows.slice(1), error: "" };
 }
+
+/** Qualify a table for a write, so another database's table is unambiguous. */
+export function qualifiedTable(driver, table, database) {
+	const name = quoteIdent(driver, table);
+	return String(database ?? "").trim() === "" ? name : `${quoteIdent(driver, database)}.${name}`;
+}
+
+/**
+ * One cell update, addressed by the row's primary key.
+ *
+ * @param options - `{driver, table, database, column, value, pkColumn, pkValue}`
+ * @returns the UPDATE statement, or "" when any part is missing
+ */
+export function updateCellSql(options) {
+	const { driver, table, database, column, value, pkColumn, pkValue } = options ?? {};
+	if (!table || !column || !pkColumn || pkValue === undefined) return "";
+	return `UPDATE ${qualifiedTable(driver, table, database)} SET ${quoteIdent(driver, column)} = ${sqlLiteral(driver, value)} WHERE ${quoteIdent(driver, pkColumn)} = ${sqlLiteral(driver, pkValue)};`;
+}
+
+/**
+ * One row deletion, addressed by the primary key.
+ *
+ * @param options - `{driver, table, database, pkColumn, pkValue}`
+ * @returns the DELETE statement, or "" when any part is missing
+ */
+export function deleteRowSql(options) {
+	const { driver, table, database, pkColumn, pkValue } = options ?? {};
+	if (!table || !pkColumn || pkValue === undefined) return "";
+	return `DELETE FROM ${qualifiedTable(driver, table, database)} WHERE ${quoteIdent(driver, pkColumn)} = ${sqlLiteral(driver, pkValue)};`;
+}
+
+/**
+ * An INSERT from the columns the user filled in.
+ *
+ * @param options - `{driver, table, database, values}` where `values` maps a
+ *   column name to its value; `undefined` values are skipped so defaults apply
+ * @returns the INSERT statement, or "" when nothing was provided
+ */
+export function insertRowSql(options) {
+	const { driver, table, database, values } = options ?? {};
+	if (!table) return "";
+	const entries = Object.entries(values ?? {}).filter(([, value]) => value !== undefined);
+	if (entries.length === 0) return "";
+	const columns = entries.map(([column]) => quoteIdent(driver, column)).join(", ");
+	const literals = entries.map(([, value]) => sqlLiteral(driver, value)).join(", ");
+	return `INSERT INTO ${qualifiedTable(driver, table, database)} (${columns}) VALUES (${literals});`;
+}

@@ -19,7 +19,7 @@
 import { Fragment, h, useCallback, useEffect, useMemo, useRef, useState } from "./react.js";
 import { api } from "./api.js";
 import { useAutoHeight } from "./autosize.js";
-import { erGraph, erLayout, parseDataText, planTree, toInsertSql, toJsonRows } from "./dbtools.js";
+import { deleteRowSql, erGraph, erLayout, insertRowSql, parseDataText, planTree, toInsertSql, toJsonRows, updateCellSql } from "./dbtools.js";
 import { DRIVERS, driverLabel, parseConnectionAddress } from "./dbconnect.js";
 import { useDismissLayer } from "./dismiss.js";
 import { DB_TAB_KIND, DB_TAB_ID } from "./constants.js";
@@ -112,6 +112,9 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 	// Clicking a database selects it (and folds its tables): the rail's job is to
 	// move the target, and picking another database used to do nothing at all.
 	const [activeDb, setActiveDb] = useState({ conn: "", database: "" });
+	// A cell being edited, plus which row is waiting for a second click to delete.
+	const [cellEdit, setCellEdit] = useState(null);
+	const [pendingDelete, setPendingDelete] = useState(-1);
 	const [collapsedDbs, setCollapsedDbs] = useState({});
 	const [schemaBusy, setSchemaBusy] = useState(false);
 	const [schemaError, setSchemaError] = useState("");
@@ -425,14 +428,14 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 			setTab("info");
 			setConnectOpen(true);
 			setNotice(t("db.needPassword"));
-			return;
+			return "";
 		}
 		const existing = connections.find((entry) => entry.profileId === profile.id);
 		if (existing) {
 			setActiveConn(existing.id);
 			setOpenConns((current) => ({ ...current, [existing.id]: true }));
 			if (!schemas[existing.id]) void refreshSchema(existing.id);
-			return;
+			return existing.id;
 		}
 		const res = await api("db.connect", { profileId: profile.id, cwd });
 		if (!res.ok) {
@@ -451,6 +454,7 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 		setActiveDb({ conn: res.value.id, database: res.value.database ?? "" });
 		setNotice("");
 		await refreshSchema(res.value.id);
+		return res.value.id;
 	}, [refreshSchema, cwd, useSavedProfile, t, connections, schemas]);
 
 	const forgetProfile = useCallback(async (profile) => {
@@ -719,6 +723,63 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 		});
 	}, [schemas, connections, t]);
 
+	/** The schema entry behind the open table tab, when there is one. */
+	const tableEntry = useMemo(() => {
+		if (activeTab?.kind !== "table") return null;
+		const schemaFor = schemas[activeTab.conn || activeConn];
+		const database = (schemaFor?.databases ?? []).find((entry) => entry.name === activeTab.database);
+		return (database?.tables ?? []).find((entry) => entry.name === activeTab.table) ?? null;
+	}, [activeTab, schemas, activeConn]);
+
+	const pkColumn = tableEntry?.columns?.find((column) => column.primaryKey)?.name ?? "";
+
+	/** Run one write, then reload the page it touched. */
+	const runMutation = useCallback(async (sql, message) => {
+		const conn = activeTab?.conn || activeConn;
+		if (!conn || sql === "") return;
+		const res = await api("db.query", { id: conn, sql });
+		const value = res.ok ? res.value : null;
+		if (!value || value.error) { setNotice(value?.error ?? res.error ?? ""); return; }
+		setNotice(message);
+		setCellEdit(null);
+		setPendingDelete(-1);
+		if (activeTab?.kind === "table") await loadRows(activeTab.id);
+	}, [activeTab, activeConn, loadRows]);
+
+	/** Commit one edited cell, addressed by the row's primary key. */
+	const commitCell = useCallback(async (rowIndex, column, value) => {
+		const result = activeTab?.result;
+		if (!result || pkColumn === "") return;
+		const pkIndex = result.columns.indexOf(pkColumn);
+		const pkValue = result.rows?.[rowIndex]?.[pkIndex];
+		const sql = updateCellSql({
+			driver: connections.find((entry) => entry.id === (activeTab.conn || activeConn))?.driver,
+			table: activeTab.table,
+			database: activeTab.database,
+			column,
+			value,
+			pkColumn,
+			pkValue,
+		});
+		await runMutation(sql, t("db.rowUpdated"));
+	}, [activeTab, pkColumn, connections, activeConn, runMutation, t]);
+
+	/** Delete one row (the second click on its button confirms). */
+	const removeRow = useCallback(async (rowIndex) => {
+		const result = activeTab?.result;
+		if (!result || pkColumn === "") return;
+		if (pendingDelete !== rowIndex) { setPendingDelete(rowIndex); return; }
+		const pkValue = result.rows?.[rowIndex]?.[result.columns.indexOf(pkColumn)];
+		const sql = deleteRowSql({
+			driver: connections.find((entry) => entry.id === (activeTab.conn || activeConn))?.driver,
+			table: activeTab.table,
+			database: activeTab.database,
+			pkColumn,
+			pkValue,
+		});
+		await runMutation(sql, t("db.rowDeleted"));
+	}, [activeTab, pkColumn, pendingDelete, connections, activeConn, runMutation, t]);
+
 	/** The databases of one instance, filtered by the rail's search box. */
 	const databasesOf = useCallback((connId) => {
 		const needle = filter.trim().toLowerCase();
@@ -902,9 +963,24 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 										h("select", {
 											className: "cedb-conn-select",
 											value: activeTab.conn || activeConn,
-											onChange: (event) => patchTab(activeTab.id, { conn: event.target.value }),
 											"aria-label": t("db.connections"),
-										}, connections.map((connection) => h("option", { key: connection.id, value: connection.id }, `${connection.driver} · ${connection.label}`))),
+											onChange: async (event) => {
+												const value = event.target.value;
+												if (!value.startsWith("profile:")) { patchTab(activeTab.id, { conn: value }); return; }
+												const profile = profiles.find((entry) => entry.id === value.slice("profile:".length));
+												if (!profile) return;
+												const connected = await connectProfile(profile);
+												if (connected) patchTab(activeTab.id, { conn: connected });
+											},
+										}, [
+											...(connections.length === 0 ? [h("option", { key: "none", value: "" }, t("db.noConnectionCtx"))] : []),
+											...connections.map((connection) => h("option", { key: connection.id, value: connection.id }, `${connection.driver} · ${connection.label}`)),
+											// Saved but not open: picking one connects it (or asks for its
+											// password) and binds this tab, instead of leaving an empty menu.
+											...profiles
+												.filter((profile) => !connections.some((connection) => connection.profileId === profile.id))
+												.map((profile) => h("option", { key: `p-${profile.id}`, value: `profile:${profile.id}` }, `${t("db.savedPrefix")} · ${profile.label}`)),
+										]),
 										activeTab.loading
 											? h("button", { type: "button", className: "ce-sk-btn cedb-run cedb-stop", onClick: () => void cancelQuery(activeTab) }, `■ ${t("db.stop")}`)
 											: h("button", {
@@ -993,10 +1069,35 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 										title: t("db.importHint"),
 										onClick: () => setModal({ kind: "import", table: activeTab.table, conn: activeTab.conn || activeConn, onDone: () => void loadRows(activeTab.id) }),
 									}, t("db.import")),
+									h("button", {
+										type: "button",
+										className: "ce-sk-btn",
+										title: t("db.addRowHint"),
+										onClick: () => setModal({
+											kind: "addrow",
+											table: activeTab.table,
+											database: activeTab.database,
+											columns: tableEntry?.columns ?? [],
+											conn: activeTab.conn || activeConn,
+											onDone: () => void loadRows(activeTab.id),
+										}),
+									}, `＋ ${t("db.addRow")}`),
+									pkColumn === "" ? h("span", { className: "cedb-nopk", title: t("db.noPkHint") }, t("db.noPk")) : null,
 								),
 								activeTab.error ? h("div", { className: "cedb-error" }, activeTab.error) : null,
 								activeTab.result
-									? h(ResultGrid, { t, result: activeTab.result, onCell: setCellDetail, onSort: (column) => sortBy(activeTab.id, column), order: activeTab.order, dir: activeTab.dir })
+									? h(ResultGrid, {
+										t,
+										result: activeTab.result,
+										onCell: setCellDetail,
+										onSort: (column) => sortBy(activeTab.id, column),
+										order: activeTab.order,
+										dir: activeTab.dir,
+										pkColumn,
+										onEditCell: (rowIndex, column, value) => void commitCell(rowIndex, column, value),
+										onDeleteRow: (rowIndex) => void removeRow(rowIndex),
+										pendingDelete,
+									})
 									: h("div", { className: "cedb-empty-result" },
 										h("span", { className: "cedb-empty-icon", "aria-hidden": "true" }, "▤"),
 										h("div", { className: "cedb-empty-title" }, activeTab.loading ? t("loading") : t("db.reloadTable")),
@@ -1031,7 +1132,26 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 					? h(ErDiagram, { t, schema, onOpenTable: (table) => { setModal(null); openTableTab(table); }, onClose: () => setModal(null) })
 					: modal.kind === "explain"
 						? h(ExplainPanel, { t, state: explainState, onClose: () => setModal(null) })
-						: h(ImportDialog, {
+						: modal.kind === "addrow"
+							? h(AddRowDialog, {
+								t,
+								table: modal.table,
+								columns: modal.columns,
+								driver: connections.find((entry) => entry.id === modal.conn)?.driver,
+								database: modal.database,
+								onClose: () => setModal(null),
+								onInsert: async (values) => {
+									const sql = insertRowSql({ driver: connections.find((entry) => entry.id === modal.conn)?.driver, table: modal.table, database: modal.database, values });
+									if (sql === "") return t("db.importEmpty");
+									const res = await api("db.query", { id: modal.conn, sql });
+									if (!res.ok || res.value?.error) return res.value?.error ?? res.error;
+									setModal(null);
+									setNotice(t("db.rowInserted"));
+									modal.onDone?.();
+									return "";
+								},
+							})
+							: h(ImportDialog, {
 							t,
 							table: modal.table,
 							driver: connections.find((entry) => entry.id === modal.conn)?.driver,
@@ -1359,12 +1479,14 @@ export function gridWindow(input = {}) {
 }
 
 /** The result grid: sticky header, sortable columns, row numbers, cell inspection. */
-export function ResultGrid({ t, result, onCell, onSort, order, dir }) {
+export function ResultGrid({ t, result, onCell, onSort, order, dir, pkColumn = "", onEditCell, onDeleteRow, pendingDelete = -1 }) {
 	const columns = result.columns ?? [];
 	const rows = result.rows ?? [];
 	const wrapRef = useRef(null);
 	const [scrollTop, setScrollTop] = useState(0);
 	const [viewport, setViewport] = useState(360);
+	// Inline edit state: one cell at a time, like every data grid.
+	const [editing, setEditing] = useState(null);
 
 	// The visible height drives the window, and the panel can be resized by the
 	// splitter at any time, so it is measured rather than assumed.
@@ -1404,18 +1526,49 @@ export function ResultGrid({ t, result, onCell, onSort, order, dir }) {
 						onClick: onSort ? () => onSort(column) : undefined,
 						title: column,
 					}, column, order === column ? (dir === "desc" ? " ↓" : " ↑") : "")))),
+				onDeleteRow ? h("th", { className: "cedb-grid-gutter", title: t("db.deleteRow") }, "") : null,
 			h("tbody", null,
 				pad(window_.topPad, "pad-top"),
 				slice.map((row, offset) => {
 					const rowIndex = window_.start + offset;
+					const editable = Boolean(onEditCell) && pkColumn !== "";
 					return h("tr", { key: rowIndex, className: "cedb-grid-row" },
 						h("td", { className: "cedb-grid-gutter" }, rowIndex + 1),
-						row.map((cell, cellIndex) => h("td", {
-							key: cellIndex,
-							className: `cedb-grid-td${cell === null ? " cedb-null" : ""}`,
-							title: formatCell(cell),
-							onClick: () => onCell?.({ title: `${columns[cellIndex]} · ${t("db.row")} ${rowIndex + 1}`, value: cell }),
-						}, truncateCell(cell))));
+						row.map((cell, cellIndex) => {
+							const isEditing = editing?.rowIndex === rowIndex && editing?.cellIndex === cellIndex;
+							if (isEditing) {
+								return h("td", { key: cellIndex, className: "cedb-grid-td cedb-grid-editing" },
+									h("input", {
+										className: "ce-input cedb-cell-input",
+										autoFocus: true,
+										value: editing.value,
+										spellCheck: false,
+										onChange: (event) => setEditing({ ...editing, value: event.target.value }),
+										onKeyDown: (event) => {
+											event.stopPropagation();
+											if (event.key === "Enter") { onEditCell?.(rowIndex, columns[cellIndex], editing.value); setEditing(null); }
+											else if (event.key === "Escape") setEditing(null);
+										},
+										onBlur: () => setEditing(null),
+									}));
+							}
+							return h("td", {
+								key: cellIndex,
+								className: `cedb-grid-td${cell === null ? " cedb-null" : ""}${editable ? " cedb-grid-editable" : ""}`,
+								title: editable ? `${formatCell(cell)} · ${t("db.editHint")}` : formatCell(cell),
+								onClick: () => onCell?.({ title: `${columns[cellIndex]} · ${t("db.row")} ${rowIndex + 1}`, value: cell }),
+								onDoubleClick: editable ? () => setEditing({ rowIndex, cellIndex, value: formatCell(cell) }) : undefined,
+							}, truncateCell(cell));
+						}),
+						onDeleteRow
+							? h("td", { className: "cedb-grid-gutter" },
+								h("button", {
+									type: "button",
+									className: `ce-tool ce-tiny${pendingDelete === rowIndex ? " cedb-del-armed" : ""}`,
+									title: t("db.deleteRow"),
+									onClick: () => onDeleteRow(rowIndex),
+								}, "✕"))
+							: null);
 				}),
 				pad(window_.bottomPad, "pad-bottom")),
 		),
@@ -1558,5 +1711,44 @@ export function ImportDialog({ t, table, driver, onInsert, onClose }) {
 					if (message) setError(message);
 				},
 			}, busy ? t("loading") : t("db.importRun")),
+			h("button", { type: "button", className: "ce-sk-btn", onClick: onClose }, t("close"))));
+}
+
+/** Insert one row: a field per column, empty fields left to the database. */
+export function AddRowDialog({ t, table, columns, onInsert, onClose }) {
+	const [values, setValues] = useState({});
+	const [error, setError] = useState("");
+	const [busy, setBusy] = useState(false);
+	const filled = Object.values(values).filter((value) => value !== undefined && String(value).trim() !== "").length;
+	return h("div", { className: "cedb-dialog cedb-dialog-wide", role: "dialog", "aria-label": t("db.addRow") },
+		h("h3", { className: "cedb-dialog-title" }, `${t("db.addRow")} · ${table}`),
+		h("p", { className: "cedb-dialog-hint" }, t("db.addRowHint")),
+		h("div", { className: "cedb-field-row cedb-addrow" }, (columns ?? []).map((column) => h("label", { key: column.name, className: "cedb-field" },
+			h("span", { className: "cedb-addrow-label" }, column.name, column.primaryKey ? h("span", { className: "cedb-pk" }, "PK") : null),
+			h("input", {
+				className: "ce-input",
+				value: values[column.name] ?? "",
+				placeholder: column.type,
+				spellCheck: false,
+				onChange: (event) => {
+					const next = { ...values };
+					if (event.target.value === "") delete next[column.name];
+					else next[column.name] = event.target.value;
+					setValues(next);
+				},
+			})))),
+		error ? h("div", { className: "cedb-dialog-error", role: "alert" }, error) : null,
+		h("div", { className: "cedb-dialog-actions" },
+			h("button", {
+				type: "button",
+				className: "ce-sk-btn ce-sk-primary",
+				disabled: busy || filled === 0,
+				onClick: async () => {
+					setBusy(true);
+					const message = await onInsert(values);
+					setBusy(false);
+					if (message) setError(message);
+				},
+			}, busy ? t("loading") : t("db.insertRow")),
 			h("button", { type: "button", className: "ce-sk-btn", onClick: onClose }, t("close"))));
 }

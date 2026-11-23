@@ -3256,6 +3256,62 @@ check("docAction reloads clean drafts, flags dirty ones, ignores others", docAct
 	}
 }
 
+// --- row editing, insert and delete ----------------------------------------------------
+{
+	const { updateCellSql, deleteRowSql, insertRowSql, qualifiedTable } = await import("./src/client/dbtools.js");
+	check("an update is addressed by the primary key", updateCellSql({ driver: "mysql", table: "t", database: "d", column: "name", value: "O'Brien", pkColumn: "id", pkValue: 3 }) === "UPDATE `d`.`t` SET `name` = 'O''Brien' WHERE `id` = 3;", null);
+	check("a delete is addressed by the primary key", deleteRowSql({ driver: "postgres", table: "t", pkColumn: "id", pkValue: 3 }) === 'DELETE FROM "t" WHERE "id" = 3;', null);
+	check("an insert skips the columns left empty", insertRowSql({ driver: "sqlite", table: "t", values: { id: 1, name: "a", note: undefined } }) === 'INSERT INTO "t" ("id", "name") VALUES (1, \'a\');', null);
+	check("no primary key means no update statement", updateCellSql({ driver: "mysql", table: "t", column: "a", value: 1, pkColumn: "", pkValue: 1 }) === "", null);
+	check("an empty insert is not a statement", insertRowSql({ driver: "mysql", table: "t", values: { a: undefined } }) === "", null);
+	check("a qualified table names its database", qualifiedTable("mysql", "t", "d") === "`d`.`t`" && qualifiedTable("mysql", "t", "") === "`t`", null);
+
+	const { ResultGrid, AddRowDialog } = await import("./src/client/db.js");
+	const flatten = (node) => {
+		if (!node || typeof node !== "object") return [];
+		if (Array.isArray(node)) return node.flatMap(flatten);
+		return [node, ...(node.children ?? []).flatMap(flatten)];
+	};
+	const edits = [];
+	const deletes = [];
+	const draw = createHookRenderer(() => ResultGrid({
+		t: (key) => key,
+		result: { columns: ["id", "name"], rows: [[1, "ada"], [2, "bob"]] },
+		pkColumn: "id",
+		onEditCell: (row, column, value) => edits.push([row, column, value]),
+		onDeleteRow: (row) => deletes.push(row),
+	}), {}, { effects: true });
+	let tree = draw();
+	const find = (test) => flatten(tree).find(test);
+	const editable = flatten(tree).filter((n) => String(n.props?.className ?? "").includes("cedb-grid-editable"));
+	check("cells advertise inline editing", editable.length === 4, editable.length);
+	editable[1].props.onDoubleClick();
+	tree = draw();
+	const input = find((n) => n.props?.className === "ce-input cedb-cell-input");
+	check("double-click turns the cell into an input", Boolean(input) && input.props.value === "ada", input?.props?.value);
+	input.props.onChange({ target: { value: "ada2" } });
+	tree = draw();
+	find((n) => n.props?.className === "ce-input cedb-cell-input").props.onKeyDown({ key: "Enter", stopPropagation() {} });
+	check("Enter reports the edited cell", edits.length === 1 && edits[0][0] === 0 && edits[0][1] === "name" && edits[0][2] === "ada2", edits);
+	const del = flatten(tree).filter((n) => n.type === "button" && n.children?.[0] === "✕");
+	check("each row has a delete button", del.length === 2, del.length);
+	del[0].props.onClick();
+	check("the delete button reports its row", deletes.join() === "0", deletes);
+
+	const addDraw = createHookRenderer(() => AddRowDialog({
+		t: (key) => key,
+		table: "t",
+		columns: [{ name: "id", type: "int", primaryKey: true }, { name: "name", type: "text" }],
+		onInsert: async () => "",
+		onClose: () => {},
+	}), {}, { effects: true });
+	const addTree = addDraw();
+	const addFind = (test) => flatten(addTree).find(test);
+	check("the insert dialog has a field per column", flatten(addTree).filter((n) => n.props?.className === "ce-input").length === 2, null);
+	const insertButton = () => addFind((n) => n.type === "button" && String(n.children?.[0] ?? "").includes("db.insertRow"));
+	check("inserting is disabled until a value exists", insertButton().props.disabled === true, null);
+}
+
 // --- the database tab's title is never blank -----------------------------------------
 {
 	const { DbTitle } = await import("./src/client/db.js");

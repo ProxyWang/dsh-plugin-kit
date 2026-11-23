@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased — the table page is editable
+
+The grid could only read. It now edits, inserts and deletes, with the primary key as the safety rail.
+
+- **Edit a cell**: double-click it, type, Enter to save, Esc to cancel. The statement is `UPDATE <db>.<table> SET col = … WHERE pk = …` — a table without a primary key refuses the edit instead of rewriting every row, and says so next to the toolbar.
+- **Insert a row**: 「＋ 新增行」 opens one field per column; empty fields are omitted so the database's defaults apply.
+- **Delete a row**: the ✕ in the row gutter arms on the first click and deletes on the second, again addressed by the primary key.
+- **A new query tab can pick a saved connection**: the selector used to list only *open* connections, so with none open it was an empty menu that did nothing. It now lists saved connections beneath the open ones, connecting (or asking for a password) when chosen.
+- Regressions: the three SQL builders (quoting, per-driver identifiers, primary-key addressing, empty inserts), inline edit via double-click + Enter, the delete button's row index, and the insert dialog's per-column fields.
+
 ## Unreleased — the host refuses to open a second connection for one profile
 
 - `db.connect({profileId})` is now **idempotent**: if a live connection already belongs to that profile it is returned as-is (`reused: true`) instead of creating another. The client-side focus/dedupe stays, but correctness no longer depends on the client being current.
