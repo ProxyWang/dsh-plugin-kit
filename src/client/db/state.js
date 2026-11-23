@@ -19,6 +19,7 @@ import { useProfiles } from "./hooks/use-profiles.js";
 import { useTabs } from "./hooks/use-tabs.js";
 import { useConnections } from "./hooks/use-connections.js";
 import { useDrivers } from "./hooks/use-drivers.js";
+import { useConnectWizard } from "./hooks/use-connect-wizard.js";
 
 
 /**
@@ -40,23 +41,6 @@ export function useWorkbench({ t, useTabInfo, sessionId, useSessions }) {
 	const [pendingDelete, setPendingDelete] = useState(-1);
 	const [collapsedDbs, setCollapsedDbs] = useState({});
 	const [expanded, setExpanded] = useState(() => new Set()); // table keys open in the tree
-	const [connectOpen, setConnectOpen] = useState(false);
-	// The address is the only thing a person has to know: the driver and the
-	// fields are typed directly instead.
-	// for the cases where inference is not enough.
-	const [form, setForm] = useState({
-		address: "", label: "", color: "", note: "",
-		driver: "postgres", path: "", host: "localhost", port: "5432", user: "", password: "", database: "", clientPath: "",
-		sslMode: "", sslCa: "", sslCert: "", sslKey: "", urlParams: "",
-		tunnelHost: "", tunnelPort: "22", tunnelUser: "", tunnelKey: "", tunnelLocalPort: "" });
-	const [tab, setTab] = useState("info");
-	// The pick step filters like dbx's: a search box and engine categories.
-	const [pickQuery, setPickQuery] = useState("");
-	const [pickCategory, setPickCategory] = useState("all");
-	// Two steps: pick the engine, then fill the connection. dbx's flow, and it
-	// keeps eight fields off the screen until they are relevant.
-	const [step, setStep] = useState("pick");
-	const [showPassword, setShowPassword] = useState(false);
 	// Loading a workspace's `mysql2`/`pg` runs project code in the connection's
 	// worker, so it is opt-in and remembered.
 	const [cellDetail, setCellDetail] = useState(null); // {title, value}
@@ -70,6 +54,15 @@ export function useWorkbench({ t, useTabInfo, sessionId, useSessions }) {
 	} = driverStore;
 	// The dialogs consume one object: import progress and install progress.
 	const dbxState = { ...(importState ?? {}), ...(installState ?? {}) };
+
+	// Saved connections live in their own hook: list, revision guard, writes.
+	const profileStore = useProfiles({ cwd, onNotice: setNotice });
+	const {
+		profiles, setProfiles, revision: profileRevision,
+		profileErrors, setProfileErrors, reload: reloadProfiles, save: rememberConnection, forget: forgetProfile,
+		editingProfileId, setEditingProfileId,
+	} = profileStore;
+
 	// Schema cache: the rail's tree data and its filter, in its own hook.
 	const schemaCache = useSchemaCache({
 		activeConn,
@@ -99,25 +92,37 @@ export function useWorkbench({ t, useTabInfo, sessionId, useSessions }) {
 		patchTab, openTab, closeTab, openQueryTab, openTable, loadRows, fetchRows, sortBy,
 		runQuery, cancelQuery, copyResult, exportResult,
 	} = tabStore;
+
+	// The new-connection dialog: its own form state, plus two world-effects.
+	const wizard = useConnectWizard({
+		cwd,
+		t,
+		drivers,
+		allowModule,
+		saveDraft: rememberConnection,
+		onNotice: setNotice,
+		onEditProfile: setEditingProfileId,
+		onConnected: async (connection) => {
+			setConnections((current) => [...current.filter((entry) => entry.id !== connection.id), connection]);
+			setActiveConn(connection.id);
+			setActiveDb({ conn: connection.id, database: connection.database ?? "" });
+			await refreshSchema(connection.id);
+		},
+	});
+	const {
+		connectOpen, setConnectOpen, form, setForm, step, setStep, tab, setTab,
+		showPassword, setShowPassword, pickQuery, setPickQuery, pickCategory, setPickCategory,
+		saveProfile, setSaveProfile, testState, setTestState,
+		openConnect, useSavedProfile, setDriver, applyAddress, pickableDrivers,
+		driverReady, canConnect, connectParams, doTest, doConnect,
+	} = wizard;
 	// Modal layer: driver manager, ER diagram, execution plan, import.
 	const [modal, setModal] = useState(null);
 	const [explainState, setExplainState] = useState({ busy: false, result: null, error: "" });
 	const [exportOpen, setExportOpen] = useState(false);
 	// dbx migration: preview first, write on the second click.
-	// Which saved profile the dialog is editing, so saving updates it instead of
-	// creating a near-duplicate. Set when a saved connection is opened or lacks a
-	// password.
-	const [editingProfileId, setEditingProfileId] = useState("");
 
-	// Saved connections live in their own hook: list, revision guard, writes.
-	const profileStore = useProfiles({ cwd, editingProfileId, onNotice: setNotice });
-	const {
-		profiles, setProfiles, revision: profileRevision,
-		profileErrors, setProfileErrors, reload: reloadProfiles, save: rememberConnection, forget: forgetProfile,
-	} = profileStore;
-	const [saveProfile, setSaveProfile] = useState(true);
 	// The dialog's "Test" result: a connection proven without being kept.
-	const [testState, setTestState] = useState({ busy: false, ok: null, text: "" });
 	const [historyOpen, setHistoryOpen] = useState(false);
 	const detailRef = useDismissLayer({ open: Boolean(cellDetail), onDismiss: () => setCellDetail(null) });
 	const connectRef = useDismissLayer({ open: connectOpen, onDismiss: () => setConnectOpen(false) });
@@ -132,88 +137,7 @@ export function useWorkbench({ t, useTabInfo, sessionId, useSessions }) {
 	// --- connections ----------------------------------------------------------------------
 
 
-	/**
-	 * Read a pasted address into driver and fields.
-	 *
-	 * A URL fills host/port/user/password/database; a path fills the SQLite
-	 * file. Unknown input clears the driver so Connect stays disabled, and the
-	 * reason is shown instead of being swallowed.
-	 */
-	/** Open the dialog in a clean state: no stale error from a previous attempt. */
-	const openConnect = useCallback(() => {
-		setEditingProfileId("");
-		setNotice("");
-		setTestState({ busy: false, ok: null, text: "" });
-		setShowPassword(false);
-		setStep("pick");
-		setConnectOpen(true);
-	}, []);
 
-	/** Fill the form from a saved connection (the dialog's quick pick). */
-	const useSavedProfile = useCallback((profile) => {
-		setEditingProfileId(profile.id);
-		const parsed = parseConnectionAddress(profile.address || profile.path || "");
-		setForm({
-			address: profile.address || profile.path || "",
-			label: profile.label ?? "",
-			color: profile.color ?? "",
-			note: profile.note ?? "",
-			...Object.fromEntries(Object.entries(profile.options ?? {}).filter(([, value]) => value !== undefined)),
-			driver: profile.driver,
-			path: profile.path ?? parsed.path,
-			host: profile.host || parsed.host || "localhost",
-			port: profile.port ? String(profile.port) : parsed.port,
-			user: profile.user ?? parsed.user,
-			password: "",
-			database: profile.database ?? parsed.database,
-			clientPath: "" });
-		setNotice(parsed.error ?? "");
-		setTestState({ busy: false, ok: null, text: "" });
-	}, []);
-
-	/** Engines the pick step should show for the current search/category. */
-	const pickableDrivers = useMemo(() => {
-		const needle = pickQuery.trim().toLowerCase();
-		const category = CATEGORIES.find((entry) => entry.id === pickCategory);
-		return DRIVERS.filter((id) => (category?.ids ? category.ids.includes(id) : true))
-			.filter((id) => needle === "" || driverLabel(id).toLowerCase().includes(needle) || id.includes(needle));
-	}, [pickQuery, pickCategory]);
-
-	/** Switch driver, carrying the port over when it was still a default. */
-	const setDriver = useCallback((driver) => {
-		setForm((current) => {
-			const defaultNow = defaultPort(current.driver);
-			const keep = String(current.port ?? "") !== "" && String(current.port) !== defaultNow;
-			return { ...current, driver, port: keep ? current.port : defaultPort(driver) };
-		});
-		setNotice("");
-		setTestState({ busy: false, ok: null, text: "" });
-	}, []);
-
-	const applyAddress = useCallback((value) => {
-		const parsed = parseConnectionAddress(value);
-		setForm((current) => ({
-			...current,
-			address: value,
-			driver: parsed.driver,
-			path: parsed.driver === "sqlite" ? parsed.path : current.path,
-			host: parsed.driver === "sqlite" ? current.host : (parsed.host || current.host),
-			port: parsed.port,
-			user: parsed.user,
-			password: parsed.password,
-			database: parsed.database }));
-		// The paste field is optional: it only reports a problem while it has text.
-		setNotice(String(value).trim() === "" ? "" : parsed.error);
-		// Any edit invalidates a previous test: it proved a different target.
-		setTestState({ busy: false, ok: null, text: "" });
-	}, []);
-
-	const driverReady = drivers.find((entry) => entry.id === form.driver)?.ready ?? true;
-	// A driver whose CLI is not on PATH can still be chosen: the binary may be
-	// keg-only, or the user may be about to install it. The note is a warning,
-	// and the connect attempt reports the real reason.
-	const canConnect = form.driver !== ""
-		&& (form.driver === "sqlite" ? form.path.trim() !== "" : form.host.trim() !== "");
 
 	/**
 	 * Install a driver module into the project (or copy the CLI command when the
@@ -283,58 +207,8 @@ export function useWorkbench({ t, useTabInfo, sessionId, useSessions }) {
 
 
 	/** The request body for both "Test" and "Connect". */
-	const connectParams = useCallback(() => {
-		const params = { driver: form.driver, cwd, allowModule: allowModule === true };
-		if (form.driver === "sqlite") params.path = form.path.trim();
-		else {
-			params.host = form.host.trim();
-			params.port = form.port ? Number(form.port) : undefined;
-			params.user = form.user;
-			params.password = form.password;
-			params.database = form.database.trim();
-			if (String(form.clientPath ?? "").trim() !== "") params.clientPath = form.clientPath.trim();
-			if (String(form.sslMode ?? "") !== "") params.sslMode = form.sslMode;
-			for (const key of ["sslCa", "sslCert", "sslKey", "urlParams"]) {
-				if (String(form[key] ?? "").trim() !== "") params[key] = String(form[key]).trim();
-			}
-			if (String(form.tunnelHost ?? "").trim() !== "") {
-				params.tunnel = {
-					bastion: form.tunnelHost.trim(),
-					port: Number(form.tunnelPort) || 22,
-					user: form.tunnelUser.trim(),
-					keyPath: String(form.tunnelKey ?? "").trim(),
-					localPort: Number(form.tunnelLocalPort) || 0 };
-			}
-		}
-		return params;
-	}, [form, cwd, allowModule]);
 
-	/**
-	 * Prove the target without keeping it. dbx has this as a first-class action;
-	 * the point is to get the driver's own error text before committing.
-	 */
-	const doTest = useCallback(async () => {
-		if (!canConnect) return;
-		setTestState({ busy: true, ok: null, text: "" });
-		const res = await api("db.test", connectParams());
-		if (!res.ok) { setTestState({ busy: false, ok: false, text: res.error }); return; }
-		if (res.value?.error) { setTestState({ busy: false, ok: false, text: res.value.error }); return; }
-		setTestState({ busy: false, ok: true, text: t("db.testOk").replace("{ms}", String(res.value.ms ?? 0)) });
-	}, [canConnect, connectParams, t]);
 
-	const doConnect = useCallback(async () => {
-		if (!canConnect) return;
-		const params = connectParams();
-		const res = await api("db.connect", params);
-		if (!res.ok) { setNotice(res.error); return; }
-		setConnections((current) => [...current.filter((entry) => entry.id !== res.value.id), res.value]);
-		setActiveConn(res.value.id);
-		setConnectOpen(false);
-		setNotice("");
-		if (saveProfile) await rememberConnection(form);
-		await refreshSchema(res.value.id);
-		setActiveDb({ conn: res.value.id, database: res.value.database ?? "" });
-	}, [connectParams, refreshSchema, saveProfile, rememberConnection]);
 
 	const doDisconnect = useCallback(async (id) => {
 		await disconnect(id);

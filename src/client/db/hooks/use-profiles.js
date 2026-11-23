@@ -22,8 +22,10 @@ function draftPort(draft) {
  *   `onNotice(text)` surfaces a save failure where the dialog can show it.
  * @returns the list, the revision, per-row errors and the read/write actions
  */
-export function useProfiles({ cwd, editingProfileId = "", onNotice }) {
+export function useProfiles({ cwd, onNotice }) {
 	const [profiles, setProfiles] = useState([]);
+	// Which profile a save updates; empty means "add a new one".
+	const [editingProfileId, setEditingProfileId] = useState("");
 	// The revision the list was read at: a save carries it so the Host can refuse
 	// to overwrite a newer list written by another window.
 	const revision = useRef(0);
@@ -97,5 +99,5 @@ export function useProfiles({ cwd, editingProfileId = "", onNotice }) {
 		setProfiles((current) => current.filter((entry) => entry.id !== profile.id));
 	}, []);
 
-	return { profiles, setProfiles, revision, profileErrors, setProfileErrors, reload, save, forget };
+	return { profiles, setProfiles, revision, profileErrors, setProfileErrors, reload, save, forget, editingProfileId, setEditingProfileId };
 }

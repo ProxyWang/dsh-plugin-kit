@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased — the connection dialog becomes a hook, and the workbench a composition
+
+- `db/hooks/use-connect-wizard.js` owns the two-step dialog: form state, the pick-step filter, pasted-address
+  parsing, the Test action and Connect. Its two world-effects are callbacks (`saveDraft`, `onConnected`), and the
+  profile it edits is reported through `onEditProfile` — so the wizard never imports the profile store or the
+  connection list.
+- `editingProfileId` moved into `useProfiles` (it is a profile-write concern, and it was the reason the two hooks
+  would have had a cycle). The wizard only announces which profile it filled.
+- **Unit tests** (probe component, `fetch` stubbed): picker start, URL fill, unreadable paste, SQLite path,
+  engine switch port default, failed and successful Test text, failed connect keeping the dialog open, success
+  handing the connection over and saving the draft, and a saved profile filling the form plus marking the edit.
+- `useWorkbench` is now 365 lines: a list of hook compositions and the cross-domain glue (DDL refresh, disconnect
+  cleanup, mutations). The panel's behaviour is pinned by 1090 client checks.
+
 ## Unreleased — connection recovery and the driver catalog become hooks
 
 - `db/hooks/use-connections.js` owns the live-connection list and **recovers it on mount** — that recovery had been

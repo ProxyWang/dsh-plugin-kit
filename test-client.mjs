@@ -3256,6 +3256,95 @@ check("docAction reloads clean drafts, flags dirty ones, ignores others", docAct
 	}
 }
 
+// --- useConnectWizard: the dialog's form and submit, on its own --------------------------
+{
+	const fetchBackup = globalThis.fetch;
+	const calls = [];
+	let failConnect = false;
+	globalThis.fetch = async (url, options) => {
+		const body = JSON.parse(options?.body ?? "{}");
+		calls.push({ url: String(url).split("/").pop(), body });
+		if (String(url).endsWith("/db.test")) {
+			if (body.host === "bad.example") return { json: async () => ({ ok: true, value: { error: "no route to host" } }) };
+			return { json: async () => ({ ok: true, value: { driver: body.driver, ms: 12 } }) };
+		}
+		if (String(url).endsWith("/db.connect")) {
+			if (failConnect) return { json: async () => ({ ok: false, error: "access denied" }) };
+			return { json: async () => ({ ok: true, value: { id: "c9", driver: body.driver, label: "db.example:3306/app", database: body.database } }) };
+		}
+		return { json: async () => ({ ok: true, value: {} }) };
+	};
+	try {
+		const { useConnectWizard } = await import("./src/client/db/hooks/use-connect-wizard.js");
+		const probe = {};
+		const notices = [];
+		const edits = [];
+		const drafts = [];
+		const connected = [];
+		const draw = createHookRenderer(() => {
+			Object.assign(probe, useConnectWizard({
+				cwd: "/work",
+				t: (key) => (key === "db.testOk" ? "ok in {ms}ms" : key),
+				drivers: [{ id: "mysql", ready: true }, { id: "postgres", ready: false }],
+				allowModule: false,
+				saveDraft: async (draft) => drafts.push(draft),
+				onConnected: async (connection) => connected.push(connection),
+				onNotice: (text) => notices.push(text),
+				onEditProfile: (id) => edits.push(id),
+			}));
+			return null;
+		}, {}, { effects: true });
+		draw();
+
+		probe.openConnect();
+		draw();
+		check("opening the dialog starts at the engine picker", probe.connectOpen === true && probe.step === "pick" && edits.at(-1) === "", { open: probe.connectOpen, step: probe.step });
+
+		probe.applyAddress("mysql://u:p@db.example:3307/app");
+		draw();
+		check("a pasted URL fills the fields", probe.form.driver === "mysql" && probe.form.host === "db.example" && probe.form.port === "3307" && probe.form.user === "u" && probe.form.password === "p" && probe.form.database === "app", probe.form);
+		probe.applyAddress("notes.txt");
+		draw();
+		check("an unreadable address reports why and keeps the driver blank", notices.at(-1) !== "" && probe.form.driver === "", { notice: notices.at(-1), driver: probe.form.driver });
+
+		probe.applyAddress("./app.sqlite");
+		draw();
+		check("a path is understood as SQLite", probe.form.driver === "sqlite" && probe.form.path === "./app.sqlite" && probe.canConnect === true, { driver: probe.form.driver, path: probe.form.path });
+
+		probe.setDriver("postgres");
+		draw();
+		check("switching the engine moves the port to that engine's default", probe.form.port === "5432" && probe.driverReady === false, probe.form.port);
+		probe.setForm({ ...probe.form, driver: "mysql", host: "bad.example", port: "3306", database: "app" });
+		draw();
+		await probe.doTest();
+		draw();
+		check("testing a target reports the driver's own error", probe.testState.ok === false && probe.testState.text === "no route to host", probe.testState);
+		probe.setForm({ ...probe.form, host: "db.example" });
+		draw();
+		await probe.doTest();
+		draw();
+		check("a successful test names the round-trip time", probe.testState.ok === true && probe.testState.text.includes("12"), probe.testState);
+
+		failConnect = true;
+		await probe.doConnect();
+		draw();
+		check("a failed connect reports the Host error and keeps the dialog open", notices.at(-1) === "access denied" && probe.connectOpen === true, notices.at(-1));
+
+		failConnect = false;
+		await probe.doConnect();
+		draw();
+		check("connecting closes the dialog and hands the connection over", probe.connectOpen === false && connected.at(-1)?.id === "c9", connected.at(-1));
+		check("a successful connect remembers the draft when asked", drafts.length === 1 && drafts[0].host === "db.example", drafts.length);
+
+		probe.useSavedProfile({ id: "p5", label: "saved", driver: "postgres", host: "db.example", port: 5432, database: "app", address: "postgres://db.example:5432/app", options: { sslMode: "required" } });
+		draw();
+		check("a saved profile fills the form and marks it as the one being edited", probe.form.driver === "postgres" && probe.form.sslMode === "required" && edits.at(-1) === "p5", { driver: probe.form.driver, sslMode: probe.form.sslMode });
+		draw.unmount();
+	} finally {
+		globalThis.fetch = fetchBackup;
+	}
+}
+
 // --- useDrivers: the driver catalog and its actions, on their own ------------------------
 {
 	const fetchBackup = globalThis.fetch;
@@ -3490,18 +3579,13 @@ check("docAction reloads clean drafts, flags dirty ones, ignores others", docAct
 		check("a password is sent only when one was typed", saveCall.body.password === "s3cret" && "options" in saveCall.body, null);
 		check("the saved profile is prepended to the list", probe.profiles[0].id === "p2" && probe.profiles.length === 2, probe.profiles.map((entry) => entry.id));
 
-		// The stub's useCallback ignores deps, so a changed prop needs a fresh
-		// renderer — the same way React would remount the memoized closure.
-		const editProbe = {};
-		const editDraw = createHookRenderer(() => {
-			Object.assign(editProbe, useProfiles({ cwd: "/work", editingProfileId: "p2", onNotice: (text) => notices.push(text) }));
-			return null;
-		}, {}, { effects: true });
-		editDraw();
-		await editProbe.save({ driver: "mysql", host: "db.example", port: 3307, database: "app" });
+		// Editing mode lives in the hook now: set it, re-render, then save.
+		probe.setEditingProfileId("p2");
+		draw();
+		check("the hook remembers which profile it is editing", probe.editingProfileId === "p2", probe.editingProfileId);
+		await probe.save({ driver: "mysql", host: "db.example", port: 3307, database: "app" });
 		const updateCall = calls.filter((call) => call.url.endsWith("/db.profile.save")).at(-1);
 		check("editing a profile sends its id instead of adding a twin", updateCall.body.id === "p2", updateCall.body.id);
-		editDraw.unmount();
 
 		saveFails = true;
 		const before = probe.profiles.length;

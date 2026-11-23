@@ -13789,8 +13789,9 @@ function draftPort(draft) {
   if (draft.driver === "postgres") return 5432;
   return 0;
 }
-function useProfiles({ cwd, editingProfileId = "", onNotice }) {
+function useProfiles({ cwd, onNotice }) {
   const [profiles, setProfiles] = useState([]);
+  const [editingProfileId, setEditingProfileId] = useState("");
   const revision = useRef(0);
   const [profileErrors, setProfileErrors] = useState({});
   const reload = useCallback(async () => {
@@ -13850,7 +13851,7 @@ function useProfiles({ cwd, editingProfileId = "", onNotice }) {
     await api("db.profile.delete", { id: profile.id });
     setProfiles((current) => current.filter((entry) => entry.id !== profile.id));
   }, []);
-  return { profiles, setProfiles, revision, profileErrors, setProfileErrors, reload, save, forget };
+  return { profiles, setProfiles, revision, profileErrors, setProfileErrors, reload, save, forget, editingProfileId, setEditingProfileId };
 }
 
 // src/client/db/hooks/use-tabs.js
@@ -14078,7 +14079,7 @@ function useConnections() {
 // src/client/db/hooks/use-drivers.js
 var ALLOW_MODULE_KEY = "dsh.plugin-kit.db.allowModule";
 function useDrivers({ cwd, t, onNotice }) {
-  const [drivers, setDrivers2] = useState([]);
+  const [drivers, setDrivers] = useState([]);
   const [allowModule, setAllowModuleState] = useState(() => {
     try {
       return localStorage.getItem(ALLOW_MODULE_KEY) === "on";
@@ -14090,7 +14091,7 @@ function useDrivers({ cwd, t, onNotice }) {
   const probe = useCallback(async (refresh = false) => {
     const body = { allowWorkspace: allowModule === true, ...refresh ? { refresh: true } : {} };
     const res = await api("db.drivers", body);
-    if (res.ok) setDrivers2(res.value ?? []);
+    if (res.ok) setDrivers(res.value ?? []);
   }, [allowModule]);
   useEffect(() => {
     void probe();
@@ -14121,20 +14122,12 @@ function useDrivers({ cwd, t, onNotice }) {
       onNotice(t("db.copyFailed"));
     }
   }, [t, onNotice]);
-  return { drivers, setDrivers: setDrivers2, probe, allowModule, setAllowModule, installState, install, copyCommand };
+  return { drivers, setDrivers, probe, allowModule, setAllowModule, installState, install, copyCommand };
 }
 
-// src/client/db/state.js
-function useWorkbench({ t, useTabInfo, sessionId, useSessions }) {
-  const cwd = useSessions ? useSessions((sessions) => sessionId ? sessions.byId[sessionId]?.cwd : void 0) : void 0;
-  const connectionStore = useConnections();
-  const { connections, setConnections, activeConn, setActiveConn, activeDb, setActiveDb, disconnect } = connectionStore;
-  const [cellEdit, setCellEdit] = useState(null);
-  const [pendingDelete, setPendingDelete] = useState(-1);
-  const [collapsedDbs, setCollapsedDbs] = useState({});
-  const [expanded, setExpanded] = useState(() => /* @__PURE__ */ new Set());
-  const [connectOpen, setConnectOpen] = useState(false);
-  const [form, setForm] = useState({
+// src/client/db/hooks/use-connect-wizard.js
+function initialForm() {
+  return {
     address: "",
     label: "",
     color: "",
@@ -14157,12 +14150,172 @@ function useWorkbench({ t, useTabInfo, sessionId, useSessions }) {
     tunnelUser: "",
     tunnelKey: "",
     tunnelLocalPort: ""
-  });
+  };
+}
+function useConnectWizard({ cwd, t, drivers, allowModule, saveDraft, onConnected, onNotice, onEditProfile }) {
+  const [connectOpen, setConnectOpen] = useState(false);
+  const [form, setForm] = useState(initialForm);
+  const [step, setStep] = useState("pick");
   const [tab, setTab] = useState("info");
+  const [showPassword, setShowPassword] = useState(false);
   const [pickQuery, setPickQuery] = useState("");
   const [pickCategory, setPickCategory] = useState("all");
-  const [step, setStep] = useState("pick");
-  const [showPassword, setShowPassword] = useState(false);
+  const [saveProfile, setSaveProfile] = useState(true);
+  const [testState, setTestState] = useState({ busy: false, ok: null, text: "" });
+  const openConnect = useCallback(() => {
+    onEditProfile("");
+    onNotice("");
+    setTestState({ busy: false, ok: null, text: "" });
+    setShowPassword(false);
+    setStep("pick");
+    setConnectOpen(true);
+  }, [onNotice, onEditProfile]);
+  const useSavedProfile = useCallback((profile) => {
+    onEditProfile(profile.id);
+    const parsed = parseConnectionAddress(profile.address || profile.path || "");
+    setForm({
+      address: profile.address || profile.path || "",
+      label: profile.label ?? "",
+      color: profile.color ?? "",
+      note: profile.note ?? "",
+      ...Object.fromEntries(Object.entries(profile.options ?? {}).filter(([, value]) => value !== void 0)),
+      driver: profile.driver,
+      path: profile.path ?? parsed.path,
+      host: profile.host || parsed.host || "localhost",
+      port: profile.port ? String(profile.port) : parsed.port,
+      user: profile.user ?? parsed.user,
+      password: "",
+      database: profile.database ?? parsed.database,
+      clientPath: ""
+    });
+    onNotice(parsed.error ?? "");
+    setTestState({ busy: false, ok: null, text: "" });
+  }, [onNotice, onEditProfile]);
+  const pickableDrivers = useMemo(() => {
+    const needle = pickQuery.trim().toLowerCase();
+    const category = CATEGORIES.find((entry) => entry.id === pickCategory);
+    return DRIVERS.filter((id) => category?.ids ? category.ids.includes(id) : true).filter((id) => needle === "" || driverLabel(id).toLowerCase().includes(needle) || id.includes(needle));
+  }, [pickQuery, pickCategory]);
+  const setDriver = useCallback((driver) => {
+    setForm((current) => {
+      const defaultNow = defaultPort(current.driver);
+      const keep = String(current.port ?? "") !== "" && String(current.port) !== defaultNow;
+      return { ...current, driver, port: keep ? current.port : defaultPort(driver) };
+    });
+    onNotice("");
+    setTestState({ busy: false, ok: null, text: "" });
+  }, [onNotice]);
+  const applyAddress = useCallback((value) => {
+    const parsed = parseConnectionAddress(value);
+    setForm((current) => ({
+      ...current,
+      address: value,
+      driver: parsed.driver,
+      path: parsed.driver === "sqlite" ? parsed.path : current.path,
+      host: parsed.driver === "sqlite" ? current.host : parsed.host || current.host,
+      port: parsed.port,
+      user: parsed.user,
+      password: parsed.password,
+      database: parsed.database
+    }));
+    onNotice(String(value).trim() === "" ? "" : parsed.error);
+    setTestState({ busy: false, ok: null, text: "" });
+  }, [onNotice]);
+  const driverReady = drivers.find((entry) => entry.id === form.driver)?.ready ?? true;
+  const canConnect = form.driver !== "" && (form.driver === "sqlite" ? form.path.trim() !== "" : form.host.trim() !== "");
+  const connectParams = useCallback(() => {
+    const params = { driver: form.driver, cwd, allowModule: allowModule === true };
+    if (form.driver === "sqlite") params.path = form.path.trim();
+    else {
+      params.host = form.host.trim();
+      params.port = form.port ? Number(form.port) : void 0;
+      params.user = form.user;
+      params.password = form.password;
+      params.database = form.database.trim();
+      if (String(form.clientPath ?? "").trim() !== "") params.clientPath = form.clientPath.trim();
+      if (String(form.sslMode ?? "") !== "") params.sslMode = form.sslMode;
+      for (const key of ["sslCa", "sslCert", "sslKey", "urlParams"]) {
+        if (String(form[key] ?? "").trim() !== "") params[key] = String(form[key]).trim();
+      }
+      if (String(form.tunnelHost ?? "").trim() !== "") {
+        params.tunnel = {
+          bastion: form.tunnelHost.trim(),
+          port: Number(form.tunnelPort) || 22,
+          user: form.tunnelUser.trim(),
+          keyPath: String(form.tunnelKey ?? "").trim(),
+          localPort: Number(form.tunnelLocalPort) || 0
+        };
+      }
+    }
+    return params;
+  }, [form, cwd, allowModule]);
+  const doTest = useCallback(async () => {
+    if (!canConnect) return;
+    setTestState({ busy: true, ok: null, text: "" });
+    const res = await api("db.test", connectParams());
+    if (!res.ok) {
+      setTestState({ busy: false, ok: false, text: res.error });
+      return;
+    }
+    if (res.value?.error) {
+      setTestState({ busy: false, ok: false, text: res.value.error });
+      return;
+    }
+    setTestState({ busy: false, ok: true, text: t("db.testOk").replace("{ms}", String(res.value.ms ?? 0)) });
+  }, [canConnect, connectParams, t]);
+  const doConnect = useCallback(async () => {
+    if (!canConnect) return;
+    const res = await api("db.connect", connectParams());
+    if (!res.ok) {
+      onNotice(res.error);
+      return;
+    }
+    setConnectOpen(false);
+    onNotice("");
+    if (saveProfile) await saveDraft(form);
+    await onConnected(res.value);
+  }, [canConnect, connectParams, saveProfile, saveDraft, onConnected, onNotice, form]);
+  return {
+    connectOpen,
+    setConnectOpen,
+    form,
+    setForm,
+    step,
+    setStep,
+    tab,
+    setTab,
+    showPassword,
+    setShowPassword,
+    pickQuery,
+    setPickQuery,
+    pickCategory,
+    setPickCategory,
+    saveProfile,
+    setSaveProfile,
+    testState,
+    setTestState,
+    openConnect,
+    useSavedProfile,
+    setDriver,
+    applyAddress,
+    pickableDrivers,
+    driverReady,
+    canConnect,
+    connectParams,
+    doTest,
+    doConnect
+  };
+}
+
+// src/client/db/state.js
+function useWorkbench({ t, useTabInfo, sessionId, useSessions }) {
+  const cwd = useSessions ? useSessions((sessions) => sessionId ? sessions.byId[sessionId]?.cwd : void 0) : void 0;
+  const connectionStore = useConnections();
+  const { connections, setConnections, activeConn, setActiveConn, activeDb, setActiveDb, disconnect } = connectionStore;
+  const [cellEdit, setCellEdit] = useState(null);
+  const [pendingDelete, setPendingDelete] = useState(-1);
+  const [collapsedDbs, setCollapsedDbs] = useState({});
+  const [expanded, setExpanded] = useState(() => /* @__PURE__ */ new Set());
   const [cellDetail, setCellDetail] = useState(null);
   const [notice, setNotice] = useState("");
   const [importState, setImportState] = useState(null);
@@ -14177,6 +14330,19 @@ function useWorkbench({ t, useTabInfo, sessionId, useSessions }) {
     copyCommand
   } = driverStore;
   const dbxState = { ...importState ?? {}, ...installState ?? {} };
+  const profileStore = useProfiles({ cwd, onNotice: setNotice });
+  const {
+    profiles,
+    setProfiles,
+    revision: profileRevision,
+    profileErrors,
+    setProfileErrors,
+    reload: reloadProfiles,
+    save: rememberConnection,
+    forget: forgetProfile,
+    editingProfileId,
+    setEditingProfileId
+  } = profileStore;
   const schemaCache = useSchemaCache({
     activeConn,
     connections,
@@ -14234,87 +14400,57 @@ function useWorkbench({ t, useTabInfo, sessionId, useSessions }) {
     copyResult,
     exportResult
   } = tabStore;
+  const wizard = useConnectWizard({
+    cwd,
+    t,
+    drivers,
+    allowModule,
+    saveDraft: rememberConnection,
+    onNotice: setNotice,
+    onEditProfile: setEditingProfileId,
+    onConnected: async (connection) => {
+      setConnections((current) => [...current.filter((entry) => entry.id !== connection.id), connection]);
+      setActiveConn(connection.id);
+      setActiveDb({ conn: connection.id, database: connection.database ?? "" });
+      await refreshSchema(connection.id);
+    }
+  });
+  const {
+    connectOpen,
+    setConnectOpen,
+    form,
+    setForm,
+    step,
+    setStep,
+    tab,
+    setTab,
+    showPassword,
+    setShowPassword,
+    pickQuery,
+    setPickQuery,
+    pickCategory,
+    setPickCategory,
+    saveProfile,
+    setSaveProfile,
+    testState,
+    setTestState,
+    openConnect,
+    useSavedProfile,
+    setDriver,
+    applyAddress,
+    pickableDrivers,
+    driverReady,
+    canConnect,
+    connectParams,
+    doTest,
+    doConnect
+  } = wizard;
   const [modal, setModal] = useState(null);
   const [explainState, setExplainState] = useState({ busy: false, result: null, error: "" });
   const [exportOpen, setExportOpen] = useState(false);
-  const [editingProfileId, setEditingProfileId] = useState("");
-  const profileStore = useProfiles({ cwd, editingProfileId, onNotice: setNotice });
-  const {
-    profiles,
-    setProfiles,
-    revision: profileRevision,
-    profileErrors,
-    setProfileErrors,
-    reload: reloadProfiles,
-    save: rememberConnection,
-    forget: forgetProfile
-  } = profileStore;
-  const [saveProfile, setSaveProfile] = useState(true);
-  const [testState, setTestState] = useState({ busy: false, ok: null, text: "" });
   const [historyOpen, setHistoryOpen] = useState(false);
   const detailRef = useDismissLayer({ open: Boolean(cellDetail), onDismiss: () => setCellDetail(null) });
   const connectRef = useDismissLayer({ open: connectOpen, onDismiss: () => setConnectOpen(false) });
-  const openConnect = useCallback(() => {
-    setEditingProfileId("");
-    setNotice("");
-    setTestState({ busy: false, ok: null, text: "" });
-    setShowPassword(false);
-    setStep("pick");
-    setConnectOpen(true);
-  }, []);
-  const useSavedProfile = useCallback((profile) => {
-    setEditingProfileId(profile.id);
-    const parsed = parseConnectionAddress(profile.address || profile.path || "");
-    setForm({
-      address: profile.address || profile.path || "",
-      label: profile.label ?? "",
-      color: profile.color ?? "",
-      note: profile.note ?? "",
-      ...Object.fromEntries(Object.entries(profile.options ?? {}).filter(([, value]) => value !== void 0)),
-      driver: profile.driver,
-      path: profile.path ?? parsed.path,
-      host: profile.host || parsed.host || "localhost",
-      port: profile.port ? String(profile.port) : parsed.port,
-      user: profile.user ?? parsed.user,
-      password: "",
-      database: profile.database ?? parsed.database,
-      clientPath: ""
-    });
-    setNotice(parsed.error ?? "");
-    setTestState({ busy: false, ok: null, text: "" });
-  }, []);
-  const pickableDrivers = useMemo(() => {
-    const needle = pickQuery.trim().toLowerCase();
-    const category = CATEGORIES.find((entry) => entry.id === pickCategory);
-    return DRIVERS.filter((id) => category?.ids ? category.ids.includes(id) : true).filter((id) => needle === "" || driverLabel(id).toLowerCase().includes(needle) || id.includes(needle));
-  }, [pickQuery, pickCategory]);
-  const setDriver = useCallback((driver) => {
-    setForm((current) => {
-      const defaultNow = defaultPort(current.driver);
-      const keep = String(current.port ?? "") !== "" && String(current.port) !== defaultNow;
-      return { ...current, driver, port: keep ? current.port : defaultPort(driver) };
-    });
-    setNotice("");
-    setTestState({ busy: false, ok: null, text: "" });
-  }, []);
-  const applyAddress = useCallback((value) => {
-    const parsed = parseConnectionAddress(value);
-    setForm((current) => ({
-      ...current,
-      address: value,
-      driver: parsed.driver,
-      path: parsed.driver === "sqlite" ? parsed.path : current.path,
-      host: parsed.driver === "sqlite" ? current.host : parsed.host || current.host,
-      port: parsed.port,
-      user: parsed.user,
-      password: parsed.password,
-      database: parsed.database
-    }));
-    setNotice(String(value).trim() === "" ? "" : parsed.error);
-    setTestState({ busy: false, ok: null, text: "" });
-  }, []);
-  const driverReady = drivers.find((entry) => entry.id === form.driver)?.ready ?? true;
-  const canConnect = form.driver !== "" && (form.driver === "sqlite" ? form.path.trim() !== "" : form.host.trim() !== "");
   const runDbxImport = useCallback(async (apply) => {
     setImportState((current) => ({ ...current ?? {}, busy: true }));
     const res = await api("db.import.dbx", { apply });
@@ -14367,62 +14503,6 @@ function useWorkbench({ t, useTabInfo, sessionId, useSessions }) {
     await refreshSchema(res.value.id);
     return res.value.id;
   }, [refreshSchema, cwd, useSavedProfile, t, connections, schemas2]);
-  const connectParams = useCallback(() => {
-    const params = { driver: form.driver, cwd, allowModule: allowModule === true };
-    if (form.driver === "sqlite") params.path = form.path.trim();
-    else {
-      params.host = form.host.trim();
-      params.port = form.port ? Number(form.port) : void 0;
-      params.user = form.user;
-      params.password = form.password;
-      params.database = form.database.trim();
-      if (String(form.clientPath ?? "").trim() !== "") params.clientPath = form.clientPath.trim();
-      if (String(form.sslMode ?? "") !== "") params.sslMode = form.sslMode;
-      for (const key of ["sslCa", "sslCert", "sslKey", "urlParams"]) {
-        if (String(form[key] ?? "").trim() !== "") params[key] = String(form[key]).trim();
-      }
-      if (String(form.tunnelHost ?? "").trim() !== "") {
-        params.tunnel = {
-          bastion: form.tunnelHost.trim(),
-          port: Number(form.tunnelPort) || 22,
-          user: form.tunnelUser.trim(),
-          keyPath: String(form.tunnelKey ?? "").trim(),
-          localPort: Number(form.tunnelLocalPort) || 0
-        };
-      }
-    }
-    return params;
-  }, [form, cwd, allowModule]);
-  const doTest = useCallback(async () => {
-    if (!canConnect) return;
-    setTestState({ busy: true, ok: null, text: "" });
-    const res = await api("db.test", connectParams());
-    if (!res.ok) {
-      setTestState({ busy: false, ok: false, text: res.error });
-      return;
-    }
-    if (res.value?.error) {
-      setTestState({ busy: false, ok: false, text: res.value.error });
-      return;
-    }
-    setTestState({ busy: false, ok: true, text: t("db.testOk").replace("{ms}", String(res.value.ms ?? 0)) });
-  }, [canConnect, connectParams, t]);
-  const doConnect = useCallback(async () => {
-    if (!canConnect) return;
-    const params = connectParams();
-    const res = await api("db.connect", params);
-    if (!res.ok) {
-      setNotice(res.error);
-      return;
-    }
-    setConnections((current) => [...current.filter((entry) => entry.id !== res.value.id), res.value]);
-    setActiveConn(res.value.id);
-    setConnectOpen(false);
-    setNotice("");
-    if (saveProfile) await rememberConnection(form);
-    await refreshSchema(res.value.id);
-    setActiveDb({ conn: res.value.id, database: res.value.database ?? "" });
-  }, [connectParams, refreshSchema, saveProfile, rememberConnection]);
   const doDisconnect = useCallback(async (id) => {
     await disconnect(id);
     setTabs((current) => current.filter((tab2) => tab2.conn !== id));
@@ -14534,7 +14614,7 @@ function useWorkbench({ t, useTabInfo, sessionId, useSessions }) {
       if (activeTab?.kind === "query") void runQuery(activeTab.id);
     }
   }, [activeTab, runQuery]);
-  return { activeConn, activeDb, activeTab, activeTabId, allowModule, applyAddress, canConnect, cancelQuery, cellDetail, cellEdit, closeTab, collapsedDbs, commitCell, connectOpen, connectParams, connectProfile, connectRef, connections, copyCommand, copyResult, counts, cwd, databasesOf, dbxState, detailRef, doConnect, doDisconnect, doTest, driverReady, drivers, editingProfileId, expanded, explainState, exportOpen, exportResult, fetchRows, filter, forgetProfile, form, history, historyOpen, installDriverModule, loadRows, modal, notice, onKeyDown, openConnect, openConns, openQueryTab, openTab, openTable, patchTab, pendingDelete, pickCategory, pickQuery, pickableDrivers, pkColumn, probeDrivers, profileErrors, profileRevision, profiles, refreshSchema, rememberConnection, removeRow, runDbxImport, runMutation, runQuery, saveProfile, schema, schemaBusy, schemaError, schemas: schemas2, selectDatabase, setActiveConn, setActiveDb, setActiveTabId, setAllowModule, setCellDetail, setCellEdit, setCollapsedDbs, setConnectOpen, setConnections, setDbxState, setDriver, setDrivers, setEditingProfileId, setExpanded, setExplainState, setExportOpen, setFilter, setForm, setHistory, setHistoryOpen, setModal, setNotice, setOpenConns, setPendingDelete, setPickCategory, setPickQuery, setProfileErrors, setProfiles, setSaveProfile, setSchemaBusy, setSchemaError, setSchemas, setShowPassword, setStep, setTab, setTabs, setTestState, showPassword, sortBy, sqlRef, step, t, tab, tableEntry, tabs, testState, toggleTable, useSavedProfile };
+  return { activeConn, activeDb, activeTab, activeTabId, allowModule, applyAddress, canConnect, cancelQuery, cellDetail, cellEdit, closeTab, collapsedDbs, commitCell, connectOpen, connectParams, connectProfile, connectRef, connections, copyCommand, copyResult, counts, cwd, databasesOf, dbxState, detailRef, doConnect, doDisconnect, doTest, driverReady, drivers, editingProfileId, expanded, explainState, exportOpen, exportResult, fetchRows, filter, forgetProfile, form, history, historyOpen, installDriverModule, loadRows, modal, notice, onKeyDown, openConnect, openConns, openQueryTab, openTab, openTable, patchTab, pendingDelete, pickCategory, pickQuery, pickableDrivers, pkColumn, probeDrivers, profileErrors, profileRevision, profiles, refreshSchema, rememberConnection, removeRow, runDbxImport, runMutation, runQuery, saveProfile, schema, schemaBusy, schemaError, schemas: schemas2, selectDatabase, setActiveConn, setActiveDb, setActiveTabId, setAllowModule, setCellDetail, setCellEdit, setCollapsedDbs, setConnectOpen, setConnections, setDriver, setEditingProfileId, setExpanded, setExplainState, setExportOpen, setFilter, setForm, setHistory, setHistoryOpen, setModal, setNotice, setOpenConns, setPendingDelete, setPickCategory, setPickQuery, setProfileErrors, setProfiles, setSaveProfile, setSchemaBusy, setSchemaError, setSchemas, setShowPassword, setStep, setTab, setTabs, setTestState, showPassword, sortBy, sqlRef, step, t, tab, tableEntry, tabs, testState, toggleTable, useSavedProfile };
 }
 
 // src/client/db/grid.js
@@ -15036,7 +15116,7 @@ function renderRail(props) {
 
 // src/client/db/view.js
 function renderWorkbench(wb) {
-  const { DbView: DbView2, absolute, activeConn, activeDb, activeTab, activeTabId, allowModule, anchor, applyAddress, blob, body, canConnect, cancelQuery, category, cellDetail, cellEdit, closeTab, collapsedDbs, commitCell, conn, connectOpen, connectParams, connectProfile, connectRef, connections, copyCommand, copyResult, counts, csv, cwd, database, databases, databasesOf, dbxState, defaultNow, detailRef, dir, doConnect, doDisconnect, doTest, driver, driverReady, drivers, editingProfileId, entries, existing, expanded, explainState, exportOpen, exportResult, fetchRows, fetched, filter, forgetProfile, form, history, historyOpen, id, index, installDriverModule, keep, key, known, label, list, loadRows, modal, ms, needle, next, notice, onKeyDown, openConnect, openConns, openQueryTab, openTab, openTable, params, parsed, patchTab, pendingDelete, pickCategory, pickQuery, pickableDrivers, pkColumn, pkIndex, pkValue, probeDrivers, profileErrors, profileRevision, profiles, refreshSchema, rememberConnection, removeRow, res, result, runDbxImport, runMutation, runQuery, saveProfile, schema, schemaBusy, schemaError, schemaFor, schemas: schemas2, selectDatabase, setActiveConn, setActiveDb, setActiveTabId, setAllowModule, setCellDetail, setCellEdit, setCollapsedDbs, setConnectOpen, setConnections, setDbxState: setDbxState2, setDriver, setDrivers: setDrivers2, setEditingProfileId, setExpanded, setExplainState, setExportOpen, setFilter, setForm, setHistory, setHistoryOpen, setModal, setNotice, setOpenConns, setPendingDelete, setPickCategory, setPickQuery, setProfileErrors, setProfiles, setSaveProfile, setSchemaBusy, setSchemaError, setSchemas, setShowPassword, setStep, setTab, setTabs, setTestState, showPassword, sortBy, sql, sqlRef, started, step, t, tab, tableEntry, tabs, target, testState, text, toggleTable, token, url, useSavedProfile, value } = wb;
+  const { DbView: DbView2, absolute, activeConn, activeDb, activeTab, activeTabId, allowModule, anchor, applyAddress, blob, body, canConnect, cancelQuery, category, cellDetail, cellEdit, closeTab, collapsedDbs, commitCell, conn, connectOpen, connectParams, connectProfile, connectRef, connections, copyCommand, copyResult, counts, csv, cwd, database, databases, databasesOf, dbxState, defaultNow, detailRef, dir, doConnect, doDisconnect, doTest, driver, driverReady, drivers, editingProfileId, entries, existing, expanded, explainState, exportOpen, exportResult, fetchRows, fetched, filter, forgetProfile, form, history, historyOpen, id, index, installDriverModule, keep, key, known, label, list, loadRows, modal, ms, needle, next, notice, onKeyDown, openConnect, openConns, openQueryTab, openTab, openTable, params, parsed, patchTab, pendingDelete, pickCategory, pickQuery, pickableDrivers, pkColumn, pkIndex, pkValue, probeDrivers, profileErrors, profileRevision, profiles, refreshSchema, rememberConnection, removeRow, res, result, runDbxImport, runMutation, runQuery, saveProfile, schema, schemaBusy, schemaError, schemaFor, schemas: schemas2, selectDatabase, setActiveConn, setActiveDb, setActiveTabId, setAllowModule, setCellDetail, setCellEdit, setCollapsedDbs, setConnectOpen, setConnections, setDbxState, setDriver, setDrivers, setEditingProfileId, setExpanded, setExplainState, setExportOpen, setFilter, setForm, setHistory, setHistoryOpen, setModal, setNotice, setOpenConns, setPendingDelete, setPickCategory, setPickQuery, setProfileErrors, setProfiles, setSaveProfile, setSchemaBusy, setSchemaError, setSchemas, setShowPassword, setStep, setTab, setTabs, setTestState, showPassword, sortBy, sql, sqlRef, started, step, t, tab, tableEntry, tabs, target, testState, text, toggleTable, token, url, useSavedProfile, value } = wb;
   if (!cwd) return h("div", { className: "ce-root" }, h("div", { className: "ce-empty" }, t("editor.noSession")));
   return h(
     "div",
