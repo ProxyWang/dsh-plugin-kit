@@ -9627,7 +9627,7 @@ var CSS2 = `
 }
 
 /* Entry points live in native left PanelRows; the right guide is a work area. */
-.ce-branch-chip{display:inline-flex;align-items:center;gap:2px;flex:0 1 auto;max-width:min(20em, 55%);padding:0 4px;margin-left:4px;border-radius:999px;background:var(--dsw-alias-bg-layer-1,#1d2126);border:.5px solid var(--dsw-alias-border-l1,#2a2e35);color:var(--dsw-alias-label-secondary,#aab);font-size:9.5px;line-height:15px;vertical-align:middle;overflow:hidden}
+.ce-branch-chip{display:inline-flex;align-items:center;gap:2px;flex:0 1 auto;max-width:min(26em, 62%);padding:0 4px;margin-left:4px;border-radius:999px;background:var(--dsw-alias-bg-layer-1,#1d2126);border:.5px solid var(--dsw-alias-border-l1,#2a2e35);color:var(--dsw-alias-label-secondary,#aab);font-size:9.5px;line-height:15px;vertical-align:middle;overflow:hidden}
 .ce-branch-glyph{opacity:.75;flex:0 0 auto}
 .ce-branch-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
 .ce-workspace-guide{height:100%;min-height:180px;box-sizing:border-box;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:24px;text-align:center;color:var(--dsw-alias-label-secondary,#9aa4b0);font-family:inherit}
