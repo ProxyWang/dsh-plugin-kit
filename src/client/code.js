@@ -80,10 +80,6 @@ export function CodeBody(props) {
 	const [search, setSearch] = useState(null); // {query, include, results, engine, truncated, busy, error}
 	const [searchOpen, setSearchOpen] = useState(false);
 	const [peek, setPeek] = useState(null);
-	// VS Code's CodeLens, in miniature: after a click on an identifier, say how
-	// many references it has — the entry point people actually look for.
-	const [lens, setLens] = useState(null);
-	const lensNonce = useRef(0);
 	const [editing, setEditing] = useState(false);
 	const [editText, setEditText] = useState("");
 	const [findOpen, setFindOpen] = useState(false);
@@ -310,10 +306,7 @@ export function CodeBody(props) {
 	const loadFile = useCallback(
 		async (path, line, col, mark, opts) => {
 			if (!cwd || (!opts?.background && !canNavigate())) return null;
-			if (!opts?.background) { dismissPanels(); }
-			// A lens belongs to the line it was measured on: a new file invalidates it.
-			lensNonce.current++;
-			setLens(null);
+			if (!opts?.background) dismissPanels();
 			const res = await api("fs.read", { cwd, path });
 			if (!res.ok) {
 				// Watch-triggered check: deleted/unreadable keeps the buffer.
@@ -1144,7 +1137,7 @@ export function CodeBody(props) {
 	/* references peek (VSCode-style pop-up) */
 
 	const openPeek = useCallback(
-		async (symbol, line, col) => {
+		async (symbol, line, col, options = {}) => {
 			// Silence here is what made "find references" look broken: say why
 			// nothing will happen instead of returning.
 			if (!cwd) { say(t("editor.noSession"), "error"); return; }
@@ -1153,7 +1146,9 @@ export function CodeBody(props) {
 			if (!LSP_RE.test(open.path)) { say(t("jump.unsupportedFile"), "error"); return; }
 			const path = open.path;
 			const nonce = ++peekNonce.current;
-			setPeek({ symbol, anchorLine: line, busy: true, def: [], refs: [] });
+			// Only a deliberate open (⇧F12, palette, toolbar) takes focus: a click
+			// must leave the caret where it is, or typing would go to the panel.
+			setPeek({ symbol, anchorLine: line, busy: true, def: [], refs: [], focus: options.focus !== false });
 			const [dres, rres] = await Promise.all([
 				api("lsp.request", { cwd, path, kind: "definition", line, col }),
 				api("lsp.request", { cwd, path, kind: "references", line, col }),
@@ -1174,6 +1169,7 @@ export function CodeBody(props) {
 				def: dres.ok ? dres.value.targets ?? [] : [],
 				refs: rres.ok ? rres.value.targets ?? [] : [],
 				error: note !== "" ? note : (!dres.ok ? dres.error : !rres.ok ? rres.error : undefined),
+				focus: options.focus !== false,
 			});
 		},
 		[cwd],
@@ -1205,8 +1201,6 @@ export function CodeBody(props) {
 	const closePeek = useCallback(() => {
 		peekNonce.current++;
 		setPeek(null);
-		lensNonce.current++;
-		setLens(null);
 	}, []);
 
 	const pickPeek = useCallback(
@@ -1486,7 +1480,7 @@ export function CodeBody(props) {
 				return;
 			}
 			if (event.key === "Escape") {
-				if (searchOpen || palette || commandOpen || branchPickOpen || fileHist || gotoOpen || symPalette || wsym || compareOpen || peek || overlay || problemsOpen || tabMenu || lens) {
+				if (searchOpen || palette || commandOpen || branchPickOpen || fileHist || gotoOpen || symPalette || wsym || compareOpen || peek || overlay || problemsOpen || tabMenu) {
 					event.preventDefault();
 					event.stopPropagation();
 					dismissPanels();
@@ -1612,7 +1606,7 @@ export function CodeBody(props) {
 		(event) => {
 			const target = event.target?.closest?.("[data-ce-l]");
 			cancelHover();
-			if (!target || !docRef.current) { closePeek(); setLens(null); return; }
+			if (!target || !docRef.current) { closePeek(); return; }
 			const line = Number(target.dataset.ceL);
 			const col = Number(target.dataset.ceC);
 			const text = docRef.current.lines[line - 1] ?? "";
@@ -1624,30 +1618,21 @@ export function CodeBody(props) {
 			if (!LSP_RE.test(docRef.current.path) || !word) {
 				// VSCode-style: clicking blank space dismisses the reference overlay.
 				setPeek(null);
-				setLens(null);
 				return;
 			}
 			if (target.classList?.contains("ce-kw")) {
 				setPeek(null);
-				setLens(null);
 				return;
 			}
 			const mod = event.metaKey || event.ctrlKey;
-			// VS Code click model: plain click only places the cursor (selecting
-			// text to copy must not pop a panel); ⌘/Ctrl+click jumps to definition.
-			// A plain click still answers "how many references?" with a lens chip,
-			// because that is what people look for after clicking a function.
-			if (mod) { void doJump("definition", at); setLens(null); return; }
-			setPeek(null);
-			const nonce = ++lensNonce.current;
-			setLens({ line: at.line, col: at.col, word, busy: true, count: null });
-			api("lsp.request", { cwd, path: docRef.current.path, kind: "references", line: at.line, col: at.col }).then((res) => {
-				if (lensNonce.current !== nonce) return;
-				const count = res.ok ? (res.value.targets ?? []).length : 0;
-				setLens({ line: at.line, col: at.col, word, busy: false, count, note: res.ok ? res.value.note ?? "" : res.error });
-			});
+			// Clicking a symbol answers the question it was asking: where is this
+			// used? The list opens directly — no intermediate "N references" chip to
+			// click first. ⌘/Ctrl-click keeps the other meaning (go to definition),
+			// and a click on blank space still dismisses the panel.
+			if (mod) { void doJump("definition", at); return; }
+			void openPeek(word, at.line, at.col, { focus: false });
 		},
-		[doJump, closePeek, cancelHover],
+		[doJump, closePeek, cancelHover, openPeek],
 	);
 
 	/**
@@ -2319,13 +2304,6 @@ export function CodeBody(props) {
 									onClick: () => jumpToLine(b.start),
 								}, null)))
 								: null,
-							lens ? h("button", {
-								type: "button",
-								className: "ce-lens",
-								style: { top: `${Math.max(2, (lens.line - 1) * ROW - scroll - 1)}px` },
-								title: lens.note ? `${t("jump.refsTitle")} — ${lens.note}` : t("jump.refsTitle"),
-								onClick: () => { setLens(null); void openPeek(lens.word, lens.line, lens.col); },
-							}, lens.busy ? t("loading") : `${lens.count ?? 0} ${t("jump.refsShort")}`) : null,
 							peek ? h(RefsPeek, { t, cwd, peek, scroll, viewport, totalLines: doc.lines.length, onPick: pickPeek, onClose: closePeek }) : null,
 							hover && !editing
 								? h("div", {

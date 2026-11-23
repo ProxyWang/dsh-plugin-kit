@@ -179,6 +179,8 @@ export function RefsPeek({ t, cwd, peek, scroll, totalLines, viewport = 600, onP
 	// The peek is a keyboard surface, but it is opened from the editor, so focus
 	// has to move here explicitly — otherwise ArrowUp/Down and Enter go nowhere.
 	useEffect(() => {
+		// A list opened by a click must not take the caret away from the editor.
+		if (peek.focus === false) return;
 		panelRef.current?.focus?.({ preventScroll: true });
 	}, []);
 	useEffect(() => {

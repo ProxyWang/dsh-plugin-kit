@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased — clicking a symbol opens its references
+
+The reference-count chip was one click too many: clicking a function asked "where is this used?" and the answer was a number you then had to click.
+
+- **A plain click on an identifier opens the reference list directly** (definition + references in one request pair). ⌘/Ctrl-click still goes to the definition, and a click on blank space closes the list.
+- The list opened by a click **does not take focus**, so the caret stays in the editor and typing keeps working; a deliberate open (⇧F12, the toolbar ⌖, the palette) focuses it so the arrow keys and Enter work.
+- The intermediate "N 个引用" chip and its CSS are gone.
+- Regressions: a plain click asks for definition and references and opens the list with every returned row; the click-opened list reports `focus: false`; blank space still dismisses.
+
 ## Unreleased — clicking a function tells you how many references it has
 
 "Click the function and I get no reference list" was half true: the peek existed, but a plain click only placed the cursor, so nothing answered the question the click was asking.
