@@ -9627,6 +9627,9 @@ var CSS2 = `
 }
 
 /* Entry points live in native left PanelRows; the right guide is a work area. */
+.ce-branch-chip{display:inline-flex;align-items:center;gap:3px;max-width:11em;padding:0 5px;margin-left:6px;border-radius:999px;background:var(--dsw-alias-bg-layer-1,#1d2126);border:.5px solid var(--dsw-alias-border-l1,#2a2e35);color:var(--dsw-alias-label-secondary,#aab);font-size:10px;line-height:16px;vertical-align:middle;overflow:hidden}
+.ce-branch-glyph{opacity:.75;flex:0 0 auto}
+.ce-branch-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ce-workspace-guide{height:100%;min-height:180px;box-sizing:border-box;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:24px;text-align:center;color:var(--dsw-alias-label-secondary,#9aa4b0);font-family:inherit}
 .ce-workspace-guide-icon{display:inline-flex;color:var(--dsw-alias-label-tertiary,#7b8794)}
 .ce-workspace-guide h2{margin:0;font-size:16px;font-weight:600;color:var(--dsw-alias-label-primary,#ddd)}
@@ -13401,8 +13404,9 @@ function sqlLiteral(driver, value) {
   if (value === null || value === void 0) return "NULL";
   if (typeof value === "number") return Number.isFinite(value) ? String(value) : "NULL";
   if (typeof value === "boolean") return value ? driver === "sqlite" ? "1" : "TRUE" : driver === "sqlite" ? "0" : "FALSE";
-  const text = String(value).replace(/'/g, "''");
-  return `'${text}'`;
+  const text = String(value);
+  const escaped = driver === "mysql" ? text.replace(/\\/g, "\\\\").replace(/'/g, "''") : text.replace(/'/g, "''");
+  return `'${escaped}'`;
 }
 function toJsonRows(result) {
   const columns = result?.columns ?? [];
@@ -13988,7 +13992,7 @@ function useTabs({ connections, setConnections, activeConn, setActiveConn, t, re
       return;
     }
     patchTab(id, { loading: false, result: res.value, error: "", ms, runToken: "", offset });
-    if (/^\s*(create|drop|alter)\b/i.test(sql)) void refreshSchema(conn);
+    if (/^\s*(create|drop|alter|rename|truncate)\b/i.test(sql)) void refreshSchema(conn);
   }, [tabs, activeConn, patchTab, refreshSchema, t]);
   const cancelQuery = useCallback(async (tab) => {
     const conn = tab.conn || activeConn;
@@ -14769,12 +14773,14 @@ function ResultGrid({ t, result, onCell, onSort, order, dir, pkColumn = "", onEd
                     className: "ce-input cedb-cell-input",
                     autoFocus: true,
                     value: editing.value,
+                    placeholder: editing.wasNull ? "NULL" : "",
                     spellCheck: false,
                     onChange: (event) => setEditing({ ...editing, value: event.target.value }),
                     onKeyDown: (event) => {
                       event.stopPropagation();
                       if (event.key === "Enter") {
-                        onEditCell?.(rowIndex, columns[cellIndex], editing.value);
+                        const next = editing.wasNull && editing.value.trim() === "" ? null : editing.value;
+                        onEditCell?.(rowIndex, columns[cellIndex], next);
                         setEditing(null);
                       } else if (event.key === "Escape") setEditing(null);
                     },
@@ -14787,7 +14793,7 @@ function ResultGrid({ t, result, onCell, onSort, order, dir, pkColumn = "", onEd
                 className: `cedb-grid-td${cell === null ? " cedb-null" : ""}${editable ? " cedb-grid-editable" : ""}`,
                 title: editable ? `${formatCell(cell)} · ${t("db.editHint")}` : formatCell(cell),
                 onClick: () => onCell?.({ title: `${columns[cellIndex]} · ${t("db.row")} ${rowIndex + 1}`, value: cell }),
-                onDoubleClick: editable ? () => setEditing({ rowIndex, cellIndex, value: formatCell(cell) }) : void 0
+                onDoubleClick: editable ? () => setEditing({ rowIndex, cellIndex, value: cell === null || cell === void 0 ? "" : formatCell(cell), wasNull: cell === null }) : void 0
               }, truncateCell(cell));
             }),
             onDeleteRow ? h(
@@ -19717,6 +19723,15 @@ var index_default = {
       name: "sidebar.right.pane.tab.title",
       key: RPC_TAB_ID
     }, RpcTitle)));
+    safe("session branch chip", () => ctx.inject(["sessions"], (sessionCtx) => ctx.slots.inject("sidebar.session.row.trailing", () => ctx.slots.register(
+      { name: "sidebar.session.row.trailing", id: "dsh-plugin-kit/session-branch", locale: NS },
+      (props) => {
+        const sessionId = String(props?.sessionId ?? "");
+        const byId = sessionCtx.sessions?.getSnapshot?.()?.byId ?? {};
+        const cwd = String(byId[sessionId]?.cwd ?? "");
+        return cwd === "" ? null : h(SessionBranch, { t: bound, cwd });
+      }
+    ))));
     safe("call diff rows", () => ctx.slots.inject("tool.call.toolview", function* () {
       const bridge = {
         t: bound,

@@ -18,8 +18,13 @@ export function sqlLiteral(driver, value) {
 	if (value === null || value === undefined) return "NULL";
 	if (typeof value === "number") return Number.isFinite(value) ? String(value) : "NULL";
 	if (typeof value === "boolean") return value ? (driver === "sqlite" ? "1" : "TRUE") : (driver === "sqlite" ? "0" : "FALSE");
-	const text = String(value).replace(/'/g, "''");
-	return `'${text}'`;
+	const text = String(value);
+	// MySQL treats a backslash as an escape inside a string literal, so `C:\temp`
+	// would turn into a tab and a trailing `\` would escape the closing quote —
+	// corrupting the value at best and breaking out of the literal at worst.
+	// PostgreSQL (standard_conforming_strings) and SQLite read it literally.
+	const escaped = driver === "mysql" ? text.replace(/\\/g, "\\\\").replace(/'/g, "''") : text.replace(/'/g, "''");
+	return `'${escaped}'`;
 }
 
 /**

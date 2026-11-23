@@ -170,6 +170,17 @@ export default {
 			name: "sidebar.right.pane.tab.title",
 			key: RPC_TAB_ID,
 		}, RpcTitle)));
+		// The workspace list is the Host's; it exposes session rows but no project
+		// header slot, so the branch rides on each session row of that workspace.
+		safe("session branch chip", () => ctx.inject(["sessions"], (sessionCtx) => ctx.slots.inject("sidebar.session.row.trailing", () => ctx.slots.register(
+			{ name: "sidebar.session.row.trailing", id: "dsh-plugin-kit/session-branch", locale: NS },
+			(props) => {
+				const sessionId = String(props?.sessionId ?? "");
+				const byId = sessionCtx.sessions?.getSnapshot?.()?.byId ?? {};
+				const cwd = String(byId[sessionId]?.cwd ?? "");
+				return cwd === "" ? null : h(SessionBranch, { t: bound, cwd });
+			},
+		))));
 		// Compact chat rows for edit/write: clicking one opens this call's diff in
 		// the side panel. Negative priority so unloading restores the stock rows.
 		safe("call diff rows", () => ctx.slots.inject("tool.call.toolview", function* () {

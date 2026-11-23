@@ -114,11 +114,19 @@ export function ResultGrid({ t, result, onCell, onSort, order, dir, pkColumn = "
 										className: "ce-input cedb-cell-input",
 										autoFocus: true,
 										value: editing.value,
+										placeholder: editing.wasNull ? "NULL" : "",
 										spellCheck: false,
 										onChange: (event) => setEditing({ ...editing, value: event.target.value }),
 										onKeyDown: (event) => {
 											event.stopPropagation();
-											if (event.key === "Enter") { onEditCell?.(rowIndex, columns[cellIndex], editing.value); setEditing(null); }
+											if (event.key === "Enter") {
+												// A NULL cell the user left empty stays NULL; typing
+												// anything turns it into that text. Seeding the input with
+												// "NULL" used to write the four-letter string instead.
+												const next = editing.wasNull && editing.value.trim() === "" ? null : editing.value;
+												onEditCell?.(rowIndex, columns[cellIndex], next);
+												setEditing(null);
+											}
 											else if (event.key === "Escape") setEditing(null);
 										},
 										onBlur: () => setEditing(null) }));
@@ -128,7 +136,7 @@ export function ResultGrid({ t, result, onCell, onSort, order, dir, pkColumn = "
 								className: `cedb-grid-td${cell === null ? " cedb-null" : ""}${editable ? " cedb-grid-editable" : ""}`,
 								title: editable ? `${formatCell(cell)} · ${t("db.editHint")}` : formatCell(cell),
 								onClick: () => onCell?.({ title: `${columns[cellIndex]} · ${t("db.row")} ${rowIndex + 1}`, value: cell }),
-								onDoubleClick: editable ? () => setEditing({ rowIndex, cellIndex, value: formatCell(cell) }) : undefined }, truncateCell(cell));
+								onDoubleClick: editable ? () => setEditing({ rowIndex, cellIndex, value: cell === null || cell === undefined ? "" : formatCell(cell), wasNull: cell === null }) : undefined }, truncateCell(cell));
 						}),
 						onDeleteRow
 							? h("td", { className: "cedb-grid-gutter" },

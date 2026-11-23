@@ -161,7 +161,7 @@ export function useTabs({ connections, setConnections, activeConn, setActiveConn
 		if (!res.ok) { patchTab(id, { loading: false, error: res.error, result: null }); return; }
 		patchTab(id, { loading: false, result: res.value, error: "", ms, runToken: "", offset });
 		// A statement that changes the schema (CREATE/DROP/ALTER) refreshes the tree.
-		if (/^\s*(create|drop|alter)\b/i.test(sql)) void refreshSchema(conn);
+		if (/^\s*(create|drop|alter|rename|truncate)\b/i.test(sql)) void refreshSchema(conn);
 	}, [tabs, activeConn, patchTab, refreshSchema, t]);
 
 	/**

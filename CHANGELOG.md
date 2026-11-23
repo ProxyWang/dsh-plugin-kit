@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased — the branch next to the workspace, live
+
+- **A branch chip in the sidebar.** The Host's workspace list exposes per-session rows (`sidebar.session.row.trailing`)
+  but no slot on the project header, so each session row of a repository now shows `⎇ branch`, resolved from that
+  session's workspace. One shared poll per workspace means ten rows cost one probe, and the probe is a single
+  `git rev-parse` (the new `git.branch` route) rather than a full `git.status`.
+- The chip refreshes every 4 s and on window focus, so a checkout appears without a reload; a detached HEAD says so
+  instead of printing `HEAD`; a non-repository workspace renders nothing.
+- Tests: the route (branch + non-repo), the chip (branch shown, workspace-scoped request, live update after a
+  switch, disappears outside a repo, detached label, unmount stops the poll, rows of one workspace share a poll).
+
 ## Unreleased — the last domain hook, and what the split now looks like
 
 - `db/hooks/use-mutations.js` owns every grid write (cell update, row delete with its two-click confirm, row insert,

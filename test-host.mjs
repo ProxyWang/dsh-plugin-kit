@@ -132,6 +132,12 @@ check("fs.read text", read.ok && read.value.kind === "text" && read.value.conten
 const outside = await call("fs.read", { cwd, path: "../../etc/passwd" });
 check("fs.read fence", outside.ok === false, outside);
 
+// The sidebar chip polls this one: a cheap branch probe, not a full status.
+const branchProbe = await call("git.branch", { cwd: fixture });
+check("git.branch reports the checked-out branch", branchProbe.ok && branchProbe.value.branch === "feature" && branchProbe.value.repo === true, branchProbe);
+const noRepo = await call("git.branch", { cwd: "/tmp" });
+check("git.branch says so when the workspace is not a repository", noRepo.ok && noRepo.value.repo === false, noRepo);
+
 const status = await call("git.status", { cwd });
 check(
 	"git.status",
@@ -1225,6 +1231,7 @@ export async function createConnection(config) {
     async query(sqlOrObject) {
       const sql = typeof sqlOrObject === "string" ? sqlOrObject : sqlOrObject.sql;
       const text = String(sql).trim();
+      globalThis.__mysqlSql = [...(globalThis.__mysqlSql ?? []), text];
       if (/^select 1$/i.test(text)) return [[[1]], fields("1")];
       if (/^show databases/i.test(text)) return [[["demo"], ["information_schema"]], fields("Database")];
       if (/information_schema\\.tables/i.test(text)) return [[["users", "BASE TABLE"]], fields("TABLE_NAME", "TABLE_TYPE")];
@@ -1246,6 +1253,16 @@ export async function createConnection(config) {
 		entry: `${workspace}/node_modules/mysql2/index.js`,
 		config: { host: "example.test", port: 3306, user: "u", password: "", database: "demo" },
 	});
+
+	globalThis.__mysqlSql = [];
+	await runner.call("schema", { database: "other" });
+	const schemaCalls = globalThis.__mysqlSql.filter((sql) => /information_schema\.tables/i.test(sql));
+	check("the module driver introspects the database it was asked for", schemaCalls.some((sql) => sql.includes("TABLE_SCHEMA='other'")), schemaCalls);
+
+	globalThis.__mysqlSql = [];
+	await runner.call("rows", { table: "users", database: "other", limit: 10, offset: 0 });
+	const rowCalls = globalThis.__mysqlSql.filter((sql) => /^SELECT \* FROM/i.test(sql));
+	check("the module driver qualifies a table from another database", rowCalls.some((sql) => sql.includes("`other`.`users`")), rowCalls);
 
 	const read = await runner.call("query", { sql: "SELECT * FROM users" });
 	check("the module driver answers a read", read.columns?.join() === "id,name" && read.rows?.[0]?.[1] === "ada", read);
@@ -1295,6 +1312,26 @@ export async function createConnection(config) {
 		db.disconnect(conn.id);
 		rmSync(file, { force: true });
 	}
+}
+
+// --- filter clause and paging edge cases -----------------------------------------------
+{
+	const { filterClause, pageable } = await import("./lib/host/db/sql.js");
+	check("a MySQL filter casts to CHAR, which MySQL actually has", filterClause("mysql", [{ name: "name" }], "ada").includes("AS CHAR"), filterClause("mysql", [{ name: "name" }], "ada"));
+	const runnerFilters = await import("./lib/host/drivers/module-runner.js");
+	check("the module driver's MySQL filter also casts to CHAR", runnerFilters.filterClause("mysql", ["name"], "ada").includes("AS CHAR"), runnerFilters.filterClause("mysql", ["name"], "ada"));
+	const mysqlPathFilter = runnerFilters.filterClause("mysql", ["path"], "C:\\temp");
+	const pathRun = mysqlPathFilter.match(/C:([\\]+)temp/);
+	check("the module driver's MySQL filter escapes backslashes twice over", pathRun?.[1]?.length === 4 && mysqlPathFilter.includes("ESCAPE"), { backslashes: pathRun?.[1]?.length, sql: mysqlPathFilter });
+	check("the module driver's PostgreSQL filter casts to TEXT", runnerFilters.filterClause("postgres", ["name"], "ada").includes("AS TEXT"), runnerFilters.filterClause("postgres", ["name"], "ada"));
+	check("PostgreSQL and SQLite filters cast to TEXT", filterClause("postgres", [{ name: "name" }], "ada").includes("AS TEXT") && filterClause("sqlite", [{ name: "name" }], "ada").includes("AS TEXT"), null);
+	check("a filter escapes quotes", filterClause("pg", [{ name: "n" }], "O'Brien").includes("O''Brien"), null);
+	check("a filter treats % and _ literally", filterClause("postgres", [{ name: "n" }], "qa_agent").includes("qa\\_agent") && filterClause("postgres", [{ name: "n" }], "100%").includes("100\\%"), null);
+	check("a filter names its escape byte", filterClause("postgres", [{ name: "n" }], "a_b").includes("ESCAPE '\\'") && filterClause("mysql", [{ name: "n" }], "a_b").includes("ESCAPE '\\\\'"), null);
+	check("a plain SELECT is pageable", pageable("select * from t") === true && pageable("  select 1;") === true, null);
+	check("a data-changing CTE is not pageable", pageable("WITH x AS (SELECT 1) DELETE FROM t") === false, null);
+	check("a read-only CTE is pageable", pageable("WITH x AS (SELECT 1) SELECT * FROM x") === true, null);
+	check("a multi-statement script is not pageable", pageable("select 1; select 2") === false, null);
 }
 
 // --- dbx import ------------------------------------------------------------------------

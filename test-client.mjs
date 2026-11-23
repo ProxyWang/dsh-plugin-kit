@@ -3256,6 +3256,121 @@ check("docAction reloads clean drafts, flags dirty ones, ignores others", docAct
 	}
 }
 
+// --- the session branch chip ------------------------------------------------------------
+{
+	const fetchBackup = globalThis.fetch;
+	const intervalBackup = globalThis.setInterval;
+	const clearBackup = globalThis.clearInterval;
+	let branch = "main";
+	let repo = true;
+	const calls = [];
+	let tick = null;
+	globalThis.setInterval = (fn) => { tick = fn; return 1; };
+	globalThis.clearInterval = () => { tick = null; };
+	globalThis.fetch = async (url, options) => {
+		const body = JSON.parse(options?.body ?? "{}");
+		calls.push({ url: String(url).split("/").pop(), body });
+		if (String(url).endsWith("/git.branch")) return { json: async () => ({ ok: true, value: { repo, root: body.cwd, branch, detached: branch === "HEAD" } }) };
+		return { json: async () => ({ ok: true, value: {} }) };
+	};
+	try {
+		const { SessionBranch } = await import("./src/client/branchchip.js");
+		const drawTree = (component, props) => {
+			const draw = createHookRenderer(() => component(props), {}, { effects: true });
+			draw();
+			return draw;
+		};
+		const flatten = (node) => {
+			if (!node || typeof node !== "object") return [];
+			if (Array.isArray(node)) return node.flatMap(flatten);
+			return [node, ...(node.children ?? []).flatMap(flatten)];
+		};
+		const draw = createHookRenderer(() => SessionBranch({ t: (key) => key, cwd: "/work" }), {}, { effects: true });
+		let tree = draw();
+		draw.flushEffects();
+		await new Promise((resolve) => setImmediate(resolve));
+		tree = draw();
+		const chip = flatten(tree).find((n) => String(n.props?.className ?? "").includes("ce-branch-chip"));
+		check("the chip shows the current branch", Boolean(chip) && JSON.stringify(chip).includes("main"), JSON.stringify(chip).slice(0, 120));
+		check("the chip asks for that workspace only", calls.at(-1).body.cwd === "/work", calls.at(-1).body);
+
+		branch = "feature/x";
+		await tick();
+		tree = draw();
+		check("the chip follows a branch switch without a reload", JSON.stringify(tree).includes("feature/x"), null);
+
+		repo = false;
+		await tick();
+		tree = draw();
+		check("the chip disappears when the workspace is not a repo", flatten(tree).every((n) => !String(n.props?.className ?? "").includes("ce-branch-chip")), null);
+
+		repo = true;
+		branch = "HEAD";
+		await tick();
+		tree = draw();
+		check("a detached HEAD says so instead of printing HEAD", JSON.stringify(tree).includes("branch.detached"), null);
+		draw.unmount();
+		check("unmounting stops the poll", tick === null, tick !== null);
+		// Two rows of the same workspace share one probe; another workspace does not.
+		const intervals = [];
+		globalThis.setInterval = (fn) => { intervals.push(fn); return intervals.length; };
+		globalThis.clearInterval = () => {};
+		calls.length = 0;
+		const a = drawTree(SessionBranch, { t: (key) => key, cwd: "/same" });
+		const b = drawTree(SessionBranch, { t: (key) => key, cwd: "/same" });
+		const c = drawTree(SessionBranch, { t: (key) => key, cwd: "/other" });
+		a.flushEffects(); b.flushEffects(); c.flushEffects();
+		await new Promise((resolve) => setImmediate(resolve));
+		check("rows of one workspace share a single poll", intervals.length === 2 && calls.filter((call) => call.body.cwd === "/same").length === 1, { intervals: intervals.length, calls: calls.length });
+	} finally {
+		globalThis.fetch = fetchBackup;
+		globalThis.setInterval = intervalBackup;
+		globalThis.clearInterval = clearBackup;
+	}
+}
+
+// --- SQL literal and grid-edit correctness ----------------------------------------------
+{
+	const { sqlLiteral, updateCellSql } = await import("./src/client/dbtools.js");
+	check("a MySQL literal escapes backslashes", sqlLiteral("mysql", "C:\\temp") === "'C:\\\\temp'", sqlLiteral("mysql", "C:\\temp"));
+	check("a trailing backslash cannot escape the closing quote", sqlLiteral("mysql", "abc\\") === "'abc\\\\'", sqlLiteral("mysql", "abc\\"));
+	check("PostgreSQL keeps backslashes literal", sqlLiteral("postgres", "C:\\temp") === "'C:\\temp'", sqlLiteral("postgres", "C:\\temp"));
+	check("quotes are doubled for every driver", sqlLiteral("sqlite", "O'Brien") === "'O''Brien'" && sqlLiteral("mysql", "O'Brien") === "'O''Brien'", null);
+	check("a NULL edit writes SQL NULL, not the text", updateCellSql({ driver: "mysql", table: "t", column: "c", value: null, pkColumn: "id", pkValue: 1 }) === "UPDATE `t` SET `c` = NULL WHERE `id` = 1;", updateCellSql({ driver: "mysql", table: "t", column: "c", value: null, pkColumn: "id", pkValue: 1 }));
+
+	const { ResultGrid } = await import("./src/client/db.js");
+	const flatten = (node) => {
+		if (!node || typeof node !== "object") return [];
+		if (Array.isArray(node)) return node.flatMap(flatten);
+		return [node, ...(node.children ?? []).flatMap(flatten)];
+	};
+	const edits = [];
+	const draw = createHookRenderer(() => ResultGrid({
+		t: (key) => key,
+		result: { columns: ["id", "note"], rows: [[1, null], [2, "text"]] },
+		pkColumn: "id",
+		onEditCell: (row, column, value) => edits.push([row, column, value]),
+		onDeleteRow: () => {},
+	}), {}, { effects: true });
+	let tree = draw();
+	const editable = flatten(tree).filter((n) => String(n.props?.className ?? "").includes("cedb-grid-editable"));
+	editable[1].props.onDoubleClick();
+	tree = draw();
+	const input = flatten(tree).find((n) => n.props?.className === "ce-input cedb-cell-input");
+	check("a NULL cell opens an empty editor instead of the word NULL", input?.props?.value === "" && input?.props?.placeholder === "NULL", { value: input?.props?.value, placeholder: input?.props?.placeholder });
+	input.props.onKeyDown({ key: "Enter", stopPropagation() {} });
+	check("leaving a NULL cell empty keeps it NULL", edits.at(-1)?.[2] === null, edits.at(-1));
+	tree = draw();
+	const textCell = flatten(tree).filter((n) => String(n.props?.className ?? "").includes("cedb-grid-editable"))[3];
+	textCell.props.onDoubleClick();
+	tree = draw();
+	const textInput = flatten(tree).find((n) => n.props?.className === "ce-input cedb-cell-input");
+	textInput.props.onChange({ target: { value: "changed" } });
+	tree = draw();
+	flatten(tree).find((n) => n.props?.className === "ce-input cedb-cell-input").props.onKeyDown({ key: "Enter", stopPropagation() {} });
+	check("editing a text cell commits the typed text", edits.at(-1)?.[2] === "changed", edits.at(-1));
+}
+
 // --- useMutations: grid edits, addressed by the primary key ------------------------------
 {
 	const fetchBackup = globalThis.fetch;

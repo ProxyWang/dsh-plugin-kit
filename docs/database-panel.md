@@ -88,6 +88,14 @@ assert against the rail.
 - every split module opens with a doc comment;
 - `db.js` still exports the names callers import.
 
+## Sidebar branch chip
+
+`src/client/branchchip.js` registers `sidebar.session.row.trailing` and shows the
+workspace's current branch next to each session row. The Host exposes no slot on
+the project header, so the row is the extension point; one shared poll per
+workspace (`watchBranch`) keeps ten rows at one `git.branch` call every few
+seconds, and the probe is a single `rev-parse` (unlike `git.status`).
+
 ## Testing
 
 - `test-host.mjs` — the host modules in isolation (registry, parsing, paging,
