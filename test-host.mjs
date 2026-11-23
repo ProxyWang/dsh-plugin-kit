@@ -1443,6 +1443,7 @@ export async function createConnection(config) {
 		check("db.connect opens a saved connection by id", conn?.driver === "sqlite" && conn.mode === "worker", conn);
 		const queried = await db.query(conn.id, "SELECT 1 AS one");
 		check("a profile-backed connection answers queries", queried.rows[0][0] === 1, queried);
+		check("a saved connection keeps its name as the instance label", conn.label === "saved", conn.label);
 		db.disconnect(conn.id);
 		db.setDbProfileService(null);
 		const refused = await db.connect({ profileId: made.profile.id }).then(() => null, (error) => error);

@@ -104,7 +104,10 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 	const [drivers, setDrivers] = useState([]);
 	const [connections, setConnections] = useState([]);
 	const [activeConn, setActiveConn] = useState("");
-	const [schema, setSchema] = useState(null);
+	// One schema per open connection: the rail is a tree of instances, not a
+	// single "objects" pane for whichever one is active.
+	const [schemas, setSchemas] = useState({});
+	const [openConns, setOpenConns] = useState({});
 	const [schemaBusy, setSchemaBusy] = useState(false);
 	const [schemaError, setSchemaError] = useState("");
 	const [filter, setFilter] = useState("");
@@ -220,13 +223,18 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 	// --- connections ----------------------------------------------------------------------
 
 	const refreshSchema = useCallback(async (id = activeConn) => {
-		if (!id) { setSchema(null); return; }
+		if (!id) return;
 		setSchemaBusy(true);
 		setSchemaError("");
 		const res = await api("db.schema", { id });
 		setSchemaBusy(false);
-		if (res.ok) setSchema(res.value);
-		else { setSchema(null); setSchemaError(res.error); }
+		if (res.ok) {
+			setSchemas((current) => ({ ...current, [id]: res.value }));
+			setOpenConns((current) => ({ ...current, [id]: true }));
+		} else {
+			setSchemas((current) => { const next = { ...current }; delete next[id]; return next; });
+			setSchemaError(res.error);
+		}
 	}, [activeConn]);
 
 	/**
@@ -471,7 +479,8 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 		setConnections((current) => current.filter((entry) => entry.id !== id));
 		// Tabs bound to this connection could only fail on their next request.
 		setTabs((current) => current.filter((tab) => tab.conn !== id));
-		if (activeConn === id) { setActiveConn(""); setSchema(null); }
+		setSchemas((current) => { const next = { ...current }; delete next[id]; return next; });
+		if (activeConn === id) setActiveConn("");
 	}, [activeConn]);
 
 	// --- table pages ----------------------------------------------------------------------
@@ -604,7 +613,7 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 		if (value.connectionClosed) {
 			setConnections((current) => current.filter((entry) => entry.id !== conn));
 			setTabs((current) => current.filter((entry) => entry.conn !== conn));
-			if (activeConn === conn) { setActiveConn(""); setSchema(null); }
+			if (activeConn === conn) setActiveConn("");
 			setNotice(t("db.cancelledClosed"));
 		}
 	}, [activeConn, patchTab, t]);
@@ -635,14 +644,17 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 
 	// --- tree ----------------------------------------------------------------------------
 
-	const tree = useMemo(() => {
+	const schema = schemas[activeConn] ?? null;
+
+	/** The databases of one instance, filtered by the rail's search box. */
+	const databasesOf = useCallback((connId) => {
 		const needle = filter.trim().toLowerCase();
-		const databases = (schema?.databases ?? []).map((database) => {
+		const databases = (schemas[connId]?.databases ?? []).map((database) => {
 			const entries = (database.tables ?? []).filter((entry) => !needle || entry.name.toLowerCase().includes(needle));
 			return { ...database, tables: entries };
 		});
 		return needle ? databases.filter((database) => database.tables.length > 0) : databases;
-	}, [schema, filter]);
+	}, [schemas, filter]);
 
 	const counts = countOf(schema);
 
@@ -701,62 +713,74 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 							h("button", { type: "button", className: "ce-tool ce-tiny", title: t("db.forget"), onClick: () => void forgetProfile(profile) }, "✕"),
 						)))
 					: null,
-				h("div", { className: "cedb-rail-head" },
+				h("div", { className: "cedb-rail-head cedb-rail-head-split" },
 					h("span", { className: "cedb-rail-title" }, t("db.connections")),
+					h("input", {
+						className: "ce-input cedb-filter",
+						placeholder: t("db.search"),
+						value: filter,
+						onChange: (event) => setFilter(event.target.value),
+					}),
 				),
 				connections.length === 0
 					? h("div", { className: "cedb-empty" }, t("db.noConnections"))
-					: connections.map((connection) => h("div", { key: connection.id, className: `cedb-conn${connection.id === activeConn ? " cedb-conn-on" : ""}` },
-						h("button", {
-							type: "button",
-							className: "cedb-conn-main",
-							title: connection.path || connection.label,
-							onClick: () => { setActiveConn(connection.id); void refreshSchema(connection.id); },
-						},
-						h("span", { className: `cedb-driver cedb-driver-${connection.driver}` }, connection.driver),
-						h("span", { className: "cedb-conn-label" }, connection.label),
-						connection.impl === "module" ? h("span", { className: "cedb-ctx cedb-ctx-dim" }, "module") : null),
-						h("button", { type: "button", className: "ce-tool ce-tiny", title: t("db.disconnect"), onClick: () => void doDisconnect(connection.id) }, "✕"),
-					)),
-				schema ? h(Fragment, null,
-					h("div", { className: "cedb-rail-head cedb-rail-head-split" },
-						h("span", { className: "cedb-rail-title" }, t("db.objects")),
-						h("input", {
-							className: "ce-input cedb-filter",
-							placeholder: t("db.search"),
-							value: filter,
-							onChange: (event) => setFilter(event.target.value),
-						}),
-					),
-					schemaBusy ? h("div", { className: "cedb-empty" }, t("loading")) : null,
-					schemaError ? h("div", { className: "cedb-error cedb-pad" }, schemaError) : null,
-					tree.map((database) => h("div", { key: database.name, className: "cedb-db" },
-						h("div", { className: "cedb-db-name" }, database.name, database.tables.length === 0 ? h("span", { className: "cedb-db-hint" }, t("db.notLoaded")) : null),
-						database.tables.map((entry) => {
-							const key = `${database.name}:${entry.name}`;
-							const open = expanded.has(key);
-							return h("div", { key, className: "cedb-table" },
+					: connections.map((connection) => {
+						const open = openConns[connection.id] === true;
+						const loaded = schemas[connection.id];
+						return h("div", { key: connection.id, className: `cedb-instance${connection.id === activeConn ? " cedb-instance-on" : ""}` },
+							h("div", { className: "cedb-conn" },
 								h("button", {
 									type: "button",
-									className: `cedb-table-row${activeTab?.key === `table:${activeConn}:${database.name}:${entry.name}` ? " cedb-table-on" : ""}`,
-									title: `${entry.name} · ${entry.columns?.length ?? 0} ${t("db.columns")}`,
-									onClick: () => { toggleTable(key); openTable(activeConn, database.name, entry); },
-									onDoubleClick: () => openQueryTab(`SELECT * FROM "${entry.name.replace(/"/g, '""')}" LIMIT 100;`),
+									className: "cedb-conn-main",
+									title: connection.path || connection.label,
+									"aria-expanded": open,
+									onClick: () => {
+										setActiveConn(connection.id);
+										const next = !open;
+										setOpenConns((current) => ({ ...current, [connection.id]: next }));
+										if (next && !loaded) void refreshSchema(connection.id);
+									},
 								},
-								h("span", { className: `cedb-kind cedb-kind-${entry.kind}` }, entry.kind === "view" ? "◇" : "▤"),
-								h("span", { className: "cedb-table-name" }, entry.name)),
-								open && entry.columns?.length
-									? h("ul", { className: "cedb-cols" }, entry.columns.map((column) => h("li", { key: column.name, className: "cedb-col" },
-										h("span", { className: "cedb-col-name" }, column.name),
-										h("span", { className: "cedb-col-type" }, column.type),
-										column.primaryKey ? h("span", { className: "cedb-pk" }, "PK") : null,
-										column.nullable === false ? h("span", { className: "cedb-nn" }, "NN") : null,
-									)))
-									: null,
-							);
-						}),
-					)),
-				) : null,
+								h("span", { className: "cedb-caret" }, open ? "▾" : "▸"),
+								h("span", { className: `cedb-driver cedb-driver-${connection.driver}` }, connection.driver),
+								h("span", { className: "cedb-conn-label" }, connection.label),
+								connection.impl === "module" ? h("span", { className: "cedb-ctx cedb-ctx-dim" }, "module") : null),
+								h("button", { type: "button", className: "ce-tool ce-tiny", title: t("db.disconnect"), onClick: () => void doDisconnect(connection.id) }, "✕")),
+							open
+								? h("div", { className: "cedb-instance-body" },
+									schemaBusy && !loaded ? h("div", { className: "cedb-empty" }, t("loading")) : null,
+									schemaError && connection.id === activeConn ? h("div", { className: "cedb-error cedb-pad" }, schemaError) : null,
+									databasesOf(connection.id).map((database) => h("div", { key: database.name, className: "cedb-db" },
+										h("div", { className: "cedb-db-name" }, database.name, database.tables.length === 0 ? h("span", { className: "cedb-db-hint" }, t("db.notLoaded")) : null),
+										database.tables.map((entry) => {
+											const key = `${connection.id}:${database.name}:${entry.name}`;
+											const expandedTable = expanded.has(key);
+											const tabKey = `table:${connection.id}:${database.name}:${entry.name}`;
+											return h("div", { key, className: "cedb-table" },
+												h("button", {
+													type: "button",
+													className: `cedb-table-row${activeTab?.key === tabKey ? " cedb-table-on" : ""}`,
+													title: `${entry.name} · ${entry.columns?.length ?? 0} ${t("db.columns")}`,
+													onClick: () => { toggleTable(key); setActiveConn(connection.id); openTable(connection.id, database.name, entry); },
+													onDoubleClick: () => openQueryTab(`SELECT * FROM "${entry.name.replace(/"/g, '""')}" LIMIT 100;`),
+												},
+												h("span", { className: `cedb-kind cedb-kind-${entry.kind}` }, entry.kind === "view" ? "◇" : "▤"),
+												h("span", { className: "cedb-table-name" }, entry.name)),
+												expandedTable && entry.columns?.length
+													? h("ul", { className: "cedb-cols" }, entry.columns.map((column) => h("li", { key: column.name, className: "cedb-col" },
+														h("span", { className: "cedb-col-name" }, column.name),
+														h("span", { className: "cedb-col-type" }, column.type),
+														column.primaryKey ? h("span", { className: "cedb-pk" }, "PK") : null,
+														column.nullable === false ? h("span", { className: "cedb-nn" }, "NN") : null,
+													)))
+													: null,
+											);
+										}),
+									)),
+								)
+								: null,
+						);
+					}),
 			),
 			// ---- main ------------------------------------------------------------------
 			h("section", { className: "cedb-main" },

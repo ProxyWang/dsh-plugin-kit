@@ -406,6 +406,9 @@ export const CSS = `
 .cedb-rail-title{display:block}
 .cedb-filter{height:24px;font-size:12px;width:100%}
 .cedb-empty{padding:6px 12px 10px;font-size:12px;color:var(--dsw-alias-label-tertiary,#667);line-height:1.5}
+.cedb-instance{display:flex;flex-direction:column}
+.cedb-instance-body{padding-left:10px;border-left:.5px solid var(--dsw-alias-border-l1,#2a2e35);margin-left:10px}
+.cedb-caret{width:10px;flex:0 0 auto;color:var(--dsw-alias-label-tertiary,#889);font-size:9px}
 .cedb-conn{display:flex;align-items:center;gap:2px;padding:2px 6px 2px 10px;border-left:2px solid transparent}
 .cedb-conn-on{border-left-color:var(--dsw-alias-button-info-fill,#58a6ff);background:color-mix(in srgb,var(--dsw-alias-button-info-fill,#58a6ff) 10%,transparent)}
 .cedb-conn-main{flex:1;min-width:0;display:flex;align-items:center;gap:6px;padding:3px 2px;border:0;background:transparent;color:var(--dsw-alias-label-primary,#dde);font-size:12px;text-align:left;cursor:pointer}

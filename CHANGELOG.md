@@ -3,6 +3,15 @@
 - A saved connection with no stored secret (every dbx import) now **opens the dialog with its fields filled and a line explaining why**, instead of calling connect with an empty password and failing with "Access denied".
 - Saving from that dialog **updates the same profile** rather than creating a near-duplicate: the dialog remembers which profile it is editing.
 
+## Unreleased — the rail is one tree: instance → database → table
+
+The rail listed live connections in one section and the objects of *whichever* connection was active in another, so the instance you just connected appeared twice (as a saved name and as `host:port`) and only one database tree existed at a time.
+
+- **Instances are the tree**: each connection is an expandable node containing its databases and tables; the separate 对象 section is gone. Expanding an instance loads its schema on demand, and the search box filters table names across every expanded instance.
+- **A saved connection keeps its name**: connecting by profile id now labels the instance with the saved label instead of `host:port`; the address stays in the tooltip.
+- The table state (active tab, expanded columns) is keyed by connection, so two instances with a table of the same name no longer collide.
+- Regressions: a profile-backed connection reports its saved label as the instance label.
+
 ## 2.4.0 (2026-11-23)
 
 The database panel stops needing anything installed: the plugin now ships `mysql2` and `pg` as its own dependencies, so a fresh install connects to MySQL and PostgreSQL without a system client. The connection dialog becomes dbx-shaped (engine picker, four tabs, TLS, SSH tunnels, colours, notes), and existing dbx connections can be migrated in one click. The editor opens references on click.
