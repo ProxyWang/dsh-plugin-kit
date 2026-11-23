@@ -18,6 +18,8 @@
   instead of printing `HEAD`; a non-repository workspace renders nothing.
 - **The row cell is icon-sized, so the full name cannot live there.** The host's contract puts the leading seat in a
   16px cell and the trailing seat in a narrow icon strip (that is why the chip clipped even at `min(26em, 62%)`).
+  The chip's font is 8.5px (it was 9.5px) so ~18 characters fit the host's ~110px icon strip without the CSS
+  ellipsis cutting the tail; the chip sizes to its content instead of a percentage cap.
   The chip now keeps the **ending complete**: when the part after the last `/` fits it is shown alone
   (`feat/checkout-panel` → `checkout-panel`), otherwise the front is cut at a separator (`…match-api`), so two
   branches that differ in their tail never look identical. The **complete name moved to the session hover card** —
