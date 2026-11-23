@@ -13506,7 +13506,7 @@ function planTree(columns, rows) {
   if (flat.length === 0) return (rows ?? []).map((row) => ({ depth: 0, detail: String(row[detailIndex] ?? "") }));
   return flat;
 }
-function parseDataText(text) {
+function parseDataText2(text) {
   const source = String(text ?? "").trim();
   if (source === "") return { columns: [], rows: [], error: "empty" };
   if (source.startsWith("[") || source.startsWith("{")) {
@@ -13575,15 +13575,6 @@ function deleteRowSql(options) {
   const { driver, table, database, pkColumn, pkValue } = options ?? {};
   if (!table || !pkColumn || pkValue === void 0) return "";
   return `DELETE FROM ${qualifiedTable(driver, table, database)} WHERE ${quoteIdent(driver, pkColumn)} = ${sqlLiteral(driver, pkValue)};`;
-}
-function insertRowSql(options) {
-  const { driver, table, database, values } = options ?? {};
-  if (!table) return "";
-  const entries = Object.entries(values ?? {}).filter(([, value]) => value !== void 0);
-  if (entries.length === 0) return "";
-  const columns = entries.map(([column]) => quoteIdent(driver, column)).join(", ");
-  const literals = entries.map(([, value]) => sqlLiteral(driver, value)).join(", ");
-  return `INSERT INTO ${qualifiedTable(driver, table, database)} (${columns}) VALUES (${literals});`;
 }
 
 // src/client/dbconnect.js
@@ -13879,7 +13870,7 @@ function useWorkbench({ t, useTabInfo, sessionId, useSessions }) {
     setForm((current) => {
       const defaultNow = defaultPort(current.driver);
       const keep = String(current.port ?? "") !== "" && String(current.port) !== defaultNow;
-      return { activeConn, activeDb, activeTab, activeTabId, allowModule, applyAddress, canConnect, cancelQuery, cellDetail, cellEdit, closeTab, collapsedDbs, commitCell, connectOpen, connectParams, connectProfile, connectRef, connections, copyCommand, copyResult, counts, cwd, databasesOf, dbxState, detailRef, doConnect, doDisconnect, doTest, driverReady, drivers, editingProfileId, expanded, explainState, exportOpen, exportResult, fetchRows, fetched, filter, forgetProfile, form, history, historyOpen, installDriverModule, loadRows, modal, notice, onKeyDown, openConnect, openConns, openQueryTab, openTab, openTable, patchTab, pendingDelete, pickCategory, pickQuery, pickableDrivers, pkColumn, probeDrivers, profileErrors, profileRevision, profiles, refreshSchema, rememberConnection, removeRow, runDbxImport, runMutation, runQuery, saveProfile, schema, schemaBusy, schemaError, schemas: schemas2, selectDatabase, setActiveConn, setActiveDb, setActiveTabId, setAllowModule, setCellDetail, setCellEdit, setCollapsedDbs, setConnectOpen, setConnections, setDbxState, setDriver, setDrivers, setEditingProfileId, setExpanded, setExplainState, setExportOpen, setFilter, setForm, setHistory, setHistoryOpen, setModal, setNotice, setOpenConns, setPendingDelete, setPickCategory, setPickQuery, setProfileErrors, setProfiles, setSaveProfile, setSchemaBusy, setSchemaError, setSchemas, setShowPassword, setStep, setTab, setTabs, setTestState, showPassword, sortBy, sqlRef, step, t, tab, tableEntry, tabs, testState, toggleTable, useSavedProfile };
+      return { activeConn, activeDb, activeTab, activeTabId, allowModule, applyAddress, canConnect, cancelQuery, cellDetail, cellEdit, closeTab, collapsedDbs, commitCell, connectOpen, connectParams, connectProfile, connectRef, connections, copyCommand, copyResult, counts, cwd, databasesOf, dbxState, detailRef, doConnect, doDisconnect, doTest, driverReady, drivers, editingProfileId, expanded, explainState, exportOpen, exportResult, fetchRows, fetched, filter, forgetProfile, form, history, historyOpen, importRows: importRows2, insertRow: insertRow2, installDriverModule, loadRows, modal, notice, onKeyDown, openConnect, openConns, openQueryTab, openTab, openTable, patchTab, pendingDelete, pickCategory, pickQuery, pickableDrivers, pkColumn, probeDrivers, profileErrors, profileRevision, profiles, refreshSchema, rememberConnection, removeRow, runDbxImport, runExplain: runExplain2, runMutation, runQuery, saveProfile, schema, schemaBusy, schemaError, schemas: schemas2, selectDatabase, setActiveConn, setActiveDb, setActiveTabId, setAllowModule, setCellDetail, setCellEdit, setCollapsedDbs, setConnectOpen, setConnections, setDbxState, setDriver, setDrivers, setEditingProfileId, setExpanded, setExplainState, setExportOpen, setFilter, setForm, setHistory, setHistoryOpen, setModal, setNotice, setOpenConns, setPendingDelete, setPickCategory, setPickQuery, setProfileErrors, setProfiles, setSaveProfile, setSchemaBusy, setSchemaError, setSchemas, setShowPassword, setStep, setTab, setTabs, setTestState, showPassword, sortBy, sqlRef, step, t, tab, tableEntry, tabs, testState, toggleTable, useSavedProfile };
     });
     setNotice("");
     setTestState({ busy: false, ok: null, text: "" });
@@ -14287,6 +14278,39 @@ function useWorkbench({ t, useTabInfo, sessionId, useSessions }) {
     });
     await runMutation(sql, t("db.rowUpdated"));
   }, [activeTab, pkColumn, connections, activeConn, runMutation, t]);
+  const runExplain2 = useCallback(() => {
+    const conn = activeTab?.conn || activeConn;
+    const sql = activeTab?.sql ?? "";
+    setModal({ kind: "explain" });
+    setExplainState({ busy: true, result: null, error: "" });
+    api("db.explain", { id: conn, sql }).then((res) => {
+      const value = res.ok ? res.value : null;
+      if (!value || value.error) setExplainState({ busy: false, result: null, error: value?.error ?? res.error ?? "" });
+      else setExplainState({ busy: false, result: value, error: "" });
+    });
+  }, [activeTab, activeConn]);
+  const insertRow2 = useCallback(async (target, table, database, values) => {
+    const driver = connections.find((entry) => entry.id === target)?.driver;
+    const sql = insertRowSql({ driver, table, database, values });
+    if (sql === "") return t("db.importEmpty");
+    const res = await api("db.query", { id: target, sql });
+    if (!res.ok || res.value?.error) return res.value?.error ?? res.error;
+    setModal(null);
+    setNotice(t("db.rowInserted"));
+    return "";
+  }, [connections, t]);
+  const importRows2 = useCallback(async (target, table, text) => {
+    const parsed = parseDataText(text);
+    if (parsed.error !== "") return parsed.error;
+    const driver = connections.find((entry) => entry.id === target)?.driver;
+    const sql = toInsertSql(parsed, table, driver);
+    if (sql === "") return t("db.importEmpty");
+    const res = await api("db.query", { id: target, sql, limit: 1 });
+    if (!res.ok || res.value?.error) return res.value?.error ?? res.error;
+    setModal(null);
+    setNotice(t("db.imported").replace("{n}", String(parsed.rows.length)));
+    return "";
+  }, [connections, t]);
   const removeRow = useCallback(async (rowIndex) => {
     const result = activeTab?.result;
     if (!result || pkColumn === "") return;
@@ -14582,7 +14606,7 @@ function ImportDialog({ t, table, driver, onInsert, onClose }) {
   const [text, setText] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const parsed = useMemo(() => parseDataText(text), [text]);
+  const parsed = useMemo(() => parseDataText2(text), [text]);
   return h(
     "div",
     { className: "cedb-dialog cedb-dialog-wide", role: "dialog", "aria-label": t("db.import") },
@@ -14971,17 +14995,7 @@ function renderWorkbench(wb) {
                   className: "ce-sk-btn",
                   disabled: !String(activeTab.sql ?? "").trim() || activeTab.loading,
                   title: t("db.explainHint"),
-                  onClick: () => {
-                    const conn2 = activeTab.conn || activeConn;
-                    const sql2 = activeTab.sql ?? "";
-                    setModal({ kind: "explain" });
-                    setExplainState({ busy: true, result: null, error: "" });
-                    api("db.explain", { id: conn2, sql: sql2 }).then((res2) => {
-                      const value2 = res2.ok ? res2.value : null;
-                      if (!value2 || value2.error) setExplainState({ busy: false, result: null, error: value2?.error ?? res2.error ?? "" });
-                      else setExplainState({ busy: false, result: value2, error: "" });
-                    });
-                  }
+                  onClick: runExplain
                 }, t("db.explain")),
                 h("button", { type: "button", className: "ce-sk-btn", title: t("db.history"), onClick: () => setHistoryOpen((v) => !v) }, t("db.history")),
                 h("span", { className: "ce-spacer" }),
@@ -15151,14 +15165,9 @@ function renderWorkbench(wb) {
       database: modal.database,
       onClose: () => setModal(null),
       onInsert: async (values) => {
-        const sql2 = insertRowSql({ driver: connections.find((entry) => entry.id === modal.conn)?.driver, table: modal.table, database: modal.database, values });
-        if (sql2 === "") return t("db.importEmpty");
-        const res2 = await api("db.query", { id: modal.conn, sql: sql2 });
-        if (!res2.ok || res2.value?.error) return res2.value?.error ?? res2.error;
-        setModal(null);
-        setNotice(t("db.rowInserted"));
-        modal.onDone?.();
-        return "";
+        const message = await insertRow(modal.conn, modal.table, modal.database, values);
+        if (message === "") modal.onDone?.();
+        return message;
       }
     }) : h(ImportDialog, {
       t,
@@ -15166,16 +15175,9 @@ function renderWorkbench(wb) {
       driver: connections.find((entry) => entry.id === modal.conn)?.driver,
       onClose: () => setModal(null),
       onInsert: async (text2) => {
-        const parsed2 = parseDataText(text2);
-        if (parsed2.error !== "") return parsed2.error;
-        const sql2 = toInsertSql(parsed2, modal.table, connections.find((entry) => entry.id === modal.conn)?.driver);
-        if (sql2 === "") return t("db.importEmpty");
-        const res2 = await api("db.query", { id: modal.conn, sql: sql2, limit: 1 });
-        if (!res2.ok || res2.value?.error) return res2.value?.error ?? res2.error;
-        setModal(null);
-        setNotice(t("db.imported").replace("{n}", String(parsed2.rows.length)));
-        if (modal.onDone) modal.onDone();
-        return "";
+        const message = await importRows(modal.conn, modal.table, text2);
+        if (message === "" && modal.onDone) modal.onDone();
+        return message;
       }
     }),
     // ---- connect dialog ---------------------------------------------------------------

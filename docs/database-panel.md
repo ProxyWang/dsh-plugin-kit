@@ -68,6 +68,16 @@ assert against the rail.
 4. Anything that talks to the Host goes through `api()` with a `db.*` route; a
    new route is added to the `dbRoutes` table and nowhere else.
 
+## Enforced by a test
+
+`test-structure.mjs` (part of `pnpm test` and CI) checks the rules above mechanically:
+
+- no view module imports `api.js` (only the state owner talks to the Host);
+- `db/view.js` and `db/rail.js` contain no `useState`/`useEffect`;
+- files in `lib/host/db/` never import the facade `../db.js`;
+- every split module opens with a doc comment;
+- `db.js` still exports the names callers import.
+
 ## Testing
 
 - `test-host.mjs` — the host modules in isolation (registry, parsing, paging,

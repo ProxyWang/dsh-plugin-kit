@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased — the layering is now enforced, not just documented
+
+- **`test-structure.mjs`** (wired into `pnpm test` and CI) asserts the module map: views never import the Host
+  API, the layout modules hold no hook state, the Host package never imports its own facade, every split module
+  starts with a doc comment, and `db.js` keeps exporting the public surface.
+- Writing the guard found a real leak: the database view called `api("db.explain")` and ran two inserts inline.
+  Those became `runExplain` / `insertRow` / `importRows` actions on the state owner, so the view is markup again.
+- Hoisted `serverTarget` out of `connect` (it had been a nested helper since the TLS/tunnel change).
+
 ## Unreleased — the database panel, split along its seams
 
 No behaviour change; the files now match the responsibilities.

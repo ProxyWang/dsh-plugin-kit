@@ -218,7 +218,7 @@ export function useWorkbench({ t, useTabInfo, sessionId, useSessions }) {
 		setForm((current) => {
 			const defaultNow = defaultPort(current.driver);
 			const keep = String(current.port ?? "") !== "" && String(current.port) !== defaultNow;
-			return { activeConn, activeDb, activeTab, activeTabId, allowModule, applyAddress, canConnect, cancelQuery, cellDetail, cellEdit, closeTab, collapsedDbs, commitCell, connectOpen, connectParams, connectProfile, connectRef, connections, copyCommand, copyResult, counts, cwd, databasesOf, dbxState, detailRef, doConnect, doDisconnect, doTest, driverReady, drivers, editingProfileId, expanded, explainState, exportOpen, exportResult, fetchRows, fetched, filter, forgetProfile, form, history, historyOpen, installDriverModule, loadRows, modal, notice, onKeyDown, openConnect, openConns, openQueryTab, openTab, openTable, patchTab, pendingDelete, pickCategory, pickQuery, pickableDrivers, pkColumn, probeDrivers, profileErrors, profileRevision, profiles, refreshSchema, rememberConnection, removeRow, runDbxImport, runMutation, runQuery, saveProfile, schema, schemaBusy, schemaError, schemas, selectDatabase, setActiveConn, setActiveDb, setActiveTabId, setAllowModule, setCellDetail, setCellEdit, setCollapsedDbs, setConnectOpen, setConnections, setDbxState, setDriver, setDrivers, setEditingProfileId, setExpanded, setExplainState, setExportOpen, setFilter, setForm, setHistory, setHistoryOpen, setModal, setNotice, setOpenConns, setPendingDelete, setPickCategory, setPickQuery, setProfileErrors, setProfiles, setSaveProfile, setSchemaBusy, setSchemaError, setSchemas, setShowPassword, setStep, setTab, setTabs, setTestState, showPassword, sortBy, sqlRef, step, t, tab, tableEntry, tabs, testState, toggleTable, useSavedProfile };
+			return { activeConn, activeDb, activeTab, activeTabId, allowModule, applyAddress, canConnect, cancelQuery, cellDetail, cellEdit, closeTab, collapsedDbs, commitCell, connectOpen, connectParams, connectProfile, connectRef, connections, copyCommand, copyResult, counts, cwd, databasesOf, dbxState, detailRef, doConnect, doDisconnect, doTest, driverReady, drivers, editingProfileId, expanded, explainState, exportOpen, exportResult, fetchRows, fetched, filter, forgetProfile, form, history, historyOpen, importRows, insertRow, installDriverModule, loadRows, modal, notice, onKeyDown, openConnect, openConns, openQueryTab, openTab, openTable, patchTab, pendingDelete, pickCategory, pickQuery, pickableDrivers, pkColumn, probeDrivers, profileErrors, profileRevision, profiles, refreshSchema, rememberConnection, removeRow, runDbxImport, runExplain, runMutation, runQuery, saveProfile, schema, schemaBusy, schemaError, schemas, selectDatabase, setActiveConn, setActiveDb, setActiveTabId, setAllowModule, setCellDetail, setCellEdit, setCollapsedDbs, setConnectOpen, setConnections, setDbxState, setDriver, setDrivers, setEditingProfileId, setExpanded, setExplainState, setExportOpen, setFilter, setForm, setHistory, setHistoryOpen, setModal, setNotice, setOpenConns, setPendingDelete, setPickCategory, setPickQuery, setProfileErrors, setProfiles, setSaveProfile, setSchemaBusy, setSchemaError, setSchemas, setShowPassword, setStep, setTab, setTabs, setTestState, showPassword, sortBy, sqlRef, step, t, tab, tableEntry, tabs, testState, toggleTable, useSavedProfile };
 		});
 		setNotice("");
 		setTestState({ busy: false, ok: null, text: "" });
@@ -674,6 +674,45 @@ export function useWorkbench({ t, useTabInfo, sessionId, useSessions }) {
 			pkValue });
 		await runMutation(sql, t("db.rowUpdated"));
 	}, [activeTab, pkColumn, connections, activeConn, runMutation, t]);
+
+	/** Explain the active tab's statement and open the plan modal. */
+	const runExplain = useCallback(() => {
+		const conn = activeTab?.conn || activeConn;
+		const sql = activeTab?.sql ?? "";
+		setModal({ kind: "explain" });
+		setExplainState({ busy: true, result: null, error: "" });
+		api("db.explain", { id: conn, sql }).then((res) => {
+			const value = res.ok ? res.value : null;
+			if (!value || value.error) setExplainState({ busy: false, result: null, error: value?.error ?? res.error ?? "" });
+			else setExplainState({ busy: false, result: value, error: "" });
+		});
+	}, [activeTab, activeConn]);
+
+	/** Insert the rows of the add-row dialog. @returns an error message or "" */
+	const insertRow = useCallback(async (target, table, database, values) => {
+		const driver = connections.find((entry) => entry.id === target)?.driver;
+		const sql = insertRowSql({ driver, table, database, values });
+		if (sql === "") return t("db.importEmpty");
+		const res = await api("db.query", { id: target, sql });
+		if (!res.ok || res.value?.error) return res.value?.error ?? res.error;
+		setModal(null);
+		setNotice(t("db.rowInserted"));
+		return "";
+	}, [connections, t]);
+
+	/** Insert pasted CSV/JSON rows. @returns an error message or the row count */
+	const importRows = useCallback(async (target, table, text) => {
+		const parsed = parseDataText(text);
+		if (parsed.error !== "") return parsed.error;
+		const driver = connections.find((entry) => entry.id === target)?.driver;
+		const sql = toInsertSql(parsed, table, driver);
+		if (sql === "") return t("db.importEmpty");
+		const res = await api("db.query", { id: target, sql, limit: 1 });
+		if (!res.ok || res.value?.error) return res.value?.error ?? res.error;
+		setModal(null);
+		setNotice(t("db.imported").replace("{n}", String(parsed.rows.length)));
+		return "";
+	}, [connections, t]);
 
 	/** Delete one row (the second click on its button confirms). */
 	const removeRow = useCallback(async (rowIndex) => {

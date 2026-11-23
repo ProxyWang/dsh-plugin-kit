@@ -10,8 +10,6 @@ import { AddRowDialog, DriverManager, ErDiagram, ExplainPanel, ImportDialog } fr
 import { renderRail } from "./rail.js";
 import { CONNECTION_COLORS, CATEGORIES, defaultPort, implSuffix } from "./meta.js";
 import { driverLabel } from "../dbconnect.js";
-import { api } from "../api.js";
-import { insertRowSql, parseDataText, toInsertSql } from "../dbtools.js";
 import { formatCell } from "./grid.js";
 import { PAGE_SIZE, tableSql } from "./format.js";
 
@@ -135,17 +133,7 @@ export function renderWorkbench(wb) {
 											className: "ce-sk-btn",
 											disabled: !String(activeTab.sql ?? "").trim() || activeTab.loading,
 											title: t("db.explainHint"),
-											onClick: () => {
-												const conn = activeTab.conn || activeConn;
-												const sql = activeTab.sql ?? "";
-												setModal({ kind: "explain" });
-												setExplainState({ busy: true, result: null, error: "" });
-												api("db.explain", { id: conn, sql }).then((res) => {
-													const value = res.ok ? res.value : null;
-													if (!value || value.error) setExplainState({ busy: false, result: null, error: value?.error ?? res.error ?? "" });
-													else setExplainState({ busy: false, result: value, error: "" });
-												});
-											} }, t("db.explain")),
+											onClick: runExplain }, t("db.explain")),
 										h("button", { type: "button", className: "ce-sk-btn", title: t("db.history"), onClick: () => setHistoryOpen((v) => !v) }, t("db.history")),
 										h("span", { className: "ce-spacer" }),
 										h("span", { className: "cedb-kbd" }, "⌘/Ctrl+Enter"),
@@ -279,14 +267,9 @@ export function renderWorkbench(wb) {
 								database: modal.database,
 								onClose: () => setModal(null),
 								onInsert: async (values) => {
-									const sql = insertRowSql({ driver: connections.find((entry) => entry.id === modal.conn)?.driver, table: modal.table, database: modal.database, values });
-									if (sql === "") return t("db.importEmpty");
-									const res = await api("db.query", { id: modal.conn, sql });
-									if (!res.ok || res.value?.error) return res.value?.error ?? res.error;
-									setModal(null);
-									setNotice(t("db.rowInserted"));
-									modal.onDone?.();
-									return "";
+									const message = await insertRow(modal.conn, modal.table, modal.database, values);
+									if (message === "") modal.onDone?.();
+									return message;
 								} })
 							: h(ImportDialog, {
 							t,
@@ -294,16 +277,9 @@ export function renderWorkbench(wb) {
 							driver: connections.find((entry) => entry.id === modal.conn)?.driver,
 							onClose: () => setModal(null),
 							onInsert: async (text) => {
-								const parsed = parseDataText(text);
-								if (parsed.error !== "") return parsed.error;
-								const sql = toInsertSql(parsed, modal.table, connections.find((entry) => entry.id === modal.conn)?.driver);
-								if (sql === "") return t("db.importEmpty");
-								const res = await api("db.query", { id: modal.conn, sql, limit: 1 });
-								if (!res.ok || res.value?.error) return res.value?.error ?? res.error;
-								setModal(null);
-								setNotice(t("db.imported").replace("{n}", String(parsed.rows.length)));
-								if (modal.onDone) modal.onDone();
-								return "";
+								const message = await importRows(modal.conn, modal.table, text);
+								if (message === "" && modal.onDone) modal.onDone();
+								return message;
 							} }),
 		// ---- connect dialog ---------------------------------------------------------------
 		connectOpen

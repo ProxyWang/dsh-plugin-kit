@@ -69,5 +69,6 @@ jobs:
       - name: Host + client suites on a runtime with node:sqlite
         run: |
           node scripts/build-client.mjs
+          node test-structure.mjs
           node test-host.mjs
           node test-client.mjs
