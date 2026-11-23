@@ -5269,6 +5269,60 @@ message HelloReply { string message = 1; int32 count = 2; }
 
 // --- the generated bundle: registration + factory --------------------------------------
 
+// --- the client entry registers the sidebar branch chip --------------------------------
+// A reference to a missing import only shows up when `apply` runs: the slot then throws
+// inside the host's error boundary and the feature silently disappears. Run apply here.
+{
+	const documentBackup = globalThis.document;
+	const windowBackup = globalThis.window;
+	globalThis.document = { addEventListener() {}, removeEventListener() {}, querySelector: () => null, createElement: () => ({ style: {}, dataset: {} }), head: { appendChild() {} } };
+	globalThis.window = { addEventListener() {}, removeEventListener() {} };
+	try {
+		const registrations = [];
+		const noop = () => {};
+		const any = () => new Proxy(function () {}, {
+			get(_target, prop) {
+				if (prop === "then") return undefined;
+				if (prop === "subscribe") return () => noop;
+				if (prop === "getSnapshot") return () => [];
+				if (prop === "entries") return () => [];
+				return any();
+			},
+			apply() { return any(); },
+		});
+		const slots = {
+			register(options, component) { registrations.push({ name: options?.name, id: options?.id, component }); return noop; },
+			inject(_name, factory) { factory(); return noop; },
+			entries: () => [],
+		};
+		const ctx = new Proxy({}, {
+			get(_target, prop) {
+				if (prop === "effect") return (fn) => { fn(); return noop; };
+				if (prop === "inject") return (_names, cb) => { cb(ctx); return noop; };
+				if (prop === "slots") return slots;
+				if (prop === "locale") return { bind: () => (key) => key, register: noop, current: () => "zh-CN" };
+				return any();
+			},
+		});
+		const entry = await import("./src/client/index.js");
+		let applyError = null;
+		try { (entry.default ?? entry).apply(ctx); } catch (error) { applyError = error; }
+		check("the client entry applies against a plugin context", applyError === null, String(applyError));
+		const chip = registrations.find((row) => row.name === "sidebar.session.row.trailing");
+		check("the branch chip registers into the session row", chip?.id === "dsh-plugin-kit/session-branch", registrations.map((row) => row.name));
+		// The registration closure must be callable without a missing import throwing.
+		let renderError = null;
+		let rendered = null;
+		try {
+			rendered = chip.component({ sessionId: "s1", useSessions: (select) => select({ byId: { s1: { cwd: "/repo" } } }), t: (key) => key });
+		} catch (error) { renderError = error; }
+		check("the branch chip renders without a missing import", renderError === null && rendered !== null, String(renderError));
+	} finally {
+		globalThis.document = documentBackup;
+		globalThis.window = windowBackup;
+	}
+}
+
 const bundle = await readFile(new URL("./client.js", import.meta.url), "utf8");
 
 // The bundle is a classic script for the DSH client module system: it must register exactly

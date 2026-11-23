@@ -1749,7 +1749,7 @@ function registerToolCloseGuard(sidebarRight, kind, message, doc = document) {
 }
 
 // src/client/api.js
-async function api2(route, body) {
+async function api(route, body) {
   try {
     const res = await fetch(`${API}/${route}`, {
       method: "POST",
@@ -1815,13 +1815,13 @@ function langFor(path) {
   for (const [re, lang] of EXT_LANG) if (re.test(p)) return lang;
   return "text";
 }
-function buildLineStates(lines2, lang = "") {
-  const states = new Uint8Array(lines2.length);
+function buildLineStates(lines, lang = "") {
+  const states = new Uint8Array(lines.length);
   if (HASH_LANGS.has(lang)) return states;
   let state = 0;
-  for (let i = 0; i < lines2.length; i++) {
+  for (let i = 0; i < lines.length; i++) {
     states[i] = state;
-    const line = lines2[i];
+    const line = lines[i];
     let j = 0;
     if (state) {
       const end = line.indexOf("*/");
@@ -1937,7 +1937,7 @@ function externalTerminalAvailable(desktop = globalThis.dshDesktop) {
   return Boolean(desktop);
 }
 function createTerminalEntry({
-  call = api2,
+  call = api,
   desktop = globalThis.dshDesktop,
   now = () => Date.now(),
   debounceMs = OPEN_DEBOUNCE_MS
@@ -2052,12 +2052,12 @@ function loadSbs() {
   }
 }
 function parseDiff(text) {
-  const lines2 = text.split("\n");
-  if (lines2.length > 1 && lines2[lines2.length - 1] === "") lines2.pop();
+  const lines = text.split("\n");
+  if (lines.length > 1 && lines[lines.length - 1] === "") lines.pop();
   const rows = [];
   let oldLine = 0;
   let newLine = 0;
-  for (const line of lines2) {
+  for (const line of lines) {
     if (line.startsWith("@@")) {
       const match = /@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/.exec(line);
       if (match) {
@@ -2417,11 +2417,11 @@ function stripFrontmatter(text) {
 var TABLE_SEP = /^[\s|:-]*-[\s|:-]*$/;
 var PARA_STOP = /^(#{1,6}\s|```|>|\||[-*+]\s|\d+[.)]\s)/;
 function parseMarkdown(text) {
-  const lines2 = stripFrontmatter(text ?? "").split("\n");
+  const lines = stripFrontmatter(text ?? "").split("\n");
   const blocks = [];
   let i = 0;
-  while (i < lines2.length) {
-    const line = lines2[i];
+  while (i < lines.length) {
+    const line = lines[i];
     if (line.trim() === "") {
       i++;
       continue;
@@ -2430,8 +2430,8 @@ function parseMarkdown(text) {
     if (fence !== null) {
       const buf2 = [];
       i++;
-      while (i < lines2.length && !/^```/.test(lines2[i])) {
-        buf2.push(lines2[i]);
+      while (i < lines.length && !/^```/.test(lines[i])) {
+        buf2.push(lines[i]);
         i++;
       }
       i++;
@@ -2449,10 +2449,10 @@ function parseMarkdown(text) {
       i++;
       continue;
     }
-    if (line.trim().startsWith("|") && i + 1 < lines2.length && TABLE_SEP.test(lines2[i + 1].trim())) {
+    if (line.trim().startsWith("|") && i + 1 < lines.length && TABLE_SEP.test(lines[i + 1].trim())) {
       const rows = [];
-      while (i < lines2.length && lines2[i].trim().startsWith("|")) {
-        rows.push(lines2[i].trim());
+      while (i < lines.length && lines[i].trim().startsWith("|")) {
+        rows.push(lines[i].trim());
         i++;
       }
       const cells = (r) => r.replace(/^\|/, "").replace(/\|$/, "").split("|").map((c) => c.trim());
@@ -2461,8 +2461,8 @@ function parseMarkdown(text) {
     }
     if (/^>\s?/.test(line)) {
       const buf2 = [];
-      while (i < lines2.length && /^>\s?/.test(lines2[i])) {
-        buf2.push(lines2[i].replace(/^>\s?/, ""));
+      while (i < lines.length && /^>\s?/.test(lines[i])) {
+        buf2.push(lines[i].replace(/^>\s?/, ""));
         i++;
       }
       blocks.push({ kind: "quote", text: buf2.join(" ") });
@@ -2471,8 +2471,8 @@ function parseMarkdown(text) {
     if (/^[-*+]\s+/.test(line) || /^\d+[.)]\s+/.test(line)) {
       const ordered = /^\d+[.)]\s+/.test(line);
       const items = [];
-      while (i < lines2.length) {
-        const m = ordered ? /^\d+[.)]\s+(.*)$/.exec(lines2[i]) : /^[-*+]\s+(.*)$/.exec(lines2[i]);
+      while (i < lines.length) {
+        const m = ordered ? /^\d+[.)]\s+(.*)$/.exec(lines[i]) : /^[-*+]\s+(.*)$/.exec(lines[i]);
         if (m === null) break;
         items.push(m[1]);
         i++;
@@ -2482,8 +2482,8 @@ function parseMarkdown(text) {
     }
     const buf = [line];
     i++;
-    while (i < lines2.length && lines2[i].trim() !== "" && !PARA_STOP.test(lines2[i])) {
-      buf.push(lines2[i]);
+    while (i < lines.length && lines[i].trim() !== "" && !PARA_STOP.test(lines[i])) {
+      buf.push(lines[i]);
       i++;
     }
     blocks.push({ kind: "p", text: buf.join(" ") });
@@ -2554,7 +2554,7 @@ function BranchPalette({ cwd, repo, current, t, onDone, onClose, onFetch, onPull
   const [busy, setBusy] = useState(false);
   useEffect(() => {
     let alive = true;
-    api2("git.branches", repo ? { cwd, repo } : { cwd }).then((res) => {
+    api("git.branches", repo ? { cwd, repo } : { cwd }).then((res) => {
       if (!alive) return;
       if (!res.ok) {
         setError(res.error);
@@ -2576,7 +2576,7 @@ function BranchPalette({ cwd, repo, current, t, onDone, onClose, onFetch, onPull
   const checkout = (branch) => {
     if (busy || !branch) return;
     setBusy(true);
-    api2("git.checkout", repo ? { cwd, repo, branch } : { cwd, branch }).then((res) => {
+    api("git.checkout", repo ? { cwd, repo, branch } : { cwd, branch }).then((res) => {
       setBusy(false);
       const ok = res.ok && !res.value?.error;
       onDone(ok, ok ? void 0 : res.value?.error ?? res.error);
@@ -3295,7 +3295,7 @@ function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshKey, sta
   const loadDir = useCallback((path) => {
     const isCurrent = requestsRef.current.begin(path);
     setListing((current) => current[path]?.entries ? current : { ...current, [path]: { loading: true } });
-    api2("fs.list", { cwd, path }).then((res) => {
+    api("fs.list", { cwd, path }).then((res) => {
       if (!isCurrent()) return;
       setListing((current) => {
         if (!res.ok) return current[path]?.entries ? current : { ...current, [path]: { error: res.error } };
@@ -3377,13 +3377,13 @@ function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshKey, sta
   const runCreate = (dirPath, name, kind) => {
     const clean = cleanName(name);
     if (clean === null) return;
-    api2("fs.create", { cwd, path: dirPath === "" ? clean : `${dirPath}/${clean}`, kind }).then((res) => finish(res, t("tree.created"), dirPath));
+    api("fs.create", { cwd, path: dirPath === "" ? clean : `${dirPath}/${clean}`, kind }).then((res) => finish(res, t("tree.created"), dirPath));
   };
   const runRename = (path, newName) => {
     const clean = cleanName(newName);
     if (clean === null) return;
     const dir = parentOf(path);
-    api2("fs.rename", { cwd, path, to: dir === "" ? clean : `${dir}/${clean}` }).then((res) => finish(res, t("tree.renamed"), dir));
+    api("fs.rename", { cwd, path, to: dir === "" ? clean : `${dir}/${clean}` }).then((res) => finish(res, t("tree.renamed"), dir));
   };
   const runDelete = async (path) => {
     if (deletePending.current || action?.kind !== "delete" || action.path !== path) return;
@@ -3391,7 +3391,7 @@ function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshKey, sta
     setDeleting(true);
     setDeleteError("");
     try {
-      const res = await api2("fs.delete", { cwd, path });
+      const res = await api("fs.delete", { cwd, path });
       if (!res.ok || res.value?.error) {
         const text = `${t("error")}: ${res.value?.error ?? res.error}`;
         setDeleteError(text);
@@ -3439,7 +3439,7 @@ function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshKey, sta
     const to = toDir === "" ? name : `${toDir}/${name}`;
     if (to === from) return;
     const srcDir = parentDir(from);
-    api2("fs.rename", { cwd, path: from, to }).then((res) => {
+    api("fs.rename", { cwd, path: from, to }).then((res) => {
       if (!res.ok || res.value?.error) {
         onNotify?.(`${t("error")}: ${res.value?.error ?? res.error}`, "error");
         return;
@@ -3806,7 +3806,7 @@ function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commitsOpen, 
   const isRepo = Boolean(git && git.repo);
   const refreshStashes = useCallback(() => {
     if (!cwd || !isRepo) return;
-    api2("git.stash.list", repoSel ? { cwd, repo: repoSel } : { cwd }).then((res) => {
+    api("git.stash.list", repoSel ? { cwd, repo: repoSel } : { cwd }).then((res) => {
       if (res.ok && Array.isArray(res.value?.stashes)) setStashes(res.value.stashes);
     }).catch(() => {
     });
@@ -3815,7 +3815,7 @@ function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commitsOpen, 
   const stashSave = () => {
     if (stashBusy) return;
     setStashBusy(true);
-    api2("git.stash.save", { ...repoArgs, message: stashMsg.trim(), includeUntracked: stashUntracked }).then((res) => {
+    api("git.stash.save", { ...repoArgs, message: stashMsg.trim(), includeUntracked: stashUntracked }).then((res) => {
       setStashBusy(false);
       const value = res.ok ? res.value ?? {} : { error: res.error };
       if (Array.isArray(value.stashes)) setStashes(value.stashes);
@@ -3829,7 +3829,7 @@ function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commitsOpen, 
   const stashApply = (ref, pop) => {
     if (stashBusy) return;
     setStashBusy(true);
-    api2(pop ? "git.stash.pop" : "git.stash.apply", { ...repoArgs, ref }).then((res) => {
+    api(pop ? "git.stash.pop" : "git.stash.apply", { ...repoArgs, ref }).then((res) => {
       setStashBusy(false);
       const value = res.ok ? res.value ?? {} : { error: res.error };
       if (Array.isArray(value.stashes)) setStashes(value.stashes);
@@ -3841,7 +3841,7 @@ function ChangesPanel({ cwd, t, git, repos, repoSel, onSelectRepo, commitsOpen, 
   const stashDrop = (ref) => {
     if (stashBusy) return;
     setStashBusy(true);
-    api2("git.stash.drop", { ...repoArgs, ref }).then((res) => {
+    api("git.stash.drop", { ...repoArgs, ref }).then((res) => {
       setStashBusy(false);
       setStashConfirm(null);
       const value = res.ok ? res.value ?? {} : { error: res.error };
@@ -4673,7 +4673,7 @@ function WorkspaceSymbolPalette({ t, cwd, state, onQuery, onPick, onClose }) {
     )
   );
 }
-function CompareRefsPalette({ t, busy, branches, onRun, onClose }) {
+function CompareRefsPalette({ t, busy, branches: branches2, onRun, onClose }) {
   const panelRef = useDismissLayer({ onDismiss: onClose });
   const [base, setBase] = useState("");
   const [head, setHead] = useState("HEAD");
@@ -4711,8 +4711,8 @@ function CompareRefsPalette({ t, busy, branches, onRun, onClose }) {
     h(
       "div",
       { className: "ce-palette-list ce-scroll" },
-      branches.length === 0 ? h("div", { className: "ce-note" }, t("compare.noRefs")) : null,
-      branches.map(
+      branches2.length === 0 ? h("div", { className: "ce-note" }, t("compare.noRefs")) : null,
+      branches2.map(
         (b) => h(
           "button",
           { key: b.name, type: "button", className: "ce-qitem", title: b.remote ? "remote" : "local", onClick: () => fill(b.name) },
@@ -4762,7 +4762,7 @@ function TaskPalette({ t, state, onRun, onClose }) {
 function TaskOutputPanel({ t, state, onStop, onClose, onOpenFile, tail = 2e3 }) {
   const panelRef = useDismissLayer({ onDismiss: onClose, ignoreSelector: '[data-ce-popup-trigger="task-stop"]' });
   const bodyRef = useRef(null);
-  const lines2 = useMemo(() => {
+  const lines = useMemo(() => {
     const all = [];
     for (const c of state.chunks) all.push(c);
     const text = all.map((c) => c.text).join("");
@@ -4798,7 +4798,7 @@ function TaskOutputPanel({ t, state, onStop, onClose, onOpenFile, tail = 2e3 }) 
     h(
       "div",
       { className: "ce-task-body ce-scroll", ref: bodyRef },
-      lines2.map((r) => {
+      lines.map((r) => {
         const loc = failureAt(r.line);
         return h(
           "div",
@@ -5082,7 +5082,7 @@ function SearchPanel({ t, cwd, state, onQuery, onInclude, onDirectory, onToggleR
     const errors = [];
     const capped = paths2.slice(0, 200);
     for (const path of capped) {
-      const res = await api2("fs.read", { cwd, path });
+      const res = await api("fs.read", { cwd, path });
       if (!res.ok || res.value.kind !== "text") {
         errors.push(path);
         continue;
@@ -5093,7 +5093,7 @@ function SearchPanel({ t, cwd, state, onQuery, onInclude, onDirectory, onToggleR
       }
       const r = replaceInText(res.value.content, state.query, replaceText, { regex: state.regex === true, words: state.words === true });
       if (r.count === 0) continue;
-      const w = await api2("fs.write", { cwd, path, content: r.text, baseMtime: res.value.mtimeMs });
+      const w = await api("fs.write", { cwd, path, content: r.text, baseMtime: res.value.mtimeMs });
       if (!w.ok) {
         errors.push(`${path}: ${w.error}`);
         continue;
@@ -5119,7 +5119,7 @@ function SearchPanel({ t, cwd, state, onQuery, onInclude, onDirectory, onToggleR
       next.add(key);
       if (!ctxCache[r.path]) {
         setCtxCache((c) => ({ ...c, [r.path]: { loading: true } }));
-        api2("fs.read", { cwd, path: r.path }).then((res) => {
+        api("fs.read", { cwd, path: r.path }).then((res) => {
           if (!res.ok || res.value.kind !== "text") {
             setCtxCache((c) => ({ ...c, [r.path]: { error: res.error ?? t("search.ctxFail") } }));
             return;
@@ -5560,8 +5560,8 @@ function segmentReplace(match, repl, sep) {
   const matchParts = match.split(sep);
   return repl.split(sep).map((part, i) => preserveCaseReplace(matchParts[i] ?? "", part)).join(sep);
 }
-function applyReplace(lines2, matches, replaceText, { all = false, index = 0, regexRe = null, preserveCase = false } = {}) {
-  if (!Array.isArray(lines2) || !Array.isArray(matches) || matches.length === 0) return null;
+function applyReplace(lines, matches, replaceText, { all = false, index = 0, regexRe = null, preserveCase = false } = {}) {
+  if (!Array.isArray(lines) || !Array.isArray(matches) || matches.length === 0) return null;
   const targets = all ? matches : [matches[index]].filter(Boolean);
   if (targets.length === 0) return null;
   const replacementFor = (match) => {
@@ -5576,7 +5576,7 @@ function applyReplace(lines2, matches, replaceText, { all = false, index = 0, re
     }
     return preserveCase ? preserveCaseReplace(match.text, text) : text;
   };
-  const next = lines2.slice();
+  const next = lines.slice();
   const byLine = /* @__PURE__ */ new Map();
   for (const m of targets) {
     const rows = byLine.get(m.line) ?? [];
@@ -5643,7 +5643,7 @@ function useGitActions({ cwd, t, say, git, setGit, repoSelRef, refreshGit, loadF
     if (!cwd || sync.busy) return;
     setSync({ busy: true });
     say(t("sync.fetching"));
-    const res = await api2("git.fetch", repoSelRef.current ? { cwd, repo: repoSelRef.current } : { cwd });
+    const res = await api("git.fetch", repoSelRef.current ? { cwd, repo: repoSelRef.current } : { cwd });
     setSync({ busy: false });
     if (!res.ok) {
       say(t("sync.fetchFail", { msg: res.error }), "error");
@@ -5663,7 +5663,7 @@ function useGitActions({ cwd, t, say, git, setGit, repoSelRef, refreshGit, loadF
     setSync({ busy: true });
     say(t("sync.pulling"));
     const before = git?.behind ?? 0;
-    const res = await api2("git.pull", repoSelRef.current ? { cwd, repo: repoSelRef.current } : { cwd });
+    const res = await api("git.pull", repoSelRef.current ? { cwd, repo: repoSelRef.current } : { cwd });
     setSync({ busy: false });
     if (!res.ok) {
       say(t("sync.pullFail", { msg: res.error }), "error");
@@ -5693,7 +5693,7 @@ function useGitActions({ cwd, t, say, git, setGit, repoSelRef, refreshGit, loadF
     if (!cwd || sync.busy) return;
     setSync({ busy: true });
     say(t("sync.pushing"));
-    const res = await api2("git.push", repoSelRef.current ? { cwd, repo: repoSelRef.current } : { cwd });
+    const res = await api("git.push", repoSelRef.current ? { cwd, repo: repoSelRef.current } : { cwd });
     setSync({ busy: false });
     if (!res.ok) {
       say(t("sync.pushFail", { msg: res.error }), "error");
@@ -5710,7 +5710,7 @@ function useGitActions({ cwd, t, say, git, setGit, repoSelRef, refreshGit, loadF
   const discardChange = useCallback(async (item) => {
     if (!cwd) return;
     const repo = repoSelRef.current;
-    const res = await api2("git.discard", repo ? { cwd, path: item.path, repo, ch: item.ch } : { cwd, path: item.path, ch: item.ch });
+    const res = await api("git.discard", repo ? { cwd, path: item.path, repo, ch: item.ch } : { cwd, path: item.path, ch: item.ch });
     if (!res.ok) {
       say(`${t("error")}: ${res.error}`, "error");
       return;
@@ -5727,7 +5727,7 @@ function useGitActions({ cwd, t, say, git, setGit, repoSelRef, refreshGit, loadF
     const revertable = dirItems.filter((item) => item?.ch !== "U");
     const skipped = dirItems.length - revertable.length;
     for (const item of revertable) {
-      const res = await api2("git.discard", repo ? { cwd, path: item.path, repo, ch: item.ch } : { cwd, path: item.path, ch: item.ch });
+      const res = await api("git.discard", repo ? { cwd, path: item.path, repo, ch: item.ch } : { cwd, path: item.path, ch: item.ch });
       if (res.ok && !res.value?.error) okCount += 1;
       else errors.push(`${item.path}: ${res.value?.error ?? res.error}`);
     }
@@ -5746,7 +5746,7 @@ function useGitActions({ cwd, t, say, git, setGit, repoSelRef, refreshGit, loadF
   };
   const deleteUntracked = useCallback(async (item) => {
     if (!cwd || !item?.path) return false;
-    const res = await api2("fs.delete", { cwd, path: toRepoSafePath(item.path) });
+    const res = await api("fs.delete", { cwd, path: toRepoSafePath(item.path) });
     if (!res.ok || res.value?.error) {
       say(`${t("error")}: ${res.value?.error ?? res.error}`, "error");
       return false;
@@ -5762,7 +5762,7 @@ function useGitActions({ cwd, t, say, git, setGit, repoSelRef, refreshGit, loadF
     const targets = Array.isArray(dirItems) && dirItems.length > 0 ? dirItems : [{ path: dirPath }];
     let done = 0;
     for (const item of targets) {
-      const res = await api2("fs.delete", { cwd, path: toRepoSafePath(item.path) });
+      const res = await api("fs.delete", { cwd, path: toRepoSafePath(item.path) });
       if (!res.ok || res.value?.error) {
         say(`${t("error")}: ${res.value?.error ?? res.error}`, "error");
         continue;
@@ -5780,7 +5780,7 @@ function useGitActions({ cwd, t, say, git, setGit, repoSelRef, refreshGit, loadF
   const stageChange = useCallback(async (path) => {
     if (!cwd) return false;
     const repo = repoSelRef.current;
-    const res = await api2("git.stage", repo ? { cwd, path, repo } : { cwd, path });
+    const res = await api("git.stage", repo ? { cwd, path, repo } : { cwd, path });
     if (!res.ok || res.value?.error) {
       say(`${t("error")}: ${res.value?.error ?? res.error}`, "error");
       return false;
@@ -5791,7 +5791,7 @@ function useGitActions({ cwd, t, say, git, setGit, repoSelRef, refreshGit, loadF
   const unstageChange = useCallback(async (path) => {
     if (!cwd) return false;
     const repo = repoSelRef.current;
-    const res = await api2("git.unstage", repo ? { cwd, path, repo } : { cwd, path });
+    const res = await api("git.unstage", repo ? { cwd, path, repo } : { cwd, path });
     if (!res.ok || res.value?.error) {
       say(`${t("error")}: ${res.value?.error ?? res.error}`, "error");
       return false;
@@ -5805,14 +5805,14 @@ function useGitActions({ cwd, t, say, git, setGit, repoSelRef, refreshGit, loadF
     try {
       const repo = repoSelRef.current;
       if (stageAll) {
-        const sres = await api2("git.stage", repo ? { cwd, path: "", repo } : { cwd, path: "" });
+        const sres = await api("git.stage", repo ? { cwd, path: "", repo } : { cwd, path: "" });
         if (!sres.ok || sres.value?.error) {
           say(`${t("error")}: ${sres.value?.error ?? sres.error}`, "error");
           return false;
         }
         if (sres.value.status) setGit(sres.value.status);
       }
-      const res = await api2("git.commit", repo ? { cwd, message, amend: amend === true, repo } : { cwd, message, amend: amend === true });
+      const res = await api("git.commit", repo ? { cwd, message, amend: amend === true, repo } : { cwd, message, amend: amend === true });
       const value = res.ok ? res.value ?? {} : { error: res.error };
       if (value.status) setGit(value.status);
       if (!res.ok || value.error) {
@@ -6048,9 +6048,9 @@ function draftDiskDiff(oldText, newText, path = "") {
 function splitLines(text) {
   const s = String(text ?? "");
   if (s === "") return [];
-  const lines2 = s.split("\n");
-  if (lines2.length > 1 && lines2[lines2.length - 1] === "") lines2.pop();
-  return lines2;
+  const lines = s.split("\n");
+  if (lines.length > 1 && lines[lines.length - 1] === "") lines.pop();
+  return lines;
 }
 function lcsOps(a, b) {
   const n = a.length;
@@ -6116,9 +6116,9 @@ function handleTabIndent(text, start, end, shift) {
   const lineEnd = after.indexOf("\n");
   const blockEnd = lineEnd < 0 ? text.length : start + selected.length + lineEnd;
   const block = text.slice(lineStart, blockEnd);
-  const lines2 = block.split("\n");
+  const lines = block.split("\n");
   let delta = 0;
-  const newLines = lines2.map((line) => {
+  const newLines = lines.map((line) => {
     if (shift) {
       if (line.startsWith("	")) {
         delta--;
@@ -6136,7 +6136,7 @@ function handleTabIndent(text, start, end, shift) {
   });
   const newBlock = newLines.join("\n");
   const newText = text.slice(0, lineStart) + newBlock + text.slice(blockEnd);
-  const newStart = start === end ? Math.max(lineStart, start + (newLines[0].length - lines2[0].length)) : Math.max(lineStart, start + (newLines[0].length - lines2[0].length));
+  const newStart = start === end ? Math.max(lineStart, start + (newLines[0].length - lines[0].length)) : Math.max(lineStart, start + (newLines[0].length - lines[0].length));
   const newEnd = start === end ? newStart : Math.max(lineStart, end + delta);
   return { text: newText, start: newStart, end: newEnd };
 }
@@ -6369,14 +6369,14 @@ function CodeBody(props) {
   useEffect(() => {
     if (!cwd || status.state !== "starting" && !status.progress) return void 0;
     const timer = setInterval(() => {
-      api2("lsp.status", { cwd }).then((r) => r.ok && setStatus(r.value));
+      api("lsp.status", { cwd }).then((r) => r.ok && setStatus(r.value));
     }, 2500);
     return () => clearInterval(timer);
   }, [cwd, status.state, status.progress]);
   const refreshGit = useCallback(() => {
     if (!cwd) return;
     const repo = repoSelRef.current;
-    api2("git.status", repo ? { cwd, repo } : { cwd }).then((res) => {
+    api("git.status", repo ? { cwd, repo } : { cwd }).then((res) => {
       if (!res.ok) {
         setGit({ error: res.error });
         return;
@@ -6403,7 +6403,7 @@ function CodeBody(props) {
     if (!cwd || !LSP_RE.test(path)) return;
     const pull = () => {
       if (openSeqRef.current !== seq) return;
-      api2("lsp.diagnostics", { cwd, path }).then((res) => {
+      api("lsp.diagnostics", { cwd, path }).then((res) => {
         if (res.ok && openSeqRef.current === seq) setDiagnostics(res.value.items ?? []);
       });
     };
@@ -6454,7 +6454,7 @@ function CodeBody(props) {
     async (path, line, col, mark, opts) => {
       if (!cwd || !opts?.background && !canNavigate()) return null;
       if (!opts?.background) dismissPanels();
-      const res = await api2("fs.read", { cwd, path });
+      const res = await api("fs.read", { cwd, path });
       if (!res.ok) {
         if (opts?.checkExternal) say(t("watch.fileGone"), "error");
         else say(`${t("error")}: ${res.error}`, "error");
@@ -6515,9 +6515,9 @@ function CodeBody(props) {
         return null;
       }
       const text = res.value.content;
-      const lines2 = text.split("\n");
-      if (lines2.length > 1 && lines2[lines2.length - 1] === "") lines2.pop();
-      const entry = { path, lines: lines2, states: buildLineStates(lines2, langFor(path)), truncated: res.value.truncated, raw: text, mtimeMs: res.value.mtimeMs };
+      const lines = text.split("\n");
+      if (lines.length > 1 && lines[lines.length - 1] === "") lines.pop();
+      const entry = { path, lines, states: buildLineStates(lines, langFor(path)), truncated: res.value.truncated, raw: text, mtimeMs: res.value.mtimeMs };
       const seq = ++openSeqRef.current;
       peekNonce.current++;
       setPeek(null);
@@ -6535,8 +6535,8 @@ function CodeBody(props) {
       setExternalConflict(null);
       modeRef.current = "code";
       setDiff(null);
-      const clampLine = Math.min(Math.max(1, line), Math.max(1, lines2.length));
-      setCursor({ line: clampLine, col, word: wordAt(lines2[clampLine - 1] ?? "", col)?.word ?? "" });
+      const clampLine = Math.min(Math.max(1, line), Math.max(1, lines.length));
+      setCursor({ line: clampLine, col, word: wordAt(lines[clampLine - 1] ?? "", col)?.word ?? "" });
       setDiagnostics([]);
       setOverlay(null);
       setHover(null);
@@ -6545,12 +6545,12 @@ function CodeBody(props) {
       if (codeRef.current) codeRef.current.scrollTop = opts?.background ? keepScroll : 0;
       if (LSP_RE.test(path)) {
         fetchDiagnostics(path, seq);
-        api2("lsp.request", { cwd, path, kind: "hover", line: 1, col: 1 }).then((warm) => {
+        api("lsp.request", { cwd, path, kind: "hover", line: 1, col: 1 }).then((warm) => {
           if (warm.ok && warm.value.status) setStatus((s) => ({ ...s, ...warm.value.status }));
         }).catch(() => {
         });
         const snonce = ++symbolNonce.current;
-        api2("lsp.request", { cwd, path, kind: "symbol" }).then((r) => {
+        api("lsp.request", { cwd, path, kind: "symbol" }).then((r) => {
           if (openSeqRef.current === seq && symbolNonce.current === snonce && r.ok) setSymbols(r.value.symbols ?? []);
         });
       } else {
@@ -6563,7 +6563,7 @@ function CodeBody(props) {
           autoMarksTimer.current = null;
           if (openSeqRef.current !== markSeq) return;
           const repo = repoSelRef.current;
-          api2("git.diff", repo ? { cwd, path, scope: "working", repo } : { cwd, path, scope: "working" }).then((gres) => {
+          api("git.diff", repo ? { cwd, path, scope: "working", repo } : { cwd, path, scope: "working" }).then((gres) => {
             if (openSeqRef.current !== markSeq || modeRef.current !== "code") return;
             const gval = gres.ok ? gres.value ?? {} : {};
             if (gval.error || gval.untracked || !gval.diff) return;
@@ -6617,13 +6617,13 @@ function CodeBody(props) {
   const generateCommitMessage = useCallback(async () => {
     if (!cwd) return "";
     const repo = repoSelRef.current;
-    const diffRes = await api2("git.diff", repo ? { cwd, path: "", scope: "staged", repo } : { cwd, path: "", scope: "staged" });
+    const diffRes = await api("git.diff", repo ? { cwd, path: "", scope: "staged", repo } : { cwd, path: "", scope: "staged" });
     const diffText = diffRes.ok ? diffRes.value?.diff ?? "" : "";
     if (!diffText.trim()) return "";
-    const lines2 = diffText.split("\n");
-    const adds = lines2.filter((l) => l.startsWith("+") && !l.startsWith("+++")).length;
-    const dels = lines2.filter((l) => l.startsWith("-") && !l.startsWith("---")).length;
-    const files = [...new Set(lines2.filter((l) => l.startsWith("diff --git")).map((l) => l.split(" b/")[1]?.trim()).filter(Boolean))];
+    const lines = diffText.split("\n");
+    const adds = lines.filter((l) => l.startsWith("+") && !l.startsWith("+++")).length;
+    const dels = lines.filter((l) => l.startsWith("-") && !l.startsWith("---")).length;
+    const files = [...new Set(lines.filter((l) => l.startsWith("diff --git")).map((l) => l.split(" b/")[1]?.trim()).filter(Boolean))];
     const summary = files.length <= 3 ? files.join(", ") : `${files.length} files`;
     return `chore: update ${summary} (+${adds} -${dels})`;
   }, [cwd]);
@@ -6807,7 +6807,7 @@ function CodeBody(props) {
         body.base = refs?.base ?? "";
         body.head = refs?.head ?? "HEAD";
       }
-      const res = await api2("git.diff", body);
+      const res = await api("git.diff", body);
       const value = res.ok ? res.value : { error: res.error };
       modeRef.current = "diff";
       setMobileView("editor");
@@ -6822,7 +6822,7 @@ function CodeBody(props) {
     if (!cwd || !canNavigate()) return;
     dismissPanels();
     const repo = repoSelRef.current;
-    const res = await api2("git.diff", repo ? { cwd, path, scope, repo } : { cwd, path, scope });
+    const res = await api("git.diff", repo ? { cwd, path, scope, repo } : { cwd, path, scope });
     const text = res.ok ? res.value.diff ?? "" : "";
     const marks = changedNewLines(text);
     let first = Number.POSITIVE_INFINITY;
@@ -6862,7 +6862,7 @@ function CodeBody(props) {
       body.base = d.base ?? "";
       body.head = d.head ?? "HEAD";
     }
-    const res = await api2("git.diff", body);
+    const res = await api("git.diff", body);
     const value = res.ok ? res.value ?? {} : {};
     setDiff((cur) => cur && cur.path === d.path && cur.scope === d.scope ? { ...cur, text: value.diff ?? "", error: value.error, untracked: value.untracked, note: value.note, base: value.base ?? cur.base, head: value.head ?? cur.head } : cur);
   }, [cwd]);
@@ -6884,7 +6884,7 @@ function CodeBody(props) {
     if (!cwd || !liveOn || tab?.visible === false) return void 0;
     unsupportedWarned.current = false;
     const loop = createWatchLoop({
-      poll: (body) => api2("watch.poll", { cwd, ...body }),
+      poll: (body) => api("watch.poll", { cwd, ...body }),
       onChanges: (v) => watchHandlersRef.current?.applyWatchBatch(v, false),
       onReset: () => watchHandlersRef.current?.applyWatchBatch({ paths: [] }, true),
       onUnsupported: () => {
@@ -6901,7 +6901,7 @@ function CodeBody(props) {
     if (q === "") return void 0;
     const { seq } = wsym;
     const timer = setTimeout(() => {
-      api2("lsp.workspaceSymbol", { cwd, query: q, path: docRef.current?.path ?? "" }).then((r) => {
+      api("lsp.workspaceSymbol", { cwd, query: q, path: docRef.current?.path ?? "" }).then((r) => {
         if (r.ok && r.value.status) setStatus((s) => ({ ...s, ...r.value.status }));
         setWsym((cur) => cur === null || cur.seq !== seq ? cur : {
           ...cur,
@@ -6917,7 +6917,7 @@ function CodeBody(props) {
     if (!blameOn || !doc || !cwd) return void 0;
     let alive = true;
     const repo = repoSelRef.current;
-    api2("git.blame", repo ? { cwd, path: doc.path, repo } : { cwd, path: doc.path }).then((res) => {
+    api("git.blame", repo ? { cwd, path: doc.path, repo } : { cwd, path: doc.path }).then((res) => {
       if (!alive) return;
       if (!res.ok || res.value?.error) {
         setBlame(null);
@@ -6936,7 +6936,7 @@ function CodeBody(props) {
       if (!cwd || !canNavigate()) return;
       dismissPanels();
       const repo = repoSelRef.current;
-      const res = await api2("git.diff", repo ? { cwd, scope: "commit", sha: commit.hash, repo } : { cwd, scope: "commit", sha: commit.hash });
+      const res = await api("git.diff", repo ? { cwd, scope: "commit", sha: commit.hash, repo } : { cwd, scope: "commit", sha: commit.hash });
       const value = res.ok ? res.value : { error: res.error };
       if (value.error) {
         say(`${t("error")}: ${value.error}`, "error");
@@ -6957,7 +6957,7 @@ function CodeBody(props) {
       if (!cwd) return;
       setCompareBusy(true);
       const repo = repoSelRef.current;
-      const res = await api2("git.compare", repo ? { cwd, base, head, repo } : { cwd, base, head });
+      const res = await api("git.compare", repo ? { cwd, base, head, repo } : { cwd, base, head });
       setCompareBusy(false);
       if (!res.ok) {
         say(`${t("error")}: ${res.error}`, "error");
@@ -6980,7 +6980,7 @@ function CodeBody(props) {
     dismissPanels();
     setCompareOpen(true);
     const repo = repoSelRef.current;
-    const res = await api2("git.branches", repo ? { cwd, repo } : { cwd });
+    const res = await api("git.branches", repo ? { cwd, repo } : { cwd });
     if (res.ok && Array.isArray(res.value.branches)) setCompareBranches(res.value.branches);
   }, [cwd, dismissPanels]);
   const taskSeq = useRef(0);
@@ -6988,13 +6988,13 @@ function CodeBody(props) {
     if (!cwd) return;
     dismissPanels();
     setTasks({ scripts: {}, running: {}, busy: true, error: "" });
-    const res = await api2("task.scripts", { cwd });
+    const res = await api("task.scripts", { cwd });
     setTasks((cur) => cur === null ? cur : res.ok && !res.value.error ? { scripts: res.value.scripts ?? {}, running: res.value.running ?? {}, busy: false, error: "" } : { scripts: {}, running: {}, busy: false, error: res.value?.error ?? res.error ?? t("error") });
   }, [cwd, dismissPanels, t]);
   const startTask = useCallback(
     async (script) => {
       if (!cwd) return;
-      const res = await api2("task.start", { cwd, script });
+      const res = await api("task.start", { cwd, script });
       if (!res.ok || res.value.error) {
         say(`${t("error")}: ${res.value?.error ?? res.error}`, "error");
         return;
@@ -7007,7 +7007,7 @@ function CodeBody(props) {
   );
   const stopTask = useCallback(async () => {
     if (!task) return;
-    const res = await api2("task.kill", { id: task.id });
+    const res = await api("task.kill", { id: task.id });
     if (!res.ok || res.value.error) say(`${t("error")}: ${res.value?.error ?? res.error}`, "error");
     else say(t("task.stopRequested"));
   }, [task, say, t]);
@@ -7019,7 +7019,7 @@ function CodeBody(props) {
     let cursor2 = task.seq;
     const pump = async () => {
       while (!cancelled && cursor2 >= 0) {
-        const res = await api2("task.poll", { id, since: cursor2, waitMs: 18e3 });
+        const res = await api("task.poll", { id, since: cursor2, waitMs: 18e3 });
         if (cancelled || active !== taskSeq.current) {
           cursor2 = -1;
           break;
@@ -7047,7 +7047,7 @@ function CodeBody(props) {
       }
       setSeqBusy(true);
       const repo = repoSelRef.current;
-      const res = await api2("git.cherryPick", repo ? { cwd, sha: commit.hash, repo } : { cwd, sha: commit.hash });
+      const res = await api("git.cherryPick", repo ? { cwd, sha: commit.hash, repo } : { cwd, sha: commit.hash });
       setSeqBusy(false);
       const value = res.ok ? res.value ?? {} : { error: res.error };
       if (value.status) setGit(value.status);
@@ -7062,7 +7062,7 @@ function CodeBody(props) {
       if (!cwd) return;
       setSeqBusy(true);
       const repo = repoSelRef.current;
-      const res = await api2("git.resolve", repo ? { cwd, path, side, repo } : { cwd, path, side });
+      const res = await api("git.resolve", repo ? { cwd, path, side, repo } : { cwd, path, side });
       setSeqBusy(false);
       const value = res.ok ? res.value ?? {} : { error: res.error };
       if (value.status) setGit(value.status);
@@ -7077,7 +7077,7 @@ function CodeBody(props) {
       const kind = git?.inProgress ?? "cherry-pick";
       setSeqBusy(true);
       const repo = repoSelRef.current;
-      const res = await api2(action === "continue" ? "git.sequencerContinue" : "git.sequencerAbort", repo ? { cwd, kind, repo } : { cwd, kind });
+      const res = await api(action === "continue" ? "git.sequencerContinue" : "git.sequencerAbort", repo ? { cwd, kind, repo } : { cwd, kind });
       setSeqBusy(false);
       const value = res.ok ? res.value ?? {} : { error: res.error };
       if (value.status) setGit(value.status);
@@ -7094,7 +7094,7 @@ function CodeBody(props) {
     const path = d.path;
     setFileHist({ path, busy: true });
     const repo = repoSelRef.current;
-    api2("git.history", repo ? { cwd, path, repo } : { cwd, path }).then((res) => {
+    api("git.history", repo ? { cwd, path, repo } : { cwd, path }).then((res) => {
       setFileHist((cur) => {
         if (!cur || cur.path !== path) return cur;
         if (!res.ok) return { path, error: res.error };
@@ -7109,7 +7109,7 @@ function CodeBody(props) {
       if (!cwd || !path || !commit?.hash || !canNavigate()) return;
       dismissPanels();
       const repo = repoSelRef.current;
-      const res = await api2("git.diff", repo ? { cwd, path, scope: "commit", sha: commit.hash, repo } : { cwd, path, scope: "commit", sha: commit.hash });
+      const res = await api("git.diff", repo ? { cwd, path, scope: "commit", sha: commit.hash, repo } : { cwd, path, scope: "commit", sha: commit.hash });
       const value = res.ok ? res.value ?? {} : { error: res.error };
       if (value.error) {
         say(`${t("error")}: ${value.error}`, "error");
@@ -7131,7 +7131,7 @@ function CodeBody(props) {
     dismissPanels();
     setMobileView("editor");
     setPalette({ query: "", results: [], busy: true });
-    api2("search.files", { cwd, query: "", limit: 80 }).then((res) => {
+    api("search.files", { cwd, query: "", limit: 80 }).then((res) => {
       setPalette((p) => p && p.query === "" ? { ...p, results: res.ok ? res.value.matches ?? [] : [], busy: false } : p);
     });
   }, [cwd, dismissPanels]);
@@ -7141,7 +7141,7 @@ function CodeBody(props) {
       if (paletteTimer.current) clearTimeout(paletteTimer.current);
       paletteTimer.current = setTimeout(() => {
         if (!cwd) return;
-        api2("search.files", { cwd, query, limit: 80 }).then((res) => {
+        api("search.files", { cwd, query, limit: 80 }).then((res) => {
           setPalette((p) => p && p.query === query ? { ...p, results: res.ok ? res.value.matches ?? [] : [], busy: false } : p);
         });
       }, 140);
@@ -7164,7 +7164,7 @@ function CodeBody(props) {
       if (!cwd) return;
       const nonce = ++searchNonce.current;
       setSearch((s) => s ? { ...s, busy: true, error: void 0 } : s);
-      api2("search.text", { cwd, query, include: include || "", regex: opts?.regex === true, words: opts?.words === true, scope: opts?.scope?.kind ?? "workspace", directory: opts?.scope?.directory, repo: opts?.scope?.repo }).then((res) => {
+      api("search.text", { cwd, query, include: include || "", regex: opts?.regex === true, words: opts?.words === true, scope: opts?.scope?.kind ?? "workspace", directory: opts?.scope?.directory, repo: opts?.scope?.repo }).then((res) => {
         if (searchNonce.current !== nonce) return;
         setSearch((s) => {
           if (!s) return s;
@@ -7220,8 +7220,8 @@ function CodeBody(props) {
       const nonce = ++peekNonce.current;
       setPeek({ symbol, anchorLine: line, busy: true, def: [], refs: [], focus: options.focus !== false });
       const [dres, rres] = await Promise.all([
-        api2("lsp.request", { cwd, path, kind: "definition", line, col }),
-        api2("lsp.request", { cwd, path, kind: "references", line, col })
+        api("lsp.request", { cwd, path, kind: "definition", line, col }),
+        api("lsp.request", { cwd, path, kind: "references", line, col })
       ]);
       if (peekNonce.current !== nonce) return;
       if (dres.ok && dres.value.status) setStatus(dres.value.status);
@@ -7336,7 +7336,7 @@ function CodeBody(props) {
     const useFormat = formatOnSave && LSP_RE.test(doc.path);
     const payload = { cwd, path: doc.path, content: editText };
     if (typeof doc.mtimeMs === "number" && opts?.overwrite !== true) payload.baseMtime = doc.mtimeMs;
-    api2(useFormat ? "fs.formatDraft" : "fs.write", payload).then((res) => {
+    api(useFormat ? "fs.formatDraft" : "fs.write", payload).then((res) => {
       if (!res.ok) {
         if (/modified on disk/i.test(res.error ?? "")) {
           setExternalConflict({ path: doc.path });
@@ -7345,9 +7345,9 @@ function CodeBody(props) {
         return;
       }
       const finalText = useFormat && typeof res.value.content === "string" ? res.value.content : editText;
-      const lines2 = finalText.split("\n");
-      if (lines2.length > 1 && lines2[lines2.length - 1] === "") lines2.pop();
-      setDoc({ ...doc, lines: lines2, states: buildLineStates(lines2, langFor(doc.path)), raw: finalText, mtimeMs: res.value.mtimeMs ?? doc.mtimeMs });
+      const lines = finalText.split("\n");
+      if (lines.length > 1 && lines[lines.length - 1] === "") lines.pop();
+      setDoc({ ...doc, lines, states: buildLineStates(lines, langFor(doc.path)), raw: finalText, mtimeMs: res.value.mtimeMs ?? doc.mtimeMs });
       setEditing(false);
       setExternalConflict(null);
       setConflictDiff(null);
@@ -7362,7 +7362,7 @@ function CodeBody(props) {
     const d = docRef.current;
     if (!d || !cwd) return;
     setConflictDiff({ path: d.path, text: "", add: 0, del: 0, busy: true, error: "" });
-    const res = await api2("fs.read", { cwd, path: d.path });
+    const res = await api("fs.read", { cwd, path: d.path });
     if (!res.ok || res.value.kind !== "text") {
       setConflictDiff({ path: d.path, text: "", add: 0, del: 0, busy: false, error: res.ok ? t("binary") : String(res.error ?? "") });
       return;
@@ -7400,7 +7400,7 @@ function CodeBody(props) {
     const body = { cwd, path, hunkIndex };
     if (typeof hunkHeader === "string" && hunkHeader !== "") body.hunkHeader = hunkHeader;
     if (repo) body.repo = repo;
-    const res = await api2("git.revertHunk", body);
+    const res = await api("git.revertHunk", body);
     const value = res.ok ? res.value ?? {} : { error: res.error };
     if (!res.ok || value.error) {
       say(`${t("error")}: ${value.error ?? res.error}`, "error");
@@ -7420,7 +7420,7 @@ function CodeBody(props) {
     dismissPanels();
     setProblemsOpen(next);
     if (next && cwd) {
-      api2("lsp.workspaceDiagnostics", { cwd }).then((res) => {
+      api("lsp.workspaceDiagnostics", { cwd }).then((res) => {
         if (res.ok) setWorkspaceDiag(res.value.files ?? []);
       }).catch(() => {
       });
@@ -7578,7 +7578,7 @@ function CodeBody(props) {
         return;
       }
       say(t("status.starting"));
-      const res = await api2("lsp.request", { cwd, path: docRef.current.path, kind, line: cur.line, col: cur.col });
+      const res = await api("lsp.request", { cwd, path: docRef.current.path, kind, line: cur.line, col: cur.col });
       setNotice({ text: "", kind: "info" });
       if (!res.ok) {
         say(res.error, "error");
@@ -7707,7 +7707,7 @@ function CodeBody(props) {
     const path = d.path;
     hoverTimer.current = setTimeout(() => {
       hoverTimer.current = null;
-      api2("lsp.request", { cwd, path, kind: "hover", line, col }).then((res) => {
+      api("lsp.request", { cwd, path, kind: "hover", line, col }).then((res) => {
         if (hoverNonce.current !== nonce) return;
         const text = res.ok ? String(res.value.hover ?? "") : "";
         if (text.trim()) setHover({ x: col, y: line, text });
@@ -7721,7 +7721,7 @@ function CodeBody(props) {
       return;
     }
     refreshGit();
-    api2("lsp.status", { cwd }).then((res) => {
+    api("lsp.status", { cwd }).then((res) => {
       if (res.ok) setStatus(res.value);
     });
   }, [cwd, refreshGit]);
@@ -9852,151 +9852,6 @@ function insertStyles() {
   };
 }
 
-// src/client/calldiff.js
-var str = (value) => typeof value === "string" ? value : "";
-function parseHunks(value) {
-  if (!Array.isArray(value) || value.length === 0) return null;
-  const hunks = [];
-  for (const item of value) {
-    if (!item || typeof item !== "object") continue;
-    if (typeof item.path !== "string" || item.path === "") continue;
-    if (typeof item.oldText !== "string" && typeof item.newText !== "string") continue;
-    hunks.push({ path: item.path, oldText: str(item.oldText), newText: str(item.newText) });
-  }
-  return hunks.length > 0 ? hunks : null;
-}
-function lines(text) {
-  return text === "" ? [] : text.split("\n");
-}
-function intendedHunk(call) {
-  const args = call && call.args || {};
-  const path = str(args.file_path);
-  if (path === "") return null;
-  if (/write/i.test(str(call && call.name))) return { path, oldText: "", newText: str(args.content) };
-  return { path, oldText: str(args.old_string), newText: str(args.new_string) };
-}
-function hunksFromBlock(block) {
-  if (!block || typeof block !== "object") return null;
-  if (!("kind" in block)) {
-    const intended = intendedHunk(block);
-    return intended === null ? null : [intended];
-  }
-  const call = block.call && typeof block.call === "object" ? block.call : null;
-  if (!block.isError) {
-    const meta = block.meta;
-    const fromMeta = meta && typeof meta === "object" ? parseHunks(meta.diffs) : null;
-    if (fromMeta !== null) return fromMeta;
-    for (const view of [block.resultView, block.callView]) {
-      if (view && view.card === "diff") {
-        const fromView = parseHunks(view.diffs);
-        if (fromView !== null) return fromView;
-      }
-    }
-    if (call && /write/i.test(str(call.name))) {
-      const intended = intendedHunk(call);
-      if (intended !== null) return [intended];
-    }
-    return null;
-  }
-  const attempted = call ? intendedHunk(call) : null;
-  return attempted === null ? null : [attempted];
-}
-function unifiedFromHunks(hunks) {
-  const files = [];
-  const byPath2 = /* @__PURE__ */ new Map();
-  for (const hunk of hunks) {
-    let list = byPath2.get(hunk.path);
-    if (list === void 0) {
-      list = [];
-      byPath2.set(hunk.path, list);
-      files.push(hunk.path);
-    }
-    list.push(hunk);
-  }
-  let add = 0;
-  let del = 0;
-  const out = [];
-  for (const path of files) {
-    out.push(`--- a/${path}`, `+++ b/${path}`);
-    for (const hunk of byPath2.get(path)) {
-      out.push("@@");
-      for (const line of lines(hunk.oldText)) {
-        out.push(`-${line}`);
-        del++;
-      }
-      for (const line of lines(hunk.newText)) {
-        out.push(`+${line}`);
-        add++;
-      }
-    }
-  }
-  return { text: out.join("\n"), stats: { add, del }, files };
-}
-function relativePath(path, cwd, home) {
-  if (cwd && path.startsWith(`${cwd}/`)) return path.slice(cwd.length + 1);
-  if (home && path.startsWith(`${home}/`)) return `~${path.slice(home.length)}`;
-  return path;
-}
-function summarize(block) {
-  const settled = Boolean(block && typeof block === "object" && "kind" in block);
-  const hunks = hunksFromBlock(block);
-  const call = block && typeof block === "object" ? settled ? block.call : block : null;
-  const argsPath = str(call && call.args && call.args.file_path);
-  const path = hunks && hunks[0].path || argsPath;
-  const stats = hunks ? unifiedFromHunks(hunks).stats : { add: 0, del: 0 };
-  return {
-    hunks,
-    path,
-    add: stats.add,
-    del: stats.del,
-    settled,
-    failed: Boolean(block && block.isError)
-  };
-}
-function CallDiffRow(props) {
-  const block = props ? props.block : null;
-  const toolName = str(props && props.toolName);
-  const info = useMemo(() => summarize(block), [block]);
-  const t = props && props.t || ((key) => key);
-  const label = /write/i.test(toolName) ? t("toolrow.write") : t("toolrow.edit");
-  const display = info.path ? relativePath(info.path, props ? props.cwd : void 0, props ? props.home : void 0) : "";
-  if (!info.settled) {
-    return h(
-      "div",
-      { className: "ce-calrow ce-calrow-run" },
-      h("span", { className: "ce-cal-label" }, label),
-      h("span", { className: "ce-cal-path" }, display || t("toolrow.nopath")),
-      h("span", { className: "ce-cal-hint ce-cal-hint-on" }, t("toolrow.running"))
-    );
-  }
-  const clickable = info.hunks !== null && info.hunks.length > 0 && typeof props.openCallDiff === "function";
-  const onClick = (event) => {
-    if (!clickable) return;
-    const { text, stats, files } = unifiedFromHunks(info.hunks);
-    props.openCallDiff({
-      path: files.length > 1 ? `${files.length} · ${display}` : display,
-      text,
-      stats,
-      gutter: false
-    }, event.currentTarget);
-  };
-  return h(
-    "button",
-    {
-      type: "button",
-      className: `ce-calrow${info.failed ? " ce-calrow-fail" : ""}`,
-      title: clickable ? t("toolrow.hint") : void 0,
-      disabled: !clickable,
-      onClick
-    },
-    h("span", { className: "ce-cal-label" }, label),
-    h("span", { className: "ce-cal-path", title: info.path }, display || t("toolrow.nopath")),
-    info.failed ? h("span", { className: "ce-chip" }, t("toolrow.failed")) : null,
-    h("span", { className: "ce-cal-stats" }, `+${info.add} −${info.del}`),
-    h("span", { className: "ce-cal-hint" }, t("toolrow.hint"))
-  );
-}
-
 // src/client/skills.js
 function skillScope(source) {
   return String(source ?? "").startsWith("project") ? "project" : String(source ?? "").startsWith("user") ? "user" : "provided";
@@ -10037,7 +9892,7 @@ function SkillsView({ cwd, t, say, visible, sessionId }) {
   const load = useCallback(() => {
     const seq = ++listSeq.current;
     setListing(true);
-    api2("skills.list", { cwd }).then((res) => {
+    api("skills.list", { cwd }).then((res) => {
       if (seq !== listSeq.current) return;
       setListing(false);
       if (!res.ok) {
@@ -10085,7 +9940,7 @@ function SkillsView({ cwd, t, say, visible, sessionId }) {
       return;
     }
     setReading(true);
-    api2("skills.read", { cwd, path: skill.path }).then((res) => {
+    api("skills.read", { cwd, path: skill.path }).then((res) => {
       if (seq !== readSeq.current) return;
       setReading(false);
       if (!res.ok) {
@@ -10101,7 +9956,7 @@ function SkillsView({ cwd, t, say, visible, sessionId }) {
     if (!sel || !editMode || readonly || reading || readError || contentTruncated || !dirty || busy) return;
     const seq = readSeq.current;
     setBusy(true);
-    api2("skills.write", { cwd, path: sel.path, content }).then((res) => {
+    api("skills.write", { cwd, path: sel.path, content }).then((res) => {
       if (seq !== readSeq.current) return;
       setBusy(false);
       if (!res.ok) {
@@ -10118,7 +9973,7 @@ function SkillsView({ cwd, t, say, visible, sessionId }) {
     if (!sel || readonly || busy || !confirmDel) return;
     const seq = readSeq.current;
     setBusy(true);
-    api2("skills.delete", { cwd, path: sel.path }).then((res) => {
+    api("skills.delete", { cwd, path: sel.path }).then((res) => {
       if (seq !== readSeq.current) return;
       setBusy(false);
       if (!res.ok) {
@@ -10139,7 +9994,7 @@ function SkillsView({ cwd, t, say, visible, sessionId }) {
     if (!validName || busy || !canLeave()) return;
     const seq = readSeq.current;
     setBusy(true);
-    api2("skills.create", { cwd, name: newName.trim(), scope }).then((res) => {
+    api("skills.create", { cwd, name: newName.trim(), scope }).then((res) => {
       if (seq !== readSeq.current) return;
       setBusy(false);
       if (!res.ok) {
@@ -10730,10 +10585,10 @@ function oneLine(value) {
 function rowsBlock(title, rows) {
   const active = (rows ?? []).filter((r) => r && String(r.name ?? "").trim() !== "");
   if (active.length === 0) return [];
-  const lines2 = [`${title} {`];
-  for (const r of active) lines2.push(`  ${r.enabled === false ? "~" : ""}${quoteKey(r.name)}: ${oneLine(r.value)}`);
-  lines2.push("}");
-  return lines2;
+  const lines = [`${title} {`];
+  for (const r of active) lines.push(`  ${r.enabled === false ? "~" : ""}${quoteKey(r.name)}: ${oneLine(r.value)}`);
+  lines.push("}");
+  return lines;
 }
 function bruNameFor(url, method) {
   const noScheme = String(url ?? "").replace(/^[a-z][a-z0-9+.-]*:\/\//i, "");
@@ -10750,7 +10605,7 @@ function requestToBru(state) {
   const authMode = state?.auth?.mode === "basic" || state?.auth?.mode === "bearer" ? state.auth.mode : "none";
   const queryRows = (state?.paramPairs ?? []).filter((p) => p?.kind !== "path");
   const pathRows = (state?.paramPairs ?? []).filter((p) => p?.kind === "path");
-  const lines2 = [
+  const lines = [
     "meta {",
     `  name: ${oneLine(bruNameFor(state?.url, method))}`,
     "  type: http",
@@ -10764,7 +10619,7 @@ function requestToBru(state) {
   ];
   const push = (block) => {
     if (block.length === 0) return;
-    lines2.push("", ...block);
+    lines.push("", ...block);
   };
   push(rowsBlock("params:query", queryRows));
   push(rowsBlock("params:path", pathRows));
@@ -10776,7 +10631,7 @@ function requestToBru(state) {
   } else if (mode !== "none" && String(state?.body ?? "") !== "") {
     push(["", `body:${mode} {`, String(state.body).split("\n").map((line) => line === "" ? "" : `  ${line}`).join("\n"), "}"]);
   }
-  return `${lines2.join("\n")}
+  return `${lines.join("\n")}
 `;
 }
 function looksLikeBru(text) {
@@ -10803,12 +10658,12 @@ function parseBru(text) {
     formPairs: [],
     auth: { mode: "none", token: "", user: "", pass: "" }
   };
-  const lines2 = String(text ?? "").replace(/\r\n/g, "\n").split("\n");
+  const lines = String(text ?? "").replace(/\r\n/g, "\n").split("\n");
   let i = 0;
   const readBlock = (onLine) => {
     i++;
-    for (; i < lines2.length; i++) {
-      const line = lines2[i];
+    for (; i < lines.length; i++) {
+      const line = lines[i];
       if (line === "}") {
         i++;
         return;
@@ -10820,8 +10675,8 @@ function parseBru(text) {
     const at = line.indexOf(":");
     return at < 0 ? null : [line.slice(0, at).trim(), line.slice(at + 1).trim()];
   };
-  for (; i < lines2.length; i++) {
-    const line = lines2[i].trim();
+  for (; i < lines.length; i++) {
+    const line = lines[i].trim();
     if (line === "" || line.startsWith("#")) continue;
     if (line === "meta {") {
       readBlock((inner) => {
@@ -11139,11 +10994,11 @@ function toCurlSnippet(resolved) {
 }
 function toFetchSnippet(resolved) {
   const req = resolved ?? {};
-  const lines2 = [];
+  const lines = [];
   if (Array.isArray(req.multipart)) {
-    lines2.push("const form = new FormData();");
-    for (const f of req.multipart) lines2.push(`form.append(${JSON.stringify(String(f?.name ?? ""))}, ${JSON.stringify(String(f?.value ?? ""))});`);
-    lines2.push("");
+    lines.push("const form = new FormData();");
+    for (const f of req.multipart) lines.push(`form.append(${JSON.stringify(String(f?.name ?? ""))}, ${JSON.stringify(String(f?.value ?? ""))});`);
+    lines.push("");
   }
   const opts = [`  method: ${JSON.stringify(String(req.method ?? "GET"))}`];
   const headers = req.headers ?? [];
@@ -11155,45 +11010,45 @@ function toFetchSnippet(resolved) {
   if (Array.isArray(req.multipart)) opts.push("  body: form");
   else if (typeof req.body === "string") opts.push(`  body: ${JSON.stringify(req.body)}`);
   if (Number.isFinite(req.timeoutMs) && req.timeoutMs > 0) opts.push(`  signal: AbortSignal.timeout(${req.timeoutMs})`);
-  lines2.push(`const response = await fetch(${JSON.stringify(String(req.url ?? ""))}, {`);
-  lines2.push(opts.join(",\n"));
-  lines2.push("});");
-  lines2.push("");
-  lines2.push("console.log(response.status);");
-  lines2.push("console.log(await response.text());");
-  return lines2.join("\n");
+  lines.push(`const response = await fetch(${JSON.stringify(String(req.url ?? ""))}, {`);
+  lines.push(opts.join(",\n"));
+  lines.push("});");
+  lines.push("");
+  lines.push("console.log(response.status);");
+  lines.push("console.log(await response.text());");
+  return lines.join("\n");
 }
 function pyLiteral(value) {
   return JSON.stringify(String(value ?? ""));
 }
 function toPythonSnippet(resolved) {
   const req = resolved ?? {};
-  const lines2 = ["import requests", ""];
-  lines2.push(`url = ${pyLiteral(req.url)}`);
+  const lines = ["import requests", ""];
+  lines.push(`url = ${pyLiteral(req.url)}`);
   const headers = req.headers ?? [];
   if (headers.length > 0) {
-    lines2.push("headers = {");
-    for (const hd of headers) lines2.push(`    ${pyLiteral(hd?.name)}: ${pyLiteral(hd?.value)},`);
-    lines2.push("}");
+    lines.push("headers = {");
+    for (const hd of headers) lines.push(`    ${pyLiteral(hd?.name)}: ${pyLiteral(hd?.value)},`);
+    lines.push("}");
   }
   const args = [pyLiteral(req.method ?? "GET"), "url"];
   if (headers.length > 0) args.push("headers=headers");
   if (Array.isArray(req.multipart)) {
-    lines2.push("files = [");
-    for (const f of req.multipart) lines2.push(`    (${pyLiteral(f?.name)}, (None, ${pyLiteral(f?.value)})),`);
-    lines2.push("]");
+    lines.push("files = [");
+    for (const f of req.multipart) lines.push(`    (${pyLiteral(f?.name)}, (None, ${pyLiteral(f?.value)})),`);
+    lines.push("]");
     args.push("files=files");
   } else if (typeof req.body === "string") {
-    lines2.push(`data = ${pyLiteral(req.body)}`);
+    lines.push(`data = ${pyLiteral(req.body)}`);
     args.push("data=data");
   }
   if (Number.isFinite(req.timeoutMs) && req.timeoutMs > 0) args.push(`timeout=${Math.max(1, Math.round(req.timeoutMs / 1e3))}`);
-  lines2.push("");
-  lines2.push(`resp = requests.request(${args.join(", ")})`);
-  lines2.push("");
-  lines2.push("print(resp.status_code)");
-  lines2.push("print(resp.text)");
-  return lines2.join("\n");
+  lines.push("");
+  lines.push(`resp = requests.request(${args.join(", ")})`);
+  lines.push("");
+  lines.push("print(resp.status_code)");
+  lines.push("print(resp.text)");
+  return lines.join("\n");
 }
 var SNIPPET_KINDS = [
   { id: "curl", label: "curl", build: toCurlSnippet },
@@ -11750,7 +11605,7 @@ function ApiView({ t, useTabInfo, sessionId, useSessions, incoming }) {
   useEffect(() => {
     if (vaultProbeRef.current) return;
     vaultProbeRef.current = true;
-    api2("vault", { action: "get", ids: [] }).then((res) => {
+    api("vault", { action: "get", ids: [] }).then((res) => {
       if (res.ok) setVaultReady(true);
     }).catch(() => {
     });
@@ -11880,7 +11735,7 @@ function ApiView({ t, useTabInfo, sessionId, useSessions, incoming }) {
         cancelled = true;
       };
     }
-    api2("vault", { action: "get", ids: [...new Set(ids)] }).then((res) => {
+    api("vault", { action: "get", ids: [...new Set(ids)] }).then((res) => {
       applyStores(res.ok ? res.value.values ?? {} : {});
     }).catch(() => applyStores({}));
     return () => {
@@ -11893,7 +11748,7 @@ function ApiView({ t, useTabInfo, sessionId, useSessions, incoming }) {
       return;
     }
     const entries = secretEntries.map(({ stableKey, value }) => ({ key: stableKey, id: secretIdByKeyRef.current[stableKey], value }));
-    const res = await api2("vault", { action: "set", entries }).catch(() => null);
+    const res = await api("vault", { action: "set", entries }).catch(() => null);
     if (!res?.ok) {
       storeJson(key, snapshot2);
       return;
@@ -12019,7 +11874,7 @@ function ApiView({ t, useTabInfo, sessionId, useSessions, incoming }) {
     const sentSnapshot = snapshotWithRefs(snapshot());
     setSending(true);
     setResponseCopied(false);
-    api2("api.send", resolved).then((res) => {
+    api("api.send", resolved).then((res) => {
       setSending(false);
       const value = res.ok ? res.value : { error: res.error };
       if (value?.streaming) {
@@ -12035,7 +11890,7 @@ function ApiView({ t, useTabInfo, sessionId, useSessions, incoming }) {
         });
       } else {
         if (streamRef.current) {
-          void api2("api.streamStop", { id: streamRef.current.id });
+          void api("api.streamStop", { id: streamRef.current.id });
           streamEpoch.current += 1;
           setStream(null);
         }
@@ -12075,7 +11930,7 @@ function ApiView({ t, useTabInfo, sessionId, useSessions, incoming }) {
     let cursor = stream.state.seq;
     const pump = async () => {
       while (!stop && cursor >= 0) {
-        const res = await api2("api.streamPoll", { id, since: cursor, waitMs: 18e3 });
+        const res = await api("api.streamPoll", { id, since: cursor, waitMs: 18e3 });
         if (stop || epoch !== streamEpoch.current) break;
         if (!res.ok || res.value?.error) break;
         const snap = res.value;
@@ -12197,7 +12052,7 @@ function ApiView({ t, useTabInfo, sessionId, useSessions, incoming }) {
       localStorage.setItem(keys.colldir, collectionDir);
     } catch {
     }
-    const res = await api2("collection.load", { cwd: cwd ?? "", dir: collectionDir.trim() });
+    const res = await api("collection.load", { cwd: cwd ?? "", dir: collectionDir.trim() });
     if (!res.ok || res.value.error) {
       setImportError(`${t("api.collectionLoadFailed")}: ${res.value?.error ?? res.error ?? ""}`);
       return;
@@ -12243,7 +12098,7 @@ function ApiView({ t, useTabInfo, sessionId, useSessions, incoming }) {
         setImportError(t("api.collectionSerializeFailed"));
         return;
       }
-      const res = await api2("collection.save", { cwd: cwd ?? "", dir: collectionDir, name, text: bruText });
+      const res = await api("collection.save", { cwd: cwd ?? "", dir: collectionDir, name, text: bruText });
       if (!res.ok || res.value.error) {
         setImportError(`${t("api.collectionSaveFailed")}: ${res.value?.error ?? res.error ?? ""}`);
         return;
@@ -13672,9 +13527,9 @@ function toCsv(columns, rows) {
     const text = value === null || value === void 0 ? "" : String(value);
     return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
   };
-  const lines2 = [columns.map(quote).join(",")];
-  for (const row of rows) lines2.push(row.map(quote).join(","));
-  return lines2.join("\n");
+  const lines = [columns.map(quote).join(",")];
+  for (const row of rows) lines.push(row.map(quote).join(","));
+  return lines.join("\n");
 }
 function tableSql(table, { order, dir, limit, offset, filter, columns, driver }) {
   const q = (name) => driver === "mysql" ? `\`${String(name).replace(/`/g, "``")}\`` : `"${String(name).replace(/"/g, '""')}"`;
@@ -13728,7 +13583,7 @@ function useSchemaCache({ activeConn, connections, t, onSelect, onNotice }) {
     if (!id) return;
     setSchemaBusy(true);
     setSchemaError("");
-    const res = await api2("db.schema", { id });
+    const res = await api("db.schema", { id });
     setSchemaBusy(false);
     if (res.ok) {
       setSchemas((current) => ({ ...current, [id]: res.value }));
@@ -13750,7 +13605,7 @@ function useSchemaCache({ activeConn, connections, t, onSelect, onNotice }) {
       onNotice(t("db.pgCrossDatabase"));
       return;
     }
-    const res = await api2("db.schema", { id: connId, database: databaseName });
+    const res = await api("db.schema", { id: connId, database: databaseName });
     if (!res.ok || !res.value) {
       setSchemaError(res.error ?? "");
       return;
@@ -13808,13 +13663,13 @@ function useProfiles({ cwd, onNotice }) {
   const revision = useRef(0);
   const [profileErrors, setProfileErrors] = useState({});
   const reload = useCallback(async () => {
-    const res = await api2("db.profile.list", {});
+    const res = await api("db.profile.list", {});
     if (!res.ok) return;
     revision.current = res.value.revision ?? 0;
     setProfiles(res.value.profiles ?? []);
   }, []);
   useEffect(() => {
-    api2("db.profile.list", {}).then((res) => {
+    api("db.profile.list", {}).then((res) => {
       if (!res.ok) return;
       revision.current = res.value.revision ?? 0;
       setProfiles(res.value.profiles ?? []);
@@ -13825,7 +13680,7 @@ function useProfiles({ cwd, onNotice }) {
     const port = draftPort(draft);
     const label = draft.driver === "sqlite" ? String(draft.path).split(/[\\/]/).pop() || draft.path : `${draft.host}:${Number(draft.port) || port}${draft.database ? `/${draft.database}` : ""}`;
     const absolute = draft.driver === "sqlite" && draft.path !== "" && !/^(\/|~|[A-Za-z]:[\\/])/.test(draft.path) && cwd ? `${cwd.replace(/\/+$/, "")}/${draft.path.replace(/^\.\//, "")}` : draft.path;
-    const res = await api2("db.profile.save", {
+    const res = await api("db.profile.save", {
       baseRevision: revision.current,
       ...editingProfileId ? { id: editingProfileId } : {},
       label: String(draft.label ?? "").trim() || label,
@@ -13861,7 +13716,7 @@ function useProfiles({ cwd, onNotice }) {
     setProfiles((current) => [res.value.profile, ...current.filter((entry) => entry.id !== res.value.profile.id)]);
   }, [cwd, editingProfileId, onNotice]);
   const forget = useCallback(async (profile) => {
-    await api2("db.profile.delete", { id: profile.id });
+    await api("db.profile.delete", { id: profile.id });
     setProfiles((current) => current.filter((entry) => entry.id !== profile.id));
   }, []);
   return { profiles, setProfiles, revision, profileErrors, setProfileErrors, reload, save, forget, editingProfileId, setEditingProfileId };
@@ -13899,7 +13754,7 @@ function useTabs({ connections, setConnections, activeConn, setActiveConn, t, re
   const fetchRows = useCallback(async (tab) => {
     const token = requestToken("rows");
     patchTab(tab.id, { loading: true, error: "", runToken: token });
-    const res = await api2("db.rows", {
+    const res = await api("db.rows", {
       id: tab.conn,
       token,
       table: tab.table,
@@ -13984,7 +13839,7 @@ function useTabs({ connections, setConnections, activeConn, setActiveConn, t, re
     const token = requestToken("query");
     patchTab(id, { loading: true, error: "", runToken: token });
     const started = Date.now();
-    const res = await api2("db.query", { id: conn, token, sql, limit: QUERY_PAGE2, offset });
+    const res = await api("db.query", { id: conn, token, sql, limit: QUERY_PAGE2, offset });
     const ms = Date.now() - started;
     setHistory((current) => [{ sql, at: Date.now(), ms, ok: res.ok && !res.value?.error }, ...current.filter((entry) => entry.sql !== sql)].slice(0, HISTORY_CAP2));
     if (!res.ok) {
@@ -13997,7 +13852,7 @@ function useTabs({ connections, setConnections, activeConn, setActiveConn, t, re
   const cancelQuery = useCallback(async (tab) => {
     const conn = tab.conn || activeConn;
     if (!conn) return;
-    const res = await api2("db.cancel", { id: conn, ...tab.runToken ? { token: tab.runToken } : {} });
+    const res = await api("db.cancel", { id: conn, ...tab.runToken ? { token: tab.runToken } : {} });
     const value = res.ok ? res.value : null;
     if (!value?.cancelled) {
       patchTab(tab.id, { loading: false, error: "" });
@@ -14063,14 +13918,14 @@ function useConnections() {
   const [activeConn, setActiveConn] = useState("");
   const [activeDb, setActiveDb] = useState({ conn: "", database: "" });
   useEffect(() => {
-    api2("db.connections", {}).then((res) => {
+    api("db.connections", {}).then((res) => {
       if (!res.ok || !Array.isArray(res.value)) return;
       const seen = /* @__PURE__ */ new Set();
       const keep = [];
       for (const connection of res.value) {
         const key = connection.profileId || connection.id;
         if (connection.profileId && seen.has(key)) {
-          void api2("db.disconnect", { id: connection.id });
+          void api("db.disconnect", { id: connection.id });
           continue;
         }
         seen.add(key);
@@ -14082,7 +13937,7 @@ function useConnections() {
     });
   }, []);
   const disconnect = useCallback(async (id) => {
-    await api2("db.disconnect", { id });
+    await api("db.disconnect", { id });
     setConnections((current) => current.filter((entry) => entry.id !== id));
     if (activeConn === id) setActiveConn("");
   }, [activeConn]);
@@ -14103,7 +13958,7 @@ function useDrivers({ cwd, t, onNotice }) {
   const [installState, setInstallState] = useState(null);
   const probe = useCallback(async (refresh = false) => {
     const body = { allowWorkspace: allowModule === true, ...refresh ? { refresh: true } : {} };
-    const res = await api2("db.drivers", body);
+    const res = await api("db.drivers", body);
     if (res.ok) setDrivers(res.value ?? []);
   }, [allowModule]);
   useEffect(() => {
@@ -14118,7 +13973,7 @@ function useDrivers({ cwd, t, onNotice }) {
   }, []);
   const install = useCallback(async (name) => {
     setInstallState((current) => ({ ...current ?? {}, installing: name, error: "" }));
-    const res = await api2("db.driver.install", { name, cwd });
+    const res = await api("db.driver.install", { name, cwd });
     const value = res.ok ? res.value : null;
     if (!value || value.error) {
       setInstallState((current) => ({ ...current ?? {}, installing: "", error: value?.error ?? res.error ?? "" }));
@@ -14265,7 +14120,7 @@ function useConnectWizard({ cwd, t, drivers, allowModule, saveDraft, onConnected
   const doTest = useCallback(async () => {
     if (!canConnect) return;
     setTestState({ busy: true, ok: null, text: "" });
-    const res = await api2("db.test", connectParams());
+    const res = await api("db.test", connectParams());
     if (!res.ok) {
       setTestState({ busy: false, ok: false, text: res.error });
       return;
@@ -14278,7 +14133,7 @@ function useConnectWizard({ cwd, t, drivers, allowModule, saveDraft, onConnected
   }, [canConnect, connectParams, t]);
   const doConnect = useCallback(async () => {
     if (!canConnect) return;
-    const res = await api2("db.connect", connectParams());
+    const res = await api("db.connect", connectParams());
     if (!res.ok) {
       onNotice(res.error);
       return;
@@ -14337,7 +14192,7 @@ function useMutations({ t, connections, activeConn, activeTab, schemas: schemas2
   const runMutation = useCallback(async (sql, message) => {
     const conn = activeTab?.conn || activeConn;
     if (!conn || sql === "") return;
-    const res = await api2("db.query", { id: conn, sql });
+    const res = await api("db.query", { id: conn, sql });
     const value = res.ok ? res.value : null;
     if (!value || value.error) {
       onNotice(value?.error ?? res.error ?? "");
@@ -14383,7 +14238,7 @@ function useMutations({ t, connections, activeConn, activeTab, schemas: schemas2
   const insertRow2 = useCallback(async (target, table, database, values) => {
     const sql = insertRowSql({ driver: driverOf(target), table, database, values });
     if (sql === "") return t("db.importEmpty");
-    const res = await api2("db.query", { id: target, sql });
+    const res = await api("db.query", { id: target, sql });
     if (!res.ok || res.value?.error) return res.value?.error ?? res.error;
     onModal(null);
     onNotice(t("db.rowInserted"));
@@ -14394,7 +14249,7 @@ function useMutations({ t, connections, activeConn, activeTab, schemas: schemas2
     if (parsed.error !== "") return parsed.error;
     const sql = toInsertSql(parsed, table, driverOf(target));
     if (sql === "") return t("db.importEmpty");
-    const res = await api2("db.query", { id: target, sql, limit: 1 });
+    const res = await api("db.query", { id: target, sql, limit: 1 });
     if (!res.ok || res.value?.error) return res.value?.error ?? res.error;
     onModal(null);
     onNotice(t("db.imported").replace("{n}", String(parsed.rows.length)));
@@ -14405,7 +14260,7 @@ function useMutations({ t, connections, activeConn, activeTab, schemas: schemas2
     const sql = activeTab?.sql ?? "";
     onModal({ kind: "explain" });
     setExplainState({ busy: true, result: null, error: "" });
-    api2("db.explain", { id: conn, sql }).then((res) => {
+    api("db.explain", { id: conn, sql }).then((res) => {
       const value = res.ok ? res.value : null;
       if (!value || value.error) setExplainState({ busy: false, result: null, error: value?.error ?? res.error ?? "" });
       else setExplainState({ busy: false, result: value, error: "" });
@@ -14601,7 +14456,7 @@ function useWorkbench({ t, useTabInfo, sessionId, useSessions }) {
   const connectRef = useDismissLayer({ open: connectOpen, onDismiss: () => setConnectOpen(false) });
   const runDbxImport = useCallback(async (apply) => {
     setImportState((current) => ({ ...current ?? {}, busy: true }));
-    const res = await api2("db.import.dbx", { apply });
+    const res = await api("db.import.dbx", { apply });
     const value = res.ok ? res.value : null;
     if (!value || value.error) {
       setImportState({ busy: false, error: value?.error ?? res.error ?? "" });
@@ -14609,7 +14464,7 @@ function useWorkbench({ t, useTabInfo, sessionId, useSessions }) {
     }
     setImportState({ busy: false, ...value });
     if (apply && value.imported > 0) {
-      const list = await api2("db.profile.list", {});
+      const list = await api("db.profile.list", {});
       if (list.ok) {
         profileRevision.current = list.value.revision ?? profileRevision.current;
         setProfiles(list.value.profiles ?? []);
@@ -14632,7 +14487,7 @@ function useWorkbench({ t, useTabInfo, sessionId, useSessions }) {
       if (!schemas2[existing.id]) void refreshSchema(existing.id);
       return existing.id;
     }
-    const res = await api2("db.connect", { profileId: profile.id, cwd });
+    const res = await api("db.connect", { profileId: profile.id, cwd });
     if (!res.ok) {
       setNotice(res.error);
       setProfileErrors((current) => ({ ...current, [profile.id]: res.error }));
@@ -15968,7 +15823,7 @@ function ProtoPicker({ t, cwd, box, onPick, onClose }) {
     let alive = true;
     setBusy(true);
     const timer = setTimeout(() => {
-      api2("search.files", { cwd, query, suffix: ".proto", limit: 200 }).then((res) => {
+      api("search.files", { cwd, query, suffix: ".proto", limit: 200 }).then((res) => {
         if (!alive) return;
         setBusy(false);
         const paths2 = (res.ok ? res.value.matches ?? [] : []).map((entry) => entry.path).filter((path) => typeof path === "string" && path.toLowerCase().endsWith(".proto"));
@@ -16139,7 +15994,7 @@ function RpcView({ t, useTabInfo, sessionId, useSessions, incoming }) {
     }
     setProtoBusy(true);
     setProtoError("");
-    const res = await api2("rpc.proto", { cwd, path });
+    const res = await api("rpc.proto", { cwd, path });
     setProtoBusy(false);
     if (!res.ok) {
       setProtoError(res.error);
@@ -16168,7 +16023,7 @@ function RpcView({ t, useTabInfo, sessionId, useSessions, incoming }) {
     }
     setProtoBusy(true);
     setProtoError("");
-    const res = await api2("rpc.discover", { url: target, insecureTls, timeoutMs });
+    const res = await api("rpc.discover", { url: target, insecureTls, timeoutMs });
     setProtoBusy(false);
     const value = res.ok ? res.value : { error: res.error };
     if (value.error) {
@@ -16258,7 +16113,7 @@ function RpcView({ t, useTabInfo, sessionId, useSessions, incoming }) {
     }
     const body = interpolateDeep(request.value, vars);
     const target = interpolateVariables(address.trim(), vars);
-    const res = await api2("rpc.call", {
+    const res = await api("rpc.call", {
       cwd,
       proto: protoPath.trim(),
       ...schemaId ? { schemaId } : {},
@@ -17343,7 +17198,7 @@ function BrowserPage({ sessionId, tab, sub, active, confirmRestore, envelope, li
 }
 
 // src/client/browsermodel.js
-function createBrowserDataModel(call = api2) {
+function createBrowserDataModel(call = api) {
   let snapshot = { data: null, error: "", busy: false };
   const listeners = /* @__PURE__ */ new Set();
   let refresh;
@@ -18689,10 +18544,10 @@ function createRenderer({ container, doc = globalThis.document, theme = () => ({
   }
   function paint(screen, { offset = 0 } = {}) {
     themeValue = theme();
-    const lines2 = screen.viewportAt(offset);
-    ensureRows(lines2.length);
-    for (let i = 0; i < lines2.length; i++) {
-      const line = lines2[i];
+    const lines = screen.viewportAt(offset);
+    ensureRows(lines.length);
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
       const version = line?.version ?? 0;
       if (versions[i] === version) continue;
       versions[i] = version;
@@ -19580,6 +19435,64 @@ function pruneOrphanKeys(liveSessionIds, storage = globalThis.localStorage) {
   return removed;
 }
 
+// src/client/branchchip.js
+var POLL_MS = 4e3;
+var branches = /* @__PURE__ */ new Map();
+async function readBranch(cwd, entry) {
+  const res = await api("git.branch", { cwd });
+  const value = res.ok ? res.value : null;
+  entry.repo = value?.repo === true;
+  entry.branch = entry.repo ? String(value.branch ?? "") : "";
+  for (const listener of entry.listeners) listener({ repo: entry.repo, branch: entry.branch });
+}
+function watchBranch(cwd, listener) {
+  let entry = branches.get(cwd);
+  if (!entry) {
+    entry = { repo: false, branch: "", listeners: /* @__PURE__ */ new Set(), timer: null };
+    branches.set(cwd, entry);
+    entry.timer = setInterval(() => readBranch(cwd, entry), POLL_MS);
+    void readBranch(cwd, entry);
+  }
+  entry.listeners.add(listener);
+  listener({ repo: entry.repo, branch: entry.branch });
+  return () => {
+    entry.listeners.delete(listener);
+    if (entry.listeners.size > 0) return;
+    clearInterval(entry.timer);
+    branches.delete(cwd);
+  };
+}
+function sessionCwd(useSessions, sessionId) {
+  const id = String(sessionId ?? "");
+  if (id === "" || typeof useSessions !== "function") return "";
+  const cwd = useSessions((select) => select?.byId?.[id]?.cwd);
+  return String(cwd ?? "");
+}
+function SessionBranch({ t, cwd }) {
+  const [state, setState] = useState({ repo: false, branch: "" });
+  useEffect(() => {
+    if (!cwd) return void 0;
+    const stop = watchBranch(cwd, setState);
+    const onFocus = () => {
+      const entry = branches.get(cwd);
+      if (entry) void readBranch(cwd, entry);
+    };
+    if (typeof window !== "undefined" && typeof window.addEventListener === "function") window.addEventListener("focus", onFocus);
+    return () => {
+      stop();
+      if (typeof window !== "undefined" && typeof window.removeEventListener === "function") window.removeEventListener("focus", onFocus);
+    };
+  }, [cwd]);
+  if (!state.repo || state.branch === "") return null;
+  const label = state.branch === "HEAD" ? t("branch.detached") : state.branch;
+  return h(
+    "span",
+    { className: "ce-branch-chip", title: `${t("branch.current")}: ${label}` },
+    h("span", { className: "ce-branch-glyph", "aria-hidden": "true" }, "⎇"),
+    h("span", { className: "ce-branch-name" }, label)
+  );
+}
+
 // src/client/index.js
 var index_default = {
   inject: ["slots", "locale", "sidebarRightTabs", "sidebarRight", "layout"],
@@ -19723,123 +19636,13 @@ var index_default = {
       name: "sidebar.right.pane.tab.title",
       key: RPC_TAB_ID
     }, RpcTitle)));
-    const diag = (text) => {
-      api("diag.note", { text }).catch(() => {
-      });
-    };
-    diag("client apply: branch chip section reached");
-    safe("session branch chip", () => {
-      try {
-        const dispose = ctx.slots.inject("sidebar.session.row.trailing", () => ctx.slots.register(
-          { name: "sidebar.session.row.trailing", id: "dsh-plugin-kit/session-branch", order: 20, locale: NS },
-          (props) => {
-            diag(`slot render: keys=${Object.keys(props ?? {}).join(",")} session=${props?.sessionId ?? ""}`);
-            const cwd = sessionCwd(props?.useSessions, props?.sessionId);
-            diag(`slot cwd=${cwd}`);
-            return cwd === "" ? null : h(SessionBranch, { t: bound, cwd });
-          }
-        ));
-        diag("slot registered");
-        return dispose;
-      } catch (error) {
-        diag(`slot registration threw: ${String(error?.message ?? error)}`);
-        throw error;
+    safe("session branch chip", () => ctx.slots.inject("sidebar.session.row.trailing", () => ctx.slots.register(
+      { name: "sidebar.session.row.trailing", id: "dsh-plugin-kit/session-branch", order: 20, locale: NS },
+      (props) => {
+        const cwd = sessionCwd(props?.useSessions, props?.sessionId);
+        return cwd === "" ? null : h(SessionBranch, { t: bound, cwd });
       }
-    });
-    safe("call diff rows", () => ctx.slots.inject("tool.call.toolview", function* () {
-      const bridge = {
-        t: bound,
-        openCallDiff: (payload, element) => {
-          const target = ctx.sidebarRight.commandTarget(element);
-          if (target === void 0) return false;
-          ctx.sidebarRight.openTabFromTarget(TAB_KIND, target);
-          setTimeout(() => document.dispatchEvent(new CustomEvent("dsh-ce-open-calldiff", { detail: payload })), 250);
-          return true;
-        }
-      };
-      yield ctx.slots.register({ name: "tool.call.toolview", key: "edit", priority: -1, inject: () => bridge }, CallDiffRow);
-      yield ctx.slots.register({ name: "tool.call.toolview", key: "write", priority: -1, inject: () => bridge }, CallDiffRow);
-    }));
-    ctx.inject(["shortcuts"], (shortcutCtx) => {
-      try {
-        shortcutCtx.effect(() => shortcutCtx.shortcuts.register({
-          id: "code.explorer",
-          label: () => bound("guide.title"),
-          aliases: ["code explorer", "code browser", "daima"],
-          defaults: {
-            "desktop:macos": { code: "KeyE", modifiers: ["primary"] },
-            "desktop:windows": { code: "KeyE", modifiers: ["primary"] },
-            "desktop:linux": { code: "KeyE", modifiers: ["primary"] },
-            "web:macos": { code: "KeyE", modifiers: ["primary", "alt"] },
-            "web:windows": { code: "KeyE", modifiers: ["primary", "alt"] },
-            "web:linux": { code: "KeyE", modifiers: ["primary", "alt"] }
-          },
-          regions: ["page", "editable", "terminal"],
-          modals: [],
-          resolve: ({ target: element }) => {
-            const target = ctx.sidebarRight.commandTarget(element);
-            if (target === void 0) return { status: "blocked", reason: bound("shortcut.noSession") };
-            return { status: "handled", run: () => ctx.sidebarRight.openTabFromTarget(TAB_KIND, target) };
-          }
-        }), "code-explorer: open shortcut");
-      } catch (error) {
-        console.warn("code-explorer: open shortcut not registered", error);
-      }
-      try {
-        shortcutCtx.effect(() => shortcutCtx.shortcuts.register({
-          id: "code.quickopen",
-          label: () => bound("quickopen.command"),
-          aliases: ["quick open", "file picker", "kuai su da kai"],
-          defaults: {
-            "desktop:macos": { code: "KeyP", modifiers: ["primary", "alt"] },
-            "desktop:windows": { code: "KeyP", modifiers: ["primary", "alt"] },
-            "desktop:linux": { code: "KeyP", modifiers: ["primary", "alt"] },
-            "web:macos": { code: "KeyP", modifiers: ["primary", "alt", "shift"] },
-            "web:windows": { code: "KeyP", modifiers: ["primary", "alt", "shift"] },
-            "web:linux": { code: "KeyP", modifiers: ["primary", "alt", "shift"] }
-          },
-          regions: ["page", "editable", "terminal"],
-          modals: [],
-          resolve: ({ target: element }) => {
-            const target = ctx.sidebarRight.commandTarget(element);
-            if (target === void 0) return { status: "blocked", reason: bound("shortcut.noSession") };
-            return {
-              status: "handled",
-              run: () => {
-                ctx.sidebarRight.openTabFromTarget(TAB_KIND, target);
-                setTimeout(() => document.dispatchEvent(new CustomEvent("dsh-ce-quick-open")), 250);
-              }
-            };
-          }
-        }), "code-explorer: quick-open shortcut");
-      } catch (error) {
-        console.warn("code-explorer: quick-open shortcut not registered", error);
-      }
-      try {
-        shortcutCtx.effect(() => shortcutCtx.shortcuts.register({
-          id: "code.skills",
-          label: () => bound("skillsGuide.title"),
-          aliases: ["skills", "skill manager", "jineng"],
-          defaults: {
-            "desktop:macos": { code: "KeyE", modifiers: ["primary", "shift"] },
-            "desktop:windows": { code: "KeyE", modifiers: ["primary", "shift"] },
-            "desktop:linux": { code: "KeyE", modifiers: ["primary", "shift"] },
-            "web:macos": { code: "KeyE", modifiers: ["primary", "alt", "shift"] },
-            "web:windows": { code: "KeyE", modifiers: ["primary", "alt", "shift"] },
-            "web:linux": { code: "KeyE", modifiers: ["primary", "alt", "shift"] }
-          },
-          regions: ["page", "editable", "terminal"],
-          modals: [],
-          resolve: ({ target: element }) => {
-            const target = ctx.sidebarRight.commandTarget(element);
-            if (target === void 0) return { status: "blocked", reason: bound("shortcut.noSession") };
-            return { status: "handled", run: () => ctx.sidebarRight.openTabFromTarget(SKILLS_TAB_KIND, target) };
-          }
-        }), "code-explorer: skills shortcut");
-      } catch (error) {
-        console.warn("code-explorer: skills shortcut not registered", error);
-      }
-    });
+    )));
     safe("left tool entries", () => installLeftTools(ctx, bound));
     const Guide = () => h(WorkspaceGuide, { t: bound });
     safe("workspace guide", () => ctx.slots.inject("sidebar.right.tab.guide", () => ctx.slots.register({

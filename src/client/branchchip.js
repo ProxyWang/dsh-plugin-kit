@@ -12,8 +12,6 @@
 import { h, useEffect, useState } from "./react.js";
 import { api } from "./api.js";
 
-// TEMP(diag): remove with the diag route.
-const diag = (text) => { api("diag.note", { text }).catch(() => {}); };
 
 /** How often each workspace re-reads its branch while a row is visible. */
 const POLL_MS = 4000;
@@ -24,7 +22,6 @@ const branches = new Map();
 /** Read one workspace's branch and push it to its listeners. */
 async function readBranch(cwd, entry) {
 	const res = await api("git.branch", { cwd });
-	diag(`git.branch ${cwd} ok=${res.ok} err=${res.ok ? "" : String(res.error ?? "").slice(0, 120)}`);
 	const value = res.ok ? res.value : null;
 	entry.repo = value?.repo === true;
 	entry.branch = entry.repo ? String(value.branch ?? "") : "";
@@ -83,7 +80,6 @@ export function SessionBranch({ t, cwd }) {
 	const [state, setState] = useState({ repo: false, branch: "" });
 
 	useEffect(() => {
-		diag(`chip effect cwd=${cwd}`);
 		if (!cwd) return undefined;
 		const stop = watchBranch(cwd, setState);
 		const onFocus = () => {

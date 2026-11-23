@@ -2,8 +2,12 @@
 
 ## Unreleased — the branch next to the workspace, live
 
-- **Fix: the chip never appeared.** The first version read the workspace from `ctx.inject(["sessions"], …)`, a client
-  service no installed package provides, so the registration never ran. The slot contract passes every occupant
+- **Fix: the chip never appeared.** The real cause was mundane: `src/client/index.js` registered the chip but never
+  imported it, so the slot component threw `ReferenceError` inside the host's error boundary and the feature
+  vanished silently. The first version also read the workspace from `ctx.inject(["sessions"], …)`, a client service
+  no installed package provides; the slot contract passes `useSessions` + `sessionId` instead, which is what the
+  chip now uses. A new test calls the client entry's `apply` against a plugin context and asserts the registration
+  exists and renders — that is the guard for this whole class of "registers but references a missing import". The slot contract passes every occupant
   `useSessions` plus `sessionId`; the chip now resolves the workspace from those props, and the client manifest
   declares `@deepseek-ai/dsh-client-ui-workspace` so the panel that declares the slot is loaded first.
 - **A branch chip in the sidebar.** The Host's workspace list exposes per-session rows (`sidebar.session.row.trailing`)

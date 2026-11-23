@@ -19,6 +19,7 @@ import { createTerminalEntry } from "./terminal.js";
 import { installTerminalTab, TERM_TAB_KIND } from "./termtab.js";
 import { installRightbarWidth } from "./rightbarwidth.js";
 import { pruneOrphanKeys } from "./orphans.js";
+import { SessionBranch, sessionCwd } from "./branchchip.js";
 
 export default {
 	inject: ["slots", "locale", "sidebarRightTabs", "sidebarRight", "layout"],
@@ -174,121 +175,13 @@ export default {
 		// header slot, so the branch rides on each session row of that workspace.
 		// The slot hands every occupant `useSessions`, which is how the row finds
 		// its own workspace — no separate service injection needed.
-		// TEMP(diag): prove this bundle ran and whether the registration sticks.
-		const diag = (text) => { api("diag.note", { text }).catch(() => {}); };
-		diag("client apply: branch chip section reached");
-		safe("session branch chip", () => { try {
-			const dispose = ctx.slots.inject("sidebar.session.row.trailing", () => ctx.slots.register(
+		safe("session branch chip", () => ctx.slots.inject("sidebar.session.row.trailing", () => ctx.slots.register(
 			{ name: "sidebar.session.row.trailing", id: "dsh-plugin-kit/session-branch", order: 20, locale: NS },
 			(props) => {
-				diag(`slot render: keys=${Object.keys(props ?? {}).join(",")} session=${props?.sessionId ?? ""}`);
 				const cwd = sessionCwd(props?.useSessions, props?.sessionId);
-				diag(`slot cwd=${cwd}`);
 				return cwd === "" ? null : h(SessionBranch, { t: bound, cwd });
 			},
-		));
-			diag("slot registered");
-			return dispose;
-		} catch (error) {
-			diag(`slot registration threw: ${String(error?.message ?? error)}`);
-			throw error;
-		} });
-		// Compact chat rows for edit/write: clicking one opens this call's diff in
-		// the side panel. Negative priority so unloading restores the stock rows.
-		safe("call diff rows", () => ctx.slots.inject("tool.call.toolview", function* () {
-			const bridge = {
-				t: bound,
-				openCallDiff: (payload, element) => {
-					const target = ctx.sidebarRight.commandTarget(element);
-					if (target === void 0) return false;
-					ctx.sidebarRight.openTabFromTarget(TAB_KIND, target);
-					setTimeout(() => document.dispatchEvent(new CustomEvent("dsh-ce-open-calldiff", { detail: payload })), 250);
-					return true;
-				},
-			};
-			yield ctx.slots.register({ name: "tool.call.toolview", key: "edit", priority: -1, inject: () => bridge }, CallDiffRow);
-			yield ctx.slots.register({ name: "tool.call.toolview", key: "write", priority: -1, inject: () => bridge }, CallDiffRow);
-		}));
-		ctx.inject(["shortcuts"], (shortcutCtx) => {
-			try {
-				shortcutCtx.effect(() => shortcutCtx.shortcuts.register({
-					id: "code.explorer",
-					label: () => bound("guide.title"),
-					aliases: ["code explorer", "code browser", "daima"],
-					defaults: {
-						"desktop:macos": { code: "KeyE", modifiers: ["primary"] },
-						"desktop:windows": { code: "KeyE", modifiers: ["primary"] },
-						"desktop:linux": { code: "KeyE", modifiers: ["primary"] },
-						"web:macos": { code: "KeyE", modifiers: ["primary", "alt"] },
-						"web:windows": { code: "KeyE", modifiers: ["primary", "alt"] },
-						"web:linux": { code: "KeyE", modifiers: ["primary", "alt"] },
-					},
-					regions: ["page", "editable", "terminal"],
-					modals: [],
-					resolve: ({ target: element }) => {
-						const target = ctx.sidebarRight.commandTarget(element);
-						if (target === void 0) return { status: "blocked", reason: bound("shortcut.noSession") };
-						return { status: "handled", run: () => ctx.sidebarRight.openTabFromTarget(TAB_KIND, target) };
-					},
-				}), "code-explorer: open shortcut");
-			} catch (error) {
-				console.warn("code-explorer: open shortcut not registered", error);
-			}
-			try {
-				shortcutCtx.effect(() => shortcutCtx.shortcuts.register({
-					id: "code.quickopen",
-					label: () => bound("quickopen.command"),
-					aliases: ["quick open", "file picker", "kuai su da kai"],
-					defaults: {
-						"desktop:macos": { code: "KeyP", modifiers: ["primary", "alt"] },
-						"desktop:windows": { code: "KeyP", modifiers: ["primary", "alt"] },
-						"desktop:linux": { code: "KeyP", modifiers: ["primary", "alt"] },
-						"web:macos": { code: "KeyP", modifiers: ["primary", "alt", "shift"] },
-						"web:windows": { code: "KeyP", modifiers: ["primary", "alt", "shift"] },
-						"web:linux": { code: "KeyP", modifiers: ["primary", "alt", "shift"] },
-					},
-					regions: ["page", "editable", "terminal"],
-					modals: [],
-					resolve: ({ target: element }) => {
-						const target = ctx.sidebarRight.commandTarget(element);
-						if (target === void 0) return { status: "blocked", reason: bound("shortcut.noSession") };
-						return {
-							status: "handled",
-							run: () => {
-								ctx.sidebarRight.openTabFromTarget(TAB_KIND, target);
-								setTimeout(() => document.dispatchEvent(new CustomEvent("dsh-ce-quick-open")), 250);
-							},
-						};
-					},
-				}), "code-explorer: quick-open shortcut");
-			} catch (error) {
-				console.warn("code-explorer: quick-open shortcut not registered", error);
-			}
-			try {
-				shortcutCtx.effect(() => shortcutCtx.shortcuts.register({
-					id: "code.skills",
-					label: () => bound("skillsGuide.title"),
-					aliases: ["skills", "skill manager", "jineng"],
-					defaults: {
-						"desktop:macos": { code: "KeyE", modifiers: ["primary", "shift"] },
-						"desktop:windows": { code: "KeyE", modifiers: ["primary", "shift"] },
-						"desktop:linux": { code: "KeyE", modifiers: ["primary", "shift"] },
-						"web:macos": { code: "KeyE", modifiers: ["primary", "alt", "shift"] },
-						"web:windows": { code: "KeyE", modifiers: ["primary", "alt", "shift"] },
-						"web:linux": { code: "KeyE", modifiers: ["primary", "alt", "shift"] },
-					},
-					regions: ["page", "editable", "terminal"],
-					modals: [],
-					resolve: ({ target: element }) => {
-						const target = ctx.sidebarRight.commandTarget(element);
-						if (target === void 0) return { status: "blocked", reason: bound("shortcut.noSession") };
-						return { status: "handled", run: () => ctx.sidebarRight.openTabFromTarget(SKILLS_TAB_KIND, target) };
-					},
-				}), "code-explorer: skills shortcut");
-			} catch (error) {
-				console.warn("code-explorer: skills shortcut not registered", error);
-			}
-		});
+		)));
 		// Left navigation owns all tool launchers; right pages remain session-bound.
 		safe("left tool entries", () => installLeftTools(ctx, bound));
 		const Guide = () => h(WorkspaceGuide, { t: bound });
