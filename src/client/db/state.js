@@ -15,6 +15,8 @@ import { useDismissLayer } from "../dismiss.js";
 import { HISTORY_CAP, PAGE_SIZE, countOf, requestToken, toCsv } from "./format.js";
 import { CATEGORIES, defaultPort } from "./meta.js";
 import { useSchemaCache } from "./hooks/use-schema-cache.js";
+import { useProfiles } from "./hooks/use-profiles.js";
+import { useTabs } from "./hooks/use-tabs.js";
 
 
 /**
@@ -39,9 +41,6 @@ export function useWorkbench({ t, useTabInfo, sessionId, useSessions }) {
 	const [pendingDelete, setPendingDelete] = useState(-1);
 	const [collapsedDbs, setCollapsedDbs] = useState({});
 	const [expanded, setExpanded] = useState(() => new Set()); // table keys open in the tree
-	const [tabs, setTabs] = useState([]);
-	const [activeTabId, setActiveTabId] = useState("");
-	const [history, setHistory] = useState([]);
 	const [connectOpen, setConnectOpen] = useState(false);
 	// The address is the only thing a person has to know: the driver and the
 	// fields are typed directly instead.
@@ -79,6 +78,22 @@ export function useWorkbench({ t, useTabInfo, sessionId, useSessions }) {
 		schemaBusy, setSchemaBusy, schemaError, setSchemaError,
 		filter, setFilter, refreshSchema, selectDatabase, databasesOf,
 	} = schemaCache;
+
+	// Tabs and queries: table pages and free SQL share one tab record.
+	const tabStore = useTabs({
+		connections,
+		setConnections,
+		activeConn,
+		setActiveConn,
+		t,
+		refreshSchema,
+		onNotice: setNotice,
+	});
+	const {
+		tabs, setTabs, activeTab, activeTabId, setActiveTabId, history, setHistory, sqlRef,
+		patchTab, openTab, closeTab, openQueryTab, openTable, loadRows, fetchRows, sortBy,
+		runQuery, cancelQuery, copyResult, exportResult,
+	} = tabStore;
 	// Modal layer: driver manager, ER diagram, execution plan, import.
 	const [modal, setModal] = useState(null);
 	const [explainState, setExplainState] = useState({ busy: false, result: null, error: "" });
@@ -89,28 +104,19 @@ export function useWorkbench({ t, useTabInfo, sessionId, useSessions }) {
 	// creating a near-duplicate. Set when a saved connection is opened or lacks a
 	// password.
 	const [editingProfileId, setEditingProfileId] = useState("");
-	// Saved connections: the profile list (passwords stay in the Host vault).
-	const [profiles, setProfiles] = useState([]);
-	// The revision the list was read at: a save carries it so the Host can
-	// refuse to overwrite a newer list written by another window.
-	const profileRevision = useRef(0);
-	// Last failure per saved connection, shown on its row: a target that stopped
-	// working should not look identical to one that never failed.
-	const [profileErrors, setProfileErrors] = useState({});
+
+	// Saved connections live in their own hook: list, revision guard, writes.
+	const profileStore = useProfiles({ cwd, editingProfileId, onNotice: setNotice });
+	const {
+		profiles, setProfiles, revision: profileRevision,
+		profileErrors, setProfileErrors, reload: reloadProfiles, save: rememberConnection, forget: forgetProfile,
+	} = profileStore;
 	const [saveProfile, setSaveProfile] = useState(true);
 	// The dialog's "Test" result: a connection proven without being kept.
 	const [testState, setTestState] = useState({ busy: false, ok: null, text: "" });
 	const [historyOpen, setHistoryOpen] = useState(false);
 	const detailRef = useDismissLayer({ open: Boolean(cellDetail), onDismiss: () => setCellDetail(null) });
 	const connectRef = useDismissLayer({ open: connectOpen, onDismiss: () => setConnectOpen(false) });
-
-	useEffect(() => {
-		api("db.profile.list", {}).then((res) => {
-			if (!res.ok) return;
-			profileRevision.current = res.value.revision ?? 0;
-			setProfiles(res.value.profiles ?? []);
-		}).catch(() => {});
-	}, []);
 
 	/**
 	 * Read the driver probes. `refresh` asks the Host to look again (a client
@@ -129,35 +135,6 @@ export function useWorkbench({ t, useTabInfo, sessionId, useSessions }) {
 
 	useEffect(() => { void probeDrivers(); }, [probeDrivers]);
 
-	const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? null;
-	// A long statement should not be read through an 88px slot.
-	const sqlRef = useRef(null);
-	useAutoHeight(sqlRef, activeTab?.sql ?? "", { min: 88 });
-
-	const patchTab = useCallback((id, patch) => {
-		setTabs((current) => current.map((tab) => (tab.id === id ? { ...tab, ...(typeof patch === "function" ? patch(tab) : patch) } : tab)));
-	}, []);
-
-	const openTab = useCallback((tab) => {
-		// Focus is decided OUTSIDE the updater: a state write inside it would run
-		// twice under React's double-invoked updaters and is a render side effect.
-		const existing = tabs.find((entry) => entry.key === tab.key);
-		if (existing) {
-			setActiveTabId(existing.id);
-			return;
-		}
-		setTabs((current) => [...current, tab]);
-		setActiveTabId(tab.id);
-	}, [tabs]);
-
-	const closeTab = useCallback((id) => {
-		setTabs((current) => {
-			const index = current.findIndex((tab) => tab.id === id);
-			const next = current.filter((tab) => tab.id !== id);
-			if (id === activeTabId) setActiveTabId(next[Math.max(0, index - 1)]?.id ?? next[0]?.id ?? "");
-			return next;
-		});
-	}, [activeTabId]);
 
 	// --- connections ----------------------------------------------------------------------
 
@@ -290,46 +267,6 @@ export function useWorkbench({ t, useTabInfo, sessionId, useSessions }) {
 	}, []);
 
 	/** Save the current target as a reusable connection (password → Host vault). */
-	const rememberConnection = useCallback(async (draft) => {
-		const defaultPort = draft.driver === "mysql" ? 3306 : draft.driver === "postgres" ? 5432 : 0;
-		const label = draft.driver === "sqlite"
-			? (String(draft.path).split(/[\\/]/).pop() || draft.path)
-			: `${draft.host}:${Number(draft.port) || defaultPort}${draft.database ? `/${draft.database}` : ""}`;
-		// A relative file path is stored absolute: the profile outlives this
-		// session, and its meaning must not change with the next workspace.
-		const absolute = draft.driver === "sqlite" && draft.path !== "" && !/^(\/|~|[A-Za-z]:[\\/])/.test(draft.path) && cwd
-			? `${cwd.replace(/\/+$/, "")}/${draft.path.replace(/^\.\//, "")}`
-			: draft.path;
-		const res = await api("db.profile.save", {
-			baseRevision: profileRevision.current,
-			...(editingProfileId ? { id: editingProfileId } : {}),
-			label: String(draft.label ?? "").trim() || label,
-			color: draft.color ?? "",
-			note: draft.note ?? "",
-			options: {
-				sslMode: draft.sslMode ?? "",
-				sslCa: draft.sslCa ?? "",
-				sslCert: draft.sslCert ?? "",
-				sslKey: draft.sslKey ?? "",
-				urlParams: draft.urlParams ?? "",
-				tunnelHost: draft.tunnelHost ?? "",
-				tunnelPort: draft.tunnelPort ?? "22",
-				tunnelUser: draft.tunnelUser ?? "",
-				tunnelKey: draft.tunnelKey ?? "",
-				tunnelLocalPort: draft.tunnelLocalPort ?? "",
-				clientPath: draft.clientPath ?? "" },
-			driver: draft.driver,
-			address: draft.address,
-			path: absolute,
-			host: draft.host,
-			port: Number(draft.port) || defaultPort,
-			user: draft.user,
-			database: draft.database,
-			...(draft.password ? { password: draft.password } : {}) });
-		if (!res.ok) { setNotice(res.error); return; }
-		profileRevision.current = res.value.revision ?? profileRevision.current;
-		setProfiles((current) => [res.value.profile, ...current.filter((entry) => entry.id !== res.value.profile.id)]);
-	}, [cwd, editingProfileId]);
 
 	/** Open a saved connection. The password never reaches this side. */
 	const connectProfile = useCallback(async (profile) => {
@@ -370,10 +307,6 @@ export function useWorkbench({ t, useTabInfo, sessionId, useSessions }) {
 		return res.value.id;
 	}, [refreshSchema, cwd, useSavedProfile, t, connections, schemas]);
 
-	const forgetProfile = useCallback(async (profile) => {
-		await api("db.profile.delete", { id: profile.id });
-		setProfiles((current) => current.filter((entry) => entry.id !== profile.id));
-	}, []);
 
 	/** The request body for both "Test" and "Connect". */
 	const connectParams = useCallback(() => {
@@ -440,109 +373,19 @@ export function useWorkbench({ t, useTabInfo, sessionId, useSessions }) {
 
 	// --- table pages ----------------------------------------------------------------------
 
-	const fetchRows = useCallback(async (tab) => {
-		const token = requestToken("rows");
-		patchTab(tab.id, { loading: true, error: "", runToken: token });
-		const res = await api("db.rows", {
-			id: tab.conn,
-			token,
-			table: tab.table,
-			database: tab.database,
-			limit: PAGE_SIZE,
-			offset: tab.offset,
-			order: tab.order,
-			dir: tab.dir,
-			filter: tab.filter });
-		if (!res.ok) { patchTab(tab.id, { loading: false, error: res.error }); return; }
-		patchTab(tab.id, { loading: false, result: res.value, error: "", runToken: "" });
-	}, [patchTab]);
-
+	
 	/**
 	 * Load one table page. `override` carries the new offset/order/filter so the
 	 * request uses the values the user just picked instead of the state the
 	 * closure was created with (React has not re-rendered yet at call time).
 	 */
-	const loadRows = useCallback((tabId, override) => {
-		const tab = tabs.find((entry) => entry.id === tabId);
-		if (!tab || tab.kind !== "table") return;
-		return fetchRows({ ...tab, ...override });
-	}, [tabs, fetchRows]);
-
-	const openTable = useCallback((connectionId, database, entry) => {
-		const key = `table:${connectionId}:${database}:${entry.name}`;
-		openTab({
-			id: `tab-${Date.now()}-${Math.round(Math.random() * 1e6)}`,
-			key,
-			kind: "table",
-			title: entry.name,
-			conn: connectionId,
-			database,
-			table: entry.name,
-			columns: entry.columns ?? [],
-			offset: 0,
-			order: "",
-			dir: "asc",
-			filter: "",
-			loading: false,
-			error: "",
-			result: null });
-	}, [openTab]);
-
-	// A freshly-opened table tab fetches its first page exactly once.
-	const fetched = useRef(new Set());
-	useEffect(() => {
-		const target = tabs.find((tab) => tab.kind === "table" && !tab.result && !tab.loading && !fetched.current.has(tab.id));
-		if (!target) return;
-		fetched.current.add(target.id);
-		void fetchRows(target);
-	}, [tabs, fetchRows]);
-
-	const sortBy = useCallback((id, column) => {
-		const target = tabs.find((tab) => tab.id === id);
-		if (!target) return;
-		const dir = target.order === column && target.dir === "asc" ? "desc" : "asc";
-		patchTab(id, { order: column, dir, offset: 0 });
-		void loadRows(id, { order: column, dir, offset: 0 });
-	}, [tabs, patchTab, loadRows]);
-
+	
+	
+	
 	// --- SQL tabs -------------------------------------------------------------------------
 
-	const openQueryTab = useCallback((sql = "") => {
-		const id = `tab-${Date.now()}-${Math.round(Math.random() * 1e6)}`;
-		openTab({
-			id,
-			key: `query:${id}`,
-			kind: "query",
-			title: t("db.queryTab"),
-			sql,
-			conn: activeConn,
-			loading: false,
-			error: "",
-			result: null,
-			ms: 0 });
-		return id;
-	}, [openTab, activeConn, t]);
-
-	const runQuery = useCallback(async (id, offset = 0) => {
-		const tab = tabs.find((entry) => entry.id === id);
-		if (!tab || tab.kind !== "query") return;
-		const sql = String(tab.sql ?? "").trim();
-		if (sql === "") return;
-		const conn = tab.conn || activeConn;
-		if (!conn) { patchTab(id, { error: t("db.noConnection"), result: null }); return; }
-		const token = requestToken("query");
-		patchTab(id, { loading: true, error: "", runToken: token });
-		const started = Date.now();
-		// One page per run: a 12 MB result was the reason Run felt slow.
-		const res = await api("db.query", { id: conn, token, sql, limit: QUERY_PAGE, offset });
-		const ms = Date.now() - started;
-		if (!res.ok) { patchTab(id, { loading: false, error: res.error, result: null }); return; }
-		patchTab(id, { loading: false, result: res.value, error: "", ms, runToken: "", offset });
-		setHistory((current) => [{ sql, at: Date.now(), ms, ok: !res.value.error }, ...current.filter((entry) => entry.sql !== sql)].slice(0, HISTORY_CAP));
-		// A statement that changes the schema (CREATE/DROP/ALTER) refreshes the tree.
-		if (/^\s*(create|drop|alter)\b/i.test(sql)) void refreshSchema(conn);
-	}, [tabs, activeConn, patchTab, refreshSchema, t]);
-
+	
+	
 	/**
 	 * Stop the statement running on this tab's connection.
 	 *
@@ -550,51 +393,10 @@ export function useWorkbench({ t, useTabInfo, sessionId, useSessions }) {
 	 * statement runs in a worker thread that cannot be interrupted in place, so
 	 * cancelling ends that connection and the panel says so.
 	 */
-	const cancelQuery = useCallback(async (tab) => {
-		const conn = tab.conn || activeConn;
-		if (!conn) return;
-		const res = await api("db.cancel", { id: conn, ...(tab.runToken ? { token: tab.runToken } : {}) });
-		const value = res.ok ? res.value : null;
-		// A statement that already finished is not a cancellation: saying so would
-		// show "cancelled" over a result that actually arrived.
-		if (!value?.cancelled) {
-			patchTab(tab.id, { loading: false, error: "" });
-			setNotice(res.ok ? t("db.notRunning") : res.error);
-			return;
-		}
-		patchTab(tab.id, { loading: false, error: t("db.cancelled") });
-		if (value.connectionClosed) {
-			setConnections((current) => current.filter((entry) => entry.id !== conn));
-			setTabs((current) => current.filter((entry) => entry.conn !== conn));
-			if (activeConn === conn) setActiveConn("");
-			setNotice(t("db.cancelledClosed"));
-		}
-	}, [activeConn, patchTab, t]);
-
+	
 	/** Copy the current result as JSON or as INSERT statements. */
-	const copyResult = useCallback(async (tab, kind) => {
-		const driver = connections.find((entry) => entry.id === (tab.conn || activeConn))?.driver;
-		const text = kind === "json" ? toJsonRows(tab.result) : toInsertSql(tab.result, tab.table ?? tab.title, driver);
-		try {
-			await navigator.clipboard.writeText(text);
-			setNotice(t("db.copied"));
-		} catch {
-			setNotice(t("db.copyFailed"));
-		}
-	}, [connections, activeConn, t]);
-
-	const exportResult = useCallback((result, name) => {
-		if (!result?.columns?.length) return;
-		const csv = toCsv(result.columns, result.rows ?? []);
-		const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-		const url = URL.createObjectURL(blob);
-		const anchor = document.createElement("a");
-		anchor.href = url;
-		anchor.download = `${name || "result"}.csv`;
-		anchor.click();
-		setTimeout(() => URL.revokeObjectURL(url), 4000);
-	}, []);
-
+	
+	
 	// --- tree ----------------------------------------------------------------------------
 
 
@@ -713,5 +515,5 @@ export function useWorkbench({ t, useTabInfo, sessionId, useSessions }) {
 
 
 
-	return { activeConn, activeDb, activeTab, activeTabId, allowModule, applyAddress, canConnect, cancelQuery, cellDetail, cellEdit, closeTab, collapsedDbs, commitCell, connectOpen, connectParams, connectProfile, connectRef, connections, copyCommand, copyResult, counts, cwd, databasesOf, dbxState, detailRef, doConnect, doDisconnect, doTest, driverReady, drivers, editingProfileId, expanded, explainState, exportOpen, exportResult, fetchRows, fetched, filter, forgetProfile, form, history, historyOpen, installDriverModule, loadRows, modal, notice, onKeyDown, openConnect, openConns, openQueryTab, openTab, openTable, patchTab, pendingDelete, pickCategory, pickQuery, pickableDrivers, pkColumn, probeDrivers, profileErrors, profileRevision, profiles, refreshSchema, rememberConnection, removeRow, runDbxImport, runMutation, runQuery, saveProfile, schema, schemaBusy, schemaError, schemas, selectDatabase, setActiveConn, setActiveDb, setActiveTabId, setAllowModule, setCellDetail, setCellEdit, setCollapsedDbs, setConnectOpen, setConnections, setDbxState, setDriver, setDrivers, setEditingProfileId, setExpanded, setExplainState, setExportOpen, setFilter, setForm, setHistory, setHistoryOpen, setModal, setNotice, setOpenConns, setPendingDelete, setPickCategory, setPickQuery, setProfileErrors, setProfiles, setSaveProfile, setSchemaBusy, setSchemaError, setSchemas, setShowPassword, setStep, setTab, setTabs, setTestState, showPassword, sortBy, sqlRef, step, t, tab, tableEntry, tabs, testState, toggleTable, useSavedProfile };
+	return { activeConn, activeDb, activeTab, activeTabId, allowModule, applyAddress, canConnect, cancelQuery, cellDetail, cellEdit, closeTab, collapsedDbs, commitCell, connectOpen, connectParams, connectProfile, connectRef, connections, copyCommand, copyResult, counts, cwd, databasesOf, dbxState, detailRef, doConnect, doDisconnect, doTest, driverReady, drivers, editingProfileId, expanded, explainState, exportOpen, exportResult, fetchRows, filter, forgetProfile, form, history, historyOpen, installDriverModule, loadRows, modal, notice, onKeyDown, openConnect, openConns, openQueryTab, openTab, openTable, patchTab, pendingDelete, pickCategory, pickQuery, pickableDrivers, pkColumn, probeDrivers, profileErrors, profileRevision, profiles, refreshSchema, rememberConnection, removeRow, runDbxImport, runMutation, runQuery, saveProfile, schema, schemaBusy, schemaError, schemas, selectDatabase, setActiveConn, setActiveDb, setActiveTabId, setAllowModule, setCellDetail, setCellEdit, setCollapsedDbs, setConnectOpen, setConnections, setDbxState, setDriver, setDrivers, setEditingProfileId, setExpanded, setExplainState, setExportOpen, setFilter, setForm, setHistory, setHistoryOpen, setModal, setNotice, setOpenConns, setPendingDelete, setPickCategory, setPickQuery, setProfileErrors, setProfiles, setSaveProfile, setSchemaBusy, setSchemaError, setSchemas, setShowPassword, setStep, setTab, setTabs, setTestState, showPassword, sortBy, sqlRef, step, t, tab, tableEntry, tabs, testState, toggleTable, useSavedProfile };
 }

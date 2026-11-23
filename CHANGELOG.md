@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased — two more domain hooks, each with its own tests
+
+- `db/hooks/use-profiles.js` owns the saved-connection list, the revision guard (a save carries the revision it
+  read so two windows cannot clobber each other), per-row errors and the save/forget actions. It takes
+  `onNotice` instead of touching the panel's notice, and `editingProfileId` so a save updates instead of duplicating.
+- `db/hooks/use-tabs.js` owns the tab list: opening a table (one first-page fetch per tab), server-side paging and
+  sorting, query tabs, running/paging SQL, cancellation (including the closed-connection case), history and export.
+  It receives `refreshSchema`/`setConnections`/`onNotice`, so it never reaches into the other domains.
+- **Unit tests per hook** (probe component, only `fetch` stubbed): profiles — mount load, revision on save,
+  computed label/port, password inclusion, prepend, edit-in-place, failure keeps the list, absolute SQLite path;
+  tabs — first page fetched once, paging offset, query binding, history dedupe, DDL refresh, failed query,
+  cancel closing the connection.
+- Writing the tab tests changed one behaviour for the better: a failed statement is now recorded in history (with
+  `ok: false`) instead of vanishing, because the next attempt usually starts from what went wrong.
+
 ## Unreleased — first domain hook out of the workbench, with its own tests
 
 - `db/hooks/use-schema-cache.js` owns the rail's tree data: the per-connection schema map, expansion, the last

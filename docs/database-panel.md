@@ -42,8 +42,10 @@ lib/host/db.js                 facade: connect ladder, profiles, routes, re-expo
 ```
 src/client/db.js               54   the tab's public face: definition, title, DbView
         │                            (DbView = renderWorkbench(useWorkbench(props)))
-        ├── db/state.js       717   useWorkbench(): composition of the domain hooks
-        ├── db/hooks/          92   use-schema-cache.js (rail tree data + filter)
+        ├── db/state.js       519   useWorkbench(): composition of the domain hooks
+        ├── db/hooks/         417   use-schema-cache.js (rail tree data + filter)
+        │                           use-profiles.js (list, revision guard, writes)
+        │                           use-tabs.js (table pages + free SQL + history)
         ├── db/view.js        547   renderWorkbench(wb): the markup, pure
         ├── db/rail.js        130   renderRail(wb): instances → databases → tables
         ├── db/grid.js        149   ResultGrid: virtualization, inline edit, row delete

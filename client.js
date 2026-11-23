@@ -13742,8 +13742,8 @@ function useSchemaCache({ activeConn, connections, t, onSelect, onNotice }) {
       setSchemaError(res.error ?? "");
       return;
     }
-    const fetched = (res.value.databases ?? []).find((entry) => entry.name === databaseName);
-    if (!fetched) return;
+    const fetched2 = (res.value.databases ?? []).find((entry) => entry.name === databaseName);
+    if (!fetched2) return;
     setSchemas((current) => {
       const schemaFor = current[connId];
       if (!schemaFor) return { ...current, [connId]: res.value };
@@ -13752,7 +13752,7 @@ function useSchemaCache({ activeConn, connections, t, onSelect, onNotice }) {
         [connId]: {
           ...schemaFor,
           current: databaseName,
-          databases: schemaFor.databases.map((entry) => entry.name === databaseName ? fetched : entry)
+          databases: schemaFor.databases.map((entry) => entry.name === databaseName ? fetched2 : entry)
         }
       };
     });
@@ -13783,6 +13783,266 @@ function useSchemaCache({ activeConn, connections, t, onSelect, onNotice }) {
   };
 }
 
+// src/client/db/hooks/use-profiles.js
+function draftPort(draft) {
+  if (draft.driver === "mysql") return 3306;
+  if (draft.driver === "postgres") return 5432;
+  return 0;
+}
+function useProfiles({ cwd, editingProfileId = "", onNotice }) {
+  const [profiles, setProfiles] = useState([]);
+  const revision = useRef(0);
+  const [profileErrors, setProfileErrors] = useState({});
+  const reload = useCallback(async () => {
+    const res = await api("db.profile.list", {});
+    if (!res.ok) return;
+    revision.current = res.value.revision ?? 0;
+    setProfiles(res.value.profiles ?? []);
+  }, []);
+  useEffect(() => {
+    api("db.profile.list", {}).then((res) => {
+      if (!res.ok) return;
+      revision.current = res.value.revision ?? 0;
+      setProfiles(res.value.profiles ?? []);
+    }).catch(() => {
+    });
+  }, []);
+  const save = useCallback(async (draft) => {
+    const port = draftPort(draft);
+    const label = draft.driver === "sqlite" ? String(draft.path).split(/[\\/]/).pop() || draft.path : `${draft.host}:${Number(draft.port) || port}${draft.database ? `/${draft.database}` : ""}`;
+    const absolute = draft.driver === "sqlite" && draft.path !== "" && !/^(\/|~|[A-Za-z]:[\\/])/.test(draft.path) && cwd ? `${cwd.replace(/\/+$/, "")}/${draft.path.replace(/^\.\//, "")}` : draft.path;
+    const res = await api("db.profile.save", {
+      baseRevision: revision.current,
+      ...editingProfileId ? { id: editingProfileId } : {},
+      label: String(draft.label ?? "").trim() || label,
+      color: draft.color ?? "",
+      note: draft.note ?? "",
+      options: {
+        sslMode: draft.sslMode ?? "",
+        sslCa: draft.sslCa ?? "",
+        sslCert: draft.sslCert ?? "",
+        sslKey: draft.sslKey ?? "",
+        urlParams: draft.urlParams ?? "",
+        tunnelHost: draft.tunnelHost ?? "",
+        tunnelPort: draft.tunnelPort ?? "22",
+        tunnelUser: draft.tunnelUser ?? "",
+        tunnelKey: draft.tunnelKey ?? "",
+        tunnelLocalPort: draft.tunnelLocalPort ?? "",
+        clientPath: draft.clientPath ?? ""
+      },
+      driver: draft.driver,
+      address: draft.address,
+      path: absolute,
+      host: draft.host,
+      port: Number(draft.port) || port,
+      user: draft.user,
+      database: draft.database,
+      ...draft.password ? { password: draft.password } : {}
+    });
+    if (!res.ok) {
+      onNotice(res.error);
+      return;
+    }
+    revision.current = res.value.revision ?? revision.current;
+    setProfiles((current) => [res.value.profile, ...current.filter((entry) => entry.id !== res.value.profile.id)]);
+  }, [cwd, editingProfileId, onNotice]);
+  const forget = useCallback(async (profile) => {
+    await api("db.profile.delete", { id: profile.id });
+    setProfiles((current) => current.filter((entry) => entry.id !== profile.id));
+  }, []);
+  return { profiles, setProfiles, revision, profileErrors, setProfileErrors, reload, save, forget };
+}
+
+// src/client/db/hooks/use-tabs.js
+var QUERY_PAGE2 = 200;
+function useTabs({ connections, setConnections, activeConn, setActiveConn, t, refreshSchema, onNotice }) {
+  const [tabs, setTabs] = useState([]);
+  const [activeTabId, setActiveTabId] = useState("");
+  const [history, setHistory] = useState([]);
+  const activeTab = tabs.find((entry) => entry.id === activeTabId) ?? null;
+  const sqlRef = useRef(null);
+  useAutoHeight(sqlRef, activeTab?.sql ?? "", { min: 88 });
+  const patchTab = useCallback((id, patch) => {
+    setTabs((current) => current.map((tab) => tab.id === id ? { ...tab, ...typeof patch === "function" ? patch(tab) : patch } : tab));
+  }, []);
+  const openTab = useCallback((tab) => {
+    const existing = tabs.find((entry) => entry.key === tab.key);
+    if (existing) {
+      setActiveTabId(existing.id);
+      return;
+    }
+    setTabs((current) => [...current, tab]);
+    setActiveTabId(tab.id);
+  }, [tabs]);
+  const closeTab = useCallback((id) => {
+    setTabs((current) => {
+      const index = current.findIndex((tab) => tab.id === id);
+      const next = current.filter((tab) => tab.id !== id);
+      if (id === activeTabId) setActiveTabId(next[Math.max(0, index - 1)]?.id ?? next[0]?.id ?? "");
+      return next;
+    });
+  }, [activeTabId]);
+  const fetchRows = useCallback(async (tab) => {
+    const token = requestToken("rows");
+    patchTab(tab.id, { loading: true, error: "", runToken: token });
+    const res = await api("db.rows", {
+      id: tab.conn,
+      token,
+      table: tab.table,
+      database: tab.database,
+      limit: PAGE_SIZE,
+      offset: tab.offset,
+      order: tab.order,
+      dir: tab.dir,
+      filter: tab.filter
+    });
+    if (!res.ok) {
+      patchTab(tab.id, { loading: false, error: res.error });
+      return;
+    }
+    patchTab(tab.id, { loading: false, result: res.value, error: "", runToken: "" });
+  }, [patchTab]);
+  const loadRows = useCallback((tabId, override) => {
+    const tab = tabs.find((entry) => entry.id === tabId);
+    if (!tab || tab.kind !== "table") return;
+    return fetchRows({ ...tab, ...override });
+  }, [tabs, fetchRows]);
+  const openTable = useCallback((connectionId, database, entry) => {
+    const key = `table:${connectionId}:${database}:${entry.name}`;
+    openTab({
+      id: `tab-${Date.now()}-${Math.round(Math.random() * 1e6)}`,
+      key,
+      kind: "table",
+      title: entry.name,
+      conn: connectionId,
+      database,
+      table: entry.name,
+      columns: entry.columns ?? [],
+      offset: 0,
+      order: "",
+      dir: "asc",
+      filter: "",
+      loading: false,
+      error: "",
+      result: null
+    });
+  }, [openTab]);
+  const fetched2 = useRef(/* @__PURE__ */ new Set());
+  useEffect(() => {
+    const target = tabs.find((tab) => tab.kind === "table" && !tab.result && !tab.loading && !fetched2.current.has(tab.id));
+    if (!target) return;
+    fetched2.current.add(target.id);
+    void fetchRows(target);
+  }, [tabs, fetchRows]);
+  const sortBy = useCallback((id, column) => {
+    const target = tabs.find((tab) => tab.id === id);
+    if (!target) return;
+    const dir = target.order === column && target.dir === "asc" ? "desc" : "asc";
+    patchTab(id, { order: column, dir, offset: 0 });
+    void loadRows(id, { order: column, dir, offset: 0 });
+  }, [tabs, patchTab, loadRows]);
+  const openQueryTab = useCallback((sql = "") => {
+    const id = `tab-${Date.now()}-${Math.round(Math.random() * 1e6)}`;
+    openTab({
+      id,
+      key: `query:${id}`,
+      kind: "query",
+      title: t("db.queryTab"),
+      sql,
+      conn: activeConn,
+      loading: false,
+      error: "",
+      result: null,
+      ms: 0
+    });
+    return id;
+  }, [openTab, activeConn, t]);
+  const runQuery = useCallback(async (id, offset = 0) => {
+    const tab = tabs.find((entry) => entry.id === id);
+    if (!tab || tab.kind !== "query") return;
+    const sql = String(tab.sql ?? "").trim();
+    if (sql === "") return;
+    const conn = tab.conn || activeConn;
+    if (!conn) {
+      patchTab(id, { error: t("db.noConnection"), result: null });
+      return;
+    }
+    const token = requestToken("query");
+    patchTab(id, { loading: true, error: "", runToken: token });
+    const started = Date.now();
+    const res = await api("db.query", { id: conn, token, sql, limit: QUERY_PAGE2, offset });
+    const ms = Date.now() - started;
+    if (!res.ok) {
+      patchTab(id, { loading: false, error: res.error, result: null });
+      return;
+    }
+    patchTab(id, { loading: false, result: res.value, error: "", ms, runToken: "", offset });
+    setHistory((current) => [{ sql, at: Date.now(), ms, ok: !res.value.error }, ...current.filter((entry) => entry.sql !== sql)].slice(0, HISTORY_CAP2));
+    if (/^\s*(create|drop|alter)\b/i.test(sql)) void refreshSchema(conn);
+  }, [tabs, activeConn, patchTab, refreshSchema, t]);
+  const cancelQuery = useCallback(async (tab) => {
+    const conn = tab.conn || activeConn;
+    if (!conn) return;
+    const res = await api("db.cancel", { id: conn, ...tab.runToken ? { token: tab.runToken } : {} });
+    const value = res.ok ? res.value : null;
+    if (!value?.cancelled) {
+      patchTab(tab.id, { loading: false, error: "" });
+      onNotice(res.ok ? t("db.notRunning") : res.error);
+      return;
+    }
+    patchTab(tab.id, { loading: false, error: t("db.cancelled") });
+    if (value.connectionClosed) {
+      setConnections((current) => current.filter((entry) => entry.id !== conn));
+      setTabs((current) => current.filter((entry) => entry.conn !== conn));
+      if (activeConn === conn) setActiveConn("");
+      onNotice(t("db.cancelledClosed"));
+    }
+  }, [activeConn, patchTab, t, setConnections, setActiveConn, onNotice]);
+  const copyResult = useCallback(async (tab, kind) => {
+    const driver = connections.find((entry) => entry.id === (tab.conn || activeConn))?.driver;
+    const text = kind === "json" ? toJsonRows(tab.result) : toInsertSql(tab.result, tab.table ?? tab.title, driver);
+    try {
+      await navigator.clipboard.writeText(text);
+      onNotice(t("db.copied"));
+    } catch {
+      onNotice(t("db.copyFailed"));
+    }
+  }, [connections, activeConn, t, onNotice]);
+  const exportResult = useCallback((result, name) => {
+    if (!result?.columns?.length) return;
+    const csv = toCsv(result.columns, result.rows ?? []);
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `${name || "result"}.csv`;
+    anchor.click();
+    setTimeout(() => URL.revokeObjectURL(url), 4e3);
+  }, []);
+  return {
+    tabs,
+    setTabs,
+    activeTab,
+    activeTabId,
+    setActiveTabId,
+    history,
+    setHistory,
+    sqlRef,
+    patchTab,
+    openTab,
+    closeTab,
+    openQueryTab,
+    openTable,
+    loadRows,
+    fetchRows,
+    sortBy,
+    runQuery,
+    cancelQuery,
+    copyResult,
+    exportResult
+  };
+}
+
 // src/client/db/state.js
 function useWorkbench({ t, useTabInfo, sessionId, useSessions }) {
   const cwd = useSessions ? useSessions((sessions) => sessionId ? sessions.byId[sessionId]?.cwd : void 0) : void 0;
@@ -13794,9 +14054,6 @@ function useWorkbench({ t, useTabInfo, sessionId, useSessions }) {
   const [pendingDelete, setPendingDelete] = useState(-1);
   const [collapsedDbs, setCollapsedDbs] = useState({});
   const [expanded, setExpanded] = useState(() => /* @__PURE__ */ new Set());
-  const [tabs, setTabs] = useState([]);
-  const [activeTabId, setActiveTabId] = useState("");
-  const [history, setHistory] = useState([]);
   const [connectOpen, setConnectOpen] = useState(false);
   const [form, setForm] = useState({
     address: "",
@@ -13862,27 +14119,58 @@ function useWorkbench({ t, useTabInfo, sessionId, useSessions }) {
     selectDatabase,
     databasesOf
   } = schemaCache;
+  const tabStore = useTabs({
+    connections,
+    setConnections,
+    activeConn,
+    setActiveConn,
+    t,
+    refreshSchema,
+    onNotice: setNotice
+  });
+  const {
+    tabs,
+    setTabs,
+    activeTab,
+    activeTabId,
+    setActiveTabId,
+    history,
+    setHistory,
+    sqlRef,
+    patchTab,
+    openTab,
+    closeTab,
+    openQueryTab,
+    openTable,
+    loadRows,
+    fetchRows,
+    sortBy,
+    runQuery,
+    cancelQuery,
+    copyResult,
+    exportResult
+  } = tabStore;
   const [modal, setModal] = useState(null);
   const [explainState, setExplainState] = useState({ busy: false, result: null, error: "" });
   const [exportOpen, setExportOpen] = useState(false);
   const [dbxState, setDbxState] = useState(null);
   const [editingProfileId, setEditingProfileId] = useState("");
-  const [profiles, setProfiles] = useState([]);
-  const profileRevision = useRef(0);
-  const [profileErrors, setProfileErrors] = useState({});
+  const profileStore = useProfiles({ cwd, editingProfileId, onNotice: setNotice });
+  const {
+    profiles,
+    setProfiles,
+    revision: profileRevision,
+    profileErrors,
+    setProfileErrors,
+    reload: reloadProfiles,
+    save: rememberConnection,
+    forget: forgetProfile
+  } = profileStore;
   const [saveProfile, setSaveProfile] = useState(true);
   const [testState, setTestState] = useState({ busy: false, ok: null, text: "" });
   const [historyOpen, setHistoryOpen] = useState(false);
   const detailRef = useDismissLayer({ open: Boolean(cellDetail), onDismiss: () => setCellDetail(null) });
   const connectRef = useDismissLayer({ open: connectOpen, onDismiss: () => setConnectOpen(false) });
-  useEffect(() => {
-    api("db.profile.list", {}).then((res) => {
-      if (!res.ok) return;
-      profileRevision.current = res.value.revision ?? 0;
-      setProfiles(res.value.profiles ?? []);
-    }).catch(() => {
-    });
-  }, []);
   const probeDrivers = useCallback(async (refresh = false) => {
     const body = { allowWorkspace: allowModule === true, ...refresh ? { refresh: true } : {} };
     const res = await api("db.drivers", body);
@@ -13891,29 +14179,6 @@ function useWorkbench({ t, useTabInfo, sessionId, useSessions }) {
   useEffect(() => {
     void probeDrivers();
   }, [probeDrivers]);
-  const activeTab = tabs.find((tab2) => tab2.id === activeTabId) ?? null;
-  const sqlRef = useRef(null);
-  useAutoHeight(sqlRef, activeTab?.sql ?? "", { min: 88 });
-  const patchTab = useCallback((id, patch) => {
-    setTabs((current) => current.map((tab2) => tab2.id === id ? { ...tab2, ...typeof patch === "function" ? patch(tab2) : patch } : tab2));
-  }, []);
-  const openTab = useCallback((tab2) => {
-    const existing = tabs.find((entry) => entry.key === tab2.key);
-    if (existing) {
-      setActiveTabId(existing.id);
-      return;
-    }
-    setTabs((current) => [...current, tab2]);
-    setActiveTabId(tab2.id);
-  }, [tabs]);
-  const closeTab = useCallback((id) => {
-    setTabs((current) => {
-      const index = current.findIndex((tab2) => tab2.id === id);
-      const next = current.filter((tab2) => tab2.id !== id);
-      if (id === activeTabId) setActiveTabId(next[Math.max(0, index - 1)]?.id ?? next[0]?.id ?? "");
-      return next;
-    });
-  }, [activeTabId]);
   const openConnect = useCallback(() => {
     setEditingProfileId("");
     setNotice("");
@@ -14011,45 +14276,6 @@ function useWorkbench({ t, useTabInfo, sessionId, useSessions }) {
       }
     }
   }, []);
-  const rememberConnection = useCallback(async (draft) => {
-    const defaultPort2 = draft.driver === "mysql" ? 3306 : draft.driver === "postgres" ? 5432 : 0;
-    const label = draft.driver === "sqlite" ? String(draft.path).split(/[\\/]/).pop() || draft.path : `${draft.host}:${Number(draft.port) || defaultPort2}${draft.database ? `/${draft.database}` : ""}`;
-    const absolute = draft.driver === "sqlite" && draft.path !== "" && !/^(\/|~|[A-Za-z]:[\\/])/.test(draft.path) && cwd ? `${cwd.replace(/\/+$/, "")}/${draft.path.replace(/^\.\//, "")}` : draft.path;
-    const res = await api("db.profile.save", {
-      baseRevision: profileRevision.current,
-      ...editingProfileId ? { id: editingProfileId } : {},
-      label: String(draft.label ?? "").trim() || label,
-      color: draft.color ?? "",
-      note: draft.note ?? "",
-      options: {
-        sslMode: draft.sslMode ?? "",
-        sslCa: draft.sslCa ?? "",
-        sslCert: draft.sslCert ?? "",
-        sslKey: draft.sslKey ?? "",
-        urlParams: draft.urlParams ?? "",
-        tunnelHost: draft.tunnelHost ?? "",
-        tunnelPort: draft.tunnelPort ?? "22",
-        tunnelUser: draft.tunnelUser ?? "",
-        tunnelKey: draft.tunnelKey ?? "",
-        tunnelLocalPort: draft.tunnelLocalPort ?? "",
-        clientPath: draft.clientPath ?? ""
-      },
-      driver: draft.driver,
-      address: draft.address,
-      path: absolute,
-      host: draft.host,
-      port: Number(draft.port) || defaultPort2,
-      user: draft.user,
-      database: draft.database,
-      ...draft.password ? { password: draft.password } : {}
-    });
-    if (!res.ok) {
-      setNotice(res.error);
-      return;
-    }
-    profileRevision.current = res.value.revision ?? profileRevision.current;
-    setProfiles((current) => [res.value.profile, ...current.filter((entry) => entry.id !== res.value.profile.id)]);
-  }, [cwd, editingProfileId]);
   const connectProfile = useCallback(async (profile) => {
     if (String(profile.secretId ?? "") === "") {
       useSavedProfile(profile);
@@ -14085,10 +14311,6 @@ function useWorkbench({ t, useTabInfo, sessionId, useSessions }) {
     await refreshSchema(res.value.id);
     return res.value.id;
   }, [refreshSchema, cwd, useSavedProfile, t, connections, schemas2]);
-  const forgetProfile = useCallback(async (profile) => {
-    await api("db.profile.delete", { id: profile.id });
-    setProfiles((current) => current.filter((entry) => entry.id !== profile.id));
-  }, []);
   const connectParams = useCallback(() => {
     const params = { driver: form.driver, cwd, allowModule: allowModule === true };
     if (form.driver === "sqlite") params.path = form.path.trim();
@@ -14156,143 +14378,6 @@ function useWorkbench({ t, useTabInfo, sessionId, useSessions }) {
     });
     if (activeConn === id) setActiveConn("");
   }, [activeConn]);
-  const fetchRows = useCallback(async (tab2) => {
-    const token = requestToken("rows");
-    patchTab(tab2.id, { loading: true, error: "", runToken: token });
-    const res = await api("db.rows", {
-      id: tab2.conn,
-      token,
-      table: tab2.table,
-      database: tab2.database,
-      limit: PAGE_SIZE,
-      offset: tab2.offset,
-      order: tab2.order,
-      dir: tab2.dir,
-      filter: tab2.filter
-    });
-    if (!res.ok) {
-      patchTab(tab2.id, { loading: false, error: res.error });
-      return;
-    }
-    patchTab(tab2.id, { loading: false, result: res.value, error: "", runToken: "" });
-  }, [patchTab]);
-  const loadRows = useCallback((tabId, override) => {
-    const tab2 = tabs.find((entry) => entry.id === tabId);
-    if (!tab2 || tab2.kind !== "table") return;
-    return fetchRows({ ...tab2, ...override });
-  }, [tabs, fetchRows]);
-  const openTable = useCallback((connectionId, database, entry) => {
-    const key = `table:${connectionId}:${database}:${entry.name}`;
-    openTab({
-      id: `tab-${Date.now()}-${Math.round(Math.random() * 1e6)}`,
-      key,
-      kind: "table",
-      title: entry.name,
-      conn: connectionId,
-      database,
-      table: entry.name,
-      columns: entry.columns ?? [],
-      offset: 0,
-      order: "",
-      dir: "asc",
-      filter: "",
-      loading: false,
-      error: "",
-      result: null
-    });
-  }, [openTab]);
-  const fetched = useRef(/* @__PURE__ */ new Set());
-  useEffect(() => {
-    const target = tabs.find((tab2) => tab2.kind === "table" && !tab2.result && !tab2.loading && !fetched.current.has(tab2.id));
-    if (!target) return;
-    fetched.current.add(target.id);
-    void fetchRows(target);
-  }, [tabs, fetchRows]);
-  const sortBy = useCallback((id, column) => {
-    const target = tabs.find((tab2) => tab2.id === id);
-    if (!target) return;
-    const dir = target.order === column && target.dir === "asc" ? "desc" : "asc";
-    patchTab(id, { order: column, dir, offset: 0 });
-    void loadRows(id, { order: column, dir, offset: 0 });
-  }, [tabs, patchTab, loadRows]);
-  const openQueryTab = useCallback((sql = "") => {
-    const id = `tab-${Date.now()}-${Math.round(Math.random() * 1e6)}`;
-    openTab({
-      id,
-      key: `query:${id}`,
-      kind: "query",
-      title: t("db.queryTab"),
-      sql,
-      conn: activeConn,
-      loading: false,
-      error: "",
-      result: null,
-      ms: 0
-    });
-    return id;
-  }, [openTab, activeConn, t]);
-  const runQuery = useCallback(async (id, offset = 0) => {
-    const tab2 = tabs.find((entry) => entry.id === id);
-    if (!tab2 || tab2.kind !== "query") return;
-    const sql = String(tab2.sql ?? "").trim();
-    if (sql === "") return;
-    const conn = tab2.conn || activeConn;
-    if (!conn) {
-      patchTab(id, { error: t("db.noConnection"), result: null });
-      return;
-    }
-    const token = requestToken("query");
-    patchTab(id, { loading: true, error: "", runToken: token });
-    const started = Date.now();
-    const res = await api("db.query", { id: conn, token, sql, limit: QUERY_PAGE, offset });
-    const ms = Date.now() - started;
-    if (!res.ok) {
-      patchTab(id, { loading: false, error: res.error, result: null });
-      return;
-    }
-    patchTab(id, { loading: false, result: res.value, error: "", ms, runToken: "", offset });
-    setHistory((current) => [{ sql, at: Date.now(), ms, ok: !res.value.error }, ...current.filter((entry) => entry.sql !== sql)].slice(0, HISTORY_CAP2));
-    if (/^\s*(create|drop|alter)\b/i.test(sql)) void refreshSchema(conn);
-  }, [tabs, activeConn, patchTab, refreshSchema, t]);
-  const cancelQuery = useCallback(async (tab2) => {
-    const conn = tab2.conn || activeConn;
-    if (!conn) return;
-    const res = await api("db.cancel", { id: conn, ...tab2.runToken ? { token: tab2.runToken } : {} });
-    const value = res.ok ? res.value : null;
-    if (!value?.cancelled) {
-      patchTab(tab2.id, { loading: false, error: "" });
-      setNotice(res.ok ? t("db.notRunning") : res.error);
-      return;
-    }
-    patchTab(tab2.id, { loading: false, error: t("db.cancelled") });
-    if (value.connectionClosed) {
-      setConnections((current) => current.filter((entry) => entry.id !== conn));
-      setTabs((current) => current.filter((entry) => entry.conn !== conn));
-      if (activeConn === conn) setActiveConn("");
-      setNotice(t("db.cancelledClosed"));
-    }
-  }, [activeConn, patchTab, t]);
-  const copyResult = useCallback(async (tab2, kind) => {
-    const driver = connections.find((entry) => entry.id === (tab2.conn || activeConn))?.driver;
-    const text = kind === "json" ? toJsonRows(tab2.result) : toInsertSql(tab2.result, tab2.table ?? tab2.title, driver);
-    try {
-      await navigator.clipboard.writeText(text);
-      setNotice(t("db.copied"));
-    } catch {
-      setNotice(t("db.copyFailed"));
-    }
-  }, [connections, activeConn, t]);
-  const exportResult = useCallback((result, name) => {
-    if (!result?.columns?.length) return;
-    const csv = toCsv(result.columns, result.rows ?? []);
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `${name || "result"}.csv`;
-    anchor.click();
-    setTimeout(() => URL.revokeObjectURL(url), 4e3);
-  }, []);
   const tableEntry = useMemo(() => {
     if (activeTab?.kind !== "table") return null;
     const schemaFor = schemas2[activeTab.conn || activeConn];
@@ -14897,7 +14982,7 @@ function renderRail(props) {
 
 // src/client/db/view.js
 function renderWorkbench(wb) {
-  const { DbView: DbView2, absolute, activeConn, activeDb, activeTab, activeTabId, allowModule, anchor, applyAddress, blob, body, canConnect, cancelQuery, category, cellDetail, cellEdit, closeTab, collapsedDbs, commitCell, conn, connectOpen, connectParams, connectProfile, connectRef, connections, copyCommand, copyResult, counts, csv, cwd, database, databases, databasesOf, dbxState, defaultNow, detailRef, dir, doConnect, doDisconnect, doTest, driver, driverReady, drivers, editingProfileId, entries, existing, expanded, explainState, exportOpen, exportResult, fetchRows, fetched, filter, forgetProfile, form, history, historyOpen, id, index, installDriverModule, keep, key, known, label, list, loadRows, modal, ms, needle, next, notice, onKeyDown, openConnect, openConns, openQueryTab, openTab, openTable, params, parsed, patchTab, pendingDelete, pickCategory, pickQuery, pickableDrivers, pkColumn, pkIndex, pkValue, probeDrivers, profileErrors, profileRevision, profiles, refreshSchema, rememberConnection, removeRow, res, result, runDbxImport, runMutation, runQuery, saveProfile, schema, schemaBusy, schemaError, schemaFor, schemas: schemas2, selectDatabase, setActiveConn, setActiveDb, setActiveTabId, setAllowModule, setCellDetail, setCellEdit, setCollapsedDbs, setConnectOpen, setConnections, setDbxState, setDriver, setDrivers, setEditingProfileId, setExpanded, setExplainState, setExportOpen, setFilter, setForm, setHistory, setHistoryOpen, setModal, setNotice, setOpenConns, setPendingDelete, setPickCategory, setPickQuery, setProfileErrors, setProfiles, setSaveProfile, setSchemaBusy, setSchemaError, setSchemas, setShowPassword, setStep, setTab, setTabs, setTestState, showPassword, sortBy, sql, sqlRef, started, step, t, tab, tableEntry, tabs, target, testState, text, toggleTable, token, url, useSavedProfile, value } = wb;
+  const { DbView: DbView2, absolute, activeConn, activeDb, activeTab, activeTabId, allowModule, anchor, applyAddress, blob, body, canConnect, cancelQuery, category, cellDetail, cellEdit, closeTab, collapsedDbs, commitCell, conn, connectOpen, connectParams, connectProfile, connectRef, connections, copyCommand, copyResult, counts, csv, cwd, database, databases, databasesOf, dbxState, defaultNow, detailRef, dir, doConnect, doDisconnect, doTest, driver, driverReady, drivers, editingProfileId, entries, existing, expanded, explainState, exportOpen, exportResult, fetchRows, fetched: fetched2, filter, forgetProfile, form, history, historyOpen, id, index, installDriverModule, keep, key, known, label, list, loadRows, modal, ms, needle, next, notice, onKeyDown, openConnect, openConns, openQueryTab, openTab, openTable, params, parsed, patchTab, pendingDelete, pickCategory, pickQuery, pickableDrivers, pkColumn, pkIndex, pkValue, probeDrivers, profileErrors, profileRevision, profiles, refreshSchema, rememberConnection, removeRow, res, result, runDbxImport, runMutation, runQuery, saveProfile, schema, schemaBusy, schemaError, schemaFor, schemas: schemas2, selectDatabase, setActiveConn, setActiveDb, setActiveTabId, setAllowModule, setCellDetail, setCellEdit, setCollapsedDbs, setConnectOpen, setConnections, setDbxState, setDriver, setDrivers, setEditingProfileId, setExpanded, setExplainState, setExportOpen, setFilter, setForm, setHistory, setHistoryOpen, setModal, setNotice, setOpenConns, setPendingDelete, setPickCategory, setPickQuery, setProfileErrors, setProfiles, setSaveProfile, setSchemaBusy, setSchemaError, setSchemas, setShowPassword, setStep, setTab, setTabs, setTestState, showPassword, sortBy, sql, sqlRef, started, step, t, tab, tableEntry, tabs, target, testState, text, toggleTable, token, url, useSavedProfile, value } = wb;
   if (!cwd) return h("div", { className: "ce-root" }, h("div", { className: "ce-empty" }, t("editor.noSession")));
   return h(
     "div",

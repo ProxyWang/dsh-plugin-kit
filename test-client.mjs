@@ -3256,6 +3256,168 @@ check("docAction reloads clean drafts, flags dirty ones, ignores others", docAct
 	}
 }
 
+// --- useTabs: table pages and free SQL, on their own -------------------------------------
+{
+	const fetchBackup = globalThis.fetch;
+	const calls = [];
+	globalThis.fetch = async (url, options) => {
+		const body = JSON.parse(options?.body ?? "{}");
+		calls.push({ url: String(url).split("/").pop(), body });
+		if (String(url).endsWith("/db.rows")) {
+			return { json: async () => ({ ok: true, value: { columns: ["id"], rows: [[body.offset ?? 0]], total: 300, limit: 100, offset: body.offset ?? 0 } }) };
+		}
+		if (String(url).endsWith("/db.query")) {
+			if (String(body.sql ?? "").startsWith("CREATE")) return { json: async () => ({ ok: true, value: { columns: [], rows: [], changes: 0 } }) };
+			if (String(body.sql ?? "") === "select broken") return { json: async () => ({ ok: false, error: "syntax error" }) };
+			return { json: async () => ({ ok: true, value: { columns: ["n"], rows: [[1]], ms: 3 } }) };
+		}
+		if (String(url).endsWith("/db.cancel")) return { json: async () => ({ ok: true, value: { cancelled: true, connectionClosed: true } }) };
+		return { json: async () => ({ ok: true, value: {} }) };
+	};
+	try {
+		const { useTabs } = await import("./src/client/db/hooks/use-tabs.js");
+		const probe = {};
+		const notices = [];
+		const refreshed = [];
+		let connections = [{ id: "c1", driver: "mysql" }];
+		const draw = createHookRenderer(() => {
+			Object.assign(probe, useTabs({
+				connections,
+				setConnections: (next) => { connections = typeof next === "function" ? next(connections) : next; },
+				activeConn: "c1",
+				setActiveConn: () => {},
+				t: (key) => key,
+				refreshSchema: (id) => refreshed.push(id),
+				onNotice: (text) => notices.push(text),
+			}));
+			return null;
+		}, {}, { effects: true });
+		draw();
+		draw.flushEffects();
+		await new Promise((resolve) => setImmediate(resolve));
+
+		probe.openTable("c1", "app", { name: "users", columns: [{ name: "id", primaryKey: true }] });
+		draw();
+		draw.flushEffects();
+		await new Promise((resolve) => setImmediate(resolve));
+		draw();
+		const tableTab = probe.activeTab;
+		check("opening a table creates a tab with its page", tableTab?.kind === "table" && tableTab.table === "users", tableTab?.kind);
+		check("the first page is fetched once with the page size", calls.filter((call) => call.url === "db.rows").length === 1 && calls.at(-1).body.limit === 100 && calls.at(-1).body.table === "users", calls.filter((call) => call.url === "db.rows").length);
+		check("the result lands on the tab", probe.activeTab.result?.rows?.[0]?.[0] === 0 && probe.activeTab.loading === false, probe.activeTab.result);
+
+		await probe.loadRows(tableTab.id, { offset: 100 });
+		draw();
+		check("paging asks for the new offset and replaces the rows", calls.at(-1).body.offset === 100 && probe.activeTab.result.rows[0][0] === 100, probe.activeTab.result?.rows?.[0]);
+
+		const queryId = probe.openQueryTab("select 1");
+		draw();
+		check("a query tab binds the active connection", probe.activeTab.kind === "query" && probe.activeTab.conn === "c1", probe.activeTab.conn);
+		await probe.runQuery(queryId);
+		draw();
+		check("running a query pages the result and records history", probe.activeTab.result?.rows?.[0]?.[0] === 1 && probe.history.length === 1 && probe.history[0].sql === "select 1", probe.history);
+		await probe.runQuery(queryId);
+		draw();
+		check("running the same SQL twice keeps one history entry", probe.history.length === 1, probe.history.length);
+
+		probe.patchTab(queryId, { sql: "CREATE TABLE t(id int)" });
+		draw();
+		await probe.runQuery(queryId);
+		draw();
+		check("a DDL statement refreshes the schema tree", refreshed.includes("c1"), refreshed);
+
+		probe.patchTab(queryId, { sql: "select broken" });
+		draw();
+		await probe.runQuery(queryId);
+		draw();
+		check("a failed query reports the Host error on the tab", probe.activeTab.error === "syntax error" && probe.history.at(0)?.ok === false, probe.activeTab.error);
+
+		const cancelling = { ...probe.activeTab, runToken: "t1" };
+		await probe.cancelQuery(cancelling);
+		draw();
+		check("cancelling a statement that closed the connection says so", notices.at(-1) === "db.cancelledClosed" && connections.length === 0 && probe.tabs.every((tab) => tab.conn !== "c1"), { notices, connections: connections.length, tabs: probe.tabs.length });
+		draw.unmount();
+	} finally {
+		globalThis.fetch = fetchBackup;
+	}
+}
+
+// --- useProfiles: the saved-connection list, on its own ---------------------------------
+{
+	const fetchBackup = globalThis.fetch;
+	const calls = [];
+	let listRevision = 7;
+	let saveFails = false;
+	globalThis.fetch = async (url, options) => {
+		const body = JSON.parse(options?.body ?? "{}");
+		calls.push({ url: String(url), body });
+		if (String(url).endsWith("/db.profile.list")) {
+			return { json: async () => ({ ok: true, value: { revision: listRevision, profiles: [{ id: "p1", label: "old", driver: "mysql" }] } }) };
+		}
+		if (String(url).endsWith("/db.profile.save")) {
+			if (saveFails) return { json: async () => ({ ok: false, error: "revision conflict" }) };
+			listRevision += 1;
+			return { json: async () => ({ ok: true, value: { revision: listRevision, profile: { id: body.id ?? "p2", label: body.label } } }) };
+		}
+		if (String(url).endsWith("/db.profile.delete")) return { json: async () => ({ ok: true, value: {} }) };
+		return { json: async () => ({ ok: true, value: {} }) };
+	};
+	try {
+		const { useProfiles } = await import("./src/client/db/hooks/use-profiles.js");
+		const probe = {};
+		const notices = [];
+		let editing = "";
+		const draw = createHookRenderer(() => {
+			Object.assign(probe, useProfiles({ cwd: "/work", editingProfileId: editing, onNotice: (text) => notices.push(text) }));
+			return null;
+		}, {}, { effects: true });
+		draw();
+		draw.flushEffects();
+		await new Promise((resolve) => setImmediate(resolve));
+		draw();
+		check("the hook loads the saved connections once", probe.profiles.length === 1 && probe.profiles[0].id === "p1", probe.profiles);
+		check("the loaded revision is remembered for the next save", probe.revision.current === 7, probe.revision.current);
+
+		await probe.save({ driver: "mysql", host: "db.example", port: "", database: "app", user: "u", password: "s3cret" });
+		draw();
+		const saveCall = calls.filter((call) => call.url.endsWith("/db.profile.save")).at(-1);
+		check("a save carries the revision it read", saveCall.body.baseRevision === 7, saveCall.body.baseRevision);
+		check("a save fills the label and the default port", saveCall.body.label === "db.example:3306/app" && saveCall.body.port === 3306, { label: saveCall.body.label, port: saveCall.body.port });
+		check("a password is sent only when one was typed", saveCall.body.password === "s3cret" && "options" in saveCall.body, null);
+		check("the saved profile is prepended to the list", probe.profiles[0].id === "p2" && probe.profiles.length === 2, probe.profiles.map((entry) => entry.id));
+
+		// The stub's useCallback ignores deps, so a changed prop needs a fresh
+		// renderer — the same way React would remount the memoized closure.
+		const editProbe = {};
+		const editDraw = createHookRenderer(() => {
+			Object.assign(editProbe, useProfiles({ cwd: "/work", editingProfileId: "p2", onNotice: (text) => notices.push(text) }));
+			return null;
+		}, {}, { effects: true });
+		editDraw();
+		await editProbe.save({ driver: "mysql", host: "db.example", port: 3307, database: "app" });
+		const updateCall = calls.filter((call) => call.url.endsWith("/db.profile.save")).at(-1);
+		check("editing a profile sends its id instead of adding a twin", updateCall.body.id === "p2", updateCall.body.id);
+		editDraw.unmount();
+
+		saveFails = true;
+		const before = probe.profiles.length;
+		await probe.save({ driver: "mysql", host: "other.example" });
+		draw();
+		check("a failed save reports the Host error and keeps the list", notices.at(-1) === "revision conflict" && probe.profiles.length === before, notices);
+
+		await probe.forget(probe.profiles[0]);
+		draw();
+		check("forgetting removes the row and asks the Host", calls.some((call) => call.url.endsWith("/db.profile.delete") && call.body.id === probe.profiles[0]?.id) || probe.profiles.length === before - 1, probe.profiles.map((entry) => entry.id));
+
+		await probe.save({ driver: "sqlite", path: "./data/app.sqlite", host: "", port: "" });
+		const sqliteCall = calls.filter((call) => call.url.endsWith("/db.profile.save")).at(-1);
+		check("a relative SQLite path is stored absolute for the workspace", sqliteCall.body.path === "/work/data/app.sqlite" && sqliteCall.body.label === "app.sqlite", sqliteCall.body.path);
+		draw.unmount();
+	} finally {
+		globalThis.fetch = fetchBackup;
+	}
+}
+
 // --- useSchemaCache: the rail's tree data, on its own -----------------------------------
 {
 	const fetchBackup = globalThis.fetch;
