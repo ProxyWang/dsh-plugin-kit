@@ -141,6 +141,8 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 	const [modal, setModal] = useState(null);
 	const [explainState, setExplainState] = useState({ busy: false, result: null, error: "" });
 	const [exportOpen, setExportOpen] = useState(false);
+	// dbx migration: preview first, write on the second click.
+	const [dbxState, setDbxState] = useState(null);
 	// Saved connections: the profile list (passwords stay in the Host vault).
 	const [profiles, setProfiles] = useState([]);
 	// The revision the list was read at: a save carries it so the Host can
@@ -306,6 +308,25 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 	// and the connect attempt reports the real reason.
 	const canConnect = form.driver !== ""
 		&& (form.driver === "sqlite" ? form.path.trim() !== "" : form.host.trim() !== "");
+
+	/** Read dbx's connection list, then import it on the second step. */
+	const runDbxImport = useCallback(async (apply) => {
+		setDbxState((current) => ({ ...(current ?? {}), busy: true }));
+		const res = await api("db.import.dbx", { apply });
+		const value = res.ok ? res.value : null;
+		if (!value || value.error) {
+			setDbxState({ busy: false, error: value?.error ?? res.error ?? "" });
+			return;
+		}
+		setDbxState({ busy: false, ...value });
+		if (apply && value.imported > 0) {
+			const list = await api("db.profile.list", {});
+			if (list.ok) {
+				profileRevision.current = list.value.revision ?? profileRevision.current;
+				setProfiles(list.value.profiles ?? []);
+			}
+		}
+	}, []);
 
 	/** Save the current target as a reusable connection (password → Host vault). */
 	const rememberConnection = useCallback(async (draft) => {
@@ -876,7 +897,7 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 		modal === null
 			? null
 			: modal.kind === "drivers"
-				? h(DriverManager, { t, drivers, onRedetect: () => void probeDrivers(true), onClose: () => setModal(null) })
+				? h(DriverManager, { t, drivers, dbxState, onImportDbx: runDbxImport, onRedetect: () => void probeDrivers(true), onClose: () => setModal(null) })
 				: modal.kind === "er"
 					? h(ErDiagram, { t, schema, onOpenTable: (table) => { setModal(null); openTableTab(table); }, onClose: () => setModal(null) })
 					: modal.kind === "explain"
@@ -1264,7 +1285,7 @@ export function ResultGrid({ t, result, onCell, onSort, order, dir }) {
 }
 
 /** Driver manager: every implementation, its capabilities and where it lives. */
-export function DriverManager({ t, drivers, onRedetect, onClose }) {
+export function DriverManager({ t, drivers, dbxState, onImportDbx, onRedetect, onClose }) {
 	const card = (driver) => {
 		const head = h("div", { className: "cedb-driver-head" },
 			h("strong", null, driver.label),
@@ -1283,8 +1304,22 @@ export function DriverManager({ t, drivers, onRedetect, onClose }) {
 				: h("span", { className: "cedb-driver-no", title: alt.note }, alt.note))));
 		return h("div", { key: driver.id, className: "cedb-driver-card" }, head, caps, alts);
 	};
+	const importStrip = h("div", { className: "cedb-dbx" },
+		h("span", { className: "cedb-dbx-title" }, t("db.importDbx")),
+		dbxState?.error ? h("span", { className: "cedb-dbx-bad" }, dbxState.error) : null,
+		dbxState?.imported !== undefined && dbxState.imported > 0
+			? h("span", { className: "cedb-dbx-ok" }, `${t("db.importDbxDone")} ${dbxState.imported}`)
+			: null,
+		dbxState?.supported
+			? h("span", { className: "cedb-dbx-info" }, `${dbxState.supported.length} ${t("db.importDbxFound")}${dbxState.withPassword > 0 ? ` · ${dbxState.withPassword} ${t("db.importDbxPassword")}` : ""}`)
+			: null,
+		h("span", { className: "ce-spacer" }),
+		dbxState?.supported && dbxState.imported === undefined
+			? h("button", { type: "button", className: "ce-sk-btn ce-sk-primary", disabled: dbxState.busy, onClick: () => void onImportDbx?.(true) }, dbxState.busy ? t("loading") : t("db.importDbxApply"))
+			: h("button", { type: "button", className: "ce-sk-btn", disabled: dbxState?.busy === true, onClick: () => void onImportDbx?.(false) }, dbxState?.busy ? t("loading") : t("db.importDbxScan")));
 	return h("div", { className: "cedb-dialog cedb-dialog-wide", role: "dialog", "aria-label": t("db.driversButton") },
 		h("h3", { className: "cedb-dialog-title" }, t("db.driversButton")),
+		importStrip,
 		h("div", { className: "cedb-driver-list ce-scroll" }, (drivers ?? []).map(card)),
 		h("div", { className: "cedb-dialog-actions" },
 			h("button", { type: "button", className: "ce-sk-btn", onClick: onRedetect }, t("db.redetect")),

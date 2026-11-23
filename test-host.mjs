@@ -1276,6 +1276,53 @@ export async function createConnection(config) {
 	}
 }
 
+// --- dbx import ------------------------------------------------------------------------
+{
+	let sqliteAvailable = false;
+	try { await import("node:sqlite"); sqliteAvailable = true; } catch { /* no node:sqlite */ }
+	if (!sqliteAvailable) {
+		skipped += 5;
+	} else {
+		const { DatabaseSync } = await import("node:sqlite");
+		const file = `${cwd}-dbx.db`;
+		rmSync(file, { force: true });
+		const dbx = new DatabaseSync(file);
+		dbx.exec("CREATE TABLE connections (id TEXT, config_json TEXT); CREATE TABLE connection_secrets (connection_id TEXT, key TEXT, secret TEXT);");
+		const insert = dbx.prepare("INSERT INTO connections VALUES (?, ?)");
+		insert.run("c1", JSON.stringify({ name: "coupon", db_type: "mysql", host: "10.0.0.1", port: 3308, username: "u1", database: "coupon", ssl: false, url_params: "charset=utf8mb4", color: "#58a6ff", database_info: { productName: "MySQL", productVersion: "8.0" } }));
+		insert.run("c2", JSON.stringify({ name: "vip", db_type: "mariadb", host: "10.0.0.2", port: 3309, username: "u2", database: "vip", ssl: true }));
+		insert.run("c3", JSON.stringify({ name: "cache", db_type: "redis", host: "10.0.0.3", port: 6379 }));
+		insert.run("c4", "not json");
+		dbx.prepare("INSERT INTO connection_secrets VALUES ('c1', 'password', 'x')").run();
+		dbx.close();
+
+		const { readDbxConnections } = await import("./lib/host/dbximport.js");
+		const preview = await readDbxConnections(file);
+		check("the import reads every connection", preview.total === 4, preview.total);
+		check("only drivers this plugin speaks are offered", preview.supported.length === 2, preview.supported.map((entry) => entry.driver));
+		check("an unsupported driver is reported, not imported", preview.skipped.some((entry) => /redis/.test(entry.reason)) && preview.skipped.some((entry) => /unreadable/.test(entry.reason)), preview.skipped);
+		check("the fields map across", preview.supported[0].label === "coupon" && preview.supported[0].host === "10.0.0.1" && preview.supported[0].port === 3308 && preview.supported[0].user === "u1" && preview.supported[0].options.urlParams === "charset=utf8mb4", preview.supported[0]);
+		check("ssl and colour survive, and passwords are counted not copied", preview.supported[1].options.sslMode === "required" && preview.supported[0].color === "#58a6ff" && preview.withPassword === 1 && !("password" in preview.supported[0]), { ssl: preview.supported[1].options, colour: preview.supported[0].color, withPassword: preview.withPassword });
+
+		const { createVaultService } = await import("./lib/host/vault.js");
+		const { createDbProfileService } = await import("./lib/host/dbprofiles.js");
+		const makeStorage = () => ({ async open(spec) { let value = structuredClone(spec.global.initial); return { global: { get: () => value, async set(next) { value = structuredClone(next); } }, async close() {} }; } });
+		const vault = createVaultService(makeStorage());
+		const profiles = createDbProfileService(makeStorage(), vault);
+		const db = await import("./lib/host/db.js");
+		db.setDbProfileService(profiles);
+		const applied = await db.importDbx({ path: file, apply: true });
+		check("applying creates one profile per supported connection", applied.imported === 2 && (await profiles.list()).profiles.length === 2, applied.imported);
+		const again = await db.importDbx({ path: file, apply: true });
+		check("a second import does not duplicate them", again.imported === 0 && (await profiles.list()).profiles.length === 2, again.imported);
+		check("the imported profile keeps its host and options", (await profiles.list()).profiles.some((entry) => entry.host === "10.0.0.1" && entry.options?.urlParams === "charset=utf8mb4"), (await profiles.list()).profiles[0]);
+		db.setDbProfileService(null);
+		await profiles.close();
+		await vault.close();
+		rmSync(file, { force: true });
+	}
+}
+
 // --- TLS options, tunnels and profile extras ------------------------------------------
 {
 	const { openTunnel } = await import("./lib/host/tunnel.js");

@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased — migrate the connections from dbx
+
+Nobody wants to retype five hostnames. The 驱动 dialog now has **从 dbx 迁移连接**: it scans dbx's own `dbx.db`, shows what it found, and imports on a second click.
+
+- **Read-only, preview first**: `db.import.dbx` opens `~/Library/Application Support/com.dbx.app/dbx.db` (or the platform equivalent, or a path you pass) with `readOnly`, lists every connection, and writes nothing until `apply: true`.
+- **What moves**: name, driver (mysql/mariadb/postgres/sqlite), host, port, user, database, colour, SSL flag (→ `sslMode: required`) and URL parameters (stored in the profile's `options`, so the connection reopens with them).
+- **What cannot**: the password. dbx encrypts secrets with a key its own app owns; the import reports how many connections had one instead of silently importing them password-less.
+- **Re-import is safe**: a connection already present (same label, host, port, database) is skipped, so running it twice does not double the list.
+- **Unsupported engines are reported, not dropped silently** (redis, mongodb, …), and a corrupt row says "unreadable config" rather than failing the whole import.
+- Regressions: a fixture dbx database with four rows (two importable, one redis, one broken), field mapping, SSL/colour/URL-parameter carry-over, the password count, apply creating exactly two profiles, the second apply importing zero, and the dialog's preview strip.
+
 ## Unreleased — the wizard's chrome, fixed
 
 The first pass reused the panel's tab-strip class names, so the connection tabs inherited the query-tab styling (boxed, cramped) and every wizard rule I wrote was skipped by a name guard. Three other things read as broken in the same screenshot.

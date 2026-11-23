@@ -3225,7 +3225,12 @@ check("docAction reloads clean drafts, flags dirty ones, ignores others", docAct
 		return [node, ...(node.children ?? []).flatMap(flat)];
 	};
 
-	const manager = render(DriverManager, { t: (key) => key, drivers, onRedetect: () => {}, onClose: () => {} });
+	const importCalls = [];
+	const manager = render(DriverManager, { t: (key) => key, drivers, dbxState: { supported: [{ label: "a" }, { label: "b" }], withPassword: 1 }, onImportDbx: (apply) => importCalls.push(apply), onRedetect: () => {}, onClose: () => {} });
+	check("the driver manager offers the dbx migration", Boolean(flat(manager).find((node) => node.type === "button" && node.children?.[0] === "db.importDbxApply")), null);
+	check("the migration preview counts the connections and the missing passwords", flat(manager).some((node) => String(node.children?.[0] ?? "").includes("2 db.importDbxFound")) && flat(manager).some((node) => String(node.children?.[0] ?? "").includes("1 db.importDbxPassword")), null);
+	flat(manager).find((node) => node.type === "button" && node.children?.[0] === "db.importDbxApply").props.onClick();
+	check("the import button asks the host to apply", importCalls.join() === "true", importCalls);
 	check("the driver manager renders a card per driver with its capabilities", flat(manager).filter((node) => node.props?.className === "cedb-driver-card").length === 2 && flat(manager).some((node) => String(node.props?.className ?? "").includes("cedb-cap")), null);
 	check("an unavailable implementation shows its reason", flat(manager).some((node) => node.props?.className === "cedb-driver-no"), null);
 

@@ -488,6 +488,11 @@ export const CSS = `
 .cedb-password .ce-input{flex:1 1 auto;min-width:0}
 .cedb-dialog-wide{width:min(920px,calc(100vw - 48px));max-height:86vh;overflow:auto}
 .cedb-dialog-hint{margin:0;font-size:11px;color:var(--dsw-alias-label-tertiary,#889)}
+.cedb-dbx{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 10px;margin-bottom:8px;border:.5px solid var(--dsw-alias-border-l1,#2a2e35);border-radius:8px;background:var(--dsw-alias-bg-base,#141618)}
+.cedb-dbx-title{font-size:12px;font-weight:600;color:var(--dsw-alias-label-primary,#dde)}
+.cedb-dbx-info{font-size:11px;color:var(--dsw-alias-label-secondary,#aab)}
+.cedb-dbx-ok{font-size:11px;color:var(--dsw-alias-label-primary,#dde)}
+.cedb-dbx-bad{font-size:11px;color:var(--dsw-alias-label-error,#f88)}
 .cedb-driver-list{display:flex;flex-direction:column;gap:8px;max-height:56vh;overflow:auto}
 .cedb-driver-card{border:.5px solid var(--dsw-alias-border-l1,#2a2e35);border-radius:8px;padding:8px 10px;display:flex;flex-direction:column;gap:6px}
 .cedb-driver-head{display:flex;align-items:center;gap:8px;font-size:12px}
