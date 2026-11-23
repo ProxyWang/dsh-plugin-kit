@@ -19,7 +19,7 @@ import { createTerminalEntry } from "./terminal.js";
 import { installTerminalTab, TERM_TAB_KIND } from "./termtab.js";
 import { installRightbarWidth } from "./rightbarwidth.js";
 import { pruneOrphanKeys } from "./orphans.js";
-import { SessionBranch, sessionCwd } from "./branchchip.js";
+import { SessionBranch, SessionBranchCard, sessionCwd } from "./branchchip.js";
 
 export default {
 	inject: ["slots", "locale", "sidebarRightTabs", "sidebarRight", "layout"],
@@ -180,6 +180,14 @@ export default {
 			(props) => {
 				const cwd = sessionCwd(props?.useSessions, props?.sessionId);
 				return cwd === "" ? null : h(SessionBranch, { t: bound, cwd });
+			},
+		)));
+		// The row cell is icon-sized; the hover card has room for the whole name.
+		safe("session branch card", () => ctx.slots.inject("sidebar.session.row.hover", () => ctx.slots.register(
+			{ name: "sidebar.session.row.hover", id: "dsh-plugin-kit/session-branch-card", order: 20, locale: NS },
+			(props) => {
+				const cwd = sessionCwd(props?.useSessions, props?.sessionId);
+				return cwd === "" ? null : h(SessionBranchCard, { t: bound, cwd });
 			},
 		)));
 		// Left navigation owns all tool launchers; right pages remain session-bound.

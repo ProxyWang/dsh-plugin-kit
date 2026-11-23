@@ -9630,6 +9630,9 @@ var CSS2 = `
 .ce-branch-chip{display:inline-flex;align-items:center;gap:2px;flex:0 1 auto;max-width:min(26em, 62%);padding:0 4px;margin-left:4px;border-radius:999px;background:var(--dsw-alias-bg-layer-1,#1d2126);border:.5px solid var(--dsw-alias-border-l1,#2a2e35);color:var(--dsw-alias-label-secondary,#aab);font-size:9.5px;line-height:15px;vertical-align:middle;overflow:hidden}
 .ce-branch-glyph{opacity:.75;flex:0 0 auto}
 .ce-branch-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.ce-branch-card{display:flex;align-items:center;gap:5px;padding:4px 6px;margin:2px 0;border-radius:6px;background:var(--dsw-alias-bg-layer-1,#1d2126);color:var(--dsw-alias-label-secondary,#aab);font-size:11px;line-height:16px;min-width:0}
+.ce-branch-card-label{flex:0 0 auto;opacity:.8}
+.ce-branch-card-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:var(--dsw-font-mono,ui-monospace,monospace);color:var(--dsw-alias-label-primary,#dde)}
 .ce-workspace-guide{height:100%;min-height:180px;box-sizing:border-box;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:24px;text-align:center;color:var(--dsw-alias-label-secondary,#9aa4b0);font-family:inherit}
 .ce-workspace-guide-icon{display:inline-flex;color:var(--dsw-alias-label-tertiary,#7b8794)}
 .ce-workspace-guide h2{margin:0;font-size:16px;font-weight:600;color:var(--dsw-alias-label-primary,#ddd)}
@@ -19462,6 +19465,15 @@ function watchBranch(cwd, listener) {
     branches.delete(cwd);
   };
 }
+var BRANCH_CHIP_MAX = 22;
+function shortBranch(name, max = BRANCH_CHIP_MAX) {
+  const text = String(name ?? "");
+  if (text.length <= max) return text;
+  const budget = max - 1;
+  const head = Math.ceil(budget * 0.45);
+  const tail = budget - head;
+  return `${text.slice(0, head)}…${text.slice(text.length - tail)}`;
+}
 function sessionCwd(useSessions, sessionId) {
   const id = String(sessionId ?? "");
   if (id === "" || typeof useSessions !== "function") return "";
@@ -19489,7 +19501,23 @@ function SessionBranch({ t, cwd }) {
     "span",
     { className: "ce-branch-chip", title: `${t("branch.current")}: ${label}` },
     h("span", { className: "ce-branch-glyph", "aria-hidden": "true" }, "⎇"),
-    h("span", { className: "ce-branch-name" }, label)
+    h("span", { className: "ce-branch-name" }, shortBranch(label))
+  );
+}
+function SessionBranchCard({ t, cwd }) {
+  const [state, setState] = useState({ repo: false, branch: "" });
+  useEffect(() => {
+    if (!cwd) return void 0;
+    return watchBranch(cwd, setState);
+  }, [cwd]);
+  if (!state.repo || state.branch === "") return null;
+  const label = state.branch === "HEAD" ? t("branch.detached") : state.branch;
+  return h(
+    "div",
+    { className: "ce-branch-card", title: label },
+    h("span", { className: "ce-branch-glyph", "aria-hidden": "true" }, "⎇"),
+    h("span", { className: "ce-branch-card-label" }, `${t("branch.current")} · `),
+    h("span", { className: "ce-branch-card-name" }, label)
   );
 }
 
@@ -19641,6 +19669,13 @@ var index_default = {
       (props) => {
         const cwd = sessionCwd(props?.useSessions, props?.sessionId);
         return cwd === "" ? null : h(SessionBranch, { t: bound, cwd });
+      }
+    )));
+    safe("session branch card", () => ctx.slots.inject("sidebar.session.row.hover", () => ctx.slots.register(
+      { name: "sidebar.session.row.hover", id: "dsh-plugin-kit/session-branch-card", order: 20, locale: NS },
+      (props) => {
+        const cwd = sessionCwd(props?.useSessions, props?.sessionId);
+        return cwd === "" ? null : h(SessionBranchCard, { t: bound, cwd });
       }
     )));
     safe("left tool entries", () => installLeftTools(ctx, bound));

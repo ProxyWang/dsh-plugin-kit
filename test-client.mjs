@@ -3274,7 +3274,10 @@ check("docAction reloads clean drafts, flags dirty ones, ignores others", docAct
 		return { json: async () => ({ ok: true, value: {} }) };
 	};
 	try {
-		const { SessionBranch, sessionCwd } = await import("./src/client/branchchip.js");
+		const { SessionBranch, SessionBranchCard, sessionCwd, shortBranch } = await import("./src/client/branchchip.js");
+		check("a short branch is shown whole", shortBranch("main") === "main", shortBranch("main"));
+		check("a long branch keeps both of its ends", shortBranch("feat/profile-match-very-long-branch-name").startsWith("feat/") && shortBranch("feat/profile-match-very-long-branch-name").endsWith("name"), shortBranch("feat/profile-match-very-long-branch-name"));
+		check("distinct long branches stay distinguishable", shortBranch("feat/profile-match-api") !== shortBranch("feat/profile-matrix-api"), [shortBranch("feat/profile-match-api"), shortBranch("feat/profile-matrix-api")]);
 		check("the row resolves its workspace from the slot's useSessions", sessionCwd((select) => select({ byId: { s9: { cwd: "/repo" } } }), "s9") === "/repo", null);
 		check("an unknown or blank session resolves to nothing", sessionCwd((select) => select({ byId: {} }), "s9") === "" && sessionCwd(undefined, "s9") === "" && sessionCwd(() => "/x", "") === "", null);
 		const drawTree = (component, props) => {
@@ -3314,6 +3317,16 @@ check("docAction reloads clean drafts, flags dirty ones, ignores others", docAct
 		check("a detached HEAD says so instead of printing HEAD", JSON.stringify(tree).includes("branch.detached"), null);
 		draw.unmount();
 		check("unmounting stops the poll", tick === null, tick !== null);
+
+		// The hover card is where the complete name lives.
+		branch = "feat/profile-match-very-long-branch-name";
+		const cardDraw = createHookRenderer(() => SessionBranchCard({ t: (key) => key, cwd: "/work" }), {}, { effects: true });
+		let cardTree = cardDraw();
+		cardDraw.flushEffects();
+		await new Promise((resolve) => setImmediate(resolve));
+		cardTree = cardDraw();
+		check("the hover card shows the full branch name", JSON.stringify(cardTree).includes("feat/profile-match-very-long-branch-name") && JSON.stringify(cardTree).includes("branch.current"), JSON.stringify(cardTree).slice(0, 140));
+		cardDraw.unmount();
 		// Two rows of the same workspace share one probe; another workspace does not.
 		const intervals = [];
 		globalThis.setInterval = (fn) => { intervals.push(fn); return intervals.length; };
