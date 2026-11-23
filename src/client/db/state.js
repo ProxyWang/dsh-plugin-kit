@@ -14,6 +14,7 @@ import { DRIVERS, driverLabel, parseConnectionAddress } from "../dbconnect.js";
 import { useDismissLayer } from "../dismiss.js";
 import { HISTORY_CAP, PAGE_SIZE, countOf, requestToken, toCsv } from "./format.js";
 import { CATEGORIES, defaultPort } from "./meta.js";
+import { useSchemaCache } from "./hooks/use-schema-cache.js";
 
 
 /**
@@ -29,18 +30,14 @@ export function useWorkbench({ t, useTabInfo, sessionId, useSessions }) {
 	const [activeConn, setActiveConn] = useState("");
 	// One schema per open connection: the rail is a tree of instances, not a
 	// single "objects" pane for whichever one is active.
-	const [schemas, setSchemas] = useState({});
-	const [openConns, setOpenConns] = useState({});
 	// Clicking a database selects it (and folds its tables): the rail's job is to
 	// move the target, and picking another database used to do nothing at all.
 	const [activeDb, setActiveDb] = useState({ conn: "", database: "" });
+
 	// A cell being edited, plus which row is waiting for a second click to delete.
 	const [cellEdit, setCellEdit] = useState(null);
 	const [pendingDelete, setPendingDelete] = useState(-1);
 	const [collapsedDbs, setCollapsedDbs] = useState({});
-	const [schemaBusy, setSchemaBusy] = useState(false);
-	const [schemaError, setSchemaError] = useState("");
-	const [filter, setFilter] = useState("");
 	const [expanded, setExpanded] = useState(() => new Set()); // table keys open in the tree
 	const [tabs, setTabs] = useState([]);
 	const [activeTabId, setActiveTabId] = useState("");
@@ -69,6 +66,19 @@ export function useWorkbench({ t, useTabInfo, sessionId, useSessions }) {
 	});
 	const [cellDetail, setCellDetail] = useState(null); // {title, value}
 	const [notice, setNotice] = useState("");
+	// Schema cache: the rail's tree data and its filter, in its own hook.
+	const schemaCache = useSchemaCache({
+		activeConn,
+		connections,
+		t,
+		onSelect: (connId, database) => { setActiveConn(connId); setActiveDb({ conn: connId, database }); },
+		onNotice: setNotice,
+	});
+	const {
+		schemas, setSchemas, openConns, setOpenConns, schema,
+		schemaBusy, setSchemaBusy, schemaError, setSchemaError,
+		filter, setFilter, refreshSchema, selectDatabase, databasesOf,
+	} = schemaCache;
 	// Modal layer: driver manager, ER diagram, execution plan, import.
 	const [modal, setModal] = useState(null);
 	const [explainState, setExplainState] = useState({ busy: false, result: null, error: "" });
@@ -151,20 +161,6 @@ export function useWorkbench({ t, useTabInfo, sessionId, useSessions }) {
 
 	// --- connections ----------------------------------------------------------------------
 
-	const refreshSchema = useCallback(async (id = activeConn) => {
-		if (!id) return;
-		setSchemaBusy(true);
-		setSchemaError("");
-		const res = await api("db.schema", { id });
-		setSchemaBusy(false);
-		if (res.ok) {
-			setSchemas((current) => ({ ...current, [id]: res.value }));
-			setOpenConns((current) => ({ ...current, [id]: true }));
-		} else {
-			setSchemas((current) => { const next = { ...current }; delete next[id]; return next; });
-			setSchemaError(res.error);
-		}
-	}, [activeConn]);
 
 	/**
 	 * Read a pasted address into driver and fields.
@@ -218,7 +214,7 @@ export function useWorkbench({ t, useTabInfo, sessionId, useSessions }) {
 		setForm((current) => {
 			const defaultNow = defaultPort(current.driver);
 			const keep = String(current.port ?? "") !== "" && String(current.port) !== defaultNow;
-			return { activeConn, activeDb, activeTab, activeTabId, allowModule, applyAddress, canConnect, cancelQuery, cellDetail, cellEdit, closeTab, collapsedDbs, commitCell, connectOpen, connectParams, connectProfile, connectRef, connections, copyCommand, copyResult, counts, cwd, databasesOf, dbxState, detailRef, doConnect, doDisconnect, doTest, driverReady, drivers, editingProfileId, expanded, explainState, exportOpen, exportResult, fetchRows, fetched, filter, forgetProfile, form, history, historyOpen, importRows, insertRow, installDriverModule, loadRows, modal, notice, onKeyDown, openConnect, openConns, openQueryTab, openTab, openTable, patchTab, pendingDelete, pickCategory, pickQuery, pickableDrivers, pkColumn, probeDrivers, profileErrors, profileRevision, profiles, refreshSchema, rememberConnection, removeRow, runDbxImport, runExplain, runMutation, runQuery, saveProfile, schema, schemaBusy, schemaError, schemas, selectDatabase, setActiveConn, setActiveDb, setActiveTabId, setAllowModule, setCellDetail, setCellEdit, setCollapsedDbs, setConnectOpen, setConnections, setDbxState, setDriver, setDrivers, setEditingProfileId, setExpanded, setExplainState, setExportOpen, setFilter, setForm, setHistory, setHistoryOpen, setModal, setNotice, setOpenConns, setPendingDelete, setPickCategory, setPickQuery, setProfileErrors, setProfiles, setSaveProfile, setSchemaBusy, setSchemaError, setSchemas, setShowPassword, setStep, setTab, setTabs, setTestState, showPassword, sortBy, sqlRef, step, t, tab, tableEntry, tabs, testState, toggleTable, useSavedProfile };
+			return { ...current, driver, port: keep ? current.port : defaultPort(driver) };
 		});
 		setNotice("");
 		setTestState({ busy: false, ok: null, text: "" });
@@ -601,39 +597,6 @@ export function useWorkbench({ t, useTabInfo, sessionId, useSessions }) {
 
 	// --- tree ----------------------------------------------------------------------------
 
-	const schema = schemas[activeConn] ?? null;
-
-	/**
-	 * Select a database, loading its tables the first time.
-	 *
-	 * MySQL lists every database but only introspects one; clicking another used
-	 * to select a name with no tables behind it.
-	 */
-	const selectDatabase = useCallback(async (connId, databaseName) => {
-		setActiveConn(connId);
-		setActiveDb({ conn: connId, database: databaseName });
-		const known = schemas[connId]?.databases?.find((entry) => entry.name === databaseName);
-		if (known && known.tables.length > 0) return;
-		// PostgreSQL binds a connection to one database; there is no `USE`.
-		if (connections.find((entry) => entry.id === connId)?.driver === "postgres") {
-			setNotice(t("db.pgCrossDatabase"));
-			return;
-		}
-		const res = await api("db.schema", { id: connId, database: databaseName });
-		if (!res.ok || !res.value) { setSchemaError(res.error ?? ""); return; }
-		const fetched = (res.value.databases ?? []).find((entry) => entry.name === databaseName);
-		if (!fetched) return;
-		setSchemas((current) => {
-			const schemaFor = current[connId];
-			if (!schemaFor) return { ...current, [connId]: res.value };
-			return {
-				...current,
-				[connId]: {
-					...schemaFor,
-					current: databaseName,
-					databases: schemaFor.databases.map((entry) => (entry.name === databaseName ? fetched : entry)) } };
-		});
-	}, [schemas, connections, t]);
 
 	/** The schema entry behind the open table tab, when there is one. */
 	const tableEntry = useMemo(() => {
@@ -729,15 +692,6 @@ export function useWorkbench({ t, useTabInfo, sessionId, useSessions }) {
 		await runMutation(sql, t("db.rowDeleted"));
 	}, [activeTab, pkColumn, pendingDelete, connections, activeConn, runMutation, t]);
 
-	/** The databases of one instance, filtered by the rail's search box. */
-	const databasesOf = useCallback((connId) => {
-		const needle = filter.trim().toLowerCase();
-		const databases = (schemas[connId]?.databases ?? []).map((database) => {
-			const entries = (database.tables ?? []).filter((entry) => !needle || entry.name.toLowerCase().includes(needle));
-			return { ...database, tables: entries };
-		});
-		return needle ? databases.filter((database) => database.tables.length > 0) : databases;
-	}, [schemas, filter]);
 
 	const counts = countOf(schema);
 

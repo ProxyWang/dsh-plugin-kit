@@ -3256,6 +3256,72 @@ check("docAction reloads clean drafts, flags dirty ones, ignores others", docAct
 	}
 }
 
+// --- useSchemaCache: the rail's tree data, on its own -----------------------------------
+{
+	const fetchBackup = globalThis.fetch;
+	const calls = [];
+	const tree = (extra = {}) => ({ databases: [
+		{ name: "app", tables: [{ name: "users", kind: "table", columns: [] }] },
+		{ name: "test", tables: [], ...extra },
+	] });
+	globalThis.fetch = async (url, options) => {
+		const body = JSON.parse(options?.body ?? "{}");
+		calls.push({ url: String(url), body });
+		if (String(url).endsWith("/db.schema")) {
+			if (body.database === "test") return { json: async () => ({ ok: true, value: { current: "test", databases: [{ name: "test", tables: [{ name: "logs", kind: "table", columns: [] }] }] } }) };
+			if (body.id === "bad") return { json: async () => ({ ok: false, error: "boom" }) };
+			return { json: async () => ({ ok: true, value: tree() }) };
+		}
+		return { json: async () => ({ ok: true, value: {} }) };
+	};
+	try {
+		const { useSchemaCache } = await import("./src/client/db/hooks/use-schema-cache.js");
+		const probe = {};
+		const selected = [];
+		const notices = [];
+		const props = {
+			activeConn: "c1",
+			connections: [{ id: "c1", driver: "mysql" }, { id: "c2", driver: "postgres" }],
+			t: (key) => key,
+			onSelect: (connId, database) => selected.push([connId, database]),
+			onNotice: (text) => notices.push(text),
+		};
+		const draw = createHookRenderer(() => {
+			Object.assign(probe, useSchemaCache(props));
+			return null;
+		}, {}, { effects: true });
+		draw();
+
+		await probe.refreshSchema("c1");
+		draw();
+		check("loading a schema stores it and expands the instance", Boolean(probe.schemas.c1) && probe.openConns.c1 === true, Object.keys(probe.schemas));
+		check("the active connection's schema is exposed for the header", probe.schema?.databases?.length === 2, probe.schema);
+		check("the load asks the Host for that connection only", calls.at(-1).body.id === "c1", calls.at(-1));
+
+		await probe.selectDatabase("c1", "test");
+		draw();
+		const testDb = probe.schemas.c1.databases.find((entry) => entry.name === "test");
+		check("selecting an empty database loads its tables", testDb.tables.length === 1 && testDb.tables[0].name === "logs", testDb);
+		check("selecting a database moves the workbench target", selected.at(-1).join() === "c1,test", selected.at(-1));
+
+		const before = calls.length;
+		await probe.selectDatabase("c2", "other");
+		check("PostgreSQL refuses to switch databases with an explanation", notices.at(-1) === "db.pgCrossDatabase" && calls.length === before, { notices, calls: calls.length - before });
+
+		probe.setFilter("log");
+		draw();
+		const filtered = probe.databasesOf("c1");
+		check("the filter narrows table names and hides empty databases", filtered.length === 1 && filtered[0].tables[0].name === "logs", filtered);
+
+		await probe.refreshSchema("bad");
+		draw();
+		check("a failed load keeps the previous tree and reports why", probe.schemaError === "boom" && probe.schemas.bad === undefined, probe.schemaError);
+		draw.unmount();
+	} finally {
+		globalThis.fetch = fetchBackup;
+	}
+}
+
 // --- row editing, insert and delete ----------------------------------------------------
 {
 	const { updateCellSql, deleteRowSql, insertRowSql, qualifiedTable } = await import("./src/client/dbtools.js");
@@ -3480,8 +3546,20 @@ check("docAction reloads clean drafts, flags dirty ones, ignores others", docAct
 
 		check("step two shows the connection fields", Boolean(find((n) => n.props?.placeholder === "localhost")) && Boolean(find((n) => n.props?.placeholder === "db.namePlaceholder")), null);
 		check("the port follows the chosen engine", find((n) => n.type === "input" && n.props?.type === "number")?.props.value === "5432", null);
+
 		check("the wizard names the implementation that will run", JSON.stringify(tree).includes("pg@8.11"), null);
 		check("a host is enough to enable connect", connectButton().props.disabled === false, null);
+		// Switching the engine must not take the rest of the form with it: a bug
+		// once replaced the whole form object with the hook's state map.
+		find((n) => n.type === "button" && n.props?.title === "db.changeDriver").props.onClick();
+		await paint();
+		cards()[1].props.onClick();
+		await paint();
+		nextButton().props.onClick();
+		await paint();
+		const hostInput = find((n) => n.props?.placeholder === "localhost");
+		check("switching the engine keeps the other fields", hostInput?.props?.value === "localhost" && find((n) => n.type === "input" && n.props?.type === "number")?.props.value === "3306", { host: hostInput?.props?.value });
+
 
 		const paste = () => find((n) => n.props?.placeholder === "db.addressPlaceholder");
 		paste().props.onChange({ target: { value: "mysql://alice:secret@db.example:3307/app" } });

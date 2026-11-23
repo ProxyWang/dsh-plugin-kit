@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased — first domain hook out of the workbench, with its own tests
+
+- `db/hooks/use-schema-cache.js` owns the rail's tree data: the per-connection schema map, expansion, the last
+  load error and the table-name filter. It takes `onSelect`/`onNotice` callbacks instead of touching `activeConn`
+  or the notice, so it is testable on its own. `useWorkbench` composes it and re-exposes the same names, so no
+  view changed.
+- **Unit tests for the hook** (through a probe component, with only `fetch` stubbed): a load stores the tree and
+  expands the instance, the active schema is exposed, a database with no tables is loaded when selected, the
+  selection moves the workbench target, PostgreSQL refuses with its explanation and no request, the filter narrows
+  names and hides empty databases, and a failed load keeps the previous tree and reports the error.
+- Writing those tests found a real regression from the scripted split: `setDriver` had its whole form replaced by
+  the hook's state map (switching engines wiped host/name). Fixed, with a regression test that switches the engine
+  through the picker and asserts the other fields survive and the port follows.
+
 ## Unreleased — migration and install leave the facade
 
 - `db/migrate.js` (dbx import) and `db/install.js` (`npm install --no-save` of a whitelisted driver) are their own
