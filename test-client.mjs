@@ -3256,6 +3256,110 @@ check("docAction reloads clean drafts, flags dirty ones, ignores others", docAct
 	}
 }
 
+// --- useDrivers: the driver catalog and its actions, on their own ------------------------
+{
+	const fetchBackup = globalThis.fetch;
+	const clipboardBackup = globalThis.navigator;
+	const calls = [];
+	const notices = [];
+	globalThis.fetch = async (url, options) => {
+		const body = JSON.parse(options?.body ?? "{}");
+		calls.push({ url: String(url).split("/").pop(), body });
+		if (String(url).endsWith("/db.drivers")) {
+			return { json: async () => ({ ok: true, value: [{ id: "mysql", ready: body.allowWorkspace === true }] }) };
+		}
+		if (String(url).endsWith("/db.driver.install")) {
+			if (body.name === "bad") return { json: async () => ({ ok: false, error: "no network" }) };
+			return { json: async () => ({ ok: true, value: { name: body.name, output: "added 1 package" } }) };
+		}
+		return { json: async () => ({ ok: true, value: {} }) };
+	};
+	globalThis.navigator = { clipboard: { writeText: async (text) => { calls.push({ url: "clipboard", body: text }); } } };
+	try {
+		const { useDrivers } = await import("./src/client/db/hooks/use-drivers.js");
+		const probe = {};
+		const draw = createHookRenderer(() => {
+			Object.assign(probe, useDrivers({ cwd: "/work", t: (key) => key, onNotice: (text) => notices.push(text) }));
+			return null;
+		}, {}, { effects: true });
+		draw();
+		draw.flushEffects();
+		await new Promise((resolve) => setImmediate(resolve));
+		draw();
+		check("the catalog is probed on mount", calls.some((call) => call.url === "db.drivers") && probe.drivers.length === 1, probe.drivers);
+		check("the probe reports the project-module permission", calls.at(-1).body.allowWorkspace === false, calls.at(-1).body);
+
+		probe.setAllowModule(true);
+		draw();
+		draw.flushEffects();
+		await new Promise((resolve) => setImmediate(resolve));
+		draw();
+		check("allowing project modules re-probes with the flag", probe.allowModule === true && calls.filter((call) => call.url === "db.drivers").at(-1).body.allowWorkspace === true, probe.allowModule);
+
+		await probe.install("mysql2");
+		draw();
+		check("installing posts the package and the workspace", calls.some((call) => call.url === "db.driver.install" && call.body.name === "mysql2" && call.body.cwd === "/work"), null);
+		check("a successful install re-probes with refresh", calls.filter((call) => call.url === "db.drivers").at(-1).body.refresh === true && probe.installState.installed === "mysql2", probe.installState);
+
+		await probe.install("bad");
+		draw();
+		check("a failed install reports the Host error", probe.installState.error === "no network" && probe.installState.installing === "", probe.installState);
+
+		await probe.copyCommand("brew install mysql-client");
+		draw();
+		check("copying a command uses the clipboard and says so", calls.some((call) => call.url === "clipboard" && call.body === "brew install mysql-client") && notices.at(-1) === "db.copied", notices);
+		draw.unmount();
+	} finally {
+		globalThis.fetch = fetchBackup;
+		globalThis.navigator = clipboardBackup;
+	}
+}
+
+// --- useConnections: the live list and its recovery, on their own ------------------------
+{
+	const fetchBackup = globalThis.fetch;
+	const calls = [];
+	let roster = [
+		{ id: "c1", driver: "mysql", label: "one", profileId: "p1" },
+		{ id: "c2", driver: "mysql", label: "one-again", profileId: "p1" },
+		{ id: "c3", driver: "postgres", label: "two", profileId: "p2" },
+	];
+	globalThis.fetch = async (url, options) => {
+		const body = JSON.parse(options?.body ?? "{}");
+		calls.push({ url: String(url).split("/").pop(), body });
+		if (String(url).endsWith("/db.connections")) return { json: async () => ({ ok: true, value: roster }) };
+		if (String(url).endsWith("/db.disconnect")) {
+			roster = roster.filter((entry) => entry.id !== body.id);
+			return { json: async () => ({ ok: true, value: {} }) };
+		}
+		return { json: async () => ({ ok: true, value: {} }) };
+	};
+	try {
+		const { useConnections } = await import("./src/client/db/hooks/use-connections.js");
+		const probe = {};
+		const draw = createHookRenderer(() => {
+			Object.assign(probe, useConnections());
+			return null;
+		}, {}, { effects: true });
+		draw();
+		draw.flushEffects();
+		await new Promise((resolve) => setImmediate(resolve));
+		draw();
+		check("the host's live connections are recovered on mount", probe.connections.length === 2 && probe.activeConn !== "", probe.connections.map((entry) => entry.id));
+		const extras = calls.filter((call) => call.url === "db.disconnect").map((call) => call.body.id);
+		check("duplicates of one profile are disconnected, keeping one", extras.join() === "c2", extras);
+		check("the first connection becomes active", probe.activeConn === "c1", probe.activeConn);
+
+		await probe.disconnect("c1");
+		draw();
+		check("disconnecting removes the row and clears the active id", probe.connections.length === 1 && probe.activeConn === "", { rows: probe.connections.length, active: probe.activeConn });
+		check("disconnecting asks the Host", calls.some((call) => call.url === "db.disconnect" && call.body.id === "c1"), null);
+		draw.unmount();
+	} finally {
+		globalThis.fetch = fetchBackup;
+	}
+}
+
 // --- useTabs: table pages and free SQL, on their own -------------------------------------
 {
 	const fetchBackup = globalThis.fetch;

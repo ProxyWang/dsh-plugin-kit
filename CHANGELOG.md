@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased — connection recovery and the driver catalog become hooks
+
+- `db/hooks/use-connections.js` owns the live-connection list and **recovers it on mount** — that recovery had been
+  lost in an earlier mechanical split, which is exactly the regression a hook test catches. Duplicates of one
+  profile are folded by disconnecting the extras, and the first connection becomes active.
+- `db/hooks/use-drivers.js` owns the catalog, the project-module permission (persisted), the install action and the
+  CLI-command copy. The panel's dialogs read one `dbxState` object that merges import progress and install progress.
+- **Unit tests per hook**: connections — recovery on mount, duplicate folding, active default, disconnect removing
+  the row and clearing the active id; drivers — mount probe, permission carried into the probe, install posts the
+  package and workspace, install re-probes with `refresh`, a failed install reports the error, copy uses the
+  clipboard and says so.
+
 ## Unreleased — two more domain hooks, each with its own tests
 
 - `db/hooks/use-profiles.js` owns the saved-connection list, the revision guard (a save carries the revision it

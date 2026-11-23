@@ -13742,8 +13742,8 @@ function useSchemaCache({ activeConn, connections, t, onSelect, onNotice }) {
       setSchemaError(res.error ?? "");
       return;
     }
-    const fetched2 = (res.value.databases ?? []).find((entry) => entry.name === databaseName);
-    if (!fetched2) return;
+    const fetched = (res.value.databases ?? []).find((entry) => entry.name === databaseName);
+    if (!fetched) return;
     setSchemas((current) => {
       const schemaFor = current[connId];
       if (!schemaFor) return { ...current, [connId]: res.value };
@@ -13752,7 +13752,7 @@ function useSchemaCache({ activeConn, connections, t, onSelect, onNotice }) {
         [connId]: {
           ...schemaFor,
           current: databaseName,
-          databases: schemaFor.databases.map((entry) => entry.name === databaseName ? fetched2 : entry)
+          databases: schemaFor.databases.map((entry) => entry.name === databaseName ? fetched : entry)
         }
       };
     });
@@ -13927,11 +13927,11 @@ function useTabs({ connections, setConnections, activeConn, setActiveConn, t, re
       result: null
     });
   }, [openTab]);
-  const fetched2 = useRef(/* @__PURE__ */ new Set());
+  const fetched = useRef(/* @__PURE__ */ new Set());
   useEffect(() => {
-    const target = tabs.find((tab) => tab.kind === "table" && !tab.result && !tab.loading && !fetched2.current.has(tab.id));
+    const target = tabs.find((tab) => tab.kind === "table" && !tab.result && !tab.loading && !fetched.current.has(tab.id));
     if (!target) return;
-    fetched2.current.add(target.id);
+    fetched.current.add(target.id);
     void fetchRows(target);
   }, [tabs, fetchRows]);
   const sortBy = useCallback((id, column) => {
@@ -13972,12 +13972,12 @@ function useTabs({ connections, setConnections, activeConn, setActiveConn, t, re
     const started = Date.now();
     const res = await api("db.query", { id: conn, token, sql, limit: QUERY_PAGE2, offset });
     const ms = Date.now() - started;
+    setHistory((current) => [{ sql, at: Date.now(), ms, ok: res.ok && !res.value?.error }, ...current.filter((entry) => entry.sql !== sql)].slice(0, HISTORY_CAP2));
     if (!res.ok) {
       patchTab(id, { loading: false, error: res.error, result: null });
       return;
     }
     patchTab(id, { loading: false, result: res.value, error: "", ms, runToken: "", offset });
-    setHistory((current) => [{ sql, at: Date.now(), ms, ok: !res.value.error }, ...current.filter((entry) => entry.sql !== sql)].slice(0, HISTORY_CAP2));
     if (/^\s*(create|drop|alter)\b/i.test(sql)) void refreshSchema(conn);
   }, [tabs, activeConn, patchTab, refreshSchema, t]);
   const cancelQuery = useCallback(async (tab) => {
@@ -14043,13 +14043,92 @@ function useTabs({ connections, setConnections, activeConn, setActiveConn, t, re
   };
 }
 
-// src/client/db/state.js
-function useWorkbench({ t, useTabInfo, sessionId, useSessions }) {
-  const cwd = useSessions ? useSessions((sessions) => sessionId ? sessions.byId[sessionId]?.cwd : void 0) : void 0;
-  const [drivers, setDrivers] = useState([]);
+// src/client/db/hooks/use-connections.js
+function useConnections() {
   const [connections, setConnections] = useState([]);
   const [activeConn, setActiveConn] = useState("");
   const [activeDb, setActiveDb] = useState({ conn: "", database: "" });
+  useEffect(() => {
+    api("db.connections", {}).then((res) => {
+      if (!res.ok || !Array.isArray(res.value)) return;
+      const seen = /* @__PURE__ */ new Set();
+      const keep = [];
+      for (const connection of res.value) {
+        const key = connection.profileId || connection.id;
+        if (connection.profileId && seen.has(key)) {
+          void api("db.disconnect", { id: connection.id });
+          continue;
+        }
+        seen.add(key);
+        keep.push(connection);
+      }
+      setConnections(keep);
+      if (keep.length > 0) setActiveConn((current) => current || keep[0].id);
+    }).catch(() => {
+    });
+  }, []);
+  const disconnect = useCallback(async (id) => {
+    await api("db.disconnect", { id });
+    setConnections((current) => current.filter((entry) => entry.id !== id));
+    if (activeConn === id) setActiveConn("");
+  }, [activeConn]);
+  return { connections, setConnections, activeConn, setActiveConn, activeDb, setActiveDb, disconnect };
+}
+
+// src/client/db/hooks/use-drivers.js
+var ALLOW_MODULE_KEY = "dsh.plugin-kit.db.allowModule";
+function useDrivers({ cwd, t, onNotice }) {
+  const [drivers, setDrivers2] = useState([]);
+  const [allowModule, setAllowModuleState] = useState(() => {
+    try {
+      return localStorage.getItem(ALLOW_MODULE_KEY) === "on";
+    } catch {
+      return false;
+    }
+  });
+  const [installState, setInstallState] = useState(null);
+  const probe = useCallback(async (refresh = false) => {
+    const body = { allowWorkspace: allowModule === true, ...refresh ? { refresh: true } : {} };
+    const res = await api("db.drivers", body);
+    if (res.ok) setDrivers2(res.value ?? []);
+  }, [allowModule]);
+  useEffect(() => {
+    void probe();
+  }, [probe]);
+  const setAllowModule = useCallback((next) => {
+    setAllowModuleState(next);
+    try {
+      localStorage.setItem(ALLOW_MODULE_KEY, next ? "on" : "off");
+    } catch {
+    }
+  }, []);
+  const install = useCallback(async (name) => {
+    setInstallState((current) => ({ ...current ?? {}, installing: name, error: "" }));
+    const res = await api("db.driver.install", { name, cwd });
+    const value = res.ok ? res.value : null;
+    if (!value || value.error) {
+      setInstallState((current) => ({ ...current ?? {}, installing: "", error: value?.error ?? res.error ?? "" }));
+      return;
+    }
+    setInstallState((current) => ({ ...current ?? {}, installing: "", installed: name }));
+    await probe(true);
+  }, [cwd, probe]);
+  const copyCommand = useCallback(async (text) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      onNotice(t("db.copied"));
+    } catch {
+      onNotice(t("db.copyFailed"));
+    }
+  }, [t, onNotice]);
+  return { drivers, setDrivers: setDrivers2, probe, allowModule, setAllowModule, installState, install, copyCommand };
+}
+
+// src/client/db/state.js
+function useWorkbench({ t, useTabInfo, sessionId, useSessions }) {
+  const cwd = useSessions ? useSessions((sessions) => sessionId ? sessions.byId[sessionId]?.cwd : void 0) : void 0;
+  const connectionStore = useConnections();
+  const { connections, setConnections, activeConn, setActiveConn, activeDb, setActiveDb, disconnect } = connectionStore;
   const [cellEdit, setCellEdit] = useState(null);
   const [pendingDelete, setPendingDelete] = useState(-1);
   const [collapsedDbs, setCollapsedDbs] = useState({});
@@ -14084,15 +14163,20 @@ function useWorkbench({ t, useTabInfo, sessionId, useSessions }) {
   const [pickCategory, setPickCategory] = useState("all");
   const [step, setStep] = useState("pick");
   const [showPassword, setShowPassword] = useState(false);
-  const [allowModule, setAllowModule] = useState(() => {
-    try {
-      return localStorage.getItem("dsh.plugin-kit.db.allowModule") === "on";
-    } catch {
-      return false;
-    }
-  });
   const [cellDetail, setCellDetail] = useState(null);
   const [notice, setNotice] = useState("");
+  const [importState, setImportState] = useState(null);
+  const driverStore = useDrivers({ cwd, t, onNotice: setNotice });
+  const {
+    drivers,
+    probe: probeDrivers,
+    allowModule,
+    setAllowModule,
+    installState,
+    install: installDriverModule,
+    copyCommand
+  } = driverStore;
+  const dbxState = { ...importState ?? {}, ...installState ?? {} };
   const schemaCache = useSchemaCache({
     activeConn,
     connections,
@@ -14153,7 +14237,6 @@ function useWorkbench({ t, useTabInfo, sessionId, useSessions }) {
   const [modal, setModal] = useState(null);
   const [explainState, setExplainState] = useState({ busy: false, result: null, error: "" });
   const [exportOpen, setExportOpen] = useState(false);
-  const [dbxState, setDbxState] = useState(null);
   const [editingProfileId, setEditingProfileId] = useState("");
   const profileStore = useProfiles({ cwd, editingProfileId, onNotice: setNotice });
   const {
@@ -14171,14 +14254,6 @@ function useWorkbench({ t, useTabInfo, sessionId, useSessions }) {
   const [historyOpen, setHistoryOpen] = useState(false);
   const detailRef = useDismissLayer({ open: Boolean(cellDetail), onDismiss: () => setCellDetail(null) });
   const connectRef = useDismissLayer({ open: connectOpen, onDismiss: () => setConnectOpen(false) });
-  const probeDrivers = useCallback(async (refresh = false) => {
-    const body = { allowWorkspace: allowModule === true, ...refresh ? { refresh: true } : {} };
-    const res = await api("db.drivers", body);
-    if (res.ok) setDrivers(res.value ?? []);
-  }, [allowModule]);
-  useEffect(() => {
-    void probeDrivers();
-  }, [probeDrivers]);
   const openConnect = useCallback(() => {
     setEditingProfileId("");
     setNotice("");
@@ -14240,34 +14315,15 @@ function useWorkbench({ t, useTabInfo, sessionId, useSessions }) {
   }, []);
   const driverReady = drivers.find((entry) => entry.id === form.driver)?.ready ?? true;
   const canConnect = form.driver !== "" && (form.driver === "sqlite" ? form.path.trim() !== "" : form.host.trim() !== "");
-  const installDriverModule = useCallback(async (name) => {
-    setDbxState((current) => ({ ...current ?? {}, installing: name, installError: "" }));
-    const res = await api("db.driver.install", { name, cwd });
-    const value = res.ok ? res.value : null;
-    if (!value || value.error) {
-      setDbxState((current) => ({ ...current ?? {}, installing: "", installError: value?.error ?? res.error ?? "" }));
-      return;
-    }
-    setDbxState((current) => ({ ...current ?? {}, installing: "", installed: name }));
-    await probeDrivers(true);
-  }, [cwd, probeDrivers]);
-  const copyCommand = useCallback(async (text) => {
-    try {
-      await navigator.clipboard.writeText(text);
-      setNotice(t("db.copied"));
-    } catch {
-      setNotice(t("db.copyFailed"));
-    }
-  }, [t]);
   const runDbxImport = useCallback(async (apply) => {
-    setDbxState((current) => ({ ...current ?? {}, busy: true }));
+    setImportState((current) => ({ ...current ?? {}, busy: true }));
     const res = await api("db.import.dbx", { apply });
     const value = res.ok ? res.value : null;
     if (!value || value.error) {
-      setDbxState({ busy: false, error: value?.error ?? res.error ?? "" });
+      setImportState({ busy: false, error: value?.error ?? res.error ?? "" });
       return;
     }
-    setDbxState({ busy: false, ...value });
+    setImportState({ busy: false, ...value });
     if (apply && value.imported > 0) {
       const list = await api("db.profile.list", {});
       if (list.ok) {
@@ -14368,16 +14424,14 @@ function useWorkbench({ t, useTabInfo, sessionId, useSessions }) {
     setActiveDb({ conn: res.value.id, database: res.value.database ?? "" });
   }, [connectParams, refreshSchema, saveProfile, rememberConnection]);
   const doDisconnect = useCallback(async (id) => {
-    await api("db.disconnect", { id });
-    setConnections((current) => current.filter((entry) => entry.id !== id));
+    await disconnect(id);
     setTabs((current) => current.filter((tab2) => tab2.conn !== id));
     setSchemas((current) => {
       const next = { ...current };
       delete next[id];
       return next;
     });
-    if (activeConn === id) setActiveConn("");
-  }, [activeConn]);
+  }, [disconnect]);
   const tableEntry = useMemo(() => {
     if (activeTab?.kind !== "table") return null;
     const schemaFor = schemas2[activeTab.conn || activeConn];
@@ -14480,7 +14534,7 @@ function useWorkbench({ t, useTabInfo, sessionId, useSessions }) {
       if (activeTab?.kind === "query") void runQuery(activeTab.id);
     }
   }, [activeTab, runQuery]);
-  return { activeConn, activeDb, activeTab, activeTabId, allowModule, applyAddress, canConnect, cancelQuery, cellDetail, cellEdit, closeTab, collapsedDbs, commitCell, connectOpen, connectParams, connectProfile, connectRef, connections, copyCommand, copyResult, counts, cwd, databasesOf, dbxState, detailRef, doConnect, doDisconnect, doTest, driverReady, drivers, editingProfileId, expanded, explainState, exportOpen, exportResult, fetchRows, fetched, filter, forgetProfile, form, history, historyOpen, installDriverModule, loadRows, modal, notice, onKeyDown, openConnect, openConns, openQueryTab, openTab, openTable, patchTab, pendingDelete, pickCategory, pickQuery, pickableDrivers, pkColumn, probeDrivers, profileErrors, profileRevision, profiles, refreshSchema, rememberConnection, removeRow, runDbxImport, runMutation, runQuery, saveProfile, schema, schemaBusy, schemaError, schemas: schemas2, selectDatabase, setActiveConn, setActiveDb, setActiveTabId, setAllowModule, setCellDetail, setCellEdit, setCollapsedDbs, setConnectOpen, setConnections, setDbxState, setDriver, setDrivers, setEditingProfileId, setExpanded, setExplainState, setExportOpen, setFilter, setForm, setHistory, setHistoryOpen, setModal, setNotice, setOpenConns, setPendingDelete, setPickCategory, setPickQuery, setProfileErrors, setProfiles, setSaveProfile, setSchemaBusy, setSchemaError, setSchemas, setShowPassword, setStep, setTab, setTabs, setTestState, showPassword, sortBy, sqlRef, step, t, tab, tableEntry, tabs, testState, toggleTable, useSavedProfile };
+  return { activeConn, activeDb, activeTab, activeTabId, allowModule, applyAddress, canConnect, cancelQuery, cellDetail, cellEdit, closeTab, collapsedDbs, commitCell, connectOpen, connectParams, connectProfile, connectRef, connections, copyCommand, copyResult, counts, cwd, databasesOf, dbxState, detailRef, doConnect, doDisconnect, doTest, driverReady, drivers, editingProfileId, expanded, explainState, exportOpen, exportResult, fetchRows, filter, forgetProfile, form, history, historyOpen, installDriverModule, loadRows, modal, notice, onKeyDown, openConnect, openConns, openQueryTab, openTab, openTable, patchTab, pendingDelete, pickCategory, pickQuery, pickableDrivers, pkColumn, probeDrivers, profileErrors, profileRevision, profiles, refreshSchema, rememberConnection, removeRow, runDbxImport, runMutation, runQuery, saveProfile, schema, schemaBusy, schemaError, schemas: schemas2, selectDatabase, setActiveConn, setActiveDb, setActiveTabId, setAllowModule, setCellDetail, setCellEdit, setCollapsedDbs, setConnectOpen, setConnections, setDbxState, setDriver, setDrivers, setEditingProfileId, setExpanded, setExplainState, setExportOpen, setFilter, setForm, setHistory, setHistoryOpen, setModal, setNotice, setOpenConns, setPendingDelete, setPickCategory, setPickQuery, setProfileErrors, setProfiles, setSaveProfile, setSchemaBusy, setSchemaError, setSchemas, setShowPassword, setStep, setTab, setTabs, setTestState, showPassword, sortBy, sqlRef, step, t, tab, tableEntry, tabs, testState, toggleTable, useSavedProfile };
 }
 
 // src/client/db/grid.js
@@ -14982,7 +15036,7 @@ function renderRail(props) {
 
 // src/client/db/view.js
 function renderWorkbench(wb) {
-  const { DbView: DbView2, absolute, activeConn, activeDb, activeTab, activeTabId, allowModule, anchor, applyAddress, blob, body, canConnect, cancelQuery, category, cellDetail, cellEdit, closeTab, collapsedDbs, commitCell, conn, connectOpen, connectParams, connectProfile, connectRef, connections, copyCommand, copyResult, counts, csv, cwd, database, databases, databasesOf, dbxState, defaultNow, detailRef, dir, doConnect, doDisconnect, doTest, driver, driverReady, drivers, editingProfileId, entries, existing, expanded, explainState, exportOpen, exportResult, fetchRows, fetched: fetched2, filter, forgetProfile, form, history, historyOpen, id, index, installDriverModule, keep, key, known, label, list, loadRows, modal, ms, needle, next, notice, onKeyDown, openConnect, openConns, openQueryTab, openTab, openTable, params, parsed, patchTab, pendingDelete, pickCategory, pickQuery, pickableDrivers, pkColumn, pkIndex, pkValue, probeDrivers, profileErrors, profileRevision, profiles, refreshSchema, rememberConnection, removeRow, res, result, runDbxImport, runMutation, runQuery, saveProfile, schema, schemaBusy, schemaError, schemaFor, schemas: schemas2, selectDatabase, setActiveConn, setActiveDb, setActiveTabId, setAllowModule, setCellDetail, setCellEdit, setCollapsedDbs, setConnectOpen, setConnections, setDbxState, setDriver, setDrivers, setEditingProfileId, setExpanded, setExplainState, setExportOpen, setFilter, setForm, setHistory, setHistoryOpen, setModal, setNotice, setOpenConns, setPendingDelete, setPickCategory, setPickQuery, setProfileErrors, setProfiles, setSaveProfile, setSchemaBusy, setSchemaError, setSchemas, setShowPassword, setStep, setTab, setTabs, setTestState, showPassword, sortBy, sql, sqlRef, started, step, t, tab, tableEntry, tabs, target, testState, text, toggleTable, token, url, useSavedProfile, value } = wb;
+  const { DbView: DbView2, absolute, activeConn, activeDb, activeTab, activeTabId, allowModule, anchor, applyAddress, blob, body, canConnect, cancelQuery, category, cellDetail, cellEdit, closeTab, collapsedDbs, commitCell, conn, connectOpen, connectParams, connectProfile, connectRef, connections, copyCommand, copyResult, counts, csv, cwd, database, databases, databasesOf, dbxState, defaultNow, detailRef, dir, doConnect, doDisconnect, doTest, driver, driverReady, drivers, editingProfileId, entries, existing, expanded, explainState, exportOpen, exportResult, fetchRows, fetched, filter, forgetProfile, form, history, historyOpen, id, index, installDriverModule, keep, key, known, label, list, loadRows, modal, ms, needle, next, notice, onKeyDown, openConnect, openConns, openQueryTab, openTab, openTable, params, parsed, patchTab, pendingDelete, pickCategory, pickQuery, pickableDrivers, pkColumn, pkIndex, pkValue, probeDrivers, profileErrors, profileRevision, profiles, refreshSchema, rememberConnection, removeRow, res, result, runDbxImport, runMutation, runQuery, saveProfile, schema, schemaBusy, schemaError, schemaFor, schemas: schemas2, selectDatabase, setActiveConn, setActiveDb, setActiveTabId, setAllowModule, setCellDetail, setCellEdit, setCollapsedDbs, setConnectOpen, setConnections, setDbxState: setDbxState2, setDriver, setDrivers: setDrivers2, setEditingProfileId, setExpanded, setExplainState, setExportOpen, setFilter, setForm, setHistory, setHistoryOpen, setModal, setNotice, setOpenConns, setPendingDelete, setPickCategory, setPickQuery, setProfileErrors, setProfiles, setSaveProfile, setSchemaBusy, setSchemaError, setSchemas, setShowPassword, setStep, setTab, setTabs, setTestState, showPassword, sortBy, sql, sqlRef, started, step, t, tab, tableEntry, tabs, target, testState, text, toggleTable, token, url, useSavedProfile, value } = wb;
   if (!cwd) return h("div", { className: "ce-root" }, h("div", { className: "ce-empty" }, t("editor.noSession")));
   return h(
     "div",

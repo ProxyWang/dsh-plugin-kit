@@ -17,6 +17,8 @@ import { CATEGORIES, defaultPort } from "./meta.js";
 import { useSchemaCache } from "./hooks/use-schema-cache.js";
 import { useProfiles } from "./hooks/use-profiles.js";
 import { useTabs } from "./hooks/use-tabs.js";
+import { useConnections } from "./hooks/use-connections.js";
+import { useDrivers } from "./hooks/use-drivers.js";
 
 
 /**
@@ -27,14 +29,11 @@ export function useWorkbench({ t, useTabInfo, sessionId, useSessions }) {
 
 	const cwd = useSessions ? useSessions((sessions) => (sessionId ? sessions.byId[sessionId]?.cwd : void 0)) : void 0;
 
-	const [drivers, setDrivers] = useState([]);
-	const [connections, setConnections] = useState([]);
-	const [activeConn, setActiveConn] = useState("");
-	// One schema per open connection: the rail is a tree of instances, not a
-	// single "objects" pane for whichever one is active.
-	// Clicking a database selects it (and folds its tables): the rail's job is to
-	// move the target, and picking another database used to do nothing at all.
-	const [activeDb, setActiveDb] = useState({ conn: "", database: "" });
+
+	// The Host owns the live connections; this hook owns the client view of them.
+	const connectionStore = useConnections();
+	const { connections, setConnections, activeConn, setActiveConn, activeDb, setActiveDb, disconnect } = connectionStore;
+
 
 	// A cell being edited, plus which row is waiting for a second click to delete.
 	const [cellEdit, setCellEdit] = useState(null);
@@ -60,11 +59,17 @@ export function useWorkbench({ t, useTabInfo, sessionId, useSessions }) {
 	const [showPassword, setShowPassword] = useState(false);
 	// Loading a workspace's `mysql2`/`pg` runs project code in the connection's
 	// worker, so it is opt-in and remembered.
-	const [allowModule, setAllowModule] = useState(() => {
-		try { return localStorage.getItem("dsh.plugin-kit.db.allowModule") === "on"; } catch { return false; }
-	});
 	const [cellDetail, setCellDetail] = useState(null); // {title, value}
 	const [notice, setNotice] = useState("");
+	const [importState, setImportState] = useState(null);
+	// The driver catalog: readiness, the project-module permission and installs.
+	const driverStore = useDrivers({ cwd, t, onNotice: setNotice });
+	const {
+		drivers, probe: probeDrivers, allowModule, setAllowModule,
+		installState, install: installDriverModule, copyCommand,
+	} = driverStore;
+	// The dialogs consume one object: import progress and install progress.
+	const dbxState = { ...(importState ?? {}), ...(installState ?? {}) };
 	// Schema cache: the rail's tree data and its filter, in its own hook.
 	const schemaCache = useSchemaCache({
 		activeConn,
@@ -99,7 +104,6 @@ export function useWorkbench({ t, useTabInfo, sessionId, useSessions }) {
 	const [explainState, setExplainState] = useState({ busy: false, result: null, error: "" });
 	const [exportOpen, setExportOpen] = useState(false);
 	// dbx migration: preview first, write on the second click.
-	const [dbxState, setDbxState] = useState(null);
 	// Which saved profile the dialog is editing, so saving updates it instead of
 	// creating a near-duplicate. Set when a saved connection is opened or lacks a
 	// password.
@@ -122,18 +126,7 @@ export function useWorkbench({ t, useTabInfo, sessionId, useSessions }) {
 	 * Read the driver probes. `refresh` asks the Host to look again (a client
 	 * installed while this dialog is open should be picked up without a reload).
 	 */
-	const probeDrivers = useCallback(async (refresh = false) => {
-		// `allowWorkspace` is what turns a resolvable project module from "found"
-		// into "will be used"; the catalog reports the difference.
-		const body = { allowWorkspace: allowModule === true, ...(refresh ? { refresh: true } : {}) };
-		const res = await api("db.drivers", body);
-		// The readiness list only decorates the optional override; a failed
-		// probe must not silence the panel, so it degrades to "assume ready"
-		// and the Host reports the real reason when connecting.
-		if (res.ok) setDrivers(res.value ?? []);
-	}, [allowModule]);
 
-	useEffect(() => { void probeDrivers(); }, [probeDrivers]);
 
 
 	// --- connections ----------------------------------------------------------------------
@@ -226,37 +219,18 @@ export function useWorkbench({ t, useTabInfo, sessionId, useSessions }) {
 	 * Install a driver module into the project (or copy the CLI command when the
 	 * missing implementation is a binary). Both are explicit user actions.
 	 */
-	const installDriverModule = useCallback(async (name) => {
-		setDbxState((current) => ({ ...(current ?? {}), installing: name, installError: "" }));
-		const res = await api("db.driver.install", { name, cwd });
-		const value = res.ok ? res.value : null;
-		if (!value || value.error) {
-			setDbxState((current) => ({ ...(current ?? {}), installing: "", installError: value?.error ?? res.error ?? "" }));
-			return;
-		}
-		setDbxState((current) => ({ ...(current ?? {}), installing: "", installed: name }));
-		await probeDrivers(true);
-	}, [cwd, probeDrivers]);
 
-	const copyCommand = useCallback(async (text) => {
-		try {
-			await navigator.clipboard.writeText(text);
-			setNotice(t("db.copied"));
-		} catch {
-			setNotice(t("db.copyFailed"));
-		}
-	}, [t]);
 
 	/** Read dbx's connection list, then import it on the second step. */
 	const runDbxImport = useCallback(async (apply) => {
-		setDbxState((current) => ({ ...(current ?? {}), busy: true }));
+		setImportState((current) => ({ ...(current ?? {}), busy: true }));
 		const res = await api("db.import.dbx", { apply });
 		const value = res.ok ? res.value : null;
 		if (!value || value.error) {
-			setDbxState({ busy: false, error: value?.error ?? res.error ?? "" });
+			setImportState({ busy: false, error: value?.error ?? res.error ?? "" });
 			return;
 		}
-		setDbxState({ busy: false, ...value });
+		setImportState({ busy: false, ...value });
 		if (apply && value.imported > 0) {
 			const list = await api("db.profile.list", {});
 			if (list.ok) {
@@ -363,13 +337,11 @@ export function useWorkbench({ t, useTabInfo, sessionId, useSessions }) {
 	}, [connectParams, refreshSchema, saveProfile, rememberConnection]);
 
 	const doDisconnect = useCallback(async (id) => {
-		await api("db.disconnect", { id });
-		setConnections((current) => current.filter((entry) => entry.id !== id));
+		await disconnect(id);
 		// Tabs bound to this connection could only fail on their next request.
 		setTabs((current) => current.filter((tab) => tab.conn !== id));
 		setSchemas((current) => { const next = { ...current }; delete next[id]; return next; });
-		if (activeConn === id) setActiveConn("");
-	}, [activeConn]);
+	}, [disconnect]);
 
 	// --- table pages ----------------------------------------------------------------------
 
@@ -515,5 +487,5 @@ export function useWorkbench({ t, useTabInfo, sessionId, useSessions }) {
 
 
 
-	return { activeConn, activeDb, activeTab, activeTabId, allowModule, applyAddress, canConnect, cancelQuery, cellDetail, cellEdit, closeTab, collapsedDbs, commitCell, connectOpen, connectParams, connectProfile, connectRef, connections, copyCommand, copyResult, counts, cwd, databasesOf, dbxState, detailRef, doConnect, doDisconnect, doTest, driverReady, drivers, editingProfileId, expanded, explainState, exportOpen, exportResult, fetchRows, filter, forgetProfile, form, history, historyOpen, installDriverModule, loadRows, modal, notice, onKeyDown, openConnect, openConns, openQueryTab, openTab, openTable, patchTab, pendingDelete, pickCategory, pickQuery, pickableDrivers, pkColumn, probeDrivers, profileErrors, profileRevision, profiles, refreshSchema, rememberConnection, removeRow, runDbxImport, runMutation, runQuery, saveProfile, schema, schemaBusy, schemaError, schemas, selectDatabase, setActiveConn, setActiveDb, setActiveTabId, setAllowModule, setCellDetail, setCellEdit, setCollapsedDbs, setConnectOpen, setConnections, setDbxState, setDriver, setDrivers, setEditingProfileId, setExpanded, setExplainState, setExportOpen, setFilter, setForm, setHistory, setHistoryOpen, setModal, setNotice, setOpenConns, setPendingDelete, setPickCategory, setPickQuery, setProfileErrors, setProfiles, setSaveProfile, setSchemaBusy, setSchemaError, setSchemas, setShowPassword, setStep, setTab, setTabs, setTestState, showPassword, sortBy, sqlRef, step, t, tab, tableEntry, tabs, testState, toggleTable, useSavedProfile };
+	return { activeConn, activeDb, activeTab, activeTabId, allowModule, applyAddress, canConnect, cancelQuery, cellDetail, cellEdit, closeTab, collapsedDbs, commitCell, connectOpen, connectParams, connectProfile, connectRef, connections, copyCommand, copyResult, counts, cwd, databasesOf, dbxState, detailRef, doConnect, doDisconnect, doTest, driverReady, drivers, editingProfileId, expanded, explainState, exportOpen, exportResult, fetchRows, filter, forgetProfile, form, history, historyOpen, installDriverModule, loadRows, modal, notice, onKeyDown, openConnect, openConns, openQueryTab, openTab, openTable, patchTab, pendingDelete, pickCategory, pickQuery, pickableDrivers, pkColumn, probeDrivers, profileErrors, profileRevision, profiles, refreshSchema, rememberConnection, removeRow, runDbxImport, runMutation, runQuery, saveProfile, schema, schemaBusy, schemaError, schemas, selectDatabase, setActiveConn, setActiveDb, setActiveTabId, setAllowModule, setCellDetail, setCellEdit, setCollapsedDbs, setConnectOpen, setConnections, setDriver, setEditingProfileId, setExpanded, setExplainState, setExportOpen, setFilter, setForm, setHistory, setHistoryOpen, setModal, setNotice, setOpenConns, setPendingDelete, setPickCategory, setPickQuery, setProfileErrors, setProfiles, setSaveProfile, setSchemaBusy, setSchemaError, setSchemas, setShowPassword, setStep, setTab, setTabs, setTestState, showPassword, sortBy, sqlRef, step, t, tab, tableEntry, tabs, testState, toggleTable, useSavedProfile };
 }
