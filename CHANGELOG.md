@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased — the database panel, split along its seams
+
+No behaviour change; the files now match the responsibilities.
+
+- **Host**: `lib/host/db.js` (970 lines) keeps the facade — connect ladder, profiles, routes — and delegates to
+  `db/registry.js` (the live-connection map), `db/cli.js` (the mysql/psql adapters) and `db/sql.js` (pure quoting
+  and parsing). Each module only imports downwards; adding an engine no longer means editing the workbench.
+- **Client**: `ResultGrid` and its virtualization/editing helpers moved to `db/grid.js`; the five dialog surfaces
+  moved to `db/dialogs.js`. Both are presentational (props in, callbacks out), so they can be rendered and tested
+  without a connection. `db.js` keeps the stateful `DbView` and re-exports the public surface, so no caller changed.
+- `docs/database-panel.md` records the module map, the dependency direction and the extension points (new engine,
+  new SQL helper, new saved-connection field).
+
 ## Unreleased — Run returns a page, not the whole table
 
 `select * from chat_telemetry` shipped **12.3 MB** of JSON and took ~3.5 s on the Host before the panel could draw anything: 2584 rows × 30 wide columns.

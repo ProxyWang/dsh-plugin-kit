@@ -24,6 +24,13 @@ import { DRIVERS, driverLabel, parseConnectionAddress } from "./dbconnect.js";
 import { useDismissLayer } from "./dismiss.js";
 import { DB_TAB_KIND, DB_TAB_ID } from "./constants.js";
 import { ToolGlyph } from "./lefttools.js";
+import { GRID_ROW_H, ResultGrid } from "./db/grid.js";
+import { AddRowDialog, DriverManager, ErDiagram, ExplainPanel, ImportDialog } from "./db/dialogs.js";
+
+// The panel's public surface stays on this module: tests and the tab registry
+// import from here, not from the internal files.
+export { formatCell, gridWindow, truncateCell, ResultGrid, GRID_ROW_H } from "./db/grid.js";
+export { AddRowDialog, DriverManager, ErDiagram, ExplainPanel, ImportDialog } from "./db/dialogs.js";
 
 export const dbDefinition = (t) => ({
 	id: DB_TAB_ID,
@@ -37,19 +44,9 @@ export const dbDefinition = (t) => ({
 const PAGE_SIZE = 100;
 const HISTORY_CAP = 40;
 
-/** Pure: format a cell for the grid (NULL is visibly distinct from ''. */
-export function formatCell(value) {
-	if (value === null) return "NULL";
-	if (value === undefined) return "";
-	if (typeof value === "object") return JSON.stringify(value);
-	return String(value);
-}
 
-/** Pure: shorten a cell for the grid preview, keeping the full value for the title. */
-export function truncateCell(value, max = 120) {
-	const text = formatCell(value);
-	return text.length > max ? `${text.slice(0, max - 1)}…` : text;
-}
+
+
 
 /** Pure: one CSV document from a result (RFC 4180 quoting). */
 export function toCsv(columns, rows) {
@@ -1456,308 +1453,19 @@ export function implSuffix(driver, t) {
 }
 
 /** One grid row's height, in px — must match `.cedb-grid-row` in the stylesheet. */
-export const GRID_ROW_H = 24;
 /** Rows fetched per page for ad-hoc queries; bigger pages were slow to send. */
 const QUERY_PAGE = 200;
 
-/**
- * Which rows a virtualized grid should render.
- *
- * A query may return thousands of rows; rendering them all puts the same number
- * of `<tr>` elements in the DOM and the panel stops scrolling smoothly. Only the
- * window the viewport can show (plus a little overscan) is rendered, and two
- * spacer rows keep the scrollbar honest.
- *
- * @param input - `{count, scrollTop, viewport, rowHeight, overscan}`
- * @returns `{start, end, topPad, bottomPad}` with `[start, end)` half-open
- */
-export function gridWindow(input = {}) {
-	const count = Math.max(0, Math.floor(Number(input.count) || 0));
-	const rawRowHeight = Number(input.rowHeight);
-	const rowHeight = Number.isFinite(rawRowHeight) && rawRowHeight > 0 ? rawRowHeight : GRID_ROW_H;
-	// `Number(undefined)` is NaN, and NaN survives `??`: without an explicit
-	// finite check every unset option turned the whole window into NaN.
-	const rawOverscan = Number(input.overscan);
-	const overscan = Number.isFinite(rawOverscan) ? Math.max(0, Math.floor(rawOverscan)) : 8;
-	const viewport = Math.max(0, Number(input.viewport) || 0);
-	const scrollTop = Math.max(0, Number(input.scrollTop) || 0);
-	const span = Math.ceil(viewport / rowHeight) + overscan * 2;
-	const start = Math.min(count, Math.max(0, Math.floor(scrollTop / rowHeight) - overscan));
-	const end = Math.min(count, start + span);
-	return { start, end, topPad: start * rowHeight, bottomPad: Math.max(0, (count - end) * rowHeight) };
-}
 
-/** The result grid: sticky header, sortable columns, row numbers, cell inspection. */
-export function ResultGrid({ t, result, onCell, onSort, order, dir, pkColumn = "", onEditCell, onDeleteRow, pendingDelete = -1 }) {
-	const columns = result.columns ?? [];
-	const rows = result.rows ?? [];
-	const wrapRef = useRef(null);
-	const [scrollTop, setScrollTop] = useState(0);
-	const [viewport, setViewport] = useState(360);
-	// Inline edit state: one cell at a time, like every data grid.
-	const [editing, setEditing] = useState(null);
 
-	// The visible height drives the window, and the panel can be resized by the
-	// splitter at any time, so it is measured rather than assumed.
-	// A new result (or a re-sorted page) starts at the top: keeping the previous
-	// scroll offset against a shorter result put the window past the last row,
-	// which rendered an empty grid under a spacer.
-	useEffect(() => {
-		setScrollTop(0);
-		if (wrapRef.current) wrapRef.current.scrollTop = 0;
-	}, [result]);
 
-	useEffect(() => {
-		const node = wrapRef.current;
-		if (!node) return undefined;
-		const measure = () => setViewport(node.clientHeight || 360);
-		measure();
-		if (typeof ResizeObserver === "function") {
-			const observer = new ResizeObserver(measure);
-			observer.observe(node);
-			return () => observer.disconnect();
-		}
-		return undefined;
-	}, [columns.length]);
 
-	if (columns.length === 0) return h("div", { className: "cedb-placeholder-small" }, t("db.noRows"));
-	const window_ = gridWindow({ count: rows.length, scrollTop, viewport });
-	const slice = rows.slice(window_.start, window_.end);
-	const pad = (height, key) => (height > 0 ? h("tr", { key, className: "cedb-grid-pad", "aria-hidden": "true" }, h("td", { colSpan: columns.length + 1, style: { height: `${height}px`, padding: 0, border: 0 } })) : null);
-	return h("div", { className: "cedb-grid-wrap", ref: wrapRef, onScroll: (event) => setScrollTop(event.currentTarget.scrollTop) },
-		h("table", { className: "cedb-grid" },
-			h("thead", null,
-				h("tr", null,
-					h("th", { className: "cedb-grid-gutter" }, "#"),
-					columns.map((column, index) => h("th", {
-						key: `${column}-${index}`,
-						className: `cedb-grid-th${onSort ? " cedb-grid-sortable" : ""}${order === column ? " cedb-grid-sorted" : ""}`,
-						onClick: onSort ? () => onSort(column) : undefined,
-						title: column,
-					}, column, order === column ? (dir === "desc" ? " ↓" : " ↑") : "")))),
-				onDeleteRow ? h("th", { className: "cedb-grid-gutter", title: t("db.deleteRow") }, "") : null,
-			h("tbody", null,
-				pad(window_.topPad, "pad-top"),
-				slice.map((row, offset) => {
-					const rowIndex = window_.start + offset;
-					const editable = Boolean(onEditCell) && pkColumn !== "";
-					return h("tr", { key: rowIndex, className: "cedb-grid-row" },
-						h("td", { className: "cedb-grid-gutter" }, rowIndex + 1),
-						row.map((cell, cellIndex) => {
-							const isEditing = editing?.rowIndex === rowIndex && editing?.cellIndex === cellIndex;
-							if (isEditing) {
-								return h("td", { key: cellIndex, className: "cedb-grid-td cedb-grid-editing" },
-									h("input", {
-										className: "ce-input cedb-cell-input",
-										autoFocus: true,
-										value: editing.value,
-										spellCheck: false,
-										onChange: (event) => setEditing({ ...editing, value: event.target.value }),
-										onKeyDown: (event) => {
-											event.stopPropagation();
-											if (event.key === "Enter") { onEditCell?.(rowIndex, columns[cellIndex], editing.value); setEditing(null); }
-											else if (event.key === "Escape") setEditing(null);
-										},
-										onBlur: () => setEditing(null),
-									}));
-							}
-							return h("td", {
-								key: cellIndex,
-								className: `cedb-grid-td${cell === null ? " cedb-null" : ""}${editable ? " cedb-grid-editable" : ""}`,
-								title: editable ? `${formatCell(cell)} · ${t("db.editHint")}` : formatCell(cell),
-								onClick: () => onCell?.({ title: `${columns[cellIndex]} · ${t("db.row")} ${rowIndex + 1}`, value: cell }),
-								onDoubleClick: editable ? () => setEditing({ rowIndex, cellIndex, value: formatCell(cell) }) : undefined,
-							}, truncateCell(cell));
-						}),
-						onDeleteRow
-							? h("td", { className: "cedb-grid-gutter" },
-								h("button", {
-									type: "button",
-									className: `ce-tool ce-tiny${pendingDelete === rowIndex ? " cedb-del-armed" : ""}`,
-									title: t("db.deleteRow"),
-									onClick: () => onDeleteRow(rowIndex),
-								}, "✕"))
-							: null);
-				}),
-				pad(window_.bottomPad, "pad-bottom")),
-		),
-	);
-}
 
-/** Driver manager: every implementation, its capabilities and where it lives. */
-export function DriverManager({ t, drivers, dbxState, onImportDbx, onInstall, onCopy, onRedetect, onClose }) {
-	const card = (driver) => {
-		const head = h("div", { className: "cedb-driver-head" },
-			h("strong", null, driver.label),
-			driver.ready
-				? h("span", { className: "cedb-ctx cedb-ctx-strong" }, driver.impl === "module" ? driver.version || "module" : String(driver.impl ?? "").toUpperCase())
-				: h("span", { className: "cedb-ctx" }, t("db.notReady")));
-		const caps = h("div", { className: "cedb-driver-caps" }, Object.entries(driver.capabilities ?? {}).map(([name, value]) => h("span", {
-			key: name,
-			className: `cedb-cap${value === true ? " cedb-cap-on" : ""}`,
-			title: name,
-		}, `${name}: ${typeof value === "boolean" ? (value ? "✓" : "—") : String(value)}`)));
-		const altRow = (driverId, alt) => {
-			const pkg = driverId === "mysql" ? "mysql2" : "pg";
-			const status = alt.ready
-				? h("span", { className: "cedb-driver-ok", title: alt.bin || alt.version }, alt.version || alt.bin || "ready")
-				: h("span", { className: "cedb-driver-no", title: alt.note }, alt.note);
-			const action = alt.ready
-				? null
-				: alt.impl === "module"
-					? h("button", {
-						type: "button",
-						className: "ce-sk-btn ce-sk-btn-ghost ce-tiny",
-						disabled: dbxState?.installing === pkg,
-						title: t("db.installIntoProject"),
-						onClick: () => void onInstall?.(pkg),
-					}, dbxState?.installing === pkg ? t("loading") : t("db.install"))
-					: h("button", {
-						type: "button",
-						className: "ce-sk-btn ce-sk-btn-ghost ce-tiny",
-						title: t("db.copyInstallCommand"),
-						onClick: () => void onCopy?.(String(alt.note ?? "").replace(/^.*?—\s*/, "") || "mysql"),
-					}, t("db.copyCommand"));
-			return h("div", { key: alt.impl, className: "cedb-driver-alt" }, h("span", { className: "cedb-driver-impl" }, alt.impl), status, action);
-		};
-		const alts = h("div", { className: "cedb-driver-alts" }, (driver.alternatives ?? []).map((alt) => altRow(driver.id, alt)));
-		return h("div", { key: driver.id, className: "cedb-driver-card" }, head, caps, alts);
-	};
-	const importStrip = h("div", { className: "cedb-dbx" },
-		h("span", { className: "cedb-dbx-title" }, t("db.importDbx")),
-		dbxState?.error ? h("span", { className: "cedb-dbx-bad" }, dbxState.error) : null,
-		dbxState?.imported !== undefined && dbxState.imported > 0
-			? h("span", { className: "cedb-dbx-ok" }, `${t("db.importDbxDone")} ${dbxState.imported}`)
-			: null,
-		dbxState?.supported
-			? h("span", { className: "cedb-dbx-info" }, `${dbxState.supported.length} ${t("db.importDbxFound")}${dbxState.withPassword > 0 ? ` · ${dbxState.withPassword} ${t("db.importDbxPassword")}` : ""}`)
-			: null,
-		h("span", { className: "ce-spacer" }),
-		dbxState?.supported && dbxState.imported === undefined
-			? h("button", { type: "button", className: "ce-sk-btn ce-sk-primary", disabled: dbxState.busy, onClick: () => void onImportDbx?.(true) }, dbxState.busy ? t("loading") : t("db.importDbxApply"))
-			: h("button", { type: "button", className: "ce-sk-btn", disabled: dbxState?.busy === true, onClick: () => void onImportDbx?.(false) }, dbxState?.busy ? t("loading") : t("db.importDbxScan")));
-	return h("div", { className: "cedb-dialog cedb-dialog-wide", role: "dialog", "aria-label": t("db.driversButton") },
-		h("h3", { className: "cedb-dialog-title" }, t("db.driversButton")),
-		importStrip,
-		h("div", { className: "cedb-driver-list ce-scroll" }, (drivers ?? []).map(card)),
-		h("div", { className: "cedb-dialog-actions" },
-			h("button", { type: "button", className: "ce-sk-btn", onClick: onRedetect }, t("db.redetect")),
-			h("button", { type: "button", className: "ce-sk-btn ce-sk-primary", onClick: onClose }, t("close"))));
-}
 
-/** ER diagram: tables as boxes, foreign keys as curves; click a box to open it. */
-export function ErDiagram({ t, schema, onOpenTable, onClose }) {
-	const graph = erGraph(schema);
-	const layout = erLayout(graph, { width: 820 });
-	return h("div", { className: "cedb-dialog cedb-dialog-wide", role: "dialog", "aria-label": t("db.erButton") },
-		h("h3", { className: "cedb-dialog-title" }, `${t("db.erButton")}${graph.database ? ` · ${graph.database}` : ""}`),
-		graph.tables.length === 0
-			? h("div", { className: "cedb-empty-result" }, h("div", { className: "cedb-empty-title" }, t("db.erEmpty")))
-			: h("div", { className: "cedb-er-scroll ce-scroll" },
-				h("svg", { className: "cedb-er", viewBox: `0 0 ${layout.width} ${layout.height}`, width: layout.width, height: layout.height, role: "img" },
-					layout.links.map((link) => h("path", { key: `${link.from}->${link.to}`, d: link.path, className: "cedb-er-link" })),
-					layout.boxes.map((box) => h("g", { key: box.name, className: "cedb-er-box", onClick: () => onOpenTable(box.name) },
-						h("rect", { x: box.x, y: box.y, width: box.width, height: box.height, rx: 8 }),
-						h("text", { x: box.x + 10, y: box.y + 20, className: "cedb-er-title" }, box.name),
-						h("text", { x: box.x + 10, y: box.y + 38, className: "cedb-er-cols" },
-							box.columns.slice(0, 3).join(", ") + (box.columns.length > 3 ? ", …" : "")))))),
-		h("div", { className: "cedb-dialog-actions" }, h("button", { type: "button", className: "ce-sk-btn ce-sk-primary", onClick: onClose }, t("close"))));
-}
 
-/** Execution plan: SQLite's tree, or a tabular plan from MySQL/PostgreSQL. */
-export function ExplainPanel({ t, state, onClose }) {
-	const rows = state.result?.rows ?? [];
-	const tree = state.result?.tree ? planTree(state.result.columns, rows) : [];
-	return h("div", { className: "cedb-dialog cedb-dialog-wide", role: "dialog", "aria-label": t("db.explain") },
-		h("h3", { className: "cedb-dialog-title" }, t("db.explain")),
-		state.busy ? h("div", { className: "cedb-empty-title" }, t("loading")) : null,
-		state.error ? h("div", { className: "cedb-dialog-error", role: "alert" }, state.error) : null,
-		!state.busy && !state.error
-			? (tree.length > 0
-				? h("div", { className: "cedb-plan ce-scroll" }, tree.map((node, index) => h("div", {
-					key: index,
-					className: "cedb-plan-row",
-					style: { paddingLeft: `${10 + node.depth * 18}px` },
-				}, node.depth > 0 ? "└ " : "", node.detail)))
-				: h("div", { className: "cedb-plan ce-scroll" },
-					h("table", { className: "cedb-grid" },
-						h("thead", null, h("tr", null, (state.result?.columns ?? []).map((column) => h("th", { key: column }, column)))),
-						h("tbody", null, rows.map((row, index) => h("tr", { key: index }, row.map((cell, cellIndex) => h("td", { key: cellIndex }, String(cell ?? "")))))))))
-			: null,
-		h("div", { className: "cedb-dialog-actions" }, h("button", { type: "button", className: "ce-sk-btn ce-sk-primary", onClick: onClose }, t("close"))));
-}
 
-/** Import: paste CSV or JSON, preview the target, then insert row by row. */
-export function ImportDialog({ t, table, driver, onInsert, onClose }) {
-	const [text, setText] = useState("");
-	const [error, setError] = useState("");
-	const [busy, setBusy] = useState(false);
-	const parsed = useMemo(() => parseDataText(text), [text]);
-	return h("div", { className: "cedb-dialog cedb-dialog-wide", role: "dialog", "aria-label": t("db.import") },
-		h("h3", { className: "cedb-dialog-title" }, `${t("db.import")} · ${table}`),
-		h("p", { className: "cedb-dialog-hint" }, t("db.importHint")),
-		h("textarea", {
-			className: "cedb-sql cedb-import-text",
-			value: text,
-			rows: 6,
-			spellCheck: false,
-			placeholder: "id,name\n1,ada",
-			onChange: (event) => { setText(event.target.value); setError(""); },
-		}),
-		parsed.error === "" && parsed.rows.length > 0
-			? h("div", { className: "cedb-dialog-hint" }, `${parsed.columns.length} ${t("db.columns")} · ${parsed.rows.length} ${t("db.rows")}`)
-			: null,
-		error ? h("div", { className: "cedb-dialog-error", role: "alert" }, error) : null,
-		h("div", { className: "cedb-dialog-actions" },
-			h("button", {
-				type: "button",
-				className: "ce-sk-btn ce-sk-primary",
-				disabled: busy || parsed.rows.length === 0,
-				onClick: async () => {
-					setBusy(true);
-					const message = await onInsert(text);
-					setBusy(false);
-					if (message) setError(message);
-				},
-			}, busy ? t("loading") : t("db.importRun")),
-			h("button", { type: "button", className: "ce-sk-btn", onClick: onClose }, t("close"))));
-}
 
-/** Insert one row: a field per column, empty fields left to the database. */
-export function AddRowDialog({ t, table, columns, onInsert, onClose }) {
-	const [values, setValues] = useState({});
-	const [error, setError] = useState("");
-	const [busy, setBusy] = useState(false);
-	const filled = Object.values(values).filter((value) => value !== undefined && String(value).trim() !== "").length;
-	return h("div", { className: "cedb-dialog cedb-dialog-wide", role: "dialog", "aria-label": t("db.addRow") },
-		h("h3", { className: "cedb-dialog-title" }, `${t("db.addRow")} · ${table}`),
-		h("p", { className: "cedb-dialog-hint" }, t("db.addRowHint")),
-		h("div", { className: "cedb-field-row cedb-addrow" }, (columns ?? []).map((column) => h("label", { key: column.name, className: "cedb-field" },
-			h("span", { className: "cedb-addrow-label" }, column.name, column.primaryKey ? h("span", { className: "cedb-pk" }, "PK") : null),
-			h("input", {
-				className: "ce-input",
-				value: values[column.name] ?? "",
-				placeholder: column.type,
-				spellCheck: false,
-				onChange: (event) => {
-					const next = { ...values };
-					if (event.target.value === "") delete next[column.name];
-					else next[column.name] = event.target.value;
-					setValues(next);
-				},
-			})))),
-		error ? h("div", { className: "cedb-dialog-error", role: "alert" }, error) : null,
-		h("div", { className: "cedb-dialog-actions" },
-			h("button", {
-				type: "button",
-				className: "ce-sk-btn ce-sk-primary",
-				disabled: busy || filled === 0,
-				onClick: async () => {
-					setBusy(true);
-					const message = await onInsert(values);
-					setBusy(false);
-					if (message) setError(message);
-				},
-			}, busy ? t("loading") : t("db.insertRow")),
-			h("button", { type: "button", className: "ce-sk-btn", onClick: onClose }, t("close"))));
-}
+
+
+
+

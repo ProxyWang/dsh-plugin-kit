@@ -22,6 +22,8 @@ README 不展示真实工作区或用户会话截图，避免暴露用户名、�
 | 接口调试 | ![接口调试浅色虚构示例](docs/images/readme-api-light.png) | ![接口调试深色虚构示例](docs/images/readme-api-dark.png) |
 | 技能管理 | ![技能管理浅色虚构示例](docs/images/readme-skills-light.png) | ![技能管理深色虚构示例](docs/images/readme-skills-dark.png) |
 | 数据库 | ![数据库浅色虚构示例](docs/images/readme-db-light.png) | ![数据库深色虚构示例](docs/images/readme-db-dark.png) |
+
+数据库面板的模块划分与扩展点（新增驱动/新增对话框该改哪里）见 [docs/database-panel.md](docs/database-panel.md)。
 | RPC 调试 | ![RPC 浅色虚构示例](docs/images/readme-rpc-light.png) | ![RPC 深色虚构示例](docs/images/readme-rpc-dark.png) |
 
 [UI system / 主题与布局约定](docs/ui-system.md)
