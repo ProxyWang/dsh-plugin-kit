@@ -4,11 +4,13 @@
 
 No behaviour change; the files now match the responsibilities.
 
-- **Host**: `lib/host/db.js` (970 lines) keeps the facade — connect ladder, profiles, routes — and delegates to
-  `db/registry.js` (the live-connection map), `db/cli.js` (the mysql/psql adapters) and `db/sql.js` (pure quoting
-  and parsing). Each module only imports downwards; adding an engine no longer means editing the workbench.
+- **Host**: `lib/host/db.js` (970 → 534 lines) keeps the facade — connect ladder, profiles, routes — and delegates to
+  `db/registry.js` (the live-connection map), `db/operations.js` (schema/rows/query/columns/explain),
+  `db/cli.js` (the mysql/psql adapters) and `db/sql.js` (pure quoting and parsing). Imports only point downwards;
+  adding an engine no longer means editing the workbench.
 - **Client**: `ResultGrid` and its virtualization/editing helpers moved to `db/grid.js`; the five dialog surfaces
-  moved to `db/dialogs.js`. Both are presentational (props in, callbacks out), so they can be rendered and tested
+  moved to `db/dialogs.js`; the rail became `db/rail.js` (`renderRail`, no hooks); the formatters and SQL text moved
+  to `db/format.js`. All four are presentational (props in, callbacks out), so they can be rendered and tested
   without a connection. `db.js` keeps the stateful `DbView` and re-exports the public surface, so no caller changed.
 - `docs/database-panel.md` records the module map, the dependency direction and the extension points (new engine,
   new SQL helper, new saved-connection field).

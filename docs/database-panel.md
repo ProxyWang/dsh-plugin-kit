@@ -37,13 +37,19 @@ lib/host/db.js                 facade: connect ladder, profiles, routes, re-expo
 ## Client
 
 ```
-src/client/db.js               DbView (state + layout) + definitions + re-exports
+src/client/db.js               DbView (state + orchestration) + definitions + re-exports
         │
+        ├── db/rail.js         renderRail(): instances → databases → tables (no hooks)
         ├── db/grid.js         ResultGrid: virtualization, inline edit, row delete
         ├── db/dialogs.js      DriverManager, ErDiagram, ExplainPanel, Import, AddRow
+        ├── db/format.js       PAGE_SIZE, toCsv, tableSql, requestToken, countOf
         ├── dbtools.js         pure SQL/CSV/ER helpers (also used by the host tests)
         └── dbconnect.js       address parsing (postgres://, mysql://, SQLite path)
 ```
+
+`renderRail` is a plain function rather than an element: it has no hooks, and
+calling it keeps the rendered tree flat, which is also how the existing tests
+assert against the rail.
 
 **Rules the code follows**
 
