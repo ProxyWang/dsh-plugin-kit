@@ -5,8 +5,7 @@
  * (which is also how they are tested).
  */
 
-import { Fragment, h, useMemo, useState } from "../react.js";
-import { api } from "../api.js";
+import { h, useMemo, useState } from "../react.js";
 import { erGraph, erLayout, parseDataText, planTree } from "../dbtools.js";
 
 /** Driver manager: every implementation, its capabilities and where it lives. */
@@ -20,8 +19,7 @@ export function DriverManager({ t, drivers, dbxState, onImportDbx, onInstall, on
 		const caps = h("div", { className: "cedb-driver-caps" }, Object.entries(driver.capabilities ?? {}).map(([name, value]) => h("span", {
 			key: name,
 			className: `cedb-cap${value === true ? " cedb-cap-on" : ""}`,
-			title: name,
-		}, `${name}: ${typeof value === "boolean" ? (value ? "✓" : "—") : String(value)}`)));
+			title: name }, `${name}: ${typeof value === "boolean" ? (value ? "✓" : "—") : String(value)}`)));
 		const altRow = (driverId, alt) => {
 			const pkg = driverId === "mysql" ? "mysql2" : "pg";
 			const status = alt.ready
@@ -35,14 +33,12 @@ export function DriverManager({ t, drivers, dbxState, onImportDbx, onInstall, on
 						className: "ce-sk-btn ce-sk-btn-ghost ce-tiny",
 						disabled: dbxState?.installing === pkg,
 						title: t("db.installIntoProject"),
-						onClick: () => void onInstall?.(pkg),
-					}, dbxState?.installing === pkg ? t("loading") : t("db.install"))
+						onClick: () => void onInstall?.(pkg) }, dbxState?.installing === pkg ? t("loading") : t("db.install"))
 					: h("button", {
 						type: "button",
 						className: "ce-sk-btn ce-sk-btn-ghost ce-tiny",
 						title: t("db.copyInstallCommand"),
-						onClick: () => void onCopy?.(String(alt.note ?? "").replace(/^.*?—\s*/, "") || "mysql"),
-					}, t("db.copyCommand"));
+						onClick: () => void onCopy?.(String(alt.note ?? "").replace(/^.*?—\s*/, "") || "mysql") }, t("db.copyCommand"));
 			return h("div", { key: alt.impl, className: "cedb-driver-alt" }, h("span", { className: "cedb-driver-impl" }, alt.impl), status, action);
 		};
 		const alts = h("div", { className: "cedb-driver-alts" }, (driver.alternatives ?? []).map((alt) => altRow(driver.id, alt)));
@@ -102,8 +98,7 @@ export function ExplainPanel({ t, state, onClose }) {
 				? h("div", { className: "cedb-plan ce-scroll" }, tree.map((node, index) => h("div", {
 					key: index,
 					className: "cedb-plan-row",
-					style: { paddingLeft: `${10 + node.depth * 18}px` },
-				}, node.depth > 0 ? "└ " : "", node.detail)))
+					style: { paddingLeft: `${10 + node.depth * 18}px` } }, node.depth > 0 ? "└ " : "", node.detail)))
 				: h("div", { className: "cedb-plan ce-scroll" },
 					h("table", { className: "cedb-grid" },
 						h("thead", null, h("tr", null, (state.result?.columns ?? []).map((column) => h("th", { key: column }, column)))),
@@ -127,8 +122,7 @@ export function ImportDialog({ t, table, driver, onInsert, onClose }) {
 			rows: 6,
 			spellCheck: false,
 			placeholder: "id,name\n1,ada",
-			onChange: (event) => { setText(event.target.value); setError(""); },
-		}),
+			onChange: (event) => { setText(event.target.value); setError(""); } }),
 		parsed.error === "" && parsed.rows.length > 0
 			? h("div", { className: "cedb-dialog-hint" }, `${parsed.columns.length} ${t("db.columns")} · ${parsed.rows.length} ${t("db.rows")}`)
 			: null,
@@ -143,8 +137,7 @@ export function ImportDialog({ t, table, driver, onInsert, onClose }) {
 					const message = await onInsert(text);
 					setBusy(false);
 					if (message) setError(message);
-				},
-			}, busy ? t("loading") : t("db.importRun")),
+				} }, busy ? t("loading") : t("db.importRun")),
 			h("button", { type: "button", className: "ce-sk-btn", onClick: onClose }, t("close"))));
 }
 
@@ -169,8 +162,7 @@ export function AddRowDialog({ t, table, columns, onInsert, onClose }) {
 					if (event.target.value === "") delete next[column.name];
 					else next[column.name] = event.target.value;
 					setValues(next);
-				},
-			})))),
+				} })))),
 		error ? h("div", { className: "cedb-dialog-error", role: "alert" }, error) : null,
 		h("div", { className: "cedb-dialog-actions" },
 			h("button", {
@@ -182,7 +174,6 @@ export function AddRowDialog({ t, table, columns, onInsert, onClose }) {
 					const message = await onInsert(values);
 					setBusy(false);
 					if (message) setError(message);
-				},
-			}, busy ? t("loading") : t("db.insertRow")),
+				} }, busy ? t("loading") : t("db.insertRow")),
 			h("button", { type: "button", className: "ce-sk-btn", onClick: onClose }, t("close"))));
 }

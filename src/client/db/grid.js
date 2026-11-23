@@ -4,7 +4,7 @@
  * it a result plus callbacks, which is what keeps the grid reusable and small.
  */
 
-import { Fragment, h, useEffect, useMemo, useRef, useState } from "../react.js";
+import { h, useEffect, useRef, useState } from "../react.js";
 
 /** One row's height, in pixels: virtualization depends on it. */
 export const GRID_ROW_H = 24;
@@ -97,8 +97,7 @@ export function ResultGrid({ t, result, onCell, onSort, order, dir, pkColumn = "
 						key: `${column}-${index}`,
 						className: `cedb-grid-th${onSort ? " cedb-grid-sortable" : ""}${order === column ? " cedb-grid-sorted" : ""}`,
 						onClick: onSort ? () => onSort(column) : undefined,
-						title: column,
-					}, column, order === column ? (dir === "desc" ? " ↓" : " ↑") : "")))),
+						title: column }, column, order === column ? (dir === "desc" ? " ↓" : " ↑") : "")))),
 				onDeleteRow ? h("th", { className: "cedb-grid-gutter", title: t("db.deleteRow") }, "") : null,
 			h("tbody", null,
 				pad(window_.topPad, "pad-top"),
@@ -122,16 +121,14 @@ export function ResultGrid({ t, result, onCell, onSort, order, dir, pkColumn = "
 											if (event.key === "Enter") { onEditCell?.(rowIndex, columns[cellIndex], editing.value); setEditing(null); }
 											else if (event.key === "Escape") setEditing(null);
 										},
-										onBlur: () => setEditing(null),
-									}));
+										onBlur: () => setEditing(null) }));
 							}
 							return h("td", {
 								key: cellIndex,
 								className: `cedb-grid-td${cell === null ? " cedb-null" : ""}${editable ? " cedb-grid-editable" : ""}`,
 								title: editable ? `${formatCell(cell)} · ${t("db.editHint")}` : formatCell(cell),
 								onClick: () => onCell?.({ title: `${columns[cellIndex]} · ${t("db.row")} ${rowIndex + 1}`, value: cell }),
-								onDoubleClick: editable ? () => setEditing({ rowIndex, cellIndex, value: formatCell(cell) }) : undefined,
-							}, truncateCell(cell));
+								onDoubleClick: editable ? () => setEditing({ rowIndex, cellIndex, value: formatCell(cell) }) : undefined }, truncateCell(cell));
 						}),
 						onDeleteRow
 							? h("td", { className: "cedb-grid-gutter" },
@@ -139,8 +136,7 @@ export function ResultGrid({ t, result, onCell, onSort, order, dir, pkColumn = "
 									type: "button",
 									className: `ce-tool ce-tiny${pendingDelete === rowIndex ? " cedb-del-armed" : ""}`,
 									title: t("db.deleteRow"),
-									onClick: () => onDeleteRow(rowIndex),
-								}, "✕"))
+									onClick: () => onDeleteRow(rowIndex) }, "✕"))
 							: null);
 				}),
 				pad(window_.bottomPad, "pad-bottom")),

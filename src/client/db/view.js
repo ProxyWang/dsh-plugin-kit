@@ -8,13 +8,12 @@ import { Fragment, h } from "../react.js";
 import { ResultGrid } from "./grid.js";
 import { AddRowDialog, DriverManager, ErDiagram, ExplainPanel, ImportDialog } from "./dialogs.js";
 import { renderRail } from "./rail.js";
-import { GRID_ROW_H } from "./grid.js";
 import { CONNECTION_COLORS, CATEGORIES, defaultPort, implSuffix } from "./meta.js";
 import { driverLabel } from "../dbconnect.js";
 import { api } from "../api.js";
-import { deleteRowSql, insertRowSql, parseDataText, toInsertSql, updateCellSql } from "../dbtools.js";
-import { formatCell, truncateCell } from "./grid.js";
-import { PAGE_SIZE, countOf, tableSql } from "./format.js";
+import { insertRowSql, parseDataText, toInsertSql } from "../dbtools.js";
+import { formatCell } from "./grid.js";
+import { PAGE_SIZE, tableSql } from "./format.js";
 
 /**
  * @param wb - everything `useWorkbench` returns
@@ -75,8 +74,7 @@ export function renderWorkbench(wb) {
 					setActiveDb({ conn: connId, database });
 					openTable(connId, database, entry);
 				},
-				onOpenQuery: (table) => openQueryTab(`SELECT * FROM "${String(table).replace(/"/g, '""')}" LIMIT 100;`),
-			}),
+				onOpenQuery: (table) => openQueryTab(`SELECT * FROM "${String(table).replace(/"/g, '""')}" LIMIT 100;`) }),
 			// ---- main ------------------------------------------------------------------
 			h("section", { className: "cedb-main" },
 				h("div", { className: "cedb-wtabs", role: "tablist" },
@@ -116,8 +114,7 @@ export function renderWorkbench(wb) {
 												if (!profile) return;
 												const connected = await connectProfile(profile);
 												if (connected) patchTab(activeTab.id, { conn: connected });
-											},
-										}, [
+											} }, [
 											...(connections.length === 0 ? [h("option", { key: "none", value: "" }, t("db.noConnectionCtx"))] : []),
 											...connections.map((connection) => h("option", { key: connection.id, value: connection.id }, `${connection.driver} · ${connection.label}`)),
 											// Saved but not open: picking one connects it (or asks for its
@@ -132,8 +129,7 @@ export function renderWorkbench(wb) {
 												type: "button",
 												className: "ce-sk-btn ce-sk-primary cedb-run",
 												disabled: !String(activeTab.sql ?? "").trim(),
-												onClick: () => void runQuery(activeTab.id),
-											}, `▶ ${t("db.run")}`),
+												onClick: () => void runQuery(activeTab.id) }, `▶ ${t("db.run")}`),
 										h("button", {
 											type: "button",
 											className: "ce-sk-btn",
@@ -149,8 +145,7 @@ export function renderWorkbench(wb) {
 													if (!value || value.error) setExplainState({ busy: false, result: null, error: value?.error ?? res.error ?? "" });
 													else setExplainState({ busy: false, result: value, error: "" });
 												});
-											},
-										}, t("db.explain")),
+											} }, t("db.explain")),
 										h("button", { type: "button", className: "ce-sk-btn", title: t("db.history"), onClick: () => setHistoryOpen((v) => !v) }, t("db.history")),
 										h("span", { className: "ce-spacer" }),
 										h("span", { className: "cedb-kbd" }, "⌘/Ctrl+Enter"),
@@ -162,8 +157,7 @@ export function renderWorkbench(wb) {
 										value: activeTab.sql ?? "",
 										placeholder: t("db.sqlPlaceholder"),
 										spellCheck: false,
-										onChange: (event) => patchTab(activeTab.id, { sql: event.target.value }),
-									}),
+										onChange: (event) => patchTab(activeTab.id, { sql: event.target.value }) }),
 								),
 								h("div", { className: "cedb-result-head" },
 									activeTab.result
@@ -202,8 +196,7 @@ export function renderWorkbench(wb) {
 										placeholder: t("db.filterRows"),
 										value: activeTab.filter,
 										onChange: (event) => patchTab(activeTab.id, { filter: event.target.value, offset: 0 }),
-										onKeyDown: (event) => { if (event.key === "Enter") void loadRows(activeTab.id, { filter: event.currentTarget.value, offset: 0 }); },
-									}),
+										onKeyDown: (event) => { if (event.key === "Enter") void loadRows(activeTab.id, { filter: event.currentTarget.value, offset: 0 }); } }),
 									h("button", { type: "button", className: "ce-sk-btn", disabled: activeTab.loading, onClick: () => void loadRows(activeTab.id) }, activeTab.loading ? t("loading") : "⟳"),
 									h("button", { type: "button", className: "ce-sk-btn", title: t("db.sqlForTable"), onClick: () => openQueryTab(`${tableSql(activeTab.table, { ...activeTab, limit: PAGE_SIZE, driver: connections.find((entry) => entry.id === activeTab.conn)?.driver }).replace(/;\s*$/, "")};`) }, "SQL"),
 									h("span", { className: "ce-spacer" }),
@@ -212,8 +205,7 @@ export function renderWorkbench(wb) {
 										type: "button",
 										className: "ce-sk-btn",
 										title: t("db.importHint"),
-										onClick: () => setModal({ kind: "import", table: activeTab.table, conn: activeTab.conn || activeConn, onDone: () => void loadRows(activeTab.id) }),
-									}, t("db.import")),
+										onClick: () => setModal({ kind: "import", table: activeTab.table, conn: activeTab.conn || activeConn, onDone: () => void loadRows(activeTab.id) }) }, t("db.import")),
 									h("button", {
 										type: "button",
 										className: "ce-sk-btn",
@@ -224,9 +216,7 @@ export function renderWorkbench(wb) {
 											database: activeTab.database,
 											columns: tableEntry?.columns ?? [],
 											conn: activeTab.conn || activeConn,
-											onDone: () => void loadRows(activeTab.id),
-										}),
-									}, `＋ ${t("db.addRow")}`),
+											onDone: () => void loadRows(activeTab.id) }) }, `＋ ${t("db.addRow")}`),
 									pkColumn === "" ? h("span", { className: "cedb-nopk", title: t("db.noPkHint") }, t("db.noPk")) : null,
 								),
 								activeTab.error ? h("div", { className: "cedb-error" }, activeTab.error) : null,
@@ -247,8 +237,7 @@ export function renderWorkbench(wb) {
 										pkColumn,
 										onEditCell: (rowIndex, column, value) => void commitCell(rowIndex, column, value),
 										onDeleteRow: (rowIndex) => void removeRow(rowIndex),
-										pendingDelete,
-									})
+										pendingDelete })
 									: h("div", { className: "cedb-empty-result" },
 										h("span", { className: "cedb-empty-icon", "aria-hidden": "true" }, "▤"),
 										h("div", { className: "cedb-empty-title" }, activeTab.loading ? t("loading") : t("db.reloadTable")),
@@ -259,16 +248,14 @@ export function renderWorkbench(wb) {
 										type: "button",
 										className: "ce-tool ce-tiny",
 										disabled: activeTab.offset === 0 || activeTab.loading,
-										onClick: () => { const offset = Math.max(0, activeTab.offset - PAGE_SIZE); patchTab(activeTab.id, { offset }); void loadRows(activeTab.id, { offset }); },
-									}, "←"),
+										onClick: () => { const offset = Math.max(0, activeTab.offset - PAGE_SIZE); patchTab(activeTab.id, { offset }); void loadRows(activeTab.id, { offset }); } }, "←"),
 									h("span", { className: "cedb-pager-text" },
 										`${activeTab.offset + 1}–${Math.min(activeTab.offset + PAGE_SIZE, activeTab.result?.total ?? 0)} / ${activeTab.result?.total ?? 0}`),
 									h("button", {
 										type: "button",
 										className: "ce-tool ce-tiny",
 										disabled: activeTab.loading || activeTab.offset + PAGE_SIZE >= (activeTab.result?.total ?? 0),
-										onClick: () => { const offset = activeTab.offset + PAGE_SIZE; patchTab(activeTab.id, { offset }); void loadRows(activeTab.id, { offset }); },
-									}, "→"),
+										onClick: () => { const offset = activeTab.offset + PAGE_SIZE; patchTab(activeTab.id, { offset }); void loadRows(activeTab.id, { offset }); } }, "→"),
 								),
 							),
 					),
@@ -300,8 +287,7 @@ export function renderWorkbench(wb) {
 									setNotice(t("db.rowInserted"));
 									modal.onDone?.();
 									return "";
-								},
-							})
+								} })
 							: h(ImportDialog, {
 							t,
 							table: modal.table,
@@ -318,8 +304,7 @@ export function renderWorkbench(wb) {
 								setNotice(t("db.imported").replace("{n}", String(parsed.rows.length)));
 								if (modal.onDone) modal.onDone();
 								return "";
-							},
-						}),
+							} }),
 		// ---- connect dialog ---------------------------------------------------------------
 		connectOpen
 			? h("div", { className: "cedb-dialog cedb-dialog-wide", ref: connectRef, role: "dialog", "aria-label": t("db.newConnection") },
@@ -339,8 +324,7 @@ export function renderWorkbench(wb) {
 							type: "button",
 							className: "cedb-saved-chip",
 							title: profile.address || profile.path,
-							onClick: () => { useSavedProfile(profile); setStep("form"); },
-						}, h("span", { className: `cedb-driver cedb-driver-${profile.driver}` }, profile.driver), profile.label))),
+							onClick: () => { useSavedProfile(profile); setStep("form"); } }, h("span", { className: `cedb-driver cedb-driver-${profile.driver}` }, profile.driver), profile.label))),
 				step === "pick"
 					? h(Fragment, null,
 						h("div", { className: "cedb-pick-tools" },
@@ -349,8 +333,7 @@ export function renderWorkbench(wb) {
 								key: category.id,
 								type: "button",
 								className: `cedb-cat${pickCategory === category.id ? " cedb-cat-on" : ""}`,
-								onClick: () => setPickCategory(category.id),
-							}, t(category.key)))),
+								onClick: () => setPickCategory(category.id) }, t(category.key)))),
 						h("div", { className: "cedb-pick" }, pickableDrivers.map((id) => {
 						const known = drivers.find((entry) => entry.id === id);
 						return h("button", {
@@ -359,8 +342,7 @@ export function renderWorkbench(wb) {
 							className: `cedb-pick-card${form.driver === id ? " cedb-pick-on" : ""}`,
 							"aria-pressed": form.driver === id,
 							onClick: () => setForm((current) => ({ ...current, driver: id, port: defaultPort(id) })),
-							onDoubleClick: () => { setForm((current) => ({ ...current, driver: id, port: defaultPort(id) })); setStep("form"); },
-						},
+							onDoubleClick: () => { setForm((current) => ({ ...current, driver: id, port: defaultPort(id) })); setStep("form"); } },
 						h("span", { className: `cedb-pick-glyph cedb-driver-${id}`, "aria-hidden": "true" }, driverLabel(id).slice(0, 2)),
 						h("span", { className: "cedb-pick-label" }, driverLabel(id)),
 						h("span", { className: "cedb-pick-note" }, known?.ready ? (known.bin || known.version || t("db.notReady")) : (known?.note ?? "")));
@@ -377,8 +359,7 @@ export function renderWorkbench(wb) {
 							role: "tab",
 							"aria-selected": tab === id,
 							className: `cedb-wtab${tab === id ? " cedb-wtab-on" : ""}`,
-							onClick: () => setTab(id),
-						}, t(key),
+							onClick: () => setTab(id) }, t(key),
 						id === "tls" && String(form.sslMode ?? "") !== "" ? h("span", { className: "cedb-wtab-dot" }) : null,
 						id === "tunnel" && String(form.tunnelHost ?? "").trim() !== "" ? h("span", { className: "cedb-wtab-dot" }) : null))),
 						tab === "info"
@@ -391,8 +372,7 @@ export function renderWorkbench(wb) {
 										autoFocus: true,
 										spellCheck: false,
 										autoComplete: "off",
-										onChange: (event) => applyAddress(event.target.value),
-									})),
+										onChange: (event) => applyAddress(event.target.value) })),
 								h("div", { className: "cedb-field-row" },
 									h("label", { className: "cedb-field" }, t("db.name"),
 										h("input", { className: "ce-input", value: form.label, placeholder: t("db.namePlaceholder"), onChange: (event) => setForm({ ...form, label: event.target.value }) })),
@@ -404,8 +384,7 @@ export function renderWorkbench(wb) {
 											style: color === "" ? undefined : { background: color },
 											"aria-label": color || t("db.noColor"),
 											"aria-pressed": form.color === color,
-											onClick: () => setForm({ ...form, color }),
-										}))))),
+											onClick: () => setForm({ ...form, color }) }))))),
 								form.driver === "sqlite"
 									? h("label", { className: "cedb-field" }, t("db.path"),
 										h("input", { className: "ce-input", value: form.path, placeholder: "/path/to/app.sqlite", spellCheck: false, onChange: (event) => setForm({ ...form, path: event.target.value }) }))
@@ -478,8 +457,7 @@ export function renderWorkbench(wb) {
 												value: form.clientPath,
 												placeholder: form.driver === "mysql" ? "/opt/homebrew/opt/mysql-client/bin/mysql" : "/opt/homebrew/opt/postgresql@16/bin/psql",
 												spellCheck: false,
-												onChange: (event) => setForm({ ...form, clientPath: event.target.value }),
-											})),
+												onChange: (event) => setForm({ ...form, clientPath: event.target.value }) })),
 										String(form.clientPath ?? "").trim() === ""
 											? h("div", { className: "cedb-bin" },
 												drivers.find((entry) => entry.id === form.driver)?.bin
@@ -493,8 +471,7 @@ export function renderWorkbench(wb) {
 												onChange: (event) => {
 													setAllowModule(event.target.checked);
 													try { localStorage.setItem("dsh.plugin-kit.db.allowModule", event.target.checked ? "on" : "off"); } catch { /* storage may be denied */ }
-												},
-											}),
+												} }),
 											t("db.allowModule"))))
 							: null,
 						h("div", { className: `cedb-detect${driverReady ? "" : " cedb-detect-miss"}` },
@@ -530,8 +507,7 @@ export function renderWorkbench(wb) {
 					type: "button",
 					className: "cedb-history-row",
 					title: entry.sql,
-					onClick: () => { const id = openQueryTab(entry.sql); setHistoryOpen(false); setActiveTabId(id); },
-				},
+					onClick: () => { const id = openQueryTab(entry.sql); setHistoryOpen(false); setActiveTabId(id); } },
 				h("span", { className: "cedb-history-sql" }, entry.sql.slice(0, 120)),
 				h("span", { className: "cedb-history-ms" }, `${entry.ms} ms`))))
 			: null,

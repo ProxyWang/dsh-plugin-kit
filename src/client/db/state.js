@@ -6,16 +6,14 @@
  * place instead of spread across the markup.
  */
 
-import { Fragment, h, useCallback, useEffect, useMemo, useRef, useState } from "../react.js";
+import { useCallback, useEffect, useMemo, useRef, useState } from "../react.js";
 import { api } from "../api.js";
 import { useAutoHeight } from "../autosize.js";
-import { deleteRowSql, erGraph, erLayout, insertRowSql, parseDataText, planTree, toInsertSql, toJsonRows, updateCellSql } from "../dbtools.js";
+import { deleteRowSql, toInsertSql, toJsonRows, updateCellSql } from "../dbtools.js";
 import { DRIVERS, driverLabel, parseConnectionAddress } from "../dbconnect.js";
 import { useDismissLayer } from "../dismiss.js";
-import { DB_TAB_KIND, DB_TAB_ID } from "../constants.js";
-import { HISTORY_CAP, PAGE_SIZE, countOf, requestToken, tableSql, toCsv } from "./format.js";
-import { AddRowDialog, DriverManager, ErDiagram, ExplainPanel, ImportDialog } from "./dialogs.js";
-import { CONNECTION_COLORS, CATEGORIES, defaultPort, implSuffix } from "./meta.js";
+import { HISTORY_CAP, PAGE_SIZE, countOf, requestToken, toCsv } from "./format.js";
+import { CATEGORIES, defaultPort } from "./meta.js";
 
 
 /**
@@ -55,8 +53,7 @@ export function useWorkbench({ t, useTabInfo, sessionId, useSessions }) {
 		address: "", label: "", color: "", note: "",
 		driver: "postgres", path: "", host: "localhost", port: "5432", user: "", password: "", database: "", clientPath: "",
 		sslMode: "", sslCa: "", sslCert: "", sslKey: "", urlParams: "",
-		tunnelHost: "", tunnelPort: "22", tunnelUser: "", tunnelKey: "", tunnelLocalPort: "",
-	});
+		tunnelHost: "", tunnelPort: "22", tunnelUser: "", tunnelKey: "", tunnelLocalPort: "" });
 	const [tab, setTab] = useState("info");
 	// The pick step filters like dbx's: a search box and engine categories.
 	const [pickQuery, setPickQuery] = useState("");
@@ -203,8 +200,7 @@ export function useWorkbench({ t, useTabInfo, sessionId, useSessions }) {
 			user: profile.user ?? parsed.user,
 			password: "",
 			database: profile.database ?? parsed.database,
-			clientPath: "",
-		});
+			clientPath: "" });
 		setNotice(parsed.error ?? "");
 		setTestState({ busy: false, ok: null, text: "" });
 	}, []);
@@ -239,8 +235,7 @@ export function useWorkbench({ t, useTabInfo, sessionId, useSessions }) {
 			port: parsed.port,
 			user: parsed.user,
 			password: parsed.password,
-			database: parsed.database,
-		}));
+			database: parsed.database }));
 		// The paste field is optional: it only reports a problem while it has text.
 		setNotice(String(value).trim() === "" ? "" : parsed.error);
 		// Any edit invalidates a previous test: it proved a different target.
@@ -326,8 +321,7 @@ export function useWorkbench({ t, useTabInfo, sessionId, useSessions }) {
 				tunnelUser: draft.tunnelUser ?? "",
 				tunnelKey: draft.tunnelKey ?? "",
 				tunnelLocalPort: draft.tunnelLocalPort ?? "",
-				clientPath: draft.clientPath ?? "",
-			},
+				clientPath: draft.clientPath ?? "" },
 			driver: draft.driver,
 			address: draft.address,
 			path: absolute,
@@ -335,8 +329,7 @@ export function useWorkbench({ t, useTabInfo, sessionId, useSessions }) {
 			port: Number(draft.port) || defaultPort,
 			user: draft.user,
 			database: draft.database,
-			...(draft.password ? { password: draft.password } : {}),
-		});
+			...(draft.password ? { password: draft.password } : {}) });
 		if (!res.ok) { setNotice(res.error); return; }
 		profileRevision.current = res.value.revision ?? profileRevision.current;
 		setProfiles((current) => [res.value.profile, ...current.filter((entry) => entry.id !== res.value.profile.id)]);
@@ -407,8 +400,7 @@ export function useWorkbench({ t, useTabInfo, sessionId, useSessions }) {
 					port: Number(form.tunnelPort) || 22,
 					user: form.tunnelUser.trim(),
 					keyPath: String(form.tunnelKey ?? "").trim(),
-					localPort: Number(form.tunnelLocalPort) || 0,
-				};
+					localPort: Number(form.tunnelLocalPort) || 0 };
 			}
 		}
 		return params;
@@ -464,8 +456,7 @@ export function useWorkbench({ t, useTabInfo, sessionId, useSessions }) {
 			offset: tab.offset,
 			order: tab.order,
 			dir: tab.dir,
-			filter: tab.filter,
-		});
+			filter: tab.filter });
 		if (!res.ok) { patchTab(tab.id, { loading: false, error: res.error }); return; }
 		patchTab(tab.id, { loading: false, result: res.value, error: "", runToken: "" });
 	}, [patchTab]);
@@ -498,8 +489,7 @@ export function useWorkbench({ t, useTabInfo, sessionId, useSessions }) {
 			filter: "",
 			loading: false,
 			error: "",
-			result: null,
-		});
+			result: null });
 	}, [openTab]);
 
 	// A freshly-opened table tab fetches its first page exactly once.
@@ -533,8 +523,7 @@ export function useWorkbench({ t, useTabInfo, sessionId, useSessions }) {
 			loading: false,
 			error: "",
 			result: null,
-			ms: 0,
-		});
+			ms: 0 });
 		return id;
 	}, [openTab, activeConn, t]);
 
@@ -642,9 +631,7 @@ export function useWorkbench({ t, useTabInfo, sessionId, useSessions }) {
 				[connId]: {
 					...schemaFor,
 					current: databaseName,
-					databases: schemaFor.databases.map((entry) => (entry.name === databaseName ? fetched : entry)),
-				},
-			};
+					databases: schemaFor.databases.map((entry) => (entry.name === databaseName ? fetched : entry)) } };
 		});
 	}, [schemas, connections, t]);
 
@@ -684,8 +671,7 @@ export function useWorkbench({ t, useTabInfo, sessionId, useSessions }) {
 			column,
 			value,
 			pkColumn,
-			pkValue,
-		});
+			pkValue });
 		await runMutation(sql, t("db.rowUpdated"));
 	}, [activeTab, pkColumn, connections, activeConn, runMutation, t]);
 
@@ -700,8 +686,7 @@ export function useWorkbench({ t, useTabInfo, sessionId, useSessions }) {
 			table: activeTab.table,
 			database: activeTab.database,
 			pkColumn,
-			pkValue,
-		});
+			pkValue });
 		await runMutation(sql, t("db.rowDeleted"));
 	}, [activeTab, pkColumn, pendingDelete, connections, activeConn, runMutation, t]);
 
