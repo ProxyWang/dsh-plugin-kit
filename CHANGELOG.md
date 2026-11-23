@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased — the host refuses to open a second connection for one profile
+
+- `db.connect({profileId})` is now **idempotent**: if a live connection already belongs to that profile it is returned as-is (`reused: true`) instead of creating another. The client-side focus/dedupe stays, but correctness no longer depends on the client being current.
+- The SQLite branch had lost its `profileId` on the record during the worker refactor; it is back, which is what made the reuse check miss local databases.
+- Regressions: connecting the same profile twice returns the same id and leaves exactly one live connection.
+
 ## Unreleased — one live connection per saved connection
 
 The rail showed ten rows for four databases. Every click on a saved connection opened a *new* host connection, the client appended it, and a page refresh forgot the ones it had opened — so they piled up invisibly and reappeared on the next click.

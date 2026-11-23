@@ -1444,6 +1444,8 @@ export async function createConnection(config) {
 		const queried = await db.query(conn.id, "SELECT 1 AS one");
 		check("a profile-backed connection answers queries", queried.rows[0][0] === 1, queried);
 		check("a saved connection keeps its name as the instance label", conn.label === "saved", conn.label);
+		const again = await db.connect({ profileId: made.profile.id });
+		check("connecting the same profile twice reuses the live connection", again.id === conn.id && again.reused === true && db.listConnections().length === 1, again);
 		db.disconnect(conn.id);
 		db.setDbProfileService(null);
 		const refused = await db.connect({ profileId: made.profile.id }).then(() => null, (error) => error);
