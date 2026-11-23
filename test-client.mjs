@@ -3276,8 +3276,9 @@ check("docAction reloads clean drafts, flags dirty ones, ignores others", docAct
 	try {
 		const { SessionBranch, SessionBranchCard, sessionCwd, shortBranch } = await import("./src/client/branchchip.js");
 		check("a short branch is shown whole", shortBranch("main") === "main", shortBranch("main"));
-		check("a branch with a path shows its last segment whole", shortBranch("feat/profile-match-api") === "profile-match-api", shortBranch("feat/profile-match-api"));
-		check("a long last segment keeps its ending", shortBranch("feat/some-really-long-tail-name").endsWith("tail-name"), shortBranch("feat/some-really-long-tail-name"));
+		check("a branch that fits is left untouched", shortBranch("feat/checkout-panel") === "feat/checkout-panel", shortBranch("feat/checkout-panel"));
+		check("a branch with a path shows its last segment whole", shortBranch("release/2026-11/profile-match-api") === "profile-match-api", shortBranch("release/2026-11/profile-match-api"));
+		check("a long last segment keeps its ending", shortBranch("feat/some-really-long-tail-name-that-overflows").endsWith("tail-name-that-overflows".slice(-12)), shortBranch("feat/some-really-long-tail-name-that-overflows"));
 		check("a branch without a path keeps its ending and cuts the front", shortBranch("feature_very_long_branch_name_fix").endsWith("branch_name_fix") && shortBranch("feature_very_long_branch_name_fix").startsWith("…"), shortBranch("feature_very_long_branch_name_fix"));
 		check("distinct long branches stay distinguishable", shortBranch("feat/profile-match-api") !== shortBranch("feat/profile-matrix-api"), [shortBranch("feat/profile-match-api"), shortBranch("feat/profile-matrix-api")]);
 		check("the row resolves its workspace from the slot's useSessions", sessionCwd((select) => select({ byId: { s9: { cwd: "/repo" } } }), "s9") === "/repo", null);
