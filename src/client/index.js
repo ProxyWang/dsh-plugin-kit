@@ -174,13 +174,25 @@ export default {
 		// header slot, so the branch rides on each session row of that workspace.
 		// The slot hands every occupant `useSessions`, which is how the row finds
 		// its own workspace — no separate service injection needed.
-		safe("session branch chip", () => ctx.slots.inject("sidebar.session.row.trailing", () => ctx.slots.register(
+		// TEMP(diag): prove this bundle ran and whether the registration sticks.
+		const diag = (text) => { api("diag.note", { text }).catch(() => {}); };
+		diag("client apply: branch chip section reached");
+		safe("session branch chip", () => { try {
+			const dispose = ctx.slots.inject("sidebar.session.row.trailing", () => ctx.slots.register(
 			{ name: "sidebar.session.row.trailing", id: "dsh-plugin-kit/session-branch", order: 20, locale: NS },
 			(props) => {
+				diag(`slot render: keys=${Object.keys(props ?? {}).join(",")} session=${props?.sessionId ?? ""}`);
 				const cwd = sessionCwd(props?.useSessions, props?.sessionId);
+				diag(`slot cwd=${cwd}`);
 				return cwd === "" ? null : h(SessionBranch, { t: bound, cwd });
 			},
-		)));
+		));
+			diag("slot registered");
+			return dispose;
+		} catch (error) {
+			diag(`slot registration threw: ${String(error?.message ?? error)}`);
+			throw error;
+		} });
 		// Compact chat rows for edit/write: clicking one opens this call's diff in
 		// the side panel. Negative priority so unloading restores the stock rows.
 		safe("call diff rows", () => ctx.slots.inject("tool.call.toolview", function* () {

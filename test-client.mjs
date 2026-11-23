@@ -3294,7 +3294,8 @@ check("docAction reloads clean drafts, flags dirty ones, ignores others", docAct
 		tree = draw();
 		const chip = flatten(tree).find((n) => String(n.props?.className ?? "").includes("ce-branch-chip"));
 		check("the chip shows the current branch", Boolean(chip) && JSON.stringify(chip).includes("main"), JSON.stringify(chip).slice(0, 120));
-		check("the chip asks for that workspace only", calls.at(-1).body.cwd === "/work", calls.at(-1).body);
+		const branchCalls = calls.filter((call) => call.url === "git.branch");
+		check("the chip asks for that workspace only", branchCalls.length === 1 && branchCalls[0].body.cwd === "/work", branchCalls);
 
 		branch = "feature/x";
 		await tick();
