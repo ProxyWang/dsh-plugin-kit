@@ -15,6 +15,9 @@ lib/host/db.js                 facade: connect ladder, profiles, routes, re-expo
         │                 │
         │                 └── db/sql.js   quoting, CSV/mysql tag parsing, clauses
         │
+        ├── db/migrate.js       dbx import (preview, then apply)
+        ├── db/install.js      npm install of a whitelisted driver module
+        ├── db/profile-source.js  the injected saved-connection service
         ├── drivers.js         the catalog shown in 驱动管理
         ├── modresolve.js      which mysql2/pg a project or the plugin provides
         ├── drivers/module-runner.js, db-worker.js, sqlite-ops.js

@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased — migration and install leave the facade
+
+- `db/migrate.js` (dbx import) and `db/install.js` (`npm install --no-save` of a whitelisted driver) are their own
+  modules; `db/profile-source.js` holds the injected saved-connection service so both the routes and the migration
+  can reach it without an import cycle. `lib/host/db.js` is 524 → 460 lines and is now only routes, wiring and
+  re-exports.
+- The structure guard covers the new modules (no upward imports, doc comment first line).
+
 ## Unreleased — the layering is now enforced, not just documented
 
 - **`test-structure.mjs`** (wired into `pnpm test` and CI) asserts the module map: views never import the Host

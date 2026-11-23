@@ -39,13 +39,13 @@ for (const file of ["src/client/db/view.js", "src/client/db/rail.js"]) {
 }
 
 // 3. The Host package imports downwards only: no module may import the facade.
-for (const file of ["lib/host/db/sql.js", "lib/host/db/cli.js", "lib/host/db/registry.js", "lib/host/db/operations.js"]) {
+for (const file of ["lib/host/db/sql.js", "lib/host/db/cli.js", "lib/host/db/registry.js", "lib/host/db/operations.js", "lib/host/db/migrate.js", "lib/host/db/install.js", "lib/host/db/profile-source.js"]) {
 	const imports = importsOf(read(file));
 	check(`${file} does not import the facade`, !imports.some((path) => path === "../db.js" || path === "./db.js"), imports);
 }
 
 // 4. Every split module explains itself on line one.
-const documented = ["src/client/db/state.js", "src/client/db/view.js", "src/client/db/rail.js", "src/client/db/grid.js", "src/client/db/dialogs.js", "src/client/db/format.js", "src/client/db/meta.js", "lib/host/db/sql.js", "lib/host/db/cli.js", "lib/host/db/registry.js", "lib/host/db/operations.js"];
+const documented = ["src/client/db/state.js", "src/client/db/view.js", "src/client/db/rail.js", "src/client/db/grid.js", "src/client/db/dialogs.js", "src/client/db/format.js", "src/client/db/meta.js", "lib/host/db/sql.js", "lib/host/db/cli.js", "lib/host/db/registry.js", "lib/host/db/operations.js", "lib/host/db/migrate.js", "lib/host/db/install.js", "lib/host/db/profile-source.js"];
 for (const file of documented) {
 	check(`${file} starts with a doc comment`, read(file).startsWith("/**"), read(file).slice(0, 40));
 }
