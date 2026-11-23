@@ -3,6 +3,13 @@
 - A saved connection with no stored secret (every dbx import) now **opens the dialog with its fields filled and a line explaining why**, instead of calling connect with an empty password and failing with "Access denied".
 - Saving from that dialog **updates the same profile** rather than creating a near-duplicate: the dialog remembers which profile it is editing.
 
+## Unreleased — installable drivers, selectable databases, a title that never empties
+
+- **Driver manager can install**: a missing module implementation has **安装** (runs `npm install --no-save <pkg>` in the session workspace through the new `db.driver.install` route, whitelisted, then re-probes), and a missing CLI implementation has **复制命令** so the `brew install …` line is one paste away. Installing never rewrites the project's `package.json`.
+- **Clicking a database switches to it**: the rail's database row used to be a label with no handler, so picking another database did nothing. It is now a button that selects the database for the connection (highlighted) and folds/unfolds its tables; a table click moves the selection to its database.
+- **A tab title can no longer be empty**: the host snapshots `title(address)` when a tab is created, so a locale that had not loaded produced a blank tab label for the tab's whole life. Every definition now falls back to a literal name (`数据库`, `技能`, …) when the locale key is not available yet.
+- Regressions: a saved connection keeps its label as the instance name; the database row is a selectable button.
+
 ## Unreleased — the rail is one tree: instance → database → table
 
 The rail listed live connections in one section and the objects of *whichever* connection was active in another, so the instance you just connected appeared twice (as a saved name and as `host:port`) and only one database tree existed at a time.

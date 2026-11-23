@@ -437,7 +437,7 @@ var zh = {
   "db.database": "数据库",
   "db.connectAction": "连接",
   "db.connections": "连接",
-  "db.noConnections": "暂无连接。点「新建连接」打开一个本地库：SQLite 只需要文件路径，MySQL / PostgreSQL 需要本机装有对应命令行客户端。",
+  "db.noConnections": "暂无连接。点「新建连接」选数据库类型：SQLite 只需要文件路径，MySQL / PostgreSQL 用插件自带的驱动，无需安装客户端。",
   "db.objects": "对象",
   "db.search": "筛选表名…",
   "db.notLoaded": "未加载",
@@ -460,6 +460,10 @@ var zh = {
   "db.reloadTableHint": "连接可能已断开，或页面刚刚切换。",
   "db.noConnectionCtx": "未选择连接",
   "db.driversButton": "驱动",
+  "db.install": "安装",
+  "db.installIntoProject": "用 npm 安装到当前项目（--no-save）",
+  "db.copyCommand": "复制命令",
+  "db.copyInstallCommand": "复制安装该客户端的命令",
   "db.importDbx": "从 dbx 迁移连接",
   "db.importDbxScan": "扫描 dbx 配置",
   "db.importDbxApply": "导入这些连接",
@@ -1243,7 +1247,7 @@ var en = {
   "db.database": "Database",
   "db.connectAction": "Connect",
   "db.connections": "Connections",
-  "db.noConnections": "No connections yet. Use “New connection”: SQLite needs only a file path; MySQL and PostgreSQL use the CLI client installed on this machine.",
+  "db.noConnections": "No connections yet. Use “New connection” to pick a database type: SQLite needs only a file path, and MySQL/postgres use the drivers bundled with the plugin.",
   "db.objects": "Objects",
   "db.search": "Filter tables…",
   "db.notLoaded": "not loaded",
@@ -1266,6 +1270,10 @@ var en = {
   "db.reloadTableHint": "The connection may have dropped, or the tab just switched.",
   "db.noConnectionCtx": "No connection",
   "db.driversButton": "Drivers",
+  "db.install": "Install",
+  "db.installIntoProject": "Install into this project with npm (--no-save)",
+  "db.copyCommand": "Copy command",
+  "db.copyInstallCommand": "Copy the command that installs this client",
   "db.importDbx": "Migrate from dbx",
   "db.importDbxScan": "Scan dbx",
   "db.importDbxApply": "Import these connections",
@@ -8965,6 +8973,10 @@ var CSS2 = `
 .cedb-bin{font-size:11px;color:var(--dsw-alias-label-secondary,#99a);word-break:break-all;margin-top:2px}
 .cedb-remember{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--dsw-alias-label-secondary,#99a);cursor:pointer;margin-top:2px}
 .cedb-db,.cedb-table{padding:0}
+.cedb-db-name{display:flex;align-items:center;gap:5px;width:100%;padding:2px 4px;border:0;border-radius:4px;background:transparent;color:var(--dsw-alias-label-secondary,#aab);font-size:11px;text-align:left;cursor:pointer}
+.cedb-db-name:hover{background:var(--dsw-alias-interactive-bg-hover,#2a2e35)}
+.cedb-db-on{background:var(--dsw-alias-bg-layer-1,#1d2126);color:var(--dsw-alias-label-primary,#dde)}
+.cedb-db-label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cedb-db-name{padding:8px 10px 2px;font-size:11px;font-weight:700;color:var(--dsw-alias-label-secondary,#aab);display:flex;align-items:center;gap:6px}
 .cedb-db-hint{font-weight:400;font-size:10px;color:var(--dsw-alias-label-tertiary,#667)}
 .cedb-table-row{display:flex;align-items:center;gap:6px;width:100%;padding:3px 10px 3px 14px;border:0;background:transparent;color:var(--dsw-alias-label-secondary,#ccd);font-size:12px;text-align:left;cursor:pointer}
@@ -9755,7 +9767,9 @@ var definition = (t) => ({
   kind: TAB_KIND,
   priority: "extension",
   keepMounted: true,
-  title: () => t("type.label"),
+  // The host snapshots `title(address)` when a tab is created, so a locale that
+  // has not loaded yet would store an empty title for the tab's whole life.
+  title: () => t("type.label") || "开发工作台",
   guide: []
 });
 var skillsDefinition = (t) => ({
@@ -9763,7 +9777,7 @@ var skillsDefinition = (t) => ({
   kind: SKILLS_TAB_KIND,
   priority: "extension",
   keepMounted: true,
-  title: () => t("skillsTab.label"),
+  title: () => t("skillsTab.label") || "技能",
   guide: []
 });
 var apiDefinition = (t) => ({
@@ -9771,7 +9785,7 @@ var apiDefinition = (t) => ({
   kind: API_TAB_KIND,
   priority: "extension",
   keepMounted: true,
-  title: () => t("workbench.title"),
+  title: () => t("workbench.title") || "接口调试",
   guide: []
 });
 var dbDefinition = (t) => ({
@@ -9779,7 +9793,7 @@ var dbDefinition = (t) => ({
   kind: DB_TAB_KIND,
   priority: "extension",
   keepMounted: true,
-  title: () => t("db.label"),
+  title: () => t("db.label") || "数据库",
   guide: []
 });
 var rpcDefinition = (t) => ({
@@ -9787,7 +9801,7 @@ var rpcDefinition = (t) => ({
   kind: RPC_TAB_KIND,
   priority: "extension",
   keepMounted: true,
-  title: () => t("rpc.label"),
+  title: () => t("rpc.label") || "RPC",
   guide: []
 });
 function insertStyles() {
@@ -13404,6 +13418,8 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
   const [activeConn, setActiveConn] = useState("");
   const [schemas, setSchemas] = useState({});
   const [openConns, setOpenConns] = useState({});
+  const [activeDb, setActiveDb] = useState({ conn: "", database: "" });
+  const [collapsedDbs, setCollapsedDbs] = useState({});
   const [schemaBusy, setSchemaBusy] = useState(false);
   const [schemaError, setSchemaError] = useState("");
   const [filter, setFilter] = useState("");
@@ -13581,6 +13597,25 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
   }, []);
   const driverReady = drivers.find((entry) => entry.id === form.driver)?.ready ?? true;
   const canConnect = form.driver !== "" && (form.driver === "sqlite" ? form.path.trim() !== "" : form.host.trim() !== "");
+  const installDriverModule = useCallback(async (name) => {
+    setDbxState((current) => ({ ...current ?? {}, installing: name, installError: "" }));
+    const res = await api("db.driver.install", { name, cwd });
+    const value = res.ok ? res.value : null;
+    if (!value || value.error) {
+      setDbxState((current) => ({ ...current ?? {}, installing: "", installError: value?.error ?? res.error ?? "" }));
+      return;
+    }
+    setDbxState((current) => ({ ...current ?? {}, installing: "", installed: name }));
+    await probeDrivers(true);
+  }, [cwd, probeDrivers]);
+  const copyCommand = useCallback(async (text) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setNotice(t("db.copied"));
+    } catch {
+      setNotice(t("db.copyFailed"));
+    }
+  }, [t]);
   const runDbxImport = useCallback(async (apply) => {
     setDbxState((current) => ({ ...current ?? {}, busy: true }));
     const res = await api("db.import.dbx", { apply });
@@ -13660,6 +13695,7 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
     });
     setConnections((current) => [...current.filter((entry) => entry.id !== res.value.id), res.value]);
     setActiveConn(res.value.id);
+    setActiveDb({ conn: res.value.id, database: res.value.database ?? "" });
     setNotice("");
     await refreshSchema(res.value.id);
   }, [refreshSchema, cwd, useSavedProfile, t]);
@@ -13721,6 +13757,7 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
     setNotice("");
     if (saveProfile) await rememberConnection(form);
     await refreshSchema(res.value.id);
+    setActiveDb({ conn: res.value.id, database: res.value.database ?? "" });
   }, [connectParams, refreshSchema, saveProfile, rememberConnection]);
   const doDisconnect = useCallback(async (id) => {
     await api("db.disconnect", { id });
@@ -13995,44 +14032,66 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
               { className: "cedb-instance-body" },
               schemaBusy && !loaded ? h("div", { className: "cedb-empty" }, t("loading")) : null,
               schemaError && connection.id === activeConn ? h("div", { className: "cedb-error cedb-pad" }, schemaError) : null,
-              databasesOf(connection.id).map((database) => h(
-                "div",
-                { key: database.name, className: "cedb-db" },
-                h("div", { className: "cedb-db-name" }, database.name, database.tables.length === 0 ? h("span", { className: "cedb-db-hint" }, t("db.notLoaded")) : null),
-                database.tables.map((entry) => {
-                  const key = `${connection.id}:${database.name}:${entry.name}`;
-                  const expandedTable = expanded.has(key);
-                  const tabKey = `table:${connection.id}:${database.name}:${entry.name}`;
-                  return h(
-                    "div",
-                    { key, className: "cedb-table" },
-                    h(
-                      "button",
-                      {
-                        type: "button",
-                        className: `cedb-table-row${activeTab?.key === tabKey ? " cedb-table-on" : ""}`,
-                        title: `${entry.name} · ${entry.columns?.length ?? 0} ${t("db.columns")}`,
-                        onClick: () => {
-                          toggleTable(key);
-                          setActiveConn(connection.id);
-                          openTable(connection.id, database.name, entry);
+              databasesOf(connection.id).map((database) => {
+                const dbKey = `${connection.id}:${database.name}`;
+                const selected = activeDb.conn === connection.id && activeDb.database === database.name;
+                const collapsed = collapsedDbs[dbKey] === true;
+                return h(
+                  "div",
+                  { key: database.name, className: "cedb-db" },
+                  h(
+                    "button",
+                    {
+                      type: "button",
+                      className: `cedb-db-name${selected ? " cedb-db-on" : ""}`,
+                      "aria-expanded": !collapsed,
+                      title: `${database.name} · ${database.tables.length} ${t("db.tables")}`,
+                      onClick: () => {
+                        setActiveConn(connection.id);
+                        setActiveDb({ conn: connection.id, database: database.name });
+                        setCollapsedDbs((current) => ({ ...current, [dbKey]: current[dbKey] !== true }));
+                      }
+                    },
+                    h("span", { className: "cedb-caret" }, collapsed ? "▸" : "▾"),
+                    h("span", { className: "cedb-db-label" }, database.name),
+                    database.tables.length === 0 ? h("span", { className: "cedb-db-hint" }, t("db.notLoaded")) : null
+                  ),
+                  collapsed ? null : database.tables.map((entry) => {
+                    const key = `${connection.id}:${database.name}:${entry.name}`;
+                    const expandedTable = expanded.has(key);
+                    const tabKey = `table:${connection.id}:${database.name}:${entry.name}`;
+                    return h(
+                      "div",
+                      { key, className: "cedb-table" },
+                      h(
+                        "button",
+                        {
+                          type: "button",
+                          className: `cedb-table-row${activeTab?.key === tabKey ? " cedb-table-on" : ""}`,
+                          title: `${entry.name} · ${entry.columns?.length ?? 0} ${t("db.columns")}`,
+                          onClick: () => {
+                            toggleTable(key);
+                            setActiveConn(connection.id);
+                            setActiveDb({ conn: connection.id, database: database.name });
+                            openTable(connection.id, database.name, entry);
+                          },
+                          onDoubleClick: () => openQueryTab(`SELECT * FROM "${entry.name.replace(/"/g, '""')}" LIMIT 100;`)
                         },
-                        onDoubleClick: () => openQueryTab(`SELECT * FROM "${entry.name.replace(/"/g, '""')}" LIMIT 100;`)
-                      },
-                      h("span", { className: `cedb-kind cedb-kind-${entry.kind}` }, entry.kind === "view" ? "◇" : "▤"),
-                      h("span", { className: "cedb-table-name" }, entry.name)
-                    ),
-                    expandedTable && entry.columns?.length ? h("ul", { className: "cedb-cols" }, entry.columns.map((column) => h(
-                      "li",
-                      { key: column.name, className: "cedb-col" },
-                      h("span", { className: "cedb-col-name" }, column.name),
-                      h("span", { className: "cedb-col-type" }, column.type),
-                      column.primaryKey ? h("span", { className: "cedb-pk" }, "PK") : null,
-                      column.nullable === false ? h("span", { className: "cedb-nn" }, "NN") : null
-                    ))) : null
-                  );
-                })
-              ))
+                        h("span", { className: `cedb-kind cedb-kind-${entry.kind}` }, entry.kind === "view" ? "◇" : "▤"),
+                        h("span", { className: "cedb-table-name" }, entry.name)
+                      ),
+                      expandedTable && entry.columns?.length ? h("ul", { className: "cedb-cols" }, entry.columns.map((column) => h(
+                        "li",
+                        { key: column.name, className: "cedb-col" },
+                        h("span", { className: "cedb-col-name" }, column.name),
+                        h("span", { className: "cedb-col-type" }, column.type),
+                        column.primaryKey ? h("span", { className: "cedb-pk" }, "PK") : null,
+                        column.nullable === false ? h("span", { className: "cedb-nn" }, "NN") : null
+                      ))) : null
+                    );
+                  })
+                );
+              })
             ) : null
           );
         })
@@ -14239,7 +14298,7 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
       )
     ),
     // ---- modal layer: drivers / ER / plan / import ------------------------------------
-    modal === null ? null : modal.kind === "drivers" ? h(DriverManager, { t, drivers, dbxState, onImportDbx: runDbxImport, onRedetect: () => void probeDrivers(true), onClose: () => setModal(null) }) : modal.kind === "er" ? h(ErDiagram, { t, schema, onOpenTable: (table) => {
+    modal === null ? null : modal.kind === "drivers" ? h(DriverManager, { t, drivers, dbxState, onImportDbx: runDbxImport, onInstall: installDriverModule, onCopy: copyCommand, onRedetect: () => void probeDrivers(true), onClose: () => setModal(null) }) : modal.kind === "er" ? h(ErDiagram, { t, schema, onOpenTable: (table) => {
       setModal(null);
       openTableTab(table);
     }, onClose: () => setModal(null) }) : modal.kind === "explain" ? h(ExplainPanel, { t, state: explainState, onClose: () => setModal(null) }) : h(ImportDialog, {
@@ -14756,7 +14815,7 @@ function ResultGrid({ t, result, onCell, onSort, order, dir }) {
     )
   );
 }
-function DriverManager({ t, drivers, dbxState, onImportDbx, onRedetect, onClose }) {
+function DriverManager({ t, drivers, dbxState, onImportDbx, onInstall, onCopy, onRedetect, onClose }) {
   const card = (driver) => {
     const head = h(
       "div",
@@ -14769,12 +14828,24 @@ function DriverManager({ t, drivers, dbxState, onImportDbx, onRedetect, onClose 
       className: `cedb-cap${value === true ? " cedb-cap-on" : ""}`,
       title: name
     }, `${name}: ${typeof value === "boolean" ? value ? "✓" : "—" : String(value)}`)));
-    const alts = h("div", { className: "cedb-driver-alts" }, (driver.alternatives ?? []).map((alt) => h(
-      "div",
-      { key: alt.impl, className: "cedb-driver-alt" },
-      h("span", { className: "cedb-driver-impl" }, alt.impl),
-      alt.ready ? h("span", { className: "cedb-driver-ok", title: alt.bin || alt.version }, alt.version || alt.bin || "ready") : h("span", { className: "cedb-driver-no", title: alt.note }, alt.note)
-    )));
+    const altRow = (driverId, alt) => {
+      const pkg = driverId === "mysql" ? "mysql2" : "pg";
+      const status = alt.ready ? h("span", { className: "cedb-driver-ok", title: alt.bin || alt.version }, alt.version || alt.bin || "ready") : h("span", { className: "cedb-driver-no", title: alt.note }, alt.note);
+      const action = alt.ready ? null : alt.impl === "module" ? h("button", {
+        type: "button",
+        className: "ce-sk-btn ce-sk-btn-ghost ce-tiny",
+        disabled: dbxState?.installing === pkg,
+        title: t("db.installIntoProject"),
+        onClick: () => void onInstall?.(pkg)
+      }, dbxState?.installing === pkg ? t("loading") : t("db.install")) : h("button", {
+        type: "button",
+        className: "ce-sk-btn ce-sk-btn-ghost ce-tiny",
+        title: t("db.copyInstallCommand"),
+        onClick: () => void onCopy?.(String(alt.note ?? "").replace(/^.*?—\s*/, "") || "mysql")
+      }, t("db.copyCommand"));
+      return h("div", { key: alt.impl, className: "cedb-driver-alt" }, h("span", { className: "cedb-driver-impl" }, alt.impl), status, action);
+    };
+    const alts = h("div", { className: "cedb-driver-alts" }, (driver.alternatives ?? []).map((alt) => altRow(driver.id, alt)));
     return h("div", { key: driver.id, className: "cedb-driver-card" }, head, caps, alts);
   };
   const importStrip = h(

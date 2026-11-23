@@ -430,6 +430,10 @@ export const CSS = `
 .cedb-bin{font-size:11px;color:var(--dsw-alias-label-secondary,#99a);word-break:break-all;margin-top:2px}
 .cedb-remember{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--dsw-alias-label-secondary,#99a);cursor:pointer;margin-top:2px}
 .cedb-db,.cedb-table{padding:0}
+.cedb-db-name{display:flex;align-items:center;gap:5px;width:100%;padding:2px 4px;border:0;border-radius:4px;background:transparent;color:var(--dsw-alias-label-secondary,#aab);font-size:11px;text-align:left;cursor:pointer}
+.cedb-db-name:hover{background:var(--dsw-alias-interactive-bg-hover,#2a2e35)}
+.cedb-db-on{background:var(--dsw-alias-bg-layer-1,#1d2126);color:var(--dsw-alias-label-primary,#dde)}
+.cedb-db-label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cedb-db-name{padding:8px 10px 2px;font-size:11px;font-weight:700;color:var(--dsw-alias-label-secondary,#aab);display:flex;align-items:center;gap:6px}
 .cedb-db-hint{font-weight:400;font-size:10px;color:var(--dsw-alias-label-tertiary,#667)}
 .cedb-table-row{display:flex;align-items:center;gap:6px;width:100%;padding:3px 10px 3px 14px;border:0;background:transparent;color:var(--dsw-alias-label-secondary,#ccd);font-size:12px;text-align:left;cursor:pointer}

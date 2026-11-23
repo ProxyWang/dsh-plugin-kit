@@ -8,7 +8,9 @@ export const definition = (t) => ({
 	kind: TAB_KIND,
 	priority: "extension",
 	keepMounted: true,
-	title: () => t("type.label"),
+	// The host snapshots `title(address)` when a tab is created, so a locale that
+	// has not loaded yet would store an empty title for the tab's whole life.
+	title: () => t("type.label") || "开发工作台",
 	guide: [],
 });
 
@@ -17,7 +19,7 @@ export const skillsDefinition = (t) => ({
 	kind: SKILLS_TAB_KIND,
 	priority: "extension",
 	keepMounted: true,
-	title: () => t("skillsTab.label"),
+	title: () => t("skillsTab.label") || "技能",
 	guide: [],
 });
 
@@ -30,7 +32,7 @@ export const apiDefinition = (t) => ({
 	kind: API_TAB_KIND,
 	priority: "extension",
 	keepMounted: true,
-	title: () => t("workbench.title"),
+	title: () => t("workbench.title") || "接口调试",
 	guide: [],
 });
 
@@ -39,7 +41,7 @@ export const dbDefinition = (t) => ({
 	kind: DB_TAB_KIND,
 	priority: "extension",
 	keepMounted: true,
-	title: () => t("db.label"),
+	title: () => t("db.label") || "数据库",
 	guide: [],
 });
 
@@ -48,7 +50,7 @@ export const rpcDefinition = (t) => ({
 	kind: RPC_TAB_KIND,
 	priority: "extension",
 	keepMounted: true,
-	title: () => t("rpc.label"),
+	title: () => t("rpc.label") || "RPC",
 	guide: [],
 });
 
