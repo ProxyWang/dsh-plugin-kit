@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased — the wizard's chrome, fixed
+
+The first pass reused the panel's tab-strip class names, so the connection tabs inherited the query-tab styling (boxed, cramped) and every wizard rule I wrote was skipped by a name guard. Three other things read as broken in the same screenshot.
+
+- **The four tabs are their own component** (`.cedb-wtabs` / `.cedb-wtab`): a quiet segmented bar with a hover state and an accent underline for the active one, plus a dot when TLS or a tunnel is configured.
+- **The header no longer wraps**: title, engine chip and close stay on one row, and the chip truncates instead of pushing the ✕ to a second line.
+- **The colour swatches are uniform**, with the "no colour" option drawn as a slashed ring rather than an oversized empty circle.
+- **One reason, not a pile of them**: the driver catalog used to join every implementation's complaint (`mysql2 is not resolvable here · mysql client not found — …`). It now picks the actionable sentence, and the dialog shows it on one ellipsized line instead of a red paragraph.
+
 ## Unreleased — TLS, tunnels and the engine picker: the dbx dialog, made real
 
 - **Engine picker with search and categories**: the first step filters like dbx's — a search box plus 全部 / 关系型 / 文件 chips — and every card says which implementation will run or why it cannot.

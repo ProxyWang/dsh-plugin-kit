@@ -313,10 +313,15 @@ async function dbPreview() {
 
  button(t("db.connect")).props.onClick();
  tree = draw();
- // The dialog asks for the target only; the driver is inferred from it.
+ // Step one: pick the engine, then continue.
+ pick(tree, (node) => node.type === "button" && String(node.props.className ?? "").includes("cedb-pick-card")).props.onClick();
+ tree = draw();
+ pick(tree, (node) => node.type === "button" && node.children?.[0] === t("db.nextStep")).props.onClick();
+ tree = draw();
+ // Step two: the optional URL field fills the fields below it.
  pick(tree, (node) => node.props.className === "ce-input" && node.props.placeholder === t("db.addressPlaceholder")).props.onChange({ target: { value: "/demo/demo.sqlite" } });
  tree = draw();
- pick(tree, (node) => node.type === "button" && node.props.className?.includes("ce-sk-primary") && node.children?.[0] === t("db.connectAction")).props.onClick();
+ pick(tree, (node) => node.type === "button" && node.children?.[0] === t("db.saveAndConnect")).props.onClick();
  await tick();
  draw.flushEffects();
  tree = draw();

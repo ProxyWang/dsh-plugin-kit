@@ -723,7 +723,7 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 			),
 			// ---- main ------------------------------------------------------------------
 			h("section", { className: "cedb-main" },
-				h("div", { className: "cedb-tabs", role: "tablist" },
+				h("div", { className: "cedb-wtabs", role: "tablist" },
 					tabs.map((tab) => h("div", { key: tab.id, className: `cedb-tab${tab.id === activeTabId ? " cedb-tab-on" : ""}` },
 						h("button", { type: "button", className: "cedb-tab-label", role: "tab", "aria-selected": tab.id === activeTabId, onClick: () => setActiveTabId(tab.id), title: tab.kind === "table" ? `${tab.table} · ${tab.database}` : tab.sql },
 							h("span", { className: "cedb-tab-kind" }, tab.kind === "table" ? "▤" : "⌘"),
@@ -945,7 +945,7 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 						h("span", { className: "cedb-pick-note" }, known?.ready ? (known.bin || known.version || t("db.notReady")) : (known?.note ?? "")));
 					})))
 					: h(Fragment, null,
-						h("div", { className: "cedb-tabs", role: "tablist" }, [
+						h("div", { className: "cedb-wtabs", role: "tablist" }, [
 							["info", "db.tabInfo"],
 							["tls", "db.tabTls"],
 							["tunnel", "db.tabTunnel"],
@@ -955,11 +955,11 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 							type: "button",
 							role: "tab",
 							"aria-selected": tab === id,
-							className: `cedb-tab${tab === id ? " cedb-tab-on" : ""}`,
+							className: `cedb-wtab${tab === id ? " cedb-wtab-on" : ""}`,
 							onClick: () => setTab(id),
 						}, t(key),
-						id === "tls" && String(form.sslMode ?? "") !== "" ? h("span", { className: "cedb-tab-dot" }) : null,
-						id === "tunnel" && String(form.tunnelHost ?? "").trim() !== "" ? h("span", { className: "cedb-tab-dot" }) : null))),
+						id === "tls" && String(form.sslMode ?? "") !== "" ? h("span", { className: "cedb-wtab-dot" }) : null,
+						id === "tunnel" && String(form.tunnelHost ?? "").trim() !== "" ? h("span", { className: "cedb-wtab-dot" }) : null))),
 						tab === "info"
 							? h(Fragment, null,
 								h("label", { className: "cedb-field" }, t("db.pasteAddress"),

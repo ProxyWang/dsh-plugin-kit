@@ -8978,7 +8978,14 @@ var CSS2 = `
 .cedb-conn-select{height:26px;font-size:12px;max-width:240px;background:var(--dsw-alias-bg-layer-2,#22262c);color:var(--dsw-alias-label-primary,#dde);border:.5px solid var(--dsw-alias-border-l1,#333);border-radius:5px;padding:0 6px}
 .cedb-run{flex:none}
 .cedb-kbd{font-size:10px;color:var(--dsw-alias-label-tertiary,#667);font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
-.cedb-dialog-head{display:flex;align-items:center;gap:8px}
+.cedb-dialog-head{display:flex;align-items:center;gap:8px;flex-wrap:nowrap;min-width:0}
+.cedb-dialog-head .cedb-dialog-title{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin:0}
+.cedb-dialog-head .ce-tool{flex:0 0 auto}
+.cedb-wtabs{display:flex;gap:4px;padding:2px 0 8px;margin-bottom:2px;border-bottom:.5px solid var(--dsw-alias-border-l1,#2a2e35)}
+.cedb-wtab{display:inline-flex;align-items:center;gap:5px;padding:5px 10px;border:0;border-radius:6px;background:transparent;color:var(--dsw-alias-label-secondary,#aab);font-size:12px;cursor:pointer;white-space:nowrap}
+.cedb-wtab:hover{background:var(--dsw-alias-interactive-bg-hover,#2a2e35);color:var(--dsw-alias-label-primary,#dde)}
+.cedb-wtab-on{background:var(--dsw-alias-bg-layer-1,#1d2126);color:var(--dsw-alias-label-primary,#fff);box-shadow:inset 0 -2px 0 var(--dsw-alias-button-info-fill,#58a6ff)}
+.cedb-wtab-dot{width:6px;height:6px;border-radius:50%;background:var(--dsw-alias-button-info-fill,#58a6ff)}
 .cedb-pick-tools{display:flex;align-items:center;gap:6px;margin-bottom:10px;flex-wrap:wrap}
 .cedb-pick-tools .ce-input{flex:1 1 200px;height:30px}
 .cedb-cat{padding:4px 10px;border-radius:999px;border:.5px solid var(--dsw-alias-border-l1,#2a2e35);background:transparent;color:var(--dsw-alias-label-secondary,#aab);font-size:11px;cursor:pointer}
@@ -8992,9 +8999,11 @@ var CSS2 = `
 .cedb-pick-glyph{display:flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:10px;background:var(--dsw-alias-bg-base,#141618);font-size:12px;font-weight:700;letter-spacing:.5px}
 .cedb-pick-label{font-size:12px;font-weight:600}
 .cedb-pick-note{font-size:10px;color:var(--dsw-alias-label-tertiary,#778);text-align:center;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.cedb-colors{display:flex;gap:4px;align-items:center;height:30px}
+.cedb-colors{display:flex;gap:6px;align-items:center;height:30px}
+.cedb-colors .cedb-color{width:18px;height:18px}
 .cedb-color{width:16px;height:16px;border-radius:50%;border:.5px solid var(--dsw-alias-border-l1,#39414a);cursor:pointer;padding:0}
 .cedb-color-none{background:transparent;position:relative}
+.cedb-color-none::after{content:"";position:absolute;inset:2px;border-radius:50%;border-top:1.5px solid var(--dsw-alias-label-tertiary,#778);transform:rotate(45deg)}
 .cedb-color-on{outline:2px solid var(--dsw-alias-button-info-fill,#58a6ff);outline-offset:1px}
 .cedb-password{display:flex;align-items:center;gap:4px}
 .cedb-password .ce-input{flex:1 1 auto;min-width:0}
@@ -13970,7 +13979,7 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
         { className: "cedb-main" },
         h(
           "div",
-          { className: "cedb-tabs", role: "tablist" },
+          { className: "cedb-wtabs", role: "tablist" },
           tabs.map((tab2) => h(
             "div",
             { key: tab2.id, className: `cedb-tab${tab2.id === activeTabId ? " cedb-tab-on" : ""}` },
@@ -14251,7 +14260,7 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
       ) : h(
         Fragment,
         null,
-        h("div", { className: "cedb-tabs", role: "tablist" }, [
+        h("div", { className: "cedb-wtabs", role: "tablist" }, [
           ["info", "db.tabInfo"],
           ["tls", "db.tabTls"],
           ["tunnel", "db.tabTunnel"],
@@ -14263,12 +14272,12 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
             type: "button",
             role: "tab",
             "aria-selected": tab === id,
-            className: `cedb-tab${tab === id ? " cedb-tab-on" : ""}`,
+            className: `cedb-wtab${tab === id ? " cedb-wtab-on" : ""}`,
             onClick: () => setTab(id)
           },
           t(key),
-          id === "tls" && String(form.sslMode ?? "") !== "" ? h("span", { className: "cedb-tab-dot" }) : null,
-          id === "tunnel" && String(form.tunnelHost ?? "").trim() !== "" ? h("span", { className: "cedb-tab-dot" }) : null
+          id === "tls" && String(form.sslMode ?? "") !== "" ? h("span", { className: "cedb-wtab-dot" }) : null,
+          id === "tunnel" && String(form.tunnelHost ?? "").trim() !== "" ? h("span", { className: "cedb-wtab-dot" }) : null
         ))),
         tab === "info" ? h(
           Fragment,
