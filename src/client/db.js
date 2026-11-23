@@ -114,10 +114,13 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 	const [history, setHistory] = useState([]);
 	const [connectOpen, setConnectOpen] = useState(false);
 	// The address is the only thing a person has to know: the driver and the
-	// fields are derived from it (dbconnect.js). `advanced` reveals the fields
+	// fields are typed directly instead.
 	// for the cases where inference is not enough.
-	const [form, setForm] = useState({ address: "", driver: "", path: "", host: "localhost", port: "", user: "", password: "", database: "", clientPath: "" });
-	const [advanced, setAdvanced] = useState(false);
+	const [form, setForm] = useState({ address: "", label: "", color: "", note: "", driver: "postgres", path: "", host: "localhost", port: "5432", user: "", password: "", database: "", clientPath: "" });
+	// Two steps: pick the engine, then fill the connection. dbx's flow, and it
+	// keeps eight fields off the screen until they are relevant.
+	const [step, setStep] = useState("pick");
+	const [showPassword, setShowPassword] = useState(false);
 	// Loading a workspace's `mysql2`/`pg` runs project code in the connection's
 	// worker, so it is opt-in and remembered.
 	const [allowModule, setAllowModule] = useState(() => {
@@ -140,9 +143,6 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 	const [saveProfile, setSaveProfile] = useState(true);
 	// The dialog's "Test" result: a connection proven without being kept.
 	const [testState, setTestState] = useState({ busy: false, ok: null, text: "" });
-	// "Unrecognised address" belongs on blur, not on every keystroke: half a URL
-	// is not an error, it is a URL being typed.
-	const [addressTouched, setAddressTouched] = useState(false);
 	const [historyOpen, setHistoryOpen] = useState(false);
 	const detailRef = useDismissLayer({ open: Boolean(cellDetail), onDismiss: () => setCellDetail(null) });
 	const connectRef = useDismissLayer({ open: connectOpen, onDismiss: () => setConnectOpen(false) });
@@ -224,8 +224,9 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 	/** Open the dialog in a clean state: no stale error from a previous attempt. */
 	const openConnect = useCallback(() => {
 		setNotice("");
-		setAddressTouched(false);
 		setTestState({ busy: false, ok: null, text: "" });
+		setShowPassword(false);
+		setStep("pick");
 		setConnectOpen(true);
 	}, []);
 
@@ -234,6 +235,9 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 		const parsed = parseConnectionAddress(profile.address || profile.path || "");
 		setForm({
 			address: profile.address || profile.path || "",
+			label: profile.label ?? "",
+			color: profile.color ?? "",
+			note: profile.note ?? "",
 			driver: profile.driver,
 			path: profile.path ?? parsed.path,
 			host: profile.host || parsed.host || "localhost",
@@ -245,6 +249,17 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 		});
 		setAddressTouched(true);
 		setNotice(parsed.error ?? "");
+		setTestState({ busy: false, ok: null, text: "" });
+	}, []);
+
+	/** Switch driver, carrying the port over when it was still a default. */
+	const setDriver = useCallback((driver) => {
+		setForm((current) => {
+			const defaultNow = defaultPort(current.driver);
+			const keep = String(current.port ?? "") !== "" && String(current.port) !== defaultNow;
+			return { ...current, driver, port: keep ? current.port : defaultPort(driver) };
+		});
+		setNotice("");
 		setTestState({ busy: false, ok: null, text: "" });
 	}, []);
 
@@ -261,10 +276,11 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 			password: parsed.password,
 			database: parsed.database,
 		}));
-		if (addressTouched) setNotice(parsed.error);
+		// The paste field is optional: it only reports a problem while it has text.
+		setNotice(String(value).trim() === "" ? "" : parsed.error);
 		// Any edit invalidates a previous test: it proved a different target.
 		setTestState({ busy: false, ok: null, text: "" });
-	}, [addressTouched]);
+	}, []);
 
 	const driverReady = drivers.find((entry) => entry.id === form.driver)?.ready ?? true;
 	// A driver whose CLI is not on PATH can still be chosen: the binary may be
@@ -286,7 +302,9 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 			: draft.path;
 		const res = await api("db.profile.save", {
 			baseRevision: profileRevision.current,
-			label,
+			label: String(draft.label ?? "").trim() || label,
+			color: draft.color ?? "",
+			note: draft.note ?? "",
 			driver: draft.driver,
 			address: draft.address,
 			path: absolute,
@@ -837,8 +855,14 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 						}),
 		// ---- connect dialog ---------------------------------------------------------------
 		connectOpen
-			? h("div", { className: "cedb-dialog", ref: connectRef, role: "dialog", "aria-label": t("db.newConnection") },
-				h("h3", { className: "cedb-dialog-title" }, t("db.newConnection")),
+			? h("div", { className: "cedb-dialog cedb-dialog-wide", ref: connectRef, role: "dialog", "aria-label": t("db.newConnection") },
+				h("div", { className: "cedb-dialog-head" },
+					h("h3", { className: "cedb-dialog-title" }, step === "pick" ? t("db.newConnection") : t("db.connectionInfo")),
+					h("span", { className: "ce-spacer" }),
+					step === "form"
+						? h("button", { type: "button", className: "ce-tool ce-tiny", title: t("db.changeDriver"), onClick: () => setStep("pick") }, `${driverLabel(form.driver)} ▾`)
+						: null,
+					h("button", { type: "button", className: "ce-tool ce-tiny", title: t("close"), onClick: () => setConnectOpen(false) }, "✕")),
 				profiles.length === 0
 					? null
 					: h("div", { className: "cedb-saved-pick" },
@@ -848,63 +872,71 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 							type: "button",
 							className: "cedb-saved-chip",
 							title: profile.address || profile.path,
-							onClick: () => useSavedProfile(profile),
+							onClick: () => { useSavedProfile(profile); setStep("form"); },
 						}, h("span", { className: `cedb-driver cedb-driver-${profile.driver}` }, profile.driver), profile.label))),
-				h("label", { className: "cedb-field" }, t("db.address"),
-					h("input", {
-						className: "ce-input",
-						value: form.address,
-						placeholder: t("db.addressPlaceholder"),
-						autoFocus: true,
-						spellcheck: false,
-						autoComplete: "off",
-						onChange: (event) => applyAddress(event.target.value),
-						onBlur: () => {
-							setAddressTouched(true);
-							setNotice(parseConnectionAddress(form.address).error);
+				step === "pick"
+					? h("div", { className: "cedb-pick" }, DRIVERS.map((id) => {
+						const known = drivers.find((entry) => entry.id === id);
+						return h("button", {
+							key: id,
+							type: "button",
+							className: `cedb-pick-card${form.driver === id ? " cedb-pick-on" : ""}`,
+							"aria-pressed": form.driver === id,
+							onClick: () => setForm((current) => ({ ...current, driver: id, port: defaultPort(id) })),
+							onDoubleClick: () => { setForm((current) => ({ ...current, driver: id, port: defaultPort(id) })); setStep("form"); },
 						},
-					})),
-				h("div", { className: `cedb-detect${form.driver === "" ? " cedb-detect-miss" : ""}` },
-					h("span", null, form.driver === ""
-						? t("db.notDetected")
-						: `${t("db.detected")}: ${driverLabel(form.driver)}${implSuffix(drivers.find((entry) => entry.id === form.driver), t)}`),
-					driverReady || form.driver === "" ? null : h("span", { className: "cedb-detect-note" }, drivers.find((entry) => entry.id === form.driver)?.note ?? ""),
-					form.driver === "" ? null : h("button", {
-						type: "button",
-						className: "cedb-redetect",
-						title: t("db.redetectHint"),
-						onClick: () => void probeDrivers(true),
-					}, t("db.redetect"))),
-				// Say which binary will actually run: a keg-only install answers
-				// "installed where?" without the user opening a shell.
-				(form.driver === "mysql" || form.driver === "postgres") && String(form.clientPath ?? "").trim() === ""
-					? h("div", { className: "cedb-bin" },
-						drivers.find((entry) => entry.id === form.driver)?.bin
-							? `${t("db.clientBin")}: ${drivers.find((entry) => entry.id === form.driver).bin}`
-							: t("db.clientBinMissing"))
-					: null,
-				advanced
-					? h(Fragment, null,
-						h("label", { className: "cedb-field" }, t("db.driver"),
-							h("select", {
+						h("span", { className: `cedb-pick-glyph cedb-driver-${id}`, "aria-hidden": "true" }, driverLabel(id).slice(0, 2)),
+						h("span", { className: "cedb-pick-label" }, driverLabel(id)),
+						h("span", { className: "cedb-pick-note" }, known?.ready ? (known.bin || known.version || t("db.notReady")) : (known?.note ?? "")));
+					}))
+					: h(Fragment, null,
+						h("label", { className: "cedb-field" }, t("db.pasteAddress"),
+							h("input", {
 								className: "ce-input",
-								value: form.driver,
-								onChange: (event) => setForm({ ...form, driver: event.target.value }),
-							// Always populated: an unprobed deployment still shows the
-							// drivers it could open, instead of an empty box.
-							}, DRIVERS.map((id) => {
-								const known = drivers.find((entry) => entry.id === id);
-								return h("option", { key: id, value: id }, known && !known.ready ? `${known.label} — ${known.note}` : driverLabel(id));
-							}))),
+								value: form.address,
+								placeholder: t("db.addressPlaceholder"),
+								autoFocus: true,
+								spellCheck: false,
+								autoComplete: "off",
+								onChange: (event) => applyAddress(event.target.value),
+							})),
+						h("div", { className: "cedb-field-row" },
+							h("label", { className: "cedb-field" }, t("db.name"),
+								h("input", { className: "ce-input", value: form.label, placeholder: t("db.namePlaceholder"), onChange: (event) => setForm({ ...form, label: event.target.value }) })),
+							h("label", { className: "cedb-field cedb-field-narrow" }, t("db.color"),
+								h("div", { className: "cedb-colors" }, CONNECTION_COLORS.map((color) => h("button", {
+									key: color || "none",
+									type: "button",
+									className: `cedb-color${form.color === color ? " cedb-color-on" : ""}${color === "" ? " cedb-color-none" : ""}`,
+									style: color === "" ? undefined : { background: color },
+									"aria-label": color || t("db.noColor"),
+									"aria-pressed": form.color === color,
+									onClick: () => setForm({ ...form, color }),
+								}))))),
 						form.driver === "sqlite"
 							? h("label", { className: "cedb-field" }, t("db.path"),
-								h("input", { className: "ce-input", value: form.path, placeholder: "/path/to/app.sqlite", onChange: (event) => setForm({ ...form, path: event.target.value }) }))
+								h("input", { className: "ce-input", value: form.path, placeholder: "/path/to/app.sqlite", spellCheck: false, onChange: (event) => setForm({ ...form, path: event.target.value }) }))
 							: h(Fragment, null,
 								h("div", { className: "cedb-field-row" },
-									h("label", { className: "cedb-field" }, t("db.host"), h("input", { className: "ce-input", value: form.host, onChange: (event) => setForm({ ...form, host: event.target.value }) })),
-									h("label", { className: "cedb-field cedb-field-narrow" }, t("db.port"), h("input", { className: "ce-input", type: "number", value: form.port, placeholder: form.driver === "mysql" ? "3306" : "5432", onChange: (event) => setForm({ ...form, port: event.target.value }) })),
-								),
-								h("label", { className: "cedb-field" }, t("db.database"), h("input", { className: "ce-input", value: form.database, onChange: (event) => setForm({ ...form, database: event.target.value }) })),
+									h("label", { className: "cedb-field" }, t("db.host"),
+										h("input", { className: "ce-input", value: form.host, spellCheck: false, placeholder: "localhost", onChange: (event) => setForm({ ...form, host: event.target.value }) })),
+									h("label", { className: "cedb-field cedb-field-narrow" }, t("db.port"),
+										h("input", { className: "ce-input", type: "number", value: form.port, placeholder: defaultPort(form.driver), onChange: (event) => setForm({ ...form, port: event.target.value }) }))),
+								h("label", { className: "cedb-field" }, t("db.database"),
+									h("input", { className: "ce-input", value: form.database, spellCheck: false, onChange: (event) => setForm({ ...form, database: event.target.value }) })),
+								h("div", { className: "cedb-field-row" },
+									h("label", { className: "cedb-field" }, t("db.user"),
+										h("input", { className: "ce-input", value: form.user, spellCheck: false, autoComplete: "off", onChange: (event) => setForm({ ...form, user: event.target.value }) })),
+									h("label", { className: "cedb-field" }, t("db.password"),
+										h("div", { className: "cedb-password" },
+											h("input", { className: "ce-input", type: showPassword ? "text" : "password", value: form.password, autoComplete: "off", onChange: (event) => setForm({ ...form, password: event.target.value }) }),
+											h("button", { type: "button", className: "ce-tool ce-tiny", title: showPassword ? t("db.hidePassword") : t("db.showPassword"), onClick: () => setShowPassword((value) => !value) }, showPassword ? "🙈" : "👁")))),
+								String(form.clientPath ?? "").trim() === ""
+									? h("div", { className: "cedb-bin" },
+										drivers.find((entry) => entry.id === form.driver)?.bin
+											? `${t("db.clientBin")}: ${drivers.find((entry) => entry.id === form.driver).bin}`
+											: t("db.clientBinMissing"))
+									: null,
 								h("label", { className: "cedb-remember" },
 									h("input", {
 										type: "checkbox",
@@ -914,36 +946,32 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 											try { localStorage.setItem("dsh.plugin-kit.db.allowModule", event.target.checked ? "on" : "off"); } catch { /* storage may be denied */ }
 										},
 									}),
-									t("db.allowModule")),
-								h("div", { className: "cedb-field-row" },
-									h("label", { className: "cedb-field" }, t("db.user"), h("input", { className: "ce-input", value: form.user, onChange: (event) => setForm({ ...form, user: event.target.value }) })),
-									h("label", { className: "cedb-field" }, t("db.password"), h("input", { className: "ce-input", type: "password", value: form.password, onChange: (event) => setForm({ ...form, password: event.target.value }) }))),
-								h("label", { className: "cedb-field" }, t("db.clientPath"),
-									h("input", {
-										className: "ce-input",
-										value: form.clientPath,
-										placeholder: form.driver === "mysql" ? "/opt/homebrew/opt/mysql-client/bin/mysql" : "/opt/homebrew/opt/postgresql@16/bin/psql",
-										spellCheck: false,
-										onChange: (event) => setForm({ ...form, clientPath: event.target.value }),
-									}))))
-					: h("button", {
-						type: "button",
-						className: "cedb-advanced",
-						"aria-expanded": advanced,
-						onClick: () => setAdvanced(true),
-					}, t("db.advanced")),
-				notice !== "" && connectOpen ? h("div", { className: "cedb-dialog-error", role: "alert" }, notice) : null,
-				h("label", { className: "cedb-remember" },
-					h("input", { type: "checkbox", checked: saveProfile, onChange: (event) => setSaveProfile(event.target.checked) }),
-					t("db.remember")),
-				testState.ok !== null || testState.text !== ""
-					? h("div", { className: `cedb-dialog-test${testState.ok === true ? " cedb-dialog-test-ok" : " cedb-dialog-test-bad"}`, role: "status" }, testState.text)
-					: null,
+									t("db.allowModule"))),
+						h("label", { className: "cedb-field" }, t("db.note"),
+							h("input", { className: "ce-input", value: form.note, placeholder: t("db.notePlaceholder"), onChange: (event) => setForm({ ...form, note: event.target.value }) })),
+						h("div", { className: `cedb-detect${driverReady ? "" : " cedb-detect-miss"}` },
+							h("span", null, `${t("db.detected")}: ${driverLabel(form.driver)}${implSuffix(drivers.find((entry) => entry.id === form.driver), t)}`),
+							driverReady ? null : h("span", { className: "cedb-detect-note" }, drivers.find((entry) => entry.id === form.driver)?.note ?? ""),
+							h("button", { type: "button", className: "cedb-redetect", title: t("db.redetectHint"), onClick: () => void probeDrivers(true) }, t("db.redetect"))),
+						notice !== "" ? h("div", { className: "cedb-dialog-error", role: "alert" }, notice) : null,
+						h("label", { className: "cedb-remember" },
+							h("input", { type: "checkbox", checked: saveProfile, onChange: (event) => setSaveProfile(event.target.checked) }),
+							t("db.remember")),
+						testState.ok !== null || testState.text !== ""
+							? h("div", { className: `cedb-dialog-test${testState.ok === true ? " cedb-dialog-test-ok" : " cedb-dialog-test-bad"}`, role: "status" }, testState.text)
+							: null),
 				h("div", { className: "cedb-dialog-actions" },
-					h("button", { type: "button", className: "ce-sk-btn", disabled: !canConnect || testState.busy, onClick: () => void doTest() }, testState.busy ? t("loading") : t("db.testAction")),
-					h("button", { type: "button", className: "ce-sk-btn ce-sk-primary", disabled: !canConnect, onClick: () => void doConnect() }, t("db.connectAction")),
-					h("button", { type: "button", className: "ce-sk-btn", onClick: () => setConnectOpen(false) }, t("editor.cancel")),
-				),
+					step === "pick"
+						? h(Fragment, null,
+							h("span", { className: "cedb-dialog-hint" }, form.driver === "" ? t("db.notDetected") : `${t("db.detected")}: ${driverLabel(form.driver)}`),
+							h("span", { className: "ce-spacer" }),
+							h("button", { type: "button", className: "ce-sk-btn", onClick: () => setConnectOpen(false) }, t("editor.cancel")),
+							h("button", { type: "button", className: "ce-sk-btn ce-sk-primary", disabled: form.driver === "", onClick: () => setStep("form") }, t("db.nextStep")))
+						: h(Fragment, null,
+							h("button", { type: "button", className: "ce-sk-btn", onClick: () => setStep("pick") }, t("db.prevStep")),
+							h("span", { className: "ce-spacer" }),
+							h("button", { type: "button", className: "ce-sk-btn", disabled: !canConnect || testState.busy, onClick: () => void doTest() }, testState.busy ? t("loading") : t("db.testAction")),
+							h("button", { type: "button", className: "ce-sk-btn ce-sk-primary", disabled: !canConnect, onClick: () => void doConnect() }, t("db.saveAndConnect")))),
 			)
 			: null,
 		// ---- history drawer ---------------------------------------------------------------
@@ -976,6 +1004,21 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 /** The tab title is the fixed database label; open tabs carry their own names. */
 export function DbTitle() {
 	return null;
+}
+
+/** Colour tags a connection can carry ("" means none). */
+export const CONNECTION_COLORS = ["", "#e5484d", "#f5a524", "#3fb950", "#58a6ff", "#a371f7"];
+
+/**
+ * The port a driver uses when the field is left empty.
+ *
+ * @param driver - `sqlite` | `mysql` | `postgres`
+ * @returns the port as a string, or "" for a file-backed driver
+ */
+export function defaultPort(driver) {
+	if (driver === "mysql") return "3306";
+	if (driver === "postgres") return "5432";
+	return "";
 }
 
 /**

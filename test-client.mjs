@@ -3307,7 +3307,7 @@ check("docAction reloads clean drafts, flags dirty ones, ignores others", docAct
 	})(), null);
 }
 
-// --- Database panel: the connect dialog asks for an address, not a driver ----------
+// --- Database panel: the connect dialog is a two-step wizard -----------------------
 {
 	const dbGlobals = { fetch: globalThis.fetch, document: globalThis.document, window: globalThis.window };
 	const dbRequests = [];
@@ -3318,7 +3318,7 @@ check("docAction reloads clean drafts, flags dirty ones, ignores others", docAct
 			return { json: async () => ({ ok: true, value: [
 				{ id: "sqlite", label: "SQLite", ready: true, note: "" },
 				{ id: "mysql", label: "MySQL", ready: false, note: "mysql client not found — install it (brew install mysql-client) or set a client path" },
-				{ id: "postgres", label: "PostgreSQL", ready: false, note: "psql client not found — install it (brew install postgresql@16) or set a client path" },
+				{ id: "postgres", label: "PostgreSQL", ready: false, impl: "module", version: "pg@8.11", note: "psql client not found — install it (brew install postgresql@16) or set a client path" },
 			] }) };
 		}
 		if (String(url).endsWith("/db.connect")) return { json: async () => ({ ok: true, value: { id: "c1", driver: body.driver, label: "app" } }) };
@@ -3333,69 +3333,58 @@ check("docAction reloads clean drafts, flags dirty ones, ignores others", docAct
 			if (Array.isArray(node)) return node.flatMap(flatten);
 			return [node, ...(node.children ?? []).flatMap(flatten)];
 		};
+		const paint = async () => { tree = draw(); draw.flushEffects(); await new Promise((resolve) => setImmediate(resolve)); tree = draw(); draw.flushEffects(); };
 		let tree = draw();
-		draw.flushEffects();
-		await new Promise((resolve) => setImmediate(resolve));
-		tree = draw();
-		draw.flushEffects();
-		tree = draw();
+		await paint();
 		const find = (test) => flatten(tree).find(test);
-		const chip = () => find((n) => typeof n.props?.className === "string" && n.props.className.startsWith("cedb-detect"))?.children?.[0]?.children?.[0];
+		const cards = () => flatten(tree).filter((n) => String(n.props?.className ?? "").includes("cedb-pick-card"));
+		const nextButton = () => find((n) => n.type === "button" && n.children?.[0] === "db.nextStep");
+		const connectButton = () => find((n) => n.type === "button" && n.children?.[0] === "db.saveAndConnect");
+
 		check("the database panel starts with no connection", Boolean(find((n) => n.children?.[0] === "db.noConnections")), null);
-
 		find((n) => n.type === "button" && n.children?.[0] === "＋ db.connect").props.onClick();
-		tree = draw();
-		draw.flushEffects();
-		tree = draw();
-		const dialog = () => find((n) => n.props?.role === "dialog" && n.props?.["aria-label"] === "db.newConnection");
-		check("the connect dialog asks for a connection address first", Boolean(dialog()) && Boolean(find((n) => n.props?.placeholder === "db.addressPlaceholder")), null);
-		const allOptions = (select) => (select?.children ?? []).flatMap((child) => (Array.isArray(child) ? child : [child]));
-		check("an empty address asks for one instead of guessing", chip() === "db.notDetected", chip());
-		// Manual fields are progressive: they appear when asked for, not because an
-		// address is half-typed. The block below opens them through the toggle.
-		check("manual fields stay hidden until requested", find((n) => n.type === "select") === undefined, null);
-		check("connect stays disabled until the address makes sense", find((n) => n.type === "button" && n.children?.[0] === "db.connectAction").props.disabled === true, null);
+		await paint();
 
-		const address = () => find((n) => n.props?.placeholder === "db.addressPlaceholder");
-		address().props.onChange({ target: { value: "postgres://alice:secret@db.example:6543/app" } });
-		tree = draw();
-		check("pasting a URL names the driver it recognised", chip() === "db.detected: PostgreSQL", chip());
-		// A keg-only or not-yet-installed client is a warning, not a dead end:
-		// the attempt is allowed and the reason is shown next to the chip.
-		check("an address for an unavailable driver still explains the gap", find((n) => n.type === "button" && n.children?.[0] === "db.connectAction").props.disabled === false && Boolean(find((n) => n.props?.className === "cedb-detect-note")), null);
+		check("step one offers one card per engine", cards().length === 3, cards().map((card) => card.props.className));
+		check("an unavailable engine still shows why", cards().some((card) => JSON.stringify(card).includes("client not found")), null);
+		check("the form fields stay hidden until an engine is chosen", find((n) => n.props?.placeholder === "localhost") === undefined, null);
 
-		// The dialog reports which binary will run, and can look again after the
-		// user installs one — the two things dbx's driver manager gives you.
-		check("the dialog offers a re-detect for a client installed meanwhile", Boolean(find((n) => n.type === "button" && n.props?.className === "cedb-redetect")), null);
-		check("the dialog names the client binary that will run", Boolean(find((n) => n.props?.className === "cedb-bin")), null);
+		cards()[2].props.onClick();
+		await paint();
+		check("choosing an engine selects it", cards()[2].props["aria-pressed"] === true, null);
+		nextButton().props.onClick();
+		await paint();
 
-		address().props.onChange({ target: { value: "notes.txt" } });
-		tree = draw();
-		check("an unrecognised address blocks connecting", find((n) => n.type === "button" && n.children?.[0] === "db.connectAction").props.disabled === true, null);
-		check("half-typed addresses are not errors yet", find((n) => n.props?.className === "cedb-dialog-error") === undefined, null);
-		address().props.onBlur();
-		tree = draw();
-		check("leaving the field explains an unrecognised address", Boolean(find((n) => n.props?.className === "cedb-dialog-error")), null);
+		check("step two shows the connection fields", Boolean(find((n) => n.props?.placeholder === "localhost")) && Boolean(find((n) => n.props?.placeholder === "db.namePlaceholder")), null);
+		check("the port follows the chosen engine", find((n) => n.type === "input" && n.props?.type === "number")?.props.value === "5432", null);
+		check("the wizard names the implementation that will run", JSON.stringify(tree).includes("pg@8.11"), null);
+		check("a host is enough to enable connect", connectButton().props.disabled === false, null);
 
-		address().props.onChange({ target: { value: "./data/app.sqlite" } });
-		tree = draw();
-		check("a path is understood as SQLite", chip() === "db.detected: SQLite", chip());
-		check("a ready driver enables connecting", find((n) => n.type === "button" && n.children?.[0] === "db.connectAction").props.disabled === false, null);
+		const paste = () => find((n) => n.props?.placeholder === "db.addressPlaceholder");
+		paste().props.onChange({ target: { value: "mysql://alice:secret@db.example:3307/app" } });
+		await paint();
+		check("pasting a URL fills the fields instead of keeping a string", JSON.stringify(tree).includes("db.example") && find((n) => n.type === "input" && n.props?.type === "number")?.props.value === "3307", null);
 
-		// The advanced path always offers every driver — the empty-select defect.
-		const toggle = find((n) => typeof n.props?.className === "string" && n.props.className === "cedb-advanced");
-		check("a recognised address still offers the manual override", Boolean(toggle), null);
-		toggle.props.onClick();
-		tree = draw();
-		const select = find((n) => n.type === "select");
-		const options = (select?.children ?? []).flatMap((child) => (Array.isArray(child) ? child : [child]));
-		check("the driver menu is never empty", options.length === 3 && options.map((option) => option.props.value).join() === "sqlite,mysql,postgres", options.map((option) => option.props.value));
-		check("an unavailable driver is selectable and names the missing client", options[1].props.disabled === undefined && String(options[1].children?.[0]).startsWith("MySQL — "), options[1].children);
+		paste().props.onChange({ target: { value: "notes.txt" } });
+		await paint();
+		check("an unreadable paste says so", Boolean(find((n) => n.props?.className === "cedb-dialog-error")), null);
 
-		find((n) => n.type === "button" && n.children?.[0] === "db.connectAction").props.onClick();
+		// A bad paste clears the target; paste a good one again before connecting.
+		paste().props.onChange({ target: { value: "mysql://alice:secret@db.example:3307/app" } });
+		await paint();
+		check("a good paste clears the error", find((n) => n.props?.className === "cedb-dialog-error") === undefined, null);
+
+		// Colour, name and note travel with the saved connection.
+		const nameInput = find((n) => n.props?.placeholder === "db.namePlaceholder");
+		nameInput.props.onChange({ target: { value: "prod-app" } });
+		const noteInput = find((n) => n.props?.placeholder === "db.notePlaceholder");
+		noteInput.props.onChange({ target: { value: "read only replica" } });
+		await paint();
+		find((n) => n.type === "button" && n.props?.["aria-label"] === "#58a6ff").props.onClick();
+		find((n) => n.type === "button" && n.children?.[0] === "db.saveAndConnect").props.onClick();
 		await new Promise((resolve) => setImmediate(resolve));
 		const connect = dbRequests.find((request) => request.url.endsWith("/db.connect"));
-		check("connecting sends the resolved driver and the workspace", connect?.body.driver === "sqlite" && connect.body.path === "./data/app.sqlite" && connect.body.cwd === "/w", connect?.body);
+		check("connecting sends the typed fields", connect?.body.driver === "mysql" && connect.body.host === "db.example" && connect.body.port === 3307, connect?.body);
 		draw.unmount();
 	} finally {
 		Object.assign(globalThis, dbGlobals);

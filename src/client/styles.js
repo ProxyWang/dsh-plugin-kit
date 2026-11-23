@@ -457,6 +457,20 @@ export const CSS = `
 .cedb-conn-select{height:26px;font-size:12px;max-width:240px;background:var(--dsw-alias-bg-layer-2,#22262c);color:var(--dsw-alias-label-primary,#dde);border:.5px solid var(--dsw-alias-border-l1,#333);border-radius:5px;padding:0 6px}
 .cedb-run{flex:none}
 .cedb-kbd{font-size:10px;color:var(--dsw-alias-label-tertiary,#667);font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.cedb-dialog-head{display:flex;align-items:center;gap:8px}
+.cedb-pick{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;padding:4px 0}
+.cedb-pick-card{display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 10px;border:.5px solid var(--dsw-alias-border-l1,#2a2e35);border-radius:10px;background:var(--dsw-alias-bg-layer-1,#1d2126);color:var(--dsw-alias-label-primary,#dde);cursor:pointer}
+.cedb-pick-card:hover{border-color:var(--dsw-alias-button-info-fill,#58a6ff)}
+.cedb-pick-on{border-color:var(--dsw-alias-button-info-fill,#58a6ff);box-shadow:0 0 0 1px var(--dsw-alias-button-info-fill,#58a6ff) inset}
+.cedb-pick-glyph{display:flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:10px;background:var(--dsw-alias-bg-base,#141618);font-size:12px;font-weight:700;letter-spacing:.5px}
+.cedb-pick-label{font-size:12px;font-weight:600}
+.cedb-pick-note{font-size:10px;color:var(--dsw-alias-label-tertiary,#778);text-align:center;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cedb-colors{display:flex;gap:4px;align-items:center;height:30px}
+.cedb-color{width:16px;height:16px;border-radius:50%;border:.5px solid var(--dsw-alias-border-l1,#39414a);cursor:pointer;padding:0}
+.cedb-color-none{background:transparent;position:relative}
+.cedb-color-on{outline:2px solid var(--dsw-alias-button-info-fill,#58a6ff);outline-offset:1px}
+.cedb-password{display:flex;align-items:center;gap:4px}
+.cedb-password .ce-input{flex:1 1 auto;min-width:0}
 .cedb-dialog-wide{width:min(920px,calc(100vw - 48px));max-height:86vh;overflow:auto}
 .cedb-dialog-hint{margin:0;font-size:11px;color:var(--dsw-alias-label-tertiary,#889)}
 .cedb-driver-list{display:flex;flex-direction:column;gap:8px;max-height:56vh;overflow:auto}

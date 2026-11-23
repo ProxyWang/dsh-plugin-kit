@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased — the new-connection dialog is a wizard
+
+The single address field made the user type a scheme the dialog already knew, and put every field behind an "advanced" disclosure. It now follows dbx's shape.
+
+- **Step one picks the engine**: one card per driver, with the implementation that will run and the reason when it cannot. No fields until an engine exists.
+- **Step two is the connection**: an optional URL field that *fills* the fields below (a paste is a shortcut, not the only input), plus name, colour tag, host/port (the port follows the engine), user, password with a show/hide toggle, database, note, and the client-binary / project-driver options. `保存并连接` and `上一步` replace the single ambiguous action.
+- **Names, colours and notes persist** with the saved connection (`db.profile.save` gained `color` and `note`), so two servers called "prod" are distinguishable in the rail.
+- The scheme (`postgres://`, `mysql://`) is implied by the engine — typing it is no longer required anywhere.
+- Regressions rewritten for the flow: three cards with reasons, fields hidden until chosen, the port following the engine, a paste filling the fields, a bad paste explaining itself, and the connect payload carrying what was typed.
+
 ## Unreleased — clicking a symbol opens its references
 
 The reference-count chip was one click too many: clicking a function asked "where is this used?" and the answer was a number you then had to click.
