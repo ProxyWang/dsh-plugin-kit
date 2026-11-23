@@ -54,6 +54,24 @@ export function watchBranch(cwd, listener) {
 }
 
 /**
+ * Resolve a session's workspace from the slot's own `useSessions` prop.
+ *
+ * The slot contract hands every occupant `useSessions` (and says occupants must
+ * address their data by Session id, not bind the Session), so the row itself
+ * tells us which workspace to probe — no separate service injection needed.
+ *
+ * @param useSessions - the selector hook supplied by the host slot
+ * @param sessionId - the row's session id
+ * @returns the workspace path, or "" when it cannot be resolved
+ */
+export function sessionCwd(useSessions, sessionId) {
+	const id = String(sessionId ?? "");
+	if (id === "" || typeof useSessions !== "function") return "";
+	const cwd = useSessions((select) => select?.byId?.[id]?.cwd);
+	return String(cwd ?? "");
+}
+
+/**
  * @param props - `{t, cwd}`; `cwd` is the session workspace, empty when unknown
  * @returns the branch chip, or null when the workspace is not a repository
  */

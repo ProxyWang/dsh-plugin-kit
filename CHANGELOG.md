@@ -2,6 +2,10 @@
 
 ## Unreleased — the branch next to the workspace, live
 
+- **Fix: the chip never appeared.** The first version read the workspace from `ctx.inject(["sessions"], …)`, a client
+  service no installed package provides, so the registration never ran. The slot contract passes every occupant
+  `useSessions` plus `sessionId`; the chip now resolves the workspace from those props, and the client manifest
+  declares `@deepseek-ai/dsh-client-ui-workspace` so the panel that declares the slot is loaded first.
 - **A branch chip in the sidebar.** The Host's workspace list exposes per-session rows (`sidebar.session.row.trailing`)
   but no slot on the project header, so each session row of a repository now shows `⎇ branch`, resolved from that
   session's workspace. One shared poll per workspace means ten rows cost one probe, and the probe is a single

@@ -50,7 +50,17 @@ for (const file of documented) {
 	check(`${file} starts with a doc comment`, read(file).startsWith("/**"), read(file).slice(0, 40));
 }
 
-// 5. The public surface stays on the facade, so callers never chase files.
+// 5. The sidebar chip registers into a slot the workspace panel declares, so that
+//    package has to be loaded before this plugin's client module runs.
+{
+	const manifest = JSON.parse(read("package.json"));
+	const inject = manifest?.dsh?.client?.inject ?? [];
+	check("the manifest loads the workspace panel before registering into its slot", inject.includes("@deepseek-ai/dsh-client-ui-workspace"), inject);
+	const chip = read("src/client/branchchip.js");
+	check("the chip resolves its workspace from the slot's useSessions prop", chip.includes("useSessions"), null);
+}
+
+// 6. The public surface stays on the facade, so callers never chase files.
 const facade = read("src/client/db.js");
 for (const name of ["DbView", "DbTitle", "dbDefinition", "ResultGrid", "AddRowDialog", "toCsv", "tableSql", "CATEGORIES"]) {
 	check(`db.js still exports ${name}`, new RegExp(`\\b${name}\\b`).test(facade), null);

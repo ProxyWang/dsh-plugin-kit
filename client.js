@@ -19723,15 +19723,13 @@ var index_default = {
       name: "sidebar.right.pane.tab.title",
       key: RPC_TAB_ID
     }, RpcTitle)));
-    safe("session branch chip", () => ctx.inject(["sessions"], (sessionCtx) => ctx.slots.inject("sidebar.session.row.trailing", () => ctx.slots.register(
-      { name: "sidebar.session.row.trailing", id: "dsh-plugin-kit/session-branch", locale: NS },
+    safe("session branch chip", () => ctx.slots.inject("sidebar.session.row.trailing", () => ctx.slots.register(
+      { name: "sidebar.session.row.trailing", id: "dsh-plugin-kit/session-branch", order: 20, locale: NS },
       (props) => {
-        const sessionId = String(props?.sessionId ?? "");
-        const byId = sessionCtx.sessions?.getSnapshot?.()?.byId ?? {};
-        const cwd = String(byId[sessionId]?.cwd ?? "");
+        const cwd = sessionCwd(props?.useSessions, props?.sessionId);
         return cwd === "" ? null : h(SessionBranch, { t: bound, cwd });
       }
-    ))));
+    )));
     safe("call diff rows", () => ctx.slots.inject("tool.call.toolview", function* () {
       const bridge = {
         t: bound,

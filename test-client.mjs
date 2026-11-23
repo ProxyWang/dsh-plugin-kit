@@ -3274,7 +3274,9 @@ check("docAction reloads clean drafts, flags dirty ones, ignores others", docAct
 		return { json: async () => ({ ok: true, value: {} }) };
 	};
 	try {
-		const { SessionBranch } = await import("./src/client/branchchip.js");
+		const { SessionBranch, sessionCwd } = await import("./src/client/branchchip.js");
+		check("the row resolves its workspace from the slot's useSessions", sessionCwd((select) => select({ byId: { s9: { cwd: "/repo" } } }), "s9") === "/repo", null);
+		check("an unknown or blank session resolves to nothing", sessionCwd((select) => select({ byId: {} }), "s9") === "" && sessionCwd(undefined, "s9") === "" && sessionCwd(() => "/x", "") === "", null);
 		const drawTree = (component, props) => {
 			const draw = createHookRenderer(() => component(props), {}, { effects: true });
 			draw();
