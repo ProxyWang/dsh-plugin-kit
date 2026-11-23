@@ -485,6 +485,7 @@ var zh = {
   "db.savedConnections": "已保存",
   "db.connectSaved": "连接这个保存的连接",
   "db.forget": "删除保存的连接",
+  "db.needPassword": "这条连接还没有保存密码（从 dbx 迁移过来的），输入一次即可。",
   "db.remember": "保存这个连接（密码存进凭据库）",
   "db.cancelled": "已取消执行",
   "db.notRunning": "这条语句已经结束，无需取消",
@@ -1290,6 +1291,7 @@ var en = {
   "db.savedConnections": "Saved",
   "db.connectSaved": "Connect to this saved connection",
   "db.forget": "Forget this saved connection",
+  "db.needPassword": "This connection has no stored password (it came from dbx); enter it once.",
   "db.remember": "Remember this connection (password goes to the secret vault)",
   "db.cancelled": "Cancelled",
   "db.notRunning": "That statement already finished",
@@ -13448,6 +13450,7 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
   const [explainState, setExplainState] = useState({ busy: false, result: null, error: "" });
   const [exportOpen, setExportOpen] = useState(false);
   const [dbxState, setDbxState] = useState(null);
+  const [editingProfileId, setEditingProfileId] = useState("");
   const [profiles, setProfiles] = useState([]);
   const profileRevision = useRef(0);
   const [profileErrors, setProfileErrors] = useState({});
@@ -13511,6 +13514,7 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
     }
   }, [activeConn]);
   const openConnect = useCallback(() => {
+    setEditingProfileId("");
     setNotice("");
     setTestState({ busy: false, ok: null, text: "" });
     setShowPassword(false);
@@ -13518,6 +13522,7 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
     setConnectOpen(true);
   }, []);
   const useSavedProfile = useCallback((profile) => {
+    setEditingProfileId(profile.id);
     const parsed = parseConnectionAddress(profile.address || profile.path || "");
     setForm({
       address: profile.address || profile.path || "",
@@ -13534,7 +13539,6 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
       database: profile.database ?? parsed.database,
       clientPath: ""
     });
-    setAddressTouched(true);
     setNotice(parsed.error ?? "");
     setTestState({ busy: false, ok: null, text: "" });
   }, []);
@@ -13593,6 +13597,7 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
     const absolute = draft.driver === "sqlite" && draft.path !== "" && !/^(\/|~|[A-Za-z]:[\\/])/.test(draft.path) && cwd ? `${cwd.replace(/\/+$/, "")}/${draft.path.replace(/^\.\//, "")}` : draft.path;
     const res = await api("db.profile.save", {
       baseRevision: profileRevision.current,
+      ...editingProfileId ? { id: editingProfileId } : {},
       label: String(draft.label ?? "").trim() || label,
       color: draft.color ?? "",
       note: draft.note ?? "",
@@ -13624,8 +13629,16 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
     }
     profileRevision.current = res.value.revision ?? profileRevision.current;
     setProfiles((current) => [res.value.profile, ...current.filter((entry) => entry.id !== res.value.profile.id)]);
-  }, [cwd]);
+  }, [cwd, editingProfileId]);
   const connectProfile = useCallback(async (profile) => {
+    if (String(profile.secretId ?? "") === "") {
+      useSavedProfile(profile);
+      setStep("form");
+      setTab("info");
+      setConnectOpen(true);
+      setNotice(t("db.needPassword"));
+      return;
+    }
     const res = await api("db.connect", { profileId: profile.id, cwd });
     if (!res.ok) {
       setNotice(res.error);
@@ -13642,7 +13655,7 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
     setActiveConn(res.value.id);
     setNotice("");
     await refreshSchema(res.value.id);
-  }, [refreshSchema, cwd]);
+  }, [refreshSchema, cwd, useSavedProfile, t]);
   const forgetProfile = useCallback(async (profile) => {
     await api("db.profile.delete", { id: profile.id });
     setProfiles((current) => current.filter((entry) => entry.id !== profile.id));

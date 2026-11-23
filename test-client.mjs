@@ -3206,6 +3206,56 @@ check("docAction reloads clean drafts, flags dirty ones, ignores others", docAct
 	check("a short message keeps the floor height", measure(20, 96) === "96px", measure(20, 96));
 }
 
+// --- a migrated profile asks for its password instead of failing ---------------------
+{
+	const fetchBackup = globalThis.fetch;
+	const documentBackup = globalThis.document;
+	const calls = [];
+	globalThis.document = { addEventListener() {}, removeEventListener() {} };
+	globalThis.fetch = async (url, options) => {
+		const body = JSON.parse(options?.body ?? "{}");
+		calls.push({ url: String(url), body });
+		if (String(url).endsWith("/db.profile.list")) {
+			return { json: async () => ({ ok: true, value: { revision: 3, profiles: [{ id: "p1", label: "bilibili_vip", driver: "mysql", address: "mysql://h:3309/vip", host: "10.0.0.2", port: 3309, user: "u", database: "vip", color: "", note: "imported from dbx", secretId: "" }] } }) };
+		}
+		if (String(url).endsWith("/db.drivers")) return { json: async () => ({ ok: true, value: [] }) };
+		if (String(url).endsWith("/db.profile.save")) return { json: async () => ({ ok: true, value: { revision: 4, profile: { id: "p1" } } }) };
+		if (String(url).endsWith("/db.connect")) return { json: async () => ({ ok: true, value: { id: "c1", driver: "mysql", label: "x" } }) };
+		return { json: async () => ({ ok: true, value: {} }) };
+	};
+	try {
+		const { DbView } = await import("./src/client/db.js");
+		const draw = createHookRenderer(DbView, { t: (key) => key, sessionId: "s1", useSessions: (select) => select({ byId: { s1: { cwd: "/w" } } }) }, { effects: true });
+		const flatten = (node) => {
+			if (!node || typeof node !== "object") return [];
+			if (Array.isArray(node)) return node.flatMap(flatten);
+			return [node, ...(node.children ?? []).flatMap(flatten)];
+		};
+		const paint = async () => { tree = draw(); draw.flushEffects(); await new Promise((resolve) => setImmediate(resolve)); tree = draw(); draw.flushEffects(); };
+		let tree = draw();
+		await paint();
+		const find = (test) => flatten(tree).find(test);
+
+		check("a saved connection without a password is offered", Boolean(find((n) => String(n.props?.className ?? "").includes("cedb-saved"))), null);
+		find((n) => String(n.props?.className ?? "").includes("cedb-conn-main")).props.onClick();
+		await paint();
+		check("opening it asks for the password instead of connecting", !calls.some((call) => call.url.endsWith("/db.connect")) && Boolean(find((n) => n.props?.role === "dialog")), calls.map((call) => call.url));
+		check("the dialog says why it is asking", Boolean(find((n) => String(n.children?.[0] ?? "").includes("db.needPassword"))), null);
+
+		const password = find((n) => n.type === "input" && n.props?.type === "password");
+		password.props.onChange({ target: { value: "s3cret" } });
+		await paint();
+		find((n) => n.type === "button" && n.children?.[0] === "db.saveAndConnect").props.onClick();
+		await new Promise((resolve) => setImmediate(resolve));
+		const saved = calls.find((call) => call.url.endsWith("/db.profile.save"));
+		check("saving updates the same profile instead of duplicating it", saved?.body.id === "p1" && saved?.body.password === "s3cret", saved?.body);
+		draw.unmount();
+	} finally {
+		globalThis.fetch = fetchBackup;
+		globalThis.document = documentBackup;
+	}
+}
+
 // --- database dialogs render (a render crash white-screens the whole workspace) ------
 {
 	const { DriverManager, ErDiagram, ExplainPanel, ImportDialog } = await import("./src/client/db.js");

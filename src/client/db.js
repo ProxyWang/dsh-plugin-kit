@@ -143,6 +143,10 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 	const [exportOpen, setExportOpen] = useState(false);
 	// dbx migration: preview first, write on the second click.
 	const [dbxState, setDbxState] = useState(null);
+	// Which saved profile the dialog is editing, so saving updates it instead of
+	// creating a near-duplicate. Set when a saved connection is opened or lacks a
+	// password.
+	const [editingProfileId, setEditingProfileId] = useState("");
 	// Saved connections: the profile list (passwords stay in the Host vault).
 	const [profiles, setProfiles] = useState([]);
 	// The revision the list was read at: a save carries it so the Host can
@@ -234,6 +238,7 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 	 */
 	/** Open the dialog in a clean state: no stale error from a previous attempt. */
 	const openConnect = useCallback(() => {
+		setEditingProfileId("");
 		setNotice("");
 		setTestState({ busy: false, ok: null, text: "" });
 		setShowPassword(false);
@@ -243,6 +248,7 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 
 	/** Fill the form from a saved connection (the dialog's quick pick). */
 	const useSavedProfile = useCallback((profile) => {
+		setEditingProfileId(profile.id);
 		const parsed = parseConnectionAddress(profile.address || profile.path || "");
 		setForm({
 			address: profile.address || profile.path || "",
@@ -259,7 +265,6 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 			database: profile.database ?? parsed.database,
 			clientPath: "",
 		});
-		setAddressTouched(true);
 		setNotice(parsed.error ?? "");
 		setTestState({ busy: false, ok: null, text: "" });
 	}, []);
@@ -341,6 +346,7 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 			: draft.path;
 		const res = await api("db.profile.save", {
 			baseRevision: profileRevision.current,
+			...(editingProfileId ? { id: editingProfileId } : {}),
 			label: String(draft.label ?? "").trim() || label,
 			color: draft.color ?? "",
 			note: draft.note ?? "",
@@ -369,10 +375,20 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 		if (!res.ok) { setNotice(res.error); return; }
 		profileRevision.current = res.value.revision ?? profileRevision.current;
 		setProfiles((current) => [res.value.profile, ...current.filter((entry) => entry.id !== res.value.profile.id)]);
-	}, [cwd]);
+	}, [cwd, editingProfileId]);
 
 	/** Open a saved connection. The password never reaches this side. */
 	const connectProfile = useCallback(async (profile) => {
+		// A migrated profile has no secret (dbx encrypts its own): ask for the
+		// password in the dialog rather than firing a connect that can only fail.
+		if (String(profile.secretId ?? "") === "") {
+			useSavedProfile(profile);
+			setStep("form");
+			setTab("info");
+			setConnectOpen(true);
+			setNotice(t("db.needPassword"));
+			return;
+		}
 		const res = await api("db.connect", { profileId: profile.id, cwd });
 		if (!res.ok) {
 			setNotice(res.error);
@@ -389,7 +405,7 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 		setActiveConn(res.value.id);
 		setNotice("");
 		await refreshSchema(res.value.id);
-	}, [refreshSchema, cwd]);
+	}, [refreshSchema, cwd, useSavedProfile, t]);
 
 	const forgetProfile = useCallback(async (profile) => {
 		await api("db.profile.delete", { id: profile.id });

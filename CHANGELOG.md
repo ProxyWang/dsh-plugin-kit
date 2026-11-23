@@ -1,3 +1,8 @@
+## Unreleased — a migrated connection asks for its password
+
+- A saved connection with no stored secret (every dbx import) now **opens the dialog with its fields filled and a line explaining why**, instead of calling connect with an empty password and failing with "Access denied".
+- Saving from that dialog **updates the same profile** rather than creating a near-duplicate: the dialog remembers which profile it is editing.
+
 ## 2.4.0 (2026-11-23)
 
 The database panel stops needing anything installed: the plugin now ships `mysql2` and `pg` as its own dependencies, so a fresh install connects to MySQL and PostgreSQL without a system client. The connection dialog becomes dbx-shaped (engine picker, four tabs, TLS, SSH tunnels, colours, notes), and existing dbx connections can be migrated in one click. The editor opens references on click.

@@ -417,6 +417,7 @@ export const zh = {
 	"db.savedConnections": "已保存",
 	"db.connectSaved": "连接这个保存的连接",
 	"db.forget": "删除保存的连接",
+	"db.needPassword": "这条连接还没有保存密码（从 dbx 迁移过来的），输入一次即可。",
 	"db.remember": "保存这个连接（密码存进凭据库）",
 
 	"db.cancelled": "已取消执行",
@@ -1230,6 +1231,7 @@ export const en = {
 	"db.savedConnections": "Saved",
 	"db.connectSaved": "Connect to this saved connection",
 	"db.forget": "Forget this saved connection",
+	"db.needPassword": "This connection has no stored password (it came from dbx); enter it once.",
 	"db.remember": "Remember this connection (password goes to the secret vault)",
 
 	"db.cancelled": "Cancelled",
