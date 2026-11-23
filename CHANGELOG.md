@@ -16,6 +16,8 @@
   `git rev-parse` (the new `git.branch` route) rather than a full `git.status`.
 - The chip refreshes every 4 s and on window focus, so a checkout appears without a reload; a detached HEAD says so
   instead of printing `HEAD`; a non-repository workspace renders nothing.
+- The label is shown in full (the chip takes up to `min(20em, 55%)` of the row at 9.5px), with the complete branch
+  in the tooltip; only a pathologically long name falls back to an ellipsis.
 - Tests: the route (branch + non-repo), the chip (branch shown, workspace-scoped request, live update after a
   switch, disappears outside a repo, detached label, unmount stops the poll, rows of one workspace share a poll).
 
