@@ -23,6 +23,7 @@ import { erGraph, erLayout, parseDataText, planTree, toInsertSql, toJsonRows } f
 import { DRIVERS, driverLabel, parseConnectionAddress } from "./dbconnect.js";
 import { useDismissLayer } from "./dismiss.js";
 import { DB_TAB_KIND, DB_TAB_ID } from "./constants.js";
+import { ToolGlyph } from "./lefttools.js";
 
 export const dbDefinition = (t) => ({
 	id: DB_TAB_ID,
@@ -677,6 +678,40 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 
 	const schema = schemas[activeConn] ?? null;
 
+	/**
+	 * Select a database, loading its tables the first time.
+	 *
+	 * MySQL lists every database but only introspects one; clicking another used
+	 * to select a name with no tables behind it.
+	 */
+	const selectDatabase = useCallback(async (connId, databaseName) => {
+		setActiveConn(connId);
+		setActiveDb({ conn: connId, database: databaseName });
+		const known = schemas[connId]?.databases?.find((entry) => entry.name === databaseName);
+		if (known && known.tables.length > 0) return;
+		// PostgreSQL binds a connection to one database; there is no `USE`.
+		if (connections.find((entry) => entry.id === connId)?.driver === "postgres") {
+			setNotice(t("db.pgCrossDatabase"));
+			return;
+		}
+		const res = await api("db.schema", { id: connId, database: databaseName });
+		if (!res.ok || !res.value) { setSchemaError(res.error ?? ""); return; }
+		const fetched = (res.value.databases ?? []).find((entry) => entry.name === databaseName);
+		if (!fetched) return;
+		setSchemas((current) => {
+			const schemaFor = current[connId];
+			if (!schemaFor) return { ...current, [connId]: res.value };
+			return {
+				...current,
+				[connId]: {
+					...schemaFor,
+					current: databaseName,
+					databases: schemaFor.databases.map((entry) => (entry.name === databaseName ? fetched : entry)),
+				},
+			};
+		});
+	}, [schemas, connections, t]);
+
 	/** The databases of one instance, filtered by the rail's search box. */
 	const databasesOf = useCallback((connId) => {
 		const needle = filter.trim().toLowerCase();
@@ -792,8 +827,7 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 											"aria-expanded": !collapsed,
 											title: `${database.name} · ${database.tables.length} ${t("db.tables")}`,
 											onClick: () => {
-												setActiveConn(connection.id);
-												setActiveDb({ conn: connection.id, database: database.name });
+												void selectDatabase(connection.id, database.name);
 												setCollapsedDbs((current) => ({ ...current, [dbKey]: current[dbKey] !== true }));
 											},
 										},
@@ -1235,8 +1269,17 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 }
 
 /** The tab title is the fixed database label; open tabs carry their own names. */
-export function DbTitle() {
-	return null;
+/**
+ * The database tab's label in the sidebar strip.
+ *
+ * It used to return null, and a registered title slot *replaces* the fallback
+ * the host would otherwise draw — which is why the tab showed nothing but its ✕.
+ */
+export function DbTitle({ useTabInfo }) {
+	const info = useTabInfo ? useTabInfo() : null;
+	const title = info?.tab?.title;
+	const label = typeof title === "string" && title !== "" ? title : "数据库";
+	return h(Fragment, null, h("span", { className: "ce-title-ico" }, h(ToolGlyph, { size: 14, glyph: "db" })), label);
 }
 
 /** Pick-step categories; only the engines this plugin speaks. */

@@ -437,6 +437,7 @@ var zh = {
   "db.database": "数据库",
   "db.connectAction": "连接",
   "db.connections": "连接",
+  "db.pgCrossDatabase": "PostgreSQL 一个连接只能用一个库：要切库请新建一个连接（或改连接的数据库）。",
   "db.noConnections": "暂无连接。点「新建连接」选数据库类型：SQLite 只需要文件路径，MySQL / PostgreSQL 用插件自带的驱动，无需安装客户端。",
   "db.objects": "对象",
   "db.search": "筛选表名…",
@@ -1247,6 +1248,7 @@ var en = {
   "db.database": "Database",
   "db.connectAction": "Connect",
   "db.connections": "Connections",
+  "db.pgCrossDatabase": "PostgreSQL binds a connection to one database: create a connection for the other database instead of switching.",
   "db.noConnections": "No connections yet. Use “New connection” to pick a database type: SQLite needs only a file path, and MySQL/postgres use the drivers bundled with the plugin.",
   "db.objects": "Objects",
   "db.search": "Filter tables…",
@@ -13368,6 +13370,244 @@ function driverLabel(driver) {
   return { sqlite: "SQLite", mysql: "MySQL", postgres: "PostgreSQL" }[driver] ?? String(driver ?? "");
 }
 
+// src/client/launcher.js
+var GROUPS = [
+  { id: "skills", test: (kind) => /skill/.test(kind) },
+  { id: "run", test: (kind) => /(terminal|shell|browser|web)/.test(kind) },
+  { id: "code", test: (kind) => /^(files|code|document)/.test(kind) }
+];
+var GROUP_ORDER = ["code", "run", "skills", "more"];
+function isRedundantWorkspaceFiles(def) {
+  return String(def?.kind ?? "") === "files";
+}
+function groupOf(kind) {
+  return GROUPS.find((g) => g.test(String(kind)))?.id ?? "more";
+}
+function collectBoxes(registry) {
+  let defs = [];
+  try {
+    defs = registry.entries();
+  } catch {
+    return [];
+  }
+  const boxes = [];
+  for (const def of defs ?? []) {
+    if (!def || typeof def !== "object" || isRedundantWorkspaceFiles(def)) continue;
+    for (const entry of def.guide ?? []) {
+      if (!entry || typeof entry !== "object") continue;
+      boxes.push({ kind: def.kind, entry, group: groupOf(def.kind) });
+    }
+  }
+  boxes.sort((a, b) => {
+    const ga = GROUP_ORDER.indexOf(a.group);
+    const gb = GROUP_ORDER.indexOf(b.group);
+    if (ga !== gb) return ga - gb;
+    return (a.entry.order ?? 0) - (b.entry.order ?? 0);
+  });
+  return boxes;
+}
+function makeBrowserOpener(sidebarRight, now = Date.now) {
+  let pendingSession;
+  let openedAt = -Infinity;
+  return () => {
+    const sessionId = sidebarRight.mounted?.getSnapshot?.();
+    if (sessionId !== void 0 && typeof sidebarRight.focus === "function") {
+      const tabs = typeof sidebarRight.tabsIn === "function" ? sidebarRight.tabsIn(sessionId) : sidebarRight.openTabs?.getSnapshot?.()?.filter((tab) => tab.sessionId === sessionId) ?? [];
+      const existing = tabs.find((tab) => tab.kind === "browser");
+      if (existing) {
+        if (sidebarRight.isExpanded?.() === false) sidebarRight.toggleExpanded();
+        sidebarRight.focus(existing.id ?? existing.tabId);
+        return;
+      }
+    }
+    const time = now();
+    if (pendingSession === sessionId && time - openedAt < 500) return;
+    pendingSession = sessionId;
+    openedAt = time;
+    try {
+      sidebarRight.openTab("browser");
+    } catch (error) {
+      openedAt = -Infinity;
+      throw error;
+    }
+  };
+}
+
+// src/client/lefttools.js
+var LEFT_TOOL_PREFIX = "dsh-plugin-kit/workspace/";
+var LEFT_TOOL_HIDDEN_KINDS = ["code-rpc"];
+function isHiddenLeftToolKind(kind) {
+  return LEFT_TOOL_HIDDEN_KINDS.includes(String(kind));
+}
+var OWN_TOOLS = [
+  { kind: TAB_KIND, label: "guide.title", description: "guide.description", glyph: "code" },
+  // HTTP and gRPC are one workbench entry; the old RPC entry is gone.
+  { kind: API_TAB_KIND, label: "apiGuide.title", description: "apiGuide.description", glyph: "api" },
+  { kind: SKILLS_TAB_KIND, label: "skillsGuide.title", description: "skillsGuide.description", glyph: "skills" },
+  { kind: DB_TAB_KIND, label: "dbGuide.title", description: "dbGuide.description", glyph: "db" }
+];
+function ToolGlyph({ size = 16, glyph = "code" }) {
+  if (glyph === "code") return h(IconCode, { size });
+  if (glyph === "rpc") return h(
+    "svg",
+    { viewBox: "0 0 24 24", width: size, height: size, fill: "none", stroke: "currentColor", strokeWidth: 1.7, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true },
+    h("path", { key: "a", d: "M4 7h16M4 17h16" }),
+    h("circle", { key: "b", cx: 8, cy: 7, r: 2 }),
+    h("circle", { key: "c", cx: 16, cy: 17, r: 2 }),
+    h("path", { key: "d", d: "M10 7h4a2 2 0 0 1 2 2v6" })
+  );
+  if (glyph === "db") return h(
+    "svg",
+    { viewBox: "0 0 24 24", width: size, height: size, fill: "none", stroke: "currentColor", strokeWidth: 1.7, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true },
+    h("ellipse", { key: "t", cx: 12, cy: 5, rx: 8, ry: 3 }),
+    h("path", { key: "m", d: "M4 5v6c0 1.66 3.58 3 8 3s8-1.34 8-3V5" }),
+    h("path", { key: "b", d: "M4 11v6c0 1.66 3.58 3 8 3s8-1.34 8-3v-6" })
+  );
+  return h(
+    "svg",
+    { viewBox: "0 0 24 24", width: size, height: size, fill: "none", stroke: "currentColor", strokeWidth: 1.7, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true },
+    glyph === "api" ? [h("path", { key: "a", d: "M8 3v5m8-5v5M6 8h12v5a6 6 0 0 1-12 0V8Zm6 11v3" })] : [h("path", { key: "s", d: "m12 3 9 5v8l-9 5-9-5V8l9-5Zm0 10 9-5M3 8l9 5v8" })]
+  );
+}
+function collectLeftTools(registry, t) {
+  const definitions = registry.entries();
+  const available = new Set(definitions.map((definition2) => definition2.kind));
+  const ownKinds = new Set(OWN_TOOLS.map((tool) => tool.kind));
+  const own = OWN_TOOLS.filter((tool) => available.has(tool.kind)).map((tool) => ({
+    id: `${LEFT_TOOL_PREFIX}${encodeURIComponent(tool.kind)}`,
+    kind: tool.kind,
+    label: () => t(tool.label),
+    description: () => t(tool.description),
+    icon: (props) => h(ToolGlyph, { ...props, glyph: tool.glyph })
+  }));
+  const seen = /* @__PURE__ */ new Set();
+  const others = collectBoxes(registry).filter(({ kind, entry }) => {
+    const key = `${kind}/${entry.id}`;
+    if (ownKinds.has(kind) || isHiddenLeftToolKind(kind) || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).map(({ kind, entry }) => ({
+    id: `${LEFT_TOOL_PREFIX}${encodeURIComponent(kind)}/${encodeURIComponent(entry.id)}`,
+    kind,
+    label: typeof entry.title === "function" ? entry.title : () => String(entry.id),
+    description: typeof entry.description === "function" ? entry.description : () => "",
+    icon: typeof entry.icon === "function" ? entry.icon : IconCode
+  }));
+  return [...own, ...others];
+}
+function makeLeftToolRouter({ layout, sidebarRight, getTools, report, t }) {
+  let openBrowser = makeBrowserOpener(sidebarRight);
+  let routing = false;
+  return () => {
+    if (routing) return;
+    const id = layout.panelInfo.getSnapshot().activePanelId;
+    const tool = getTools().find((entry) => entry.id === id);
+    if (!tool) {
+      if (typeof id === "string" && id.startsWith(LEFT_TOOL_PREFIX)) {
+        routing = true;
+        try {
+          layout.selectPanel(null);
+        } finally {
+          routing = false;
+        }
+      }
+      return;
+    }
+    routing = true;
+    try {
+      layout.selectPanel(null);
+      const target = sidebarRight.commandTarget(null);
+      if (target === void 0) {
+        report(t("shortcut.noSession"));
+        return;
+      }
+      report("");
+      const inventory = () => typeof sidebarRight.tabsIn === "function" ? sidebarRight.tabsIn(target.sessionId) : (sidebarRight.openTabs?.getSnapshot?.() ?? []).filter((tab) => tab.sessionId === target.sessionId);
+      const matching = inventory().filter((tab) => tab.kind === tool.kind);
+      const active = sidebarRight.active?.();
+      const existing = matching.find((tab) => (tab.id ?? tab.tabId) === (active?.id ?? active?.tabId)) ?? matching.at(-1);
+      if (existing) {
+        const tabId = existing.id ?? existing.tabId;
+        if (sidebarRight.isExpanded() === false) sidebarRight.toggleExpanded();
+        sidebarRight.focus(tabId);
+        if (tool.kind === "browser") openBrowser = makeBrowserOpener(sidebarRight);
+        return;
+      }
+      if (tool.kind === "browser") openBrowser();
+      else sidebarRight.openTabFromTarget(tool.kind, target);
+    } catch (error) {
+      report(`${t("left.openFailed")}: ${error?.message ?? error}`);
+    } finally {
+      routing = false;
+    }
+  };
+}
+function WorkspaceGuide({ t }) {
+  return h(
+    "div",
+    { className: "ce-workspace-guide" },
+    h("span", { className: "ce-workspace-guide-icon" }, h(IconCode, { size: 28 })),
+    h("h2", null, t("left.workspace")),
+    h("p", null, t("left.guide"))
+  );
+}
+function installLeftTools(ctx, t) {
+  const registrations = /* @__PURE__ */ new Map();
+  let tools = [];
+  let message = "";
+  const listeners = /* @__PURE__ */ new Set();
+  const report = (next) => {
+    message = next;
+    for (const listener of listeners) listener(next);
+  };
+  function Notice() {
+    const [text, setText] = useState(message);
+    useEffect(() => {
+      listeners.add(setText);
+      setText(message);
+      return () => listeners.delete(setText);
+    }, []);
+    useEffect(() => {
+      if (!text) return void 0;
+      const timer = setTimeout(() => report(""), 5e3);
+      return () => clearTimeout(timer);
+    }, [text]);
+    return text ? h("div", { className: "ce-left-notice", role: "status" }, h("span", null, text), h("button", { type: "button", "aria-label": t("close"), onClick: () => report("") }, "×")) : null;
+  }
+  const sync = () => {
+    const next = collectLeftTools(ctx.sidebarRightTabs, t);
+    const ids = new Set(next.map((tool) => tool.id));
+    for (const [id, dispose] of registrations) if (!ids.has(id)) {
+      dispose();
+      registrations.delete(id);
+    }
+    tools = next;
+    for (const [index, tool] of next.entries()) {
+      if (registrations.has(tool.id)) continue;
+      const disposeMain = ctx.slots.inject("main", () => ctx.slots.register({ name: "main", key: tool.id, locale: NS }, () => h(WorkspaceGuide, { t })));
+      const disposeNav = ctx.slots.inject("sidebar.panellist", () => ctx.slots.register({ name: "sidebar.panellist", id: tool.id, order: 20 + index, label: tool.label, locale: NS }, tool.icon));
+      registrations.set(tool.id, () => {
+        disposeNav();
+        disposeMain();
+      });
+    }
+  };
+  const route = makeLeftToolRouter({ layout: ctx.layout, sidebarRight: ctx.sidebarRight, getTools: () => tools, report, t });
+  const stopRouting = ctx.layout.panelInfo.subscribe(route);
+  sync();
+  const stopRegistry = ctx.sidebarRightTabs.subscribe(sync);
+  const disposeNotice = ctx.slots.inject("shell.overlay", () => ctx.slots.register({ name: "shell.overlay", id: "dsh-plugin-kit/tool-notice", order: 50 }, Notice));
+  return () => {
+    stopRegistry();
+    stopRouting();
+    disposeNotice();
+    if (tools.some((tool) => tool.id === ctx.layout.panelInfo.getSnapshot().activePanelId)) ctx.layout.selectPanel(null);
+    for (const dispose of registrations.values()) dispose();
+    registrations.clear();
+    listeners.clear();
+  };
+}
+
 // src/client/db.js
 var PAGE_SIZE = 100;
 var HISTORY_CAP2 = 40;
@@ -13908,6 +14148,35 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
     setTimeout(() => URL.revokeObjectURL(url), 4e3);
   }, []);
   const schema = schemas[activeConn] ?? null;
+  const selectDatabase = useCallback(async (connId, databaseName) => {
+    setActiveConn(connId);
+    setActiveDb({ conn: connId, database: databaseName });
+    const known = schemas[connId]?.databases?.find((entry) => entry.name === databaseName);
+    if (known && known.tables.length > 0) return;
+    if (connections.find((entry) => entry.id === connId)?.driver === "postgres") {
+      setNotice(t("db.pgCrossDatabase"));
+      return;
+    }
+    const res = await api("db.schema", { id: connId, database: databaseName });
+    if (!res.ok || !res.value) {
+      setSchemaError(res.error ?? "");
+      return;
+    }
+    const fetched2 = (res.value.databases ?? []).find((entry) => entry.name === databaseName);
+    if (!fetched2) return;
+    setSchemas((current) => {
+      const schemaFor = current[connId];
+      if (!schemaFor) return { ...current, [connId]: res.value };
+      return {
+        ...current,
+        [connId]: {
+          ...schemaFor,
+          current: databaseName,
+          databases: schemaFor.databases.map((entry) => entry.name === databaseName ? fetched2 : entry)
+        }
+      };
+    });
+  }, [schemas, connections, t]);
   const databasesOf = useCallback((connId) => {
     const needle = filter.trim().toLowerCase();
     const databases = (schemas[connId]?.databases ?? []).map((database) => {
@@ -14047,8 +14316,7 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
                       "aria-expanded": !collapsed,
                       title: `${database.name} · ${database.tables.length} ${t("db.tables")}`,
                       onClick: () => {
-                        setActiveConn(connection.id);
-                        setActiveDb({ conn: connection.id, database: database.name });
+                        void selectDatabase(connection.id, database.name);
                         setCollapsedDbs((current) => ({ ...current, [dbKey]: current[dbKey] !== true }));
                       }
                     },
@@ -14711,8 +14979,11 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
     ) : null
   );
 }
-function DbTitle() {
-  return null;
+function DbTitle({ useTabInfo }) {
+  const info = useTabInfo ? useTabInfo() : null;
+  const title = info?.tab?.title;
+  const label = typeof title === "string" && title !== "" ? title : "数据库";
+  return h(Fragment, null, h("span", { className: "ce-title-ico" }, h(ToolGlyph, { size: 14, glyph: "db" })), label);
 }
 var CATEGORIES = [
   { id: "all", key: "db.catAll", ids: null },
@@ -15678,244 +15949,6 @@ function RpcTitle({ useTabInfo }) {
   const title = info?.tab?.title;
   const label = typeof title === "string" && title !== "" ? title : "gRPC";
   return h("span", { className: "cerpc-title" }, `>_ ${label}`);
-}
-
-// src/client/launcher.js
-var GROUPS = [
-  { id: "skills", test: (kind) => /skill/.test(kind) },
-  { id: "run", test: (kind) => /(terminal|shell|browser|web)/.test(kind) },
-  { id: "code", test: (kind) => /^(files|code|document)/.test(kind) }
-];
-var GROUP_ORDER = ["code", "run", "skills", "more"];
-function isRedundantWorkspaceFiles(def) {
-  return String(def?.kind ?? "") === "files";
-}
-function groupOf(kind) {
-  return GROUPS.find((g) => g.test(String(kind)))?.id ?? "more";
-}
-function collectBoxes(registry) {
-  let defs = [];
-  try {
-    defs = registry.entries();
-  } catch {
-    return [];
-  }
-  const boxes = [];
-  for (const def of defs ?? []) {
-    if (!def || typeof def !== "object" || isRedundantWorkspaceFiles(def)) continue;
-    for (const entry of def.guide ?? []) {
-      if (!entry || typeof entry !== "object") continue;
-      boxes.push({ kind: def.kind, entry, group: groupOf(def.kind) });
-    }
-  }
-  boxes.sort((a, b) => {
-    const ga = GROUP_ORDER.indexOf(a.group);
-    const gb = GROUP_ORDER.indexOf(b.group);
-    if (ga !== gb) return ga - gb;
-    return (a.entry.order ?? 0) - (b.entry.order ?? 0);
-  });
-  return boxes;
-}
-function makeBrowserOpener(sidebarRight, now = Date.now) {
-  let pendingSession;
-  let openedAt = -Infinity;
-  return () => {
-    const sessionId = sidebarRight.mounted?.getSnapshot?.();
-    if (sessionId !== void 0 && typeof sidebarRight.focus === "function") {
-      const tabs = typeof sidebarRight.tabsIn === "function" ? sidebarRight.tabsIn(sessionId) : sidebarRight.openTabs?.getSnapshot?.()?.filter((tab) => tab.sessionId === sessionId) ?? [];
-      const existing = tabs.find((tab) => tab.kind === "browser");
-      if (existing) {
-        if (sidebarRight.isExpanded?.() === false) sidebarRight.toggleExpanded();
-        sidebarRight.focus(existing.id ?? existing.tabId);
-        return;
-      }
-    }
-    const time = now();
-    if (pendingSession === sessionId && time - openedAt < 500) return;
-    pendingSession = sessionId;
-    openedAt = time;
-    try {
-      sidebarRight.openTab("browser");
-    } catch (error) {
-      openedAt = -Infinity;
-      throw error;
-    }
-  };
-}
-
-// src/client/lefttools.js
-var LEFT_TOOL_PREFIX = "dsh-plugin-kit/workspace/";
-var LEFT_TOOL_HIDDEN_KINDS = ["code-rpc"];
-function isHiddenLeftToolKind(kind) {
-  return LEFT_TOOL_HIDDEN_KINDS.includes(String(kind));
-}
-var OWN_TOOLS = [
-  { kind: TAB_KIND, label: "guide.title", description: "guide.description", glyph: "code" },
-  // HTTP and gRPC are one workbench entry; the old RPC entry is gone.
-  { kind: API_TAB_KIND, label: "apiGuide.title", description: "apiGuide.description", glyph: "api" },
-  { kind: SKILLS_TAB_KIND, label: "skillsGuide.title", description: "skillsGuide.description", glyph: "skills" },
-  { kind: DB_TAB_KIND, label: "dbGuide.title", description: "dbGuide.description", glyph: "db" }
-];
-function ToolGlyph({ size = 16, glyph = "code" }) {
-  if (glyph === "code") return h(IconCode, { size });
-  if (glyph === "rpc") return h(
-    "svg",
-    { viewBox: "0 0 24 24", width: size, height: size, fill: "none", stroke: "currentColor", strokeWidth: 1.7, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true },
-    h("path", { key: "a", d: "M4 7h16M4 17h16" }),
-    h("circle", { key: "b", cx: 8, cy: 7, r: 2 }),
-    h("circle", { key: "c", cx: 16, cy: 17, r: 2 }),
-    h("path", { key: "d", d: "M10 7h4a2 2 0 0 1 2 2v6" })
-  );
-  if (glyph === "db") return h(
-    "svg",
-    { viewBox: "0 0 24 24", width: size, height: size, fill: "none", stroke: "currentColor", strokeWidth: 1.7, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true },
-    h("ellipse", { key: "t", cx: 12, cy: 5, rx: 8, ry: 3 }),
-    h("path", { key: "m", d: "M4 5v6c0 1.66 3.58 3 8 3s8-1.34 8-3V5" }),
-    h("path", { key: "b", d: "M4 11v6c0 1.66 3.58 3 8 3s8-1.34 8-3v-6" })
-  );
-  return h(
-    "svg",
-    { viewBox: "0 0 24 24", width: size, height: size, fill: "none", stroke: "currentColor", strokeWidth: 1.7, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true },
-    glyph === "api" ? [h("path", { key: "a", d: "M8 3v5m8-5v5M6 8h12v5a6 6 0 0 1-12 0V8Zm6 11v3" })] : [h("path", { key: "s", d: "m12 3 9 5v8l-9 5-9-5V8l9-5Zm0 10 9-5M3 8l9 5v8" })]
-  );
-}
-function collectLeftTools(registry, t) {
-  const definitions = registry.entries();
-  const available = new Set(definitions.map((definition2) => definition2.kind));
-  const ownKinds = new Set(OWN_TOOLS.map((tool) => tool.kind));
-  const own = OWN_TOOLS.filter((tool) => available.has(tool.kind)).map((tool) => ({
-    id: `${LEFT_TOOL_PREFIX}${encodeURIComponent(tool.kind)}`,
-    kind: tool.kind,
-    label: () => t(tool.label),
-    description: () => t(tool.description),
-    icon: (props) => h(ToolGlyph, { ...props, glyph: tool.glyph })
-  }));
-  const seen = /* @__PURE__ */ new Set();
-  const others = collectBoxes(registry).filter(({ kind, entry }) => {
-    const key = `${kind}/${entry.id}`;
-    if (ownKinds.has(kind) || isHiddenLeftToolKind(kind) || seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  }).map(({ kind, entry }) => ({
-    id: `${LEFT_TOOL_PREFIX}${encodeURIComponent(kind)}/${encodeURIComponent(entry.id)}`,
-    kind,
-    label: typeof entry.title === "function" ? entry.title : () => String(entry.id),
-    description: typeof entry.description === "function" ? entry.description : () => "",
-    icon: typeof entry.icon === "function" ? entry.icon : IconCode
-  }));
-  return [...own, ...others];
-}
-function makeLeftToolRouter({ layout, sidebarRight, getTools, report, t }) {
-  let openBrowser = makeBrowserOpener(sidebarRight);
-  let routing = false;
-  return () => {
-    if (routing) return;
-    const id = layout.panelInfo.getSnapshot().activePanelId;
-    const tool = getTools().find((entry) => entry.id === id);
-    if (!tool) {
-      if (typeof id === "string" && id.startsWith(LEFT_TOOL_PREFIX)) {
-        routing = true;
-        try {
-          layout.selectPanel(null);
-        } finally {
-          routing = false;
-        }
-      }
-      return;
-    }
-    routing = true;
-    try {
-      layout.selectPanel(null);
-      const target = sidebarRight.commandTarget(null);
-      if (target === void 0) {
-        report(t("shortcut.noSession"));
-        return;
-      }
-      report("");
-      const inventory = () => typeof sidebarRight.tabsIn === "function" ? sidebarRight.tabsIn(target.sessionId) : (sidebarRight.openTabs?.getSnapshot?.() ?? []).filter((tab) => tab.sessionId === target.sessionId);
-      const matching = inventory().filter((tab) => tab.kind === tool.kind);
-      const active = sidebarRight.active?.();
-      const existing = matching.find((tab) => (tab.id ?? tab.tabId) === (active?.id ?? active?.tabId)) ?? matching.at(-1);
-      if (existing) {
-        const tabId = existing.id ?? existing.tabId;
-        if (sidebarRight.isExpanded() === false) sidebarRight.toggleExpanded();
-        sidebarRight.focus(tabId);
-        if (tool.kind === "browser") openBrowser = makeBrowserOpener(sidebarRight);
-        return;
-      }
-      if (tool.kind === "browser") openBrowser();
-      else sidebarRight.openTabFromTarget(tool.kind, target);
-    } catch (error) {
-      report(`${t("left.openFailed")}: ${error?.message ?? error}`);
-    } finally {
-      routing = false;
-    }
-  };
-}
-function WorkspaceGuide({ t }) {
-  return h(
-    "div",
-    { className: "ce-workspace-guide" },
-    h("span", { className: "ce-workspace-guide-icon" }, h(IconCode, { size: 28 })),
-    h("h2", null, t("left.workspace")),
-    h("p", null, t("left.guide"))
-  );
-}
-function installLeftTools(ctx, t) {
-  const registrations = /* @__PURE__ */ new Map();
-  let tools = [];
-  let message = "";
-  const listeners = /* @__PURE__ */ new Set();
-  const report = (next) => {
-    message = next;
-    for (const listener of listeners) listener(next);
-  };
-  function Notice() {
-    const [text, setText] = useState(message);
-    useEffect(() => {
-      listeners.add(setText);
-      setText(message);
-      return () => listeners.delete(setText);
-    }, []);
-    useEffect(() => {
-      if (!text) return void 0;
-      const timer = setTimeout(() => report(""), 5e3);
-      return () => clearTimeout(timer);
-    }, [text]);
-    return text ? h("div", { className: "ce-left-notice", role: "status" }, h("span", null, text), h("button", { type: "button", "aria-label": t("close"), onClick: () => report("") }, "×")) : null;
-  }
-  const sync = () => {
-    const next = collectLeftTools(ctx.sidebarRightTabs, t);
-    const ids = new Set(next.map((tool) => tool.id));
-    for (const [id, dispose] of registrations) if (!ids.has(id)) {
-      dispose();
-      registrations.delete(id);
-    }
-    tools = next;
-    for (const [index, tool] of next.entries()) {
-      if (registrations.has(tool.id)) continue;
-      const disposeMain = ctx.slots.inject("main", () => ctx.slots.register({ name: "main", key: tool.id, locale: NS }, () => h(WorkspaceGuide, { t })));
-      const disposeNav = ctx.slots.inject("sidebar.panellist", () => ctx.slots.register({ name: "sidebar.panellist", id: tool.id, order: 20 + index, label: tool.label, locale: NS }, tool.icon));
-      registrations.set(tool.id, () => {
-        disposeNav();
-        disposeMain();
-      });
-    }
-  };
-  const route = makeLeftToolRouter({ layout: ctx.layout, sidebarRight: ctx.sidebarRight, getTools: () => tools, report, t });
-  const stopRouting = ctx.layout.panelInfo.subscribe(route);
-  sync();
-  const stopRegistry = ctx.sidebarRightTabs.subscribe(sync);
-  const disposeNotice = ctx.slots.inject("shell.overlay", () => ctx.slots.register({ name: "shell.overlay", id: "dsh-plugin-kit/tool-notice", order: 50 }, Notice));
-  return () => {
-    stopRegistry();
-    stopRouting();
-    disposeNotice();
-    if (tools.some((tool) => tool.id === ctx.layout.panelInfo.getSnapshot().activePanelId)) ctx.layout.selectPanel(null);
-    for (const dispose of registrations.values()) dispose();
-    registrations.clear();
-    listeners.clear();
-  };
 }
 
 // src/client/browserdata.js

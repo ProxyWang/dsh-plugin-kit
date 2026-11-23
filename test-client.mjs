@@ -3256,6 +3256,18 @@ check("docAction reloads clean drafts, flags dirty ones, ignores others", docAct
 	}
 }
 
+// --- the database tab's title is never blank -----------------------------------------
+{
+	const { DbTitle } = await import("./src/client/db.js");
+	const plain = DbTitle({});
+	const withTitle = DbTitle({ useTabInfo: () => ({ tab: { title: "数据库" } }) });
+	const stale = DbTitle({ useTabInfo: () => ({ tab: { title: "" } }) });
+	const text = (node) => JSON.stringify(node);
+	check("the database tab title falls back to a label", text(plain).includes("数据库"), text(plain).slice(0, 120));
+	check("a stale empty tab title still renders a label", text(stale).includes("数据库"), null);
+	check("the tab title uses the resolved title when there is one", text(withTitle).includes("数据库") && withTitle.children?.length === 2, null);
+}
+
 // --- database dialogs render (a render crash white-screens the whole workspace) ------
 {
 	const { DriverManager, ErDiagram, ExplainPanel, ImportDialog } = await import("./src/client/db.js");

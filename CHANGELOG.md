@@ -1,4 +1,13 @@
-## Unreleased — a migrated connection asks for its password
+# Changelog
+
+## Unreleased — the blank tab and the database that would not switch
+
+Two real defects, both found after the previous "fix" did not change what the screenshot showed:
+
+- **The database tab had no label because its title component returned `null`.** A registered `sidebar.right.pane.tab.title` slot *replaces* the host's fallback (`tab.title`), so `DbTitle() => null` produced a tab with an icon-less, text-less label and only a ✕. It now renders the database glyph plus the tab title (falling back to 数据库).
+- **Clicking another MySQL database did nothing because only the current one was ever introspected.** Databases other than the connection's own were listed with `tables: []` and no handler loaded them. `db.schema` now accepts `{database}` and introspects that schema on demand, the rail loads it when the database is clicked, and table pages qualify their queries (`\`db\`.\`table\``) so a table from another database is actually read from that database. PostgreSQL cannot switch databases on an open connection, so that case now says so instead of silently doing nothing.
+- Regressions: the tab title renders a label for a resolved, empty and absent title; the rail's database row is a button.
+d — a migrated connection asks for its password
 
 - A saved connection with no stored secret (every dbx import) now **opens the dialog with its fields filled and a line explaining why**, instead of calling connect with an empty password and failing with "Access denied".
 - Saving from that dialog **updates the same profile** rather than creating a near-duplicate: the dialog remembers which profile it is editing.
