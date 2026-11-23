@@ -3374,6 +3374,20 @@ check("docAction reloads clean drafts, flags dirty ones, ignores others", docAct
 		await paint();
 		check("a good paste clears the error", find((n) => n.props?.className === "cedb-dialog-error") === undefined, null);
 
+		// TLS and tunnel live on their own tabs and reach the same request.
+		find((n) => n.type === "button" && n.children?.[0] === "db.tabTls").props.onClick();
+		await paint();
+		check("the TLS tab offers the ssl mode and certificate paths", Boolean(find((n) => n.type === "select")) && Boolean(find((n) => n.props?.placeholder === "/path/to/ca.pem")), null);
+		find((n) => n.type === "select").props.onChange({ target: { value: "required" } });
+		await paint();
+		find((n) => n.type === "button" && n.children?.[0] === "db.tabTunnel").props.onClick();
+		await paint();
+		check("the tunnel tab asks for the jump host", Boolean(find((n) => n.props?.placeholder === "jump.example.com")), null);
+		find((n) => n.props?.placeholder === "jump.example.com").props.onChange({ target: { value: "bastion.example" } });
+		await paint();
+		find((n) => n.type === "button" && n.children?.[0] === "db.tabInfo").props.onClick();
+		await paint();
+
 		// Colour, name and note travel with the saved connection.
 		const nameInput = find((n) => n.props?.placeholder === "db.namePlaceholder");
 		nameInput.props.onChange({ target: { value: "prod-app" } });
@@ -3385,6 +3399,7 @@ check("docAction reloads clean drafts, flags dirty ones, ignores others", docAct
 		await new Promise((resolve) => setImmediate(resolve));
 		const connect = dbRequests.find((request) => request.url.endsWith("/db.connect"));
 		check("connecting sends the typed fields", connect?.body.driver === "mysql" && connect.body.host === "db.example" && connect.body.port === 3307, connect?.body);
+		check("the TLS mode and tunnel travel with the connection", connect?.body.sslMode === "required" && connect?.body.tunnel?.bastion === "bastion.example", { sslMode: connect?.body.sslMode, tunnel: connect?.body.tunnel });
 		draw.unmount();
 	} finally {
 		Object.assign(globalThis, dbGlobals);

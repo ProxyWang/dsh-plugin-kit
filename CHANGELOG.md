@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased — TLS, tunnels and the engine picker: the dbx dialog, made real
+
+- **Engine picker with search and categories**: the first step filters like dbx's — a search box plus 全部 / 关系型 / 文件 chips — and every card says which implementation will run or why it cannot.
+- **Four tabs on the connection step**: 连接信息 (name, colour, host/port, user, password with reveal, database, URL parameters, note), **TLS/SSL** (mode: default/disabled/preferred/required/verify-ca/verify-full, plus CA/cert/key paths), **隧道/代理** (jump host, port, user, key path, local port), and 高级 (client binary, project driver).
+- **TLS is wired, not decorative**: the CLI drivers get `--ssl-mode` / `--ssl-ca|cert|key` and `PGSSLMODE` / `PGSSLROOTCERT|CERT|KEY`; the JS drivers get a real `ssl` option with the CA/cert/key files read for them.
+- **SSH tunnels are real** ([lib/host/tunnel.js](<lib/host/tunnel.js>)): a free loopback port, `ssh -N -L … -o ExitOnForwardFailure=yes -o BatchMode=yes`, a readiness probe, and a clear error when it does not come up. The plugin never reads the private key; `ssh` does. The tunnel is torn down with its connection.
+- **Profiles keep the new fields** (colour, note, and an `options` bag for TLS/tunnel/client settings), so a saved connection reopens with everything it was created with.
+- URL parameters are honoured by the module drivers (`charset`, `application_name`); the CLI path ignores them, which the field's hint says.
+- Regressions: tab content, TLS mode + tunnel reaching the connect payload, tunnel validation without a jump host/target/port, an unreachable tunnel reporting the ssh reason, and a profile round-tripping colour, note and options.
+
 ## Unreleased — the new-connection dialog is a wizard
 
 The single address field made the user type a scheme the dialog already knew, and put every field behind an "advanced" disclosure. It now follows dbx's shape.

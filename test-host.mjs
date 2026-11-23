@@ -1276,6 +1276,37 @@ export async function createConnection(config) {
 	}
 }
 
+// --- TLS options, tunnels and profile extras ------------------------------------------
+{
+	const { openTunnel } = await import("./lib/host/tunnel.js");
+	const noBastion = await openTunnel({ bastion: "", targetHost: "db", targetPort: 5432 }).then(() => null, (error) => error);
+	check("a tunnel without a jump host is refused", noBastion !== null && /jump host/.test(noBastion.message), String(noBastion));
+	const noTarget = await openTunnel({ bastion: "jump.example", targetHost: "", targetPort: 5432 }).then(() => null, (error) => error);
+	check("a tunnel without a database host is refused", noTarget !== null && /database host/.test(noTarget.message), String(noTarget));
+	const noPort = await openTunnel({ bastion: "jump.example", targetHost: "db", targetPort: 0 }).then(() => null, (error) => error);
+	check("a tunnel without a database port is refused", noPort !== null && /database port/.test(noPort.message), String(noPort));
+
+	// A connection that names an unreachable jump host fails with the ssh reason.
+	const db = await import("./lib/host/db.js");
+	const failed = await db.connect({ driver: "mysql", host: "db", clientPath: "/bin/false", tunnel: { bastion: "127.0.0.1", port: 1, user: "x" } }).then(() => null, (error) => error);
+	check("a tunnel that cannot come up reports why", failed !== null && /ssh tunnel|ssh failed/.test(failed.message), String(failed));
+
+	const { createVaultService } = await import("./lib/host/vault.js");
+	const { createDbProfileService } = await import("./lib/host/dbprofiles.js");
+	const makeStorage = () => ({ async open(spec) { let value = structuredClone(spec.global.initial); return { global: { get: () => value, async set(next) { value = structuredClone(next); } }, async close() {} }; } });
+	const vault = createVaultService(makeStorage());
+	const profiles = createDbProfileService(makeStorage(), vault);
+	const saved = await profiles.save({
+		label: "prod", driver: "postgres", address: "db.example/app", host: "db.example", port: 5432, database: "app",
+		color: "#58a6ff", note: "read only", options: { sslMode: "required", tunnelHost: "jump.example" },
+	});
+	check("a profile keeps its colour, note and options", saved.profile.color === "#58a6ff" && saved.profile.note === "read only" && saved.profile.options.sslMode === "required", saved.profile);
+	const listed = (await profiles.list()).profiles[0];
+	check("the profile round-trips through storage", listed.color === "#58a6ff" && listed.options.tunnelHost === "jump.example", listed);
+	await profiles.close();
+	await vault.close();
+}
+
 // --- agent tools for the database panel ------------------------------------------------
 {
 	let sqliteAvailable = false;

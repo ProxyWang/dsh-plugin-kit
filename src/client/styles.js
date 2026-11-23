@@ -458,6 +458,12 @@ export const CSS = `
 .cedb-run{flex:none}
 .cedb-kbd{font-size:10px;color:var(--dsw-alias-label-tertiary,#667);font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
 .cedb-dialog-head{display:flex;align-items:center;gap:8px}
+.cedb-pick-tools{display:flex;align-items:center;gap:6px;margin-bottom:10px;flex-wrap:wrap}
+.cedb-pick-tools .ce-input{flex:1 1 200px;height:30px}
+.cedb-cat{padding:4px 10px;border-radius:999px;border:.5px solid var(--dsw-alias-border-l1,#2a2e35);background:transparent;color:var(--dsw-alias-label-secondary,#aab);font-size:11px;cursor:pointer}
+.cedb-cat-on{background:var(--dsw-alias-bg-layer-1,#1d2126);color:var(--dsw-alias-label-primary,#dde);border-color:var(--dsw-alias-button-info-fill,#58a6ff)}
+.cedb-color-dot{width:8px;height:8px;border-radius:50%;flex:0 0 auto}
+.cedb-conn-note{color:var(--dsw-alias-label-tertiary,#667);font-size:10px;flex:0 0 auto}
 .cedb-pick{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;padding:4px 0}
 .cedb-pick-card{display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 10px;border:.5px solid var(--dsw-alias-border-l1,#2a2e35);border-radius:10px;background:var(--dsw-alias-bg-layer-1,#1d2126);color:var(--dsw-alias-label-primary,#dde);cursor:pointer}
 .cedb-pick-card:hover{border-color:var(--dsw-alias-button-info-fill,#58a6ff)}
