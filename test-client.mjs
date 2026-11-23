@@ -3256,6 +3256,111 @@ check("docAction reloads clean drafts, flags dirty ones, ignores others", docAct
 	}
 }
 
+// --- useMutations: grid edits, addressed by the primary key ------------------------------
+{
+	const fetchBackup = globalThis.fetch;
+	const calls = [];
+	let explainFails = false;
+	globalThis.fetch = async (url, options) => {
+		const body = JSON.parse(options?.body ?? "{}");
+		calls.push({ url: String(url).split("/").pop(), body });
+		if (String(url).endsWith("/db.explain")) {
+			if (explainFails) return { json: async () => ({ ok: false, error: "planner refused" }) };
+			return { json: async () => ({ ok: true, value: { plan: [{ node: "scan" }] } }) };
+		}
+		if (String(url).endsWith("/db.query")) {
+			if (String(body.sql).startsWith("UPDATE") && body.sql.includes("boom")) return { json: async () => ({ ok: false, error: "constraint failed" }) };
+			return { json: async () => ({ ok: true, value: { changes: 1, columns: [], rows: [] } }) };
+		}
+		return { json: async () => ({ ok: true, value: {} }) };
+	};
+	try {
+		const { useMutations } = await import("./src/client/db/hooks/use-mutations.js");
+		const notices = [];
+		const reloads = [];
+		const modals = [];
+		const activeTab = {
+			id: "t1", kind: "table", conn: "c1", database: "app", table: "users",
+			columns: [{ name: "id", primaryKey: true }, { name: "name" }],
+			result: { columns: ["id", "name"], rows: [[1, "ada"], [2, "bob"]] },
+		};
+		const schemas = { c1: { databases: [{ name: "app", tables: [{ name: "users", columns: [{ name: "id", primaryKey: true }, { name: "name" }] }] }] } };
+		const probe = {};
+		const draw = createHookRenderer(() => {
+			Object.assign(probe, useMutations({
+				t: (key) => key,
+				connections: [{ id: "c1", driver: "mysql" }],
+				activeConn: "c1",
+				activeTab,
+				schemas,
+				loadRows: (id) => reloads.push(id),
+				onNotice: (text) => notices.push(text),
+				onModal: (value) => modals.push(value),
+			}));
+			return null;
+		}, {}, { effects: true });
+		draw();
+		check("the table's primary key is found from the schema", probe.pkColumn === "id" && probe.tableEntry?.name === "users", probe.pkColumn);
+
+		await probe.commitCell(0, "name", "ada2");
+		draw();
+		const update = calls.filter((call) => call.url === "db.query").at(-1);
+		check("a cell edit updates one row by its primary key", update.body.sql.startsWith("UPDATE `app`.`users` SET `name` = 'ada2' WHERE `id` = 1;"), update.body.sql);
+		check("a successful edit reloads the page and says so", reloads.includes("t1") && notices.at(-1) === "db.rowUpdated", { reloads, notices });
+
+		await probe.removeRow(0);
+		draw();
+		check("the first delete click only arms the row", calls.filter((call) => call.url === "db.query").length === 1 && probe.pendingDelete === 0, probe.pendingDelete);
+		await probe.removeRow(0);
+		draw();
+		const del = calls.filter((call) => call.url === "db.query").at(-1);
+		check("the second click deletes by primary key and clears the arming", del.body.sql.startsWith("DELETE FROM `app`.`users` WHERE `id` = 1;") && probe.pendingDelete === -1, del.body.sql);
+
+		const empty = await probe.insertRow("c1", "users", "app", { id: undefined, name: "new" });
+		draw();
+		check("an insert builds the statement and closes the modal", empty === "" && calls.at(-1).body.sql.startsWith("INSERT INTO `app`.`users`") && modals.at(-1) === null, calls.at(-1).body.sql);
+		check("an insert with nothing filled reports it instead of running", (await probe.insertRow("c1", "users", "app", {})) === "db.importEmpty", null);
+
+		const imported = await probe.importRows("c1", "users", "id,name\n3,carol");
+		draw();
+		check("pasted rows are inserted and counted", imported === "" && notices.at(-1) === "db.imported", { imported, notice: notices.at(-1) });
+		check("unreadable pasted data returns the parser error", (await probe.importRows("c1", "users", "")) !== "", null);
+
+		probe.runExplain.call(null);
+		await new Promise((resolve) => setImmediate(resolve));
+		draw();
+		check("the plan modal opens and fills with the plan", modals.some((value) => value?.kind === "explain") && probe.explainState.result?.plan?.length === 1, probe.explainState);
+
+		explainFails = true;
+		probe.runExplain.call(null);
+		await new Promise((resolve) => setImmediate(resolve));
+		draw();
+		check("a failed plan explains itself in the modal", probe.explainState.error === "planner refused", probe.explainState);
+
+		const noPk = createHookRenderer(() => {
+			Object.assign(probe, useMutations({
+				t: (key) => key,
+				connections: [],
+				activeConn: "c1",
+				activeTab: { ...activeTab, kind: "query", sql: "select 1" },
+				schemas,
+				loadRows: () => {},
+				onNotice: () => {},
+				onModal: () => {},
+			}));
+			return null;
+		}, {}, { effects: true });
+		noPk();
+		const before = calls.length;
+		await probe.commitCell(0, "name", "x");
+		check("a query tab has no primary key, so edits do nothing", calls.length === before && probe.pkColumn === "", probe.pkColumn);
+		noPk.unmount();
+		draw.unmount();
+	} finally {
+		globalThis.fetch = fetchBackup;
+	}
+}
+
 // --- useConnectWizard: the dialog's form and submit, on its own --------------------------
 {
 	const fetchBackup = globalThis.fetch;

@@ -20,6 +20,7 @@ import { useTabs } from "./hooks/use-tabs.js";
 import { useConnections } from "./hooks/use-connections.js";
 import { useDrivers } from "./hooks/use-drivers.js";
 import { useConnectWizard } from "./hooks/use-connect-wizard.js";
+import { useMutations } from "./hooks/use-mutations.js";
 
 
 /**
@@ -36,14 +37,10 @@ export function useWorkbench({ t, useTabInfo, sessionId, useSessions }) {
 	const { connections, setConnections, activeConn, setActiveConn, activeDb, setActiveDb, disconnect } = connectionStore;
 
 
-	// A cell being edited, plus which row is waiting for a second click to delete.
-	const [cellEdit, setCellEdit] = useState(null);
-	const [pendingDelete, setPendingDelete] = useState(-1);
 	const [collapsedDbs, setCollapsedDbs] = useState({});
 	const [expanded, setExpanded] = useState(() => new Set()); // table keys open in the tree
 	// Loading a workspace's `mysql2`/`pg` runs project code in the connection's
 	// worker, so it is opt-in and remembered.
-	const [cellDetail, setCellDetail] = useState(null); // {title, value}
 	const [notice, setNotice] = useState("");
 	const [importState, setImportState] = useState(null);
 	// The driver catalog: readiness, the project-module permission and installs.
@@ -118,7 +115,24 @@ export function useWorkbench({ t, useTabInfo, sessionId, useSessions }) {
 	} = wizard;
 	// Modal layer: driver manager, ER diagram, execution plan, import.
 	const [modal, setModal] = useState(null);
-	const [explainState, setExplainState] = useState({ busy: false, result: null, error: "" });
+
+	// Grid edits: one rule for every write (addressed by primary key).
+	const mutationStore = useMutations({
+		t,
+		connections,
+		activeConn,
+		activeTab,
+		schemas,
+		loadRows,
+		onNotice: setNotice,
+		onModal: setModal,
+	});
+	const {
+		cellEdit, setCellEdit, pendingDelete, setPendingDelete,
+		cellDetail, setCellDetail, explainState, setExplainState,
+		tableEntry, pkColumn,
+		runMutation, commitCell, removeRow, insertRow, importRows, runExplain,
+	} = mutationStore;
 	const [exportOpen, setExportOpen] = useState(false);
 	// dbx migration: preview first, write on the second click.
 
@@ -246,99 +260,13 @@ export function useWorkbench({ t, useTabInfo, sessionId, useSessions }) {
 	// --- tree ----------------------------------------------------------------------------
 
 
-	/** The schema entry behind the open table tab, when there is one. */
-	const tableEntry = useMemo(() => {
-		if (activeTab?.kind !== "table") return null;
-		const schemaFor = schemas[activeTab.conn || activeConn];
-		const database = (schemaFor?.databases ?? []).find((entry) => entry.name === activeTab.database);
-		return (database?.tables ?? []).find((entry) => entry.name === activeTab.table) ?? null;
-	}, [activeTab, schemas, activeConn]);
 
-	const pkColumn = tableEntry?.columns?.find((column) => column.primaryKey)?.name ?? "";
 
-	/** Run one write, then reload the page it touched. */
-	const runMutation = useCallback(async (sql, message) => {
-		const conn = activeTab?.conn || activeConn;
-		if (!conn || sql === "") return;
-		const res = await api("db.query", { id: conn, sql });
-		const value = res.ok ? res.value : null;
-		if (!value || value.error) { setNotice(value?.error ?? res.error ?? ""); return; }
-		setNotice(message);
-		setCellEdit(null);
-		setPendingDelete(-1);
-		if (activeTab?.kind === "table") await loadRows(activeTab.id);
-	}, [activeTab, activeConn, loadRows]);
 
-	/** Commit one edited cell, addressed by the row's primary key. */
-	const commitCell = useCallback(async (rowIndex, column, value) => {
-		const result = activeTab?.result;
-		if (!result || pkColumn === "") return;
-		const pkIndex = result.columns.indexOf(pkColumn);
-		const pkValue = result.rows?.[rowIndex]?.[pkIndex];
-		const sql = updateCellSql({
-			driver: connections.find((entry) => entry.id === (activeTab.conn || activeConn))?.driver,
-			table: activeTab.table,
-			database: activeTab.database,
-			column,
-			value,
-			pkColumn,
-			pkValue });
-		await runMutation(sql, t("db.rowUpdated"));
-	}, [activeTab, pkColumn, connections, activeConn, runMutation, t]);
 
-	/** Explain the active tab's statement and open the plan modal. */
-	const runExplain = useCallback(() => {
-		const conn = activeTab?.conn || activeConn;
-		const sql = activeTab?.sql ?? "";
-		setModal({ kind: "explain" });
-		setExplainState({ busy: true, result: null, error: "" });
-		api("db.explain", { id: conn, sql }).then((res) => {
-			const value = res.ok ? res.value : null;
-			if (!value || value.error) setExplainState({ busy: false, result: null, error: value?.error ?? res.error ?? "" });
-			else setExplainState({ busy: false, result: value, error: "" });
-		});
-	}, [activeTab, activeConn]);
 
-	/** Insert the rows of the add-row dialog. @returns an error message or "" */
-	const insertRow = useCallback(async (target, table, database, values) => {
-		const driver = connections.find((entry) => entry.id === target)?.driver;
-		const sql = insertRowSql({ driver, table, database, values });
-		if (sql === "") return t("db.importEmpty");
-		const res = await api("db.query", { id: target, sql });
-		if (!res.ok || res.value?.error) return res.value?.error ?? res.error;
-		setModal(null);
-		setNotice(t("db.rowInserted"));
-		return "";
-	}, [connections, t]);
 
-	/** Insert pasted CSV/JSON rows. @returns an error message or the row count */
-	const importRows = useCallback(async (target, table, text) => {
-		const parsed = parseDataText(text);
-		if (parsed.error !== "") return parsed.error;
-		const driver = connections.find((entry) => entry.id === target)?.driver;
-		const sql = toInsertSql(parsed, table, driver);
-		if (sql === "") return t("db.importEmpty");
-		const res = await api("db.query", { id: target, sql, limit: 1 });
-		if (!res.ok || res.value?.error) return res.value?.error ?? res.error;
-		setModal(null);
-		setNotice(t("db.imported").replace("{n}", String(parsed.rows.length)));
-		return "";
-	}, [connections, t]);
 
-	/** Delete one row (the second click on its button confirms). */
-	const removeRow = useCallback(async (rowIndex) => {
-		const result = activeTab?.result;
-		if (!result || pkColumn === "") return;
-		if (pendingDelete !== rowIndex) { setPendingDelete(rowIndex); return; }
-		const pkValue = result.rows?.[rowIndex]?.[result.columns.indexOf(pkColumn)];
-		const sql = deleteRowSql({
-			driver: connections.find((entry) => entry.id === (activeTab.conn || activeConn))?.driver,
-			table: activeTab.table,
-			database: activeTab.database,
-			pkColumn,
-			pkValue });
-		await runMutation(sql, t("db.rowDeleted"));
-	}, [activeTab, pkColumn, pendingDelete, connections, activeConn, runMutation, t]);
 
 
 	const counts = countOf(schema);

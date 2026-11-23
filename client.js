@@ -13506,7 +13506,7 @@ function planTree(columns, rows) {
   if (flat.length === 0) return (rows ?? []).map((row) => ({ depth: 0, detail: String(row[detailIndex] ?? "") }));
   return flat;
 }
-function parseDataText2(text) {
+function parseDataText(text) {
   const source = String(text ?? "").trim();
   if (source === "") return { columns: [], rows: [], error: "empty" };
   if (source.startsWith("[") || source.startsWith("{")) {
@@ -13575,6 +13575,15 @@ function deleteRowSql(options) {
   const { driver, table, database, pkColumn, pkValue } = options ?? {};
   if (!table || !pkColumn || pkValue === void 0) return "";
   return `DELETE FROM ${qualifiedTable(driver, table, database)} WHERE ${quoteIdent(driver, pkColumn)} = ${sqlLiteral(driver, pkValue)};`;
+}
+function insertRowSql(options) {
+  const { driver, table, database, values } = options ?? {};
+  if (!table) return "";
+  const entries = Object.entries(values ?? {}).filter(([, value]) => value !== void 0);
+  if (entries.length === 0) return "";
+  const columns = entries.map(([column]) => quoteIdent(driver, column)).join(", ");
+  const literals = entries.map(([, value]) => sqlLiteral(driver, value)).join(", ");
+  return `INSERT INTO ${qualifiedTable(driver, table, database)} (${columns}) VALUES (${literals});`;
 }
 
 // src/client/dbconnect.js
@@ -14307,16 +14316,124 @@ function useConnectWizard({ cwd, t, drivers, allowModule, saveDraft, onConnected
   };
 }
 
+// src/client/db/hooks/use-mutations.js
+function useMutations({ t, connections, activeConn, activeTab, schemas: schemas2, loadRows, onNotice, onModal }) {
+  const [cellEdit, setCellEdit] = useState(null);
+  const [pendingDelete, setPendingDelete] = useState(-1);
+  const [cellDetail, setCellDetail] = useState(null);
+  const [explainState, setExplainState] = useState({ busy: false, result: null, error: "" });
+  const tableEntry = useMemo(() => {
+    if (activeTab?.kind !== "table") return null;
+    const schemaFor = schemas2[activeTab.conn || activeConn];
+    const database = (schemaFor?.databases ?? []).find((entry) => entry.name === activeTab.database);
+    return (database?.tables ?? []).find((entry) => entry.name === activeTab.table) ?? null;
+  }, [activeTab, schemas2, activeConn]);
+  const pkColumn = tableEntry?.columns?.find((column) => column.primaryKey)?.name ?? "";
+  const driverOf = (conn) => connections.find((entry) => entry.id === conn)?.driver;
+  const runMutation = useCallback(async (sql, message) => {
+    const conn = activeTab?.conn || activeConn;
+    if (!conn || sql === "") return;
+    const res = await api("db.query", { id: conn, sql });
+    const value = res.ok ? res.value : null;
+    if (!value || value.error) {
+      onNotice(value?.error ?? res.error ?? "");
+      return;
+    }
+    onNotice(message);
+    setCellEdit(null);
+    setPendingDelete(-1);
+    if (activeTab?.kind === "table") await loadRows(activeTab.id);
+  }, [activeTab, activeConn, loadRows, onNotice]);
+  const commitCell = useCallback(async (rowIndex, column, value) => {
+    const result = activeTab?.result;
+    if (!result || pkColumn === "") return;
+    const pkValue = result.rows?.[rowIndex]?.[result.columns.indexOf(pkColumn)];
+    const sql = updateCellSql({
+      driver: driverOf(activeTab.conn || activeConn),
+      table: activeTab.table,
+      database: activeTab.database,
+      column,
+      value,
+      pkColumn,
+      pkValue
+    });
+    await runMutation(sql, t("db.rowUpdated"));
+  }, [activeTab, pkColumn, connections, activeConn, runMutation, t]);
+  const removeRow = useCallback(async (rowIndex) => {
+    const result = activeTab?.result;
+    if (!result || pkColumn === "") return;
+    if (pendingDelete !== rowIndex) {
+      setPendingDelete(rowIndex);
+      return;
+    }
+    const pkValue = result.rows?.[rowIndex]?.[result.columns.indexOf(pkColumn)];
+    const sql = deleteRowSql({
+      driver: driverOf(activeTab.conn || activeConn),
+      table: activeTab.table,
+      database: activeTab.database,
+      pkColumn,
+      pkValue
+    });
+    await runMutation(sql, t("db.rowDeleted"));
+  }, [activeTab, pkColumn, pendingDelete, connections, activeConn, runMutation, t]);
+  const insertRow2 = useCallback(async (target, table, database, values) => {
+    const sql = insertRowSql({ driver: driverOf(target), table, database, values });
+    if (sql === "") return t("db.importEmpty");
+    const res = await api("db.query", { id: target, sql });
+    if (!res.ok || res.value?.error) return res.value?.error ?? res.error;
+    onModal(null);
+    onNotice(t("db.rowInserted"));
+    return "";
+  }, [connections, t, onModal, onNotice]);
+  const importRows2 = useCallback(async (target, table, text) => {
+    const parsed = parseDataText(text);
+    if (parsed.error !== "") return parsed.error;
+    const sql = toInsertSql(parsed, table, driverOf(target));
+    if (sql === "") return t("db.importEmpty");
+    const res = await api("db.query", { id: target, sql, limit: 1 });
+    if (!res.ok || res.value?.error) return res.value?.error ?? res.error;
+    onModal(null);
+    onNotice(t("db.imported").replace("{n}", String(parsed.rows.length)));
+    return "";
+  }, [connections, t, onModal, onNotice]);
+  const runExplain2 = useCallback(() => {
+    const conn = activeTab?.conn || activeConn;
+    const sql = activeTab?.sql ?? "";
+    onModal({ kind: "explain" });
+    setExplainState({ busy: true, result: null, error: "" });
+    api("db.explain", { id: conn, sql }).then((res) => {
+      const value = res.ok ? res.value : null;
+      if (!value || value.error) setExplainState({ busy: false, result: null, error: value?.error ?? res.error ?? "" });
+      else setExplainState({ busy: false, result: value, error: "" });
+    });
+  }, [activeTab, activeConn, onModal]);
+  return {
+    cellEdit,
+    setCellEdit,
+    pendingDelete,
+    setPendingDelete,
+    cellDetail,
+    setCellDetail,
+    explainState,
+    setExplainState,
+    tableEntry,
+    pkColumn,
+    runMutation,
+    commitCell,
+    removeRow,
+    insertRow: insertRow2,
+    importRows: importRows2,
+    runExplain: runExplain2
+  };
+}
+
 // src/client/db/state.js
 function useWorkbench({ t, useTabInfo, sessionId, useSessions }) {
   const cwd = useSessions ? useSessions((sessions) => sessionId ? sessions.byId[sessionId]?.cwd : void 0) : void 0;
   const connectionStore = useConnections();
   const { connections, setConnections, activeConn, setActiveConn, activeDb, setActiveDb, disconnect } = connectionStore;
-  const [cellEdit, setCellEdit] = useState(null);
-  const [pendingDelete, setPendingDelete] = useState(-1);
   const [collapsedDbs, setCollapsedDbs] = useState({});
   const [expanded, setExpanded] = useState(() => /* @__PURE__ */ new Set());
-  const [cellDetail, setCellDetail] = useState(null);
   const [notice, setNotice] = useState("");
   const [importState, setImportState] = useState(null);
   const driverStore = useDrivers({ cwd, t, onNotice: setNotice });
@@ -14446,7 +14563,34 @@ function useWorkbench({ t, useTabInfo, sessionId, useSessions }) {
     doConnect
   } = wizard;
   const [modal, setModal] = useState(null);
-  const [explainState, setExplainState] = useState({ busy: false, result: null, error: "" });
+  const mutationStore = useMutations({
+    t,
+    connections,
+    activeConn,
+    activeTab,
+    schemas: schemas2,
+    loadRows,
+    onNotice: setNotice,
+    onModal: setModal
+  });
+  const {
+    cellEdit,
+    setCellEdit,
+    pendingDelete,
+    setPendingDelete,
+    cellDetail,
+    setCellDetail,
+    explainState,
+    setExplainState,
+    tableEntry,
+    pkColumn,
+    runMutation,
+    commitCell,
+    removeRow,
+    insertRow: insertRow2,
+    importRows: importRows2,
+    runExplain: runExplain2
+  } = mutationStore;
   const [exportOpen, setExportOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const detailRef = useDismissLayer({ open: Boolean(cellDetail), onDismiss: () => setCellDetail(null) });
@@ -14512,93 +14656,6 @@ function useWorkbench({ t, useTabInfo, sessionId, useSessions }) {
       return next;
     });
   }, [disconnect]);
-  const tableEntry = useMemo(() => {
-    if (activeTab?.kind !== "table") return null;
-    const schemaFor = schemas2[activeTab.conn || activeConn];
-    const database = (schemaFor?.databases ?? []).find((entry) => entry.name === activeTab.database);
-    return (database?.tables ?? []).find((entry) => entry.name === activeTab.table) ?? null;
-  }, [activeTab, schemas2, activeConn]);
-  const pkColumn = tableEntry?.columns?.find((column) => column.primaryKey)?.name ?? "";
-  const runMutation = useCallback(async (sql, message) => {
-    const conn = activeTab?.conn || activeConn;
-    if (!conn || sql === "") return;
-    const res = await api("db.query", { id: conn, sql });
-    const value = res.ok ? res.value : null;
-    if (!value || value.error) {
-      setNotice(value?.error ?? res.error ?? "");
-      return;
-    }
-    setNotice(message);
-    setCellEdit(null);
-    setPendingDelete(-1);
-    if (activeTab?.kind === "table") await loadRows(activeTab.id);
-  }, [activeTab, activeConn, loadRows]);
-  const commitCell = useCallback(async (rowIndex, column, value) => {
-    const result = activeTab?.result;
-    if (!result || pkColumn === "") return;
-    const pkIndex = result.columns.indexOf(pkColumn);
-    const pkValue = result.rows?.[rowIndex]?.[pkIndex];
-    const sql = updateCellSql({
-      driver: connections.find((entry) => entry.id === (activeTab.conn || activeConn))?.driver,
-      table: activeTab.table,
-      database: activeTab.database,
-      column,
-      value,
-      pkColumn,
-      pkValue
-    });
-    await runMutation(sql, t("db.rowUpdated"));
-  }, [activeTab, pkColumn, connections, activeConn, runMutation, t]);
-  const runExplain2 = useCallback(() => {
-    const conn = activeTab?.conn || activeConn;
-    const sql = activeTab?.sql ?? "";
-    setModal({ kind: "explain" });
-    setExplainState({ busy: true, result: null, error: "" });
-    api("db.explain", { id: conn, sql }).then((res) => {
-      const value = res.ok ? res.value : null;
-      if (!value || value.error) setExplainState({ busy: false, result: null, error: value?.error ?? res.error ?? "" });
-      else setExplainState({ busy: false, result: value, error: "" });
-    });
-  }, [activeTab, activeConn]);
-  const insertRow2 = useCallback(async (target, table, database, values) => {
-    const driver = connections.find((entry) => entry.id === target)?.driver;
-    const sql = insertRowSql({ driver, table, database, values });
-    if (sql === "") return t("db.importEmpty");
-    const res = await api("db.query", { id: target, sql });
-    if (!res.ok || res.value?.error) return res.value?.error ?? res.error;
-    setModal(null);
-    setNotice(t("db.rowInserted"));
-    return "";
-  }, [connections, t]);
-  const importRows2 = useCallback(async (target, table, text) => {
-    const parsed = parseDataText(text);
-    if (parsed.error !== "") return parsed.error;
-    const driver = connections.find((entry) => entry.id === target)?.driver;
-    const sql = toInsertSql(parsed, table, driver);
-    if (sql === "") return t("db.importEmpty");
-    const res = await api("db.query", { id: target, sql, limit: 1 });
-    if (!res.ok || res.value?.error) return res.value?.error ?? res.error;
-    setModal(null);
-    setNotice(t("db.imported").replace("{n}", String(parsed.rows.length)));
-    return "";
-  }, [connections, t]);
-  const removeRow = useCallback(async (rowIndex) => {
-    const result = activeTab?.result;
-    if (!result || pkColumn === "") return;
-    if (pendingDelete !== rowIndex) {
-      setPendingDelete(rowIndex);
-      return;
-    }
-    const pkValue = result.rows?.[rowIndex]?.[result.columns.indexOf(pkColumn)];
-    const sql = deleteRowSql({
-      driver: connections.find((entry) => entry.id === (activeTab.conn || activeConn))?.driver,
-      table: activeTab.table,
-      database: activeTab.database,
-      pkColumn,
-      pkValue
-    });
-    await runMutation(sql, t("db.rowDeleted"));
-  }, [activeTab, pkColumn, pendingDelete, connections, activeConn, runMutation, t]);
   const counts = countOf(schema);
   const toggleTable = (key) => {
     setExpanded((current) => {
@@ -14869,7 +14926,7 @@ function ImportDialog({ t, table, driver, onInsert, onClose }) {
   const [text, setText] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const parsed = useMemo(() => parseDataText2(text), [text]);
+  const parsed = useMemo(() => parseDataText(text), [text]);
   return h(
     "div",
     { className: "cedb-dialog cedb-dialog-wide", role: "dialog", "aria-label": t("db.import") },

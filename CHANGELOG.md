@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased — the last domain hook, and what the split now looks like
+
+- `db/hooks/use-mutations.js` owns every grid write (cell update, row delete with its two-click confirm, row insert,
+  pasted import) plus the execution-plan modal. They share one rule — "addressed by the primary key, then reload
+  the page" — and one place now states it.
+- **Unit tests**: primary key derived from the schema, UPDATE with the key, delete arming then deleting, insert
+  closing the modal, empty insert reporting instead of running, pasted import counting rows, parser errors
+  bubbling back, plan success and failure, and a query tab (no primary key) refusing edits.
+- The panel's client side is now: `db.js` (54 lines, public face) + `db/view.js` (markup) + six domain hooks
+  (`useWorkbench` composes them, 293 lines of glue) + three presentational modules (`rail`, `grid`, `dialogs`).
+  Client checks: 1102.
+
 ## Unreleased — the connection dialog becomes a hook, and the workbench a composition
 
 - `db/hooks/use-connect-wizard.js` owns the two-step dialog: form state, the pick-step filter, pasted-address
