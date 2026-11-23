@@ -13143,6 +13143,244 @@ function migrateLegacyRpcTabs({
   return count;
 }
 
+// src/client/launcher.js
+var GROUPS = [
+  { id: "skills", test: (kind) => /skill/.test(kind) },
+  { id: "run", test: (kind) => /(terminal|shell|browser|web)/.test(kind) },
+  { id: "code", test: (kind) => /^(files|code|document)/.test(kind) }
+];
+var GROUP_ORDER = ["code", "run", "skills", "more"];
+function isRedundantWorkspaceFiles(def) {
+  return String(def?.kind ?? "") === "files";
+}
+function groupOf(kind) {
+  return GROUPS.find((g) => g.test(String(kind)))?.id ?? "more";
+}
+function collectBoxes(registry) {
+  let defs = [];
+  try {
+    defs = registry.entries();
+  } catch {
+    return [];
+  }
+  const boxes = [];
+  for (const def of defs ?? []) {
+    if (!def || typeof def !== "object" || isRedundantWorkspaceFiles(def)) continue;
+    for (const entry of def.guide ?? []) {
+      if (!entry || typeof entry !== "object") continue;
+      boxes.push({ kind: def.kind, entry, group: groupOf(def.kind) });
+    }
+  }
+  boxes.sort((a, b) => {
+    const ga = GROUP_ORDER.indexOf(a.group);
+    const gb = GROUP_ORDER.indexOf(b.group);
+    if (ga !== gb) return ga - gb;
+    return (a.entry.order ?? 0) - (b.entry.order ?? 0);
+  });
+  return boxes;
+}
+function makeBrowserOpener(sidebarRight, now = Date.now) {
+  let pendingSession;
+  let openedAt = -Infinity;
+  return () => {
+    const sessionId = sidebarRight.mounted?.getSnapshot?.();
+    if (sessionId !== void 0 && typeof sidebarRight.focus === "function") {
+      const tabs = typeof sidebarRight.tabsIn === "function" ? sidebarRight.tabsIn(sessionId) : sidebarRight.openTabs?.getSnapshot?.()?.filter((tab) => tab.sessionId === sessionId) ?? [];
+      const existing = tabs.find((tab) => tab.kind === "browser");
+      if (existing) {
+        if (sidebarRight.isExpanded?.() === false) sidebarRight.toggleExpanded();
+        sidebarRight.focus(existing.id ?? existing.tabId);
+        return;
+      }
+    }
+    const time = now();
+    if (pendingSession === sessionId && time - openedAt < 500) return;
+    pendingSession = sessionId;
+    openedAt = time;
+    try {
+      sidebarRight.openTab("browser");
+    } catch (error) {
+      openedAt = -Infinity;
+      throw error;
+    }
+  };
+}
+
+// src/client/lefttools.js
+var LEFT_TOOL_PREFIX = "dsh-plugin-kit/workspace/";
+var LEFT_TOOL_HIDDEN_KINDS = ["code-rpc"];
+function isHiddenLeftToolKind(kind) {
+  return LEFT_TOOL_HIDDEN_KINDS.includes(String(kind));
+}
+var OWN_TOOLS = [
+  { kind: TAB_KIND, label: "guide.title", description: "guide.description", glyph: "code" },
+  // HTTP and gRPC are one workbench entry; the old RPC entry is gone.
+  { kind: API_TAB_KIND, label: "apiGuide.title", description: "apiGuide.description", glyph: "api" },
+  { kind: SKILLS_TAB_KIND, label: "skillsGuide.title", description: "skillsGuide.description", glyph: "skills" },
+  { kind: DB_TAB_KIND, label: "dbGuide.title", description: "dbGuide.description", glyph: "db" }
+];
+function ToolGlyph({ size = 16, glyph = "code" }) {
+  if (glyph === "code") return h(IconCode, { size });
+  if (glyph === "rpc") return h(
+    "svg",
+    { viewBox: "0 0 24 24", width: size, height: size, fill: "none", stroke: "currentColor", strokeWidth: 1.7, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true },
+    h("path", { key: "a", d: "M4 7h16M4 17h16" }),
+    h("circle", { key: "b", cx: 8, cy: 7, r: 2 }),
+    h("circle", { key: "c", cx: 16, cy: 17, r: 2 }),
+    h("path", { key: "d", d: "M10 7h4a2 2 0 0 1 2 2v6" })
+  );
+  if (glyph === "db") return h(
+    "svg",
+    { viewBox: "0 0 24 24", width: size, height: size, fill: "none", stroke: "currentColor", strokeWidth: 1.7, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true },
+    h("ellipse", { key: "t", cx: 12, cy: 5, rx: 8, ry: 3 }),
+    h("path", { key: "m", d: "M4 5v6c0 1.66 3.58 3 8 3s8-1.34 8-3V5" }),
+    h("path", { key: "b", d: "M4 11v6c0 1.66 3.58 3 8 3s8-1.34 8-3v-6" })
+  );
+  return h(
+    "svg",
+    { viewBox: "0 0 24 24", width: size, height: size, fill: "none", stroke: "currentColor", strokeWidth: 1.7, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true },
+    glyph === "api" ? [h("path", { key: "a", d: "M8 3v5m8-5v5M6 8h12v5a6 6 0 0 1-12 0V8Zm6 11v3" })] : [h("path", { key: "s", d: "m12 3 9 5v8l-9 5-9-5V8l9-5Zm0 10 9-5M3 8l9 5v8" })]
+  );
+}
+function collectLeftTools(registry, t) {
+  const definitions = registry.entries();
+  const available = new Set(definitions.map((definition2) => definition2.kind));
+  const ownKinds = new Set(OWN_TOOLS.map((tool) => tool.kind));
+  const own = OWN_TOOLS.filter((tool) => available.has(tool.kind)).map((tool) => ({
+    id: `${LEFT_TOOL_PREFIX}${encodeURIComponent(tool.kind)}`,
+    kind: tool.kind,
+    label: () => t(tool.label),
+    description: () => t(tool.description),
+    icon: (props) => h(ToolGlyph, { ...props, glyph: tool.glyph })
+  }));
+  const seen = /* @__PURE__ */ new Set();
+  const others = collectBoxes(registry).filter(({ kind, entry }) => {
+    const key = `${kind}/${entry.id}`;
+    if (ownKinds.has(kind) || isHiddenLeftToolKind(kind) || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).map(({ kind, entry }) => ({
+    id: `${LEFT_TOOL_PREFIX}${encodeURIComponent(kind)}/${encodeURIComponent(entry.id)}`,
+    kind,
+    label: typeof entry.title === "function" ? entry.title : () => String(entry.id),
+    description: typeof entry.description === "function" ? entry.description : () => "",
+    icon: typeof entry.icon === "function" ? entry.icon : IconCode
+  }));
+  return [...own, ...others];
+}
+function makeLeftToolRouter({ layout, sidebarRight, getTools, report, t }) {
+  let openBrowser = makeBrowserOpener(sidebarRight);
+  let routing = false;
+  return () => {
+    if (routing) return;
+    const id = layout.panelInfo.getSnapshot().activePanelId;
+    const tool = getTools().find((entry) => entry.id === id);
+    if (!tool) {
+      if (typeof id === "string" && id.startsWith(LEFT_TOOL_PREFIX)) {
+        routing = true;
+        try {
+          layout.selectPanel(null);
+        } finally {
+          routing = false;
+        }
+      }
+      return;
+    }
+    routing = true;
+    try {
+      layout.selectPanel(null);
+      const target = sidebarRight.commandTarget(null);
+      if (target === void 0) {
+        report(t("shortcut.noSession"));
+        return;
+      }
+      report("");
+      const inventory = () => typeof sidebarRight.tabsIn === "function" ? sidebarRight.tabsIn(target.sessionId) : (sidebarRight.openTabs?.getSnapshot?.() ?? []).filter((tab) => tab.sessionId === target.sessionId);
+      const matching = inventory().filter((tab) => tab.kind === tool.kind);
+      const active = sidebarRight.active?.();
+      const existing = matching.find((tab) => (tab.id ?? tab.tabId) === (active?.id ?? active?.tabId)) ?? matching.at(-1);
+      if (existing) {
+        const tabId = existing.id ?? existing.tabId;
+        if (sidebarRight.isExpanded() === false) sidebarRight.toggleExpanded();
+        sidebarRight.focus(tabId);
+        if (tool.kind === "browser") openBrowser = makeBrowserOpener(sidebarRight);
+        return;
+      }
+      if (tool.kind === "browser") openBrowser();
+      else sidebarRight.openTabFromTarget(tool.kind, target);
+    } catch (error) {
+      report(`${t("left.openFailed")}: ${error?.message ?? error}`);
+    } finally {
+      routing = false;
+    }
+  };
+}
+function WorkspaceGuide({ t }) {
+  return h(
+    "div",
+    { className: "ce-workspace-guide" },
+    h("span", { className: "ce-workspace-guide-icon" }, h(IconCode, { size: 28 })),
+    h("h2", null, t("left.workspace")),
+    h("p", null, t("left.guide"))
+  );
+}
+function installLeftTools(ctx, t) {
+  const registrations = /* @__PURE__ */ new Map();
+  let tools = [];
+  let message = "";
+  const listeners = /* @__PURE__ */ new Set();
+  const report = (next) => {
+    message = next;
+    for (const listener of listeners) listener(next);
+  };
+  function Notice() {
+    const [text, setText] = useState(message);
+    useEffect(() => {
+      listeners.add(setText);
+      setText(message);
+      return () => listeners.delete(setText);
+    }, []);
+    useEffect(() => {
+      if (!text) return void 0;
+      const timer = setTimeout(() => report(""), 5e3);
+      return () => clearTimeout(timer);
+    }, [text]);
+    return text ? h("div", { className: "ce-left-notice", role: "status" }, h("span", null, text), h("button", { type: "button", "aria-label": t("close"), onClick: () => report("") }, "×")) : null;
+  }
+  const sync = () => {
+    const next = collectLeftTools(ctx.sidebarRightTabs, t);
+    const ids = new Set(next.map((tool) => tool.id));
+    for (const [id, dispose] of registrations) if (!ids.has(id)) {
+      dispose();
+      registrations.delete(id);
+    }
+    tools = next;
+    for (const [index, tool] of next.entries()) {
+      if (registrations.has(tool.id)) continue;
+      const disposeMain = ctx.slots.inject("main", () => ctx.slots.register({ name: "main", key: tool.id, locale: NS }, () => h(WorkspaceGuide, { t })));
+      const disposeNav = ctx.slots.inject("sidebar.panellist", () => ctx.slots.register({ name: "sidebar.panellist", id: tool.id, order: 20 + index, label: tool.label, locale: NS }, tool.icon));
+      registrations.set(tool.id, () => {
+        disposeNav();
+        disposeMain();
+      });
+    }
+  };
+  const route = makeLeftToolRouter({ layout: ctx.layout, sidebarRight: ctx.sidebarRight, getTools: () => tools, report, t });
+  const stopRouting = ctx.layout.panelInfo.subscribe(route);
+  sync();
+  const stopRegistry = ctx.sidebarRightTabs.subscribe(sync);
+  const disposeNotice = ctx.slots.inject("shell.overlay", () => ctx.slots.register({ name: "shell.overlay", id: "dsh-plugin-kit/tool-notice", order: 50 }, Notice));
+  return () => {
+    stopRegistry();
+    stopRouting();
+    disposeNotice();
+    if (tools.some((tool) => tool.id === ctx.layout.panelInfo.getSnapshot().activePanelId)) ctx.layout.selectPanel(null);
+    for (const dispose of registrations.values()) dispose();
+    registrations.clear();
+    listeners.clear();
+  };
+}
+
 // src/client/autosize.js
 function useAutoHeight(ref, value, options = {}) {
   const min = Number(options.min) > 0 ? Number(options.min) : 96;
@@ -13422,539 +13660,6 @@ function driverLabel(driver) {
   return { sqlite: "SQLite", mysql: "MySQL", postgres: "PostgreSQL" }[driver] ?? String(driver ?? "");
 }
 
-// src/client/launcher.js
-var GROUPS = [
-  { id: "skills", test: (kind) => /skill/.test(kind) },
-  { id: "run", test: (kind) => /(terminal|shell|browser|web)/.test(kind) },
-  { id: "code", test: (kind) => /^(files|code|document)/.test(kind) }
-];
-var GROUP_ORDER = ["code", "run", "skills", "more"];
-function isRedundantWorkspaceFiles(def) {
-  return String(def?.kind ?? "") === "files";
-}
-function groupOf(kind) {
-  return GROUPS.find((g) => g.test(String(kind)))?.id ?? "more";
-}
-function collectBoxes(registry) {
-  let defs = [];
-  try {
-    defs = registry.entries();
-  } catch {
-    return [];
-  }
-  const boxes = [];
-  for (const def of defs ?? []) {
-    if (!def || typeof def !== "object" || isRedundantWorkspaceFiles(def)) continue;
-    for (const entry of def.guide ?? []) {
-      if (!entry || typeof entry !== "object") continue;
-      boxes.push({ kind: def.kind, entry, group: groupOf(def.kind) });
-    }
-  }
-  boxes.sort((a, b) => {
-    const ga = GROUP_ORDER.indexOf(a.group);
-    const gb = GROUP_ORDER.indexOf(b.group);
-    if (ga !== gb) return ga - gb;
-    return (a.entry.order ?? 0) - (b.entry.order ?? 0);
-  });
-  return boxes;
-}
-function makeBrowserOpener(sidebarRight, now = Date.now) {
-  let pendingSession;
-  let openedAt = -Infinity;
-  return () => {
-    const sessionId = sidebarRight.mounted?.getSnapshot?.();
-    if (sessionId !== void 0 && typeof sidebarRight.focus === "function") {
-      const tabs = typeof sidebarRight.tabsIn === "function" ? sidebarRight.tabsIn(sessionId) : sidebarRight.openTabs?.getSnapshot?.()?.filter((tab) => tab.sessionId === sessionId) ?? [];
-      const existing = tabs.find((tab) => tab.kind === "browser");
-      if (existing) {
-        if (sidebarRight.isExpanded?.() === false) sidebarRight.toggleExpanded();
-        sidebarRight.focus(existing.id ?? existing.tabId);
-        return;
-      }
-    }
-    const time = now();
-    if (pendingSession === sessionId && time - openedAt < 500) return;
-    pendingSession = sessionId;
-    openedAt = time;
-    try {
-      sidebarRight.openTab("browser");
-    } catch (error) {
-      openedAt = -Infinity;
-      throw error;
-    }
-  };
-}
-
-// src/client/lefttools.js
-var LEFT_TOOL_PREFIX = "dsh-plugin-kit/workspace/";
-var LEFT_TOOL_HIDDEN_KINDS = ["code-rpc"];
-function isHiddenLeftToolKind(kind) {
-  return LEFT_TOOL_HIDDEN_KINDS.includes(String(kind));
-}
-var OWN_TOOLS = [
-  { kind: TAB_KIND, label: "guide.title", description: "guide.description", glyph: "code" },
-  // HTTP and gRPC are one workbench entry; the old RPC entry is gone.
-  { kind: API_TAB_KIND, label: "apiGuide.title", description: "apiGuide.description", glyph: "api" },
-  { kind: SKILLS_TAB_KIND, label: "skillsGuide.title", description: "skillsGuide.description", glyph: "skills" },
-  { kind: DB_TAB_KIND, label: "dbGuide.title", description: "dbGuide.description", glyph: "db" }
-];
-function ToolGlyph({ size = 16, glyph = "code" }) {
-  if (glyph === "code") return h(IconCode, { size });
-  if (glyph === "rpc") return h(
-    "svg",
-    { viewBox: "0 0 24 24", width: size, height: size, fill: "none", stroke: "currentColor", strokeWidth: 1.7, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true },
-    h("path", { key: "a", d: "M4 7h16M4 17h16" }),
-    h("circle", { key: "b", cx: 8, cy: 7, r: 2 }),
-    h("circle", { key: "c", cx: 16, cy: 17, r: 2 }),
-    h("path", { key: "d", d: "M10 7h4a2 2 0 0 1 2 2v6" })
-  );
-  if (glyph === "db") return h(
-    "svg",
-    { viewBox: "0 0 24 24", width: size, height: size, fill: "none", stroke: "currentColor", strokeWidth: 1.7, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true },
-    h("ellipse", { key: "t", cx: 12, cy: 5, rx: 8, ry: 3 }),
-    h("path", { key: "m", d: "M4 5v6c0 1.66 3.58 3 8 3s8-1.34 8-3V5" }),
-    h("path", { key: "b", d: "M4 11v6c0 1.66 3.58 3 8 3s8-1.34 8-3v-6" })
-  );
-  return h(
-    "svg",
-    { viewBox: "0 0 24 24", width: size, height: size, fill: "none", stroke: "currentColor", strokeWidth: 1.7, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true },
-    glyph === "api" ? [h("path", { key: "a", d: "M8 3v5m8-5v5M6 8h12v5a6 6 0 0 1-12 0V8Zm6 11v3" })] : [h("path", { key: "s", d: "m12 3 9 5v8l-9 5-9-5V8l9-5Zm0 10 9-5M3 8l9 5v8" })]
-  );
-}
-function collectLeftTools(registry, t) {
-  const definitions = registry.entries();
-  const available = new Set(definitions.map((definition2) => definition2.kind));
-  const ownKinds = new Set(OWN_TOOLS.map((tool) => tool.kind));
-  const own = OWN_TOOLS.filter((tool) => available.has(tool.kind)).map((tool) => ({
-    id: `${LEFT_TOOL_PREFIX}${encodeURIComponent(tool.kind)}`,
-    kind: tool.kind,
-    label: () => t(tool.label),
-    description: () => t(tool.description),
-    icon: (props) => h(ToolGlyph, { ...props, glyph: tool.glyph })
-  }));
-  const seen = /* @__PURE__ */ new Set();
-  const others = collectBoxes(registry).filter(({ kind, entry }) => {
-    const key = `${kind}/${entry.id}`;
-    if (ownKinds.has(kind) || isHiddenLeftToolKind(kind) || seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  }).map(({ kind, entry }) => ({
-    id: `${LEFT_TOOL_PREFIX}${encodeURIComponent(kind)}/${encodeURIComponent(entry.id)}`,
-    kind,
-    label: typeof entry.title === "function" ? entry.title : () => String(entry.id),
-    description: typeof entry.description === "function" ? entry.description : () => "",
-    icon: typeof entry.icon === "function" ? entry.icon : IconCode
-  }));
-  return [...own, ...others];
-}
-function makeLeftToolRouter({ layout, sidebarRight, getTools, report, t }) {
-  let openBrowser = makeBrowserOpener(sidebarRight);
-  let routing = false;
-  return () => {
-    if (routing) return;
-    const id = layout.panelInfo.getSnapshot().activePanelId;
-    const tool = getTools().find((entry) => entry.id === id);
-    if (!tool) {
-      if (typeof id === "string" && id.startsWith(LEFT_TOOL_PREFIX)) {
-        routing = true;
-        try {
-          layout.selectPanel(null);
-        } finally {
-          routing = false;
-        }
-      }
-      return;
-    }
-    routing = true;
-    try {
-      layout.selectPanel(null);
-      const target = sidebarRight.commandTarget(null);
-      if (target === void 0) {
-        report(t("shortcut.noSession"));
-        return;
-      }
-      report("");
-      const inventory = () => typeof sidebarRight.tabsIn === "function" ? sidebarRight.tabsIn(target.sessionId) : (sidebarRight.openTabs?.getSnapshot?.() ?? []).filter((tab) => tab.sessionId === target.sessionId);
-      const matching = inventory().filter((tab) => tab.kind === tool.kind);
-      const active = sidebarRight.active?.();
-      const existing = matching.find((tab) => (tab.id ?? tab.tabId) === (active?.id ?? active?.tabId)) ?? matching.at(-1);
-      if (existing) {
-        const tabId = existing.id ?? existing.tabId;
-        if (sidebarRight.isExpanded() === false) sidebarRight.toggleExpanded();
-        sidebarRight.focus(tabId);
-        if (tool.kind === "browser") openBrowser = makeBrowserOpener(sidebarRight);
-        return;
-      }
-      if (tool.kind === "browser") openBrowser();
-      else sidebarRight.openTabFromTarget(tool.kind, target);
-    } catch (error) {
-      report(`${t("left.openFailed")}: ${error?.message ?? error}`);
-    } finally {
-      routing = false;
-    }
-  };
-}
-function WorkspaceGuide({ t }) {
-  return h(
-    "div",
-    { className: "ce-workspace-guide" },
-    h("span", { className: "ce-workspace-guide-icon" }, h(IconCode, { size: 28 })),
-    h("h2", null, t("left.workspace")),
-    h("p", null, t("left.guide"))
-  );
-}
-function installLeftTools(ctx, t) {
-  const registrations = /* @__PURE__ */ new Map();
-  let tools = [];
-  let message = "";
-  const listeners = /* @__PURE__ */ new Set();
-  const report = (next) => {
-    message = next;
-    for (const listener of listeners) listener(next);
-  };
-  function Notice() {
-    const [text, setText] = useState(message);
-    useEffect(() => {
-      listeners.add(setText);
-      setText(message);
-      return () => listeners.delete(setText);
-    }, []);
-    useEffect(() => {
-      if (!text) return void 0;
-      const timer = setTimeout(() => report(""), 5e3);
-      return () => clearTimeout(timer);
-    }, [text]);
-    return text ? h("div", { className: "ce-left-notice", role: "status" }, h("span", null, text), h("button", { type: "button", "aria-label": t("close"), onClick: () => report("") }, "×")) : null;
-  }
-  const sync = () => {
-    const next = collectLeftTools(ctx.sidebarRightTabs, t);
-    const ids = new Set(next.map((tool) => tool.id));
-    for (const [id, dispose] of registrations) if (!ids.has(id)) {
-      dispose();
-      registrations.delete(id);
-    }
-    tools = next;
-    for (const [index, tool] of next.entries()) {
-      if (registrations.has(tool.id)) continue;
-      const disposeMain = ctx.slots.inject("main", () => ctx.slots.register({ name: "main", key: tool.id, locale: NS }, () => h(WorkspaceGuide, { t })));
-      const disposeNav = ctx.slots.inject("sidebar.panellist", () => ctx.slots.register({ name: "sidebar.panellist", id: tool.id, order: 20 + index, label: tool.label, locale: NS }, tool.icon));
-      registrations.set(tool.id, () => {
-        disposeNav();
-        disposeMain();
-      });
-    }
-  };
-  const route = makeLeftToolRouter({ layout: ctx.layout, sidebarRight: ctx.sidebarRight, getTools: () => tools, report, t });
-  const stopRouting = ctx.layout.panelInfo.subscribe(route);
-  sync();
-  const stopRegistry = ctx.sidebarRightTabs.subscribe(sync);
-  const disposeNotice = ctx.slots.inject("shell.overlay", () => ctx.slots.register({ name: "shell.overlay", id: "dsh-plugin-kit/tool-notice", order: 50 }, Notice));
-  return () => {
-    stopRegistry();
-    stopRouting();
-    disposeNotice();
-    if (tools.some((tool) => tool.id === ctx.layout.panelInfo.getSnapshot().activePanelId)) ctx.layout.selectPanel(null);
-    for (const dispose of registrations.values()) dispose();
-    registrations.clear();
-    listeners.clear();
-  };
-}
-
-// src/client/db/grid.js
-var GRID_ROW_H = 24;
-function formatCell2(value) {
-  if (value === null) return "NULL";
-  if (value === void 0) return "";
-  if (typeof value === "object") return JSON.stringify(value);
-  return String(value);
-}
-function truncateCell(value, max = 120) {
-  const text = formatCell2(value);
-  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
-}
-function gridWindow(input = {}) {
-  const count = Math.max(0, Math.floor(Number(input.count) || 0));
-  const rawRowHeight = Number(input.rowHeight);
-  const rowHeight = Number.isFinite(rawRowHeight) && rawRowHeight > 0 ? rawRowHeight : GRID_ROW_H;
-  const rawOverscan = Number(input.overscan);
-  const overscan = Number.isFinite(rawOverscan) ? Math.max(0, Math.floor(rawOverscan)) : 8;
-  const viewport = Math.max(0, Number(input.viewport) || 0);
-  const scrollTop = Math.max(0, Number(input.scrollTop) || 0);
-  const span = Math.ceil(viewport / rowHeight) + overscan * 2;
-  const start = Math.min(count, Math.max(0, Math.floor(scrollTop / rowHeight) - overscan));
-  const end = Math.min(count, start + span);
-  return { start, end, topPad: start * rowHeight, bottomPad: Math.max(0, (count - end) * rowHeight) };
-}
-function ResultGrid({ t, result, onCell, onSort, order, dir, pkColumn = "", onEditCell, onDeleteRow, pendingDelete = -1 }) {
-  const columns = result.columns ?? [];
-  const rows = result.rows ?? [];
-  const wrapRef = useRef(null);
-  const [scrollTop, setScrollTop] = useState(0);
-  const [viewport, setViewport] = useState(360);
-  const [editing, setEditing] = useState(null);
-  useEffect(() => {
-    setScrollTop(0);
-    if (wrapRef.current) wrapRef.current.scrollTop = 0;
-  }, [result]);
-  useEffect(() => {
-    const node = wrapRef.current;
-    if (!node) return void 0;
-    const measure = () => setViewport(node.clientHeight || 360);
-    measure();
-    if (typeof ResizeObserver === "function") {
-      const observer = new ResizeObserver(measure);
-      observer.observe(node);
-      return () => observer.disconnect();
-    }
-    return void 0;
-  }, [columns.length]);
-  if (columns.length === 0) return h("div", { className: "cedb-placeholder-small" }, t("db.noRows"));
-  const window_ = gridWindow({ count: rows.length, scrollTop, viewport });
-  const slice = rows.slice(window_.start, window_.end);
-  const pad = (height, key) => height > 0 ? h("tr", { key, className: "cedb-grid-pad", "aria-hidden": "true" }, h("td", { colSpan: columns.length + 1, style: { height: `${height}px`, padding: 0, border: 0 } })) : null;
-  return h(
-    "div",
-    { className: "cedb-grid-wrap", ref: wrapRef, onScroll: (event) => setScrollTop(event.currentTarget.scrollTop) },
-    h(
-      "table",
-      { className: "cedb-grid" },
-      h(
-        "thead",
-        null,
-        h(
-          "tr",
-          null,
-          h("th", { className: "cedb-grid-gutter" }, "#"),
-          columns.map((column, index) => h("th", {
-            key: `${column}-${index}`,
-            className: `cedb-grid-th${onSort ? " cedb-grid-sortable" : ""}${order === column ? " cedb-grid-sorted" : ""}`,
-            onClick: onSort ? () => onSort(column) : void 0,
-            title: column
-          }, column, order === column ? dir === "desc" ? " ↓" : " ↑" : ""))
-        )
-      ),
-      onDeleteRow ? h("th", { className: "cedb-grid-gutter", title: t("db.deleteRow") }, "") : null,
-      h(
-        "tbody",
-        null,
-        pad(window_.topPad, "pad-top"),
-        slice.map((row, offset) => {
-          const rowIndex = window_.start + offset;
-          const editable = Boolean(onEditCell) && pkColumn !== "";
-          return h(
-            "tr",
-            { key: rowIndex, className: "cedb-grid-row" },
-            h("td", { className: "cedb-grid-gutter" }, rowIndex + 1),
-            row.map((cell, cellIndex) => {
-              const isEditing = editing?.rowIndex === rowIndex && editing?.cellIndex === cellIndex;
-              if (isEditing) {
-                return h(
-                  "td",
-                  { key: cellIndex, className: "cedb-grid-td cedb-grid-editing" },
-                  h("input", {
-                    className: "ce-input cedb-cell-input",
-                    autoFocus: true,
-                    value: editing.value,
-                    spellCheck: false,
-                    onChange: (event) => setEditing({ ...editing, value: event.target.value }),
-                    onKeyDown: (event) => {
-                      event.stopPropagation();
-                      if (event.key === "Enter") {
-                        onEditCell?.(rowIndex, columns[cellIndex], editing.value);
-                        setEditing(null);
-                      } else if (event.key === "Escape") setEditing(null);
-                    },
-                    onBlur: () => setEditing(null)
-                  })
-                );
-              }
-              return h("td", {
-                key: cellIndex,
-                className: `cedb-grid-td${cell === null ? " cedb-null" : ""}${editable ? " cedb-grid-editable" : ""}`,
-                title: editable ? `${formatCell2(cell)} · ${t("db.editHint")}` : formatCell2(cell),
-                onClick: () => onCell?.({ title: `${columns[cellIndex]} · ${t("db.row")} ${rowIndex + 1}`, value: cell }),
-                onDoubleClick: editable ? () => setEditing({ rowIndex, cellIndex, value: formatCell2(cell) }) : void 0
-              }, truncateCell(cell));
-            }),
-            onDeleteRow ? h(
-              "td",
-              { className: "cedb-grid-gutter" },
-              h("button", {
-                type: "button",
-                className: `ce-tool ce-tiny${pendingDelete === rowIndex ? " cedb-del-armed" : ""}`,
-                title: t("db.deleteRow"),
-                onClick: () => onDeleteRow(rowIndex)
-              }, "✕")
-            ) : null
-          );
-        }),
-        pad(window_.bottomPad, "pad-bottom")
-      )
-    )
-  );
-}
-
-// src/client/db/rail.js
-function renderRail(props) {
-  const {
-    t,
-    profiles,
-    connections,
-    databasesFor,
-    openConns,
-    collapsedDbs,
-    expanded,
-    activeConn,
-    activeDb,
-    activeTableKey,
-    profileErrors,
-    schemaBusy,
-    schemaError,
-    filter,
-    onFilter,
-    onConnect,
-    onForget,
-    onToggleConn,
-    onDisconnect,
-    onSelectDatabase,
-    onSelectTable,
-    onOpenQuery
-  } = props;
-  return h(
-    "aside",
-    { className: "cedb-rail" },
-    profiles.length > 0 ? h(
-      Fragment,
-      null,
-      h(
-        "div",
-        { className: "cedb-rail-head cedb-rail-head-sub" },
-        h("span", { className: "cedb-rail-title" }, t("db.savedConnections"))
-      ),
-      profiles.map((profile) => h(
-        "div",
-        { key: profile.id, className: "cedb-conn cedb-saved" },
-        h(
-          "button",
-          {
-            type: "button",
-            className: "cedb-conn-main",
-            title: `${profile.address || profile.path} — ${t("db.connectSaved")}`,
-            onClick: () => void onConnect(profile)
-          },
-          profile.color ? h("span", { className: "cedb-color-dot", style: { background: profile.color }, "aria-hidden": "true" }) : null,
-          h("span", { className: `cedb-driver cedb-driver-${profile.driver}` }, profile.driver),
-          h("span", { className: "cedb-conn-label" }, profile.label),
-          profile.note ? h("span", { className: "cedb-conn-note", title: profile.note }, "…") : null,
-          profileErrors[profile.id] ? h("span", { className: "cedb-conn-bad", title: profileErrors[profile.id], "aria-label": profileErrors[profile.id] }, "⚠") : null
-        ),
-        h("button", { type: "button", className: "ce-tool ce-tiny", title: t("db.forget"), onClick: () => void onForget(profile) }, "✕")
-      ))
-    ) : null,
-    h(
-      "div",
-      { className: "cedb-rail-head cedb-rail-head-split" },
-      h("span", { className: "cedb-rail-title" }, t("db.connections")),
-      h("input", {
-        className: "ce-input cedb-filter",
-        placeholder: t("db.search"),
-        value: filter,
-        onChange: (event) => onFilter(event.target.value)
-      })
-    ),
-    connections.length === 0 ? h("div", { className: "cedb-empty" }, t("db.noConnections")) : connections.map((connection) => {
-      const open = openConns[connection.id] === true;
-      const loaded = schemas[connection.id];
-      return h(
-        "div",
-        { key: connection.id, className: `cedb-instance${connection.id === activeConn ? " cedb-instance-on" : ""}` },
-        h(
-          "div",
-          { className: "cedb-conn" },
-          h(
-            "button",
-            {
-              type: "button",
-              className: "cedb-conn-main",
-              title: connection.path || connection.label,
-              "aria-expanded": open,
-              onClick: () => {
-                onToggleConn(connection, !open);
-              }
-            },
-            h("span", { className: "cedb-caret" }, open ? "▾" : "▸"),
-            h("span", { className: `cedb-driver cedb-driver-${connection.driver}` }, connection.driver),
-            h("span", { className: "cedb-conn-label" }, connection.label),
-            connection.impl === "module" ? h("span", { className: "cedb-ctx cedb-ctx-dim" }, "module") : null
-          ),
-          h("button", { type: "button", className: "ce-tool ce-tiny", title: t("db.disconnect"), onClick: () => void onDisconnect(connection.id) }, "✕")
-        ),
-        open ? h(
-          "div",
-          { className: "cedb-instance-body" },
-          schemaBusy && !loaded ? h("div", { className: "cedb-empty" }, t("loading")) : null,
-          schemaError && connection.id === activeConn ? h("div", { className: "cedb-error cedb-pad" }, schemaError) : null,
-          databasesFor(connection.id).map((database) => {
-            const dbKey = `${connection.id}:${database.name}`;
-            const selected = activeDb.conn === connection.id && activeDb.database === database.name;
-            const collapsed = collapsedDbs[dbKey] === true;
-            return h(
-              "div",
-              { key: database.name, className: "cedb-db" },
-              h(
-                "button",
-                {
-                  type: "button",
-                  className: `cedb-db-name${selected ? " cedb-db-on" : ""}`,
-                  "aria-expanded": !collapsed,
-                  title: `${database.name} · ${database.tables.length} ${t("db.tables")}`,
-                  onClick: () => {
-                    onSelectDatabase(connection.id, database.name);
-                  }
-                },
-                h("span", { className: "cedb-caret" }, collapsed ? "▸" : "▾"),
-                h("span", { className: "cedb-db-label" }, database.name),
-                database.tables.length === 0 ? h("span", { className: "cedb-db-hint" }, t("db.notLoaded")) : null
-              ),
-              collapsed ? null : database.tables.map((entry) => {
-                const key = `${connection.id}:${database.name}:${entry.name}`;
-                const expandedTable = expanded.has(key);
-                const tabKey = `table:${connection.id}:${database.name}:${entry.name}`;
-                return h(
-                  "div",
-                  { key, className: "cedb-table" },
-                  h(
-                    "button",
-                    {
-                      type: "button",
-                      className: `cedb-table-row${activeTableKey === tabKey ? " cedb-table-on" : ""}`,
-                      title: `${entry.name} · ${entry.columns?.length ?? 0} ${t("db.columns")}`,
-                      onClick: () => {
-                        onSelectTable(connection.id, database.name, entry);
-                      },
-                      onDoubleClick: () => onOpenQuery(entry.name)
-                    },
-                    h("span", { className: `cedb-kind cedb-kind-${entry.kind}` }, entry.kind === "view" ? "◇" : "▤"),
-                    h("span", { className: "cedb-table-name" }, entry.name)
-                  ),
-                  expandedTable && entry.columns?.length ? h("ul", { className: "cedb-cols" }, entry.columns.map((column) => h(
-                    "li",
-                    { key: column.name, className: "cedb-col" },
-                    h("span", { className: "cedb-col-name" }, column.name),
-                    h("span", { className: "cedb-col-type" }, column.type),
-                    column.primaryKey ? h("span", { className: "cedb-pk" }, "PK") : null,
-                    column.nullable === false ? h("span", { className: "cedb-nn" }, "NN") : null
-                  ))) : null
-                );
-              })
-            );
-          })
-        ) : null
-      );
-    })
-  );
-}
-
 // src/client/db/format.js
 var PAGE_SIZE = 100;
 var HISTORY_CAP2 = 40;
@@ -14191,8 +13896,27 @@ function AddRowDialog({ t, table, columns, onInsert, onClose }) {
   );
 }
 
-// src/client/db.js
-function DbView({ t, useTabInfo, sessionId, useSessions }) {
+// src/client/db/meta.js
+var CATEGORIES = [
+  { id: "all", key: "db.catAll", ids: null },
+  { id: "relational", key: "db.catRelational", ids: ["mysql", "postgres"] },
+  { id: "file", key: "db.catFile", ids: ["sqlite"] }
+];
+var CONNECTION_COLORS = ["", "#e5484d", "#f5a524", "#3fb950", "#58a6ff", "#a371f7"];
+function defaultPort(driver) {
+  if (driver === "mysql") return "3306";
+  if (driver === "postgres") return "5432";
+  return "";
+}
+function implSuffix(driver, t) {
+  if (!driver || !driver.impl) return "";
+  if (driver.impl === "module") return ` · ${driver.version || t("db.implModule")}`;
+  if (driver.impl === "cli") return ` · ${t("db.implCli")}`;
+  return ` · ${t("db.implEmbedded")}`;
+}
+
+// src/client/db/state.js
+function useWorkbench({ t, useTabInfo, sessionId, useSessions }) {
   const cwd = useSessions ? useSessions((sessions) => sessionId ? sessions.byId[sessionId]?.cwd : void 0) : void 0;
   const [drivers, setDrivers] = useState([]);
   const [connections, setConnections] = useState([]);
@@ -14357,7 +14081,7 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
     setForm((current) => {
       const defaultNow = defaultPort(current.driver);
       const keep = String(current.port ?? "") !== "" && String(current.port) !== defaultNow;
-      return { ...current, driver, port: keep ? current.port : defaultPort(driver) };
+      return { activeConn, activeDb, activeTab, activeTabId, allowModule, applyAddress, canConnect, cancelQuery, cellDetail, cellEdit, closeTab, collapsedDbs, commitCell, connectOpen, connectParams, connectProfile, connectRef, connections, copyCommand, copyResult, counts, cwd, databasesOf, dbxState, detailRef, doConnect, doDisconnect, doTest, driverReady, drivers, editingProfileId, expanded, explainState, exportOpen, exportResult, fetchRows, fetched, filter, forgetProfile, form, history, historyOpen, installDriverModule, loadRows, modal, notice, onKeyDown, openConnect, openConns, openQueryTab, openTab, openTable, patchTab, pendingDelete, pickCategory, pickQuery, pickableDrivers, pkColumn, probeDrivers, profileErrors, profileRevision, profiles, refreshSchema, rememberConnection, removeRow, runDbxImport, runMutation, runQuery, saveProfile, schema, schemaBusy, schemaError, schemas: schemas2, selectDatabase, setActiveConn, setActiveDb, setActiveTabId, setAllowModule, setCellDetail, setCellEdit, setCollapsedDbs, setConnectOpen, setConnections, setDbxState, setDriver, setDrivers, setEditingProfileId, setExpanded, setExplainState, setExportOpen, setFilter, setForm, setHistory, setHistoryOpen, setModal, setNotice, setOpenConns, setPendingDelete, setPickCategory, setPickQuery, setProfileErrors, setProfiles, setSaveProfile, setSchemaBusy, setSchemaError, setSchemas, setShowPassword, setStep, setTab, setTabs, setTestState, showPassword, sortBy, sqlRef, step, t, tab, tableEntry, tabs, testState, toggleTable, useSavedProfile };
     });
     setNotice("");
     setTestState({ busy: false, ok: null, text: "" });
@@ -14805,9 +14529,308 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
       if (activeTab?.kind === "query") void runQuery(activeTab.id);
     }
   }, [activeTab, runQuery]);
-  if (!cwd) {
-    return h("div", { className: "ce-root" }, h("div", { className: "ce-empty" }, t("editor.noSession")));
-  }
+  return { activeConn, activeDb, activeTab, activeTabId, allowModule, applyAddress, canConnect, cancelQuery, cellDetail, cellEdit, closeTab, collapsedDbs, commitCell, connectOpen, connectParams, connectProfile, connectRef, connections, copyCommand, copyResult, counts, cwd, databasesOf, dbxState, detailRef, doConnect, doDisconnect, doTest, driverReady, drivers, editingProfileId, expanded, explainState, exportOpen, exportResult, fetchRows, fetched, filter, forgetProfile, form, history, historyOpen, installDriverModule, loadRows, modal, notice, onKeyDown, openConnect, openConns, openQueryTab, openTab, openTable, patchTab, pendingDelete, pickCategory, pickQuery, pickableDrivers, pkColumn, probeDrivers, profileErrors, profileRevision, profiles, refreshSchema, rememberConnection, removeRow, runDbxImport, runMutation, runQuery, saveProfile, schema, schemaBusy, schemaError, schemas: schemas2, selectDatabase, setActiveConn, setActiveDb, setActiveTabId, setAllowModule, setCellDetail, setCellEdit, setCollapsedDbs, setConnectOpen, setConnections, setDbxState, setDriver, setDrivers, setEditingProfileId, setExpanded, setExplainState, setExportOpen, setFilter, setForm, setHistory, setHistoryOpen, setModal, setNotice, setOpenConns, setPendingDelete, setPickCategory, setPickQuery, setProfileErrors, setProfiles, setSaveProfile, setSchemaBusy, setSchemaError, setSchemas, setShowPassword, setStep, setTab, setTabs, setTestState, showPassword, sortBy, sqlRef, step, t, tab, tableEntry, tabs, testState, toggleTable, useSavedProfile };
+}
+
+// src/client/db/grid.js
+var GRID_ROW_H = 24;
+function formatCell(value) {
+  if (value === null) return "NULL";
+  if (value === void 0) return "";
+  if (typeof value === "object") return JSON.stringify(value);
+  return String(value);
+}
+function truncateCell(value, max = 120) {
+  const text = formatCell(value);
+  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+}
+function gridWindow(input = {}) {
+  const count = Math.max(0, Math.floor(Number(input.count) || 0));
+  const rawRowHeight = Number(input.rowHeight);
+  const rowHeight = Number.isFinite(rawRowHeight) && rawRowHeight > 0 ? rawRowHeight : GRID_ROW_H;
+  const rawOverscan = Number(input.overscan);
+  const overscan = Number.isFinite(rawOverscan) ? Math.max(0, Math.floor(rawOverscan)) : 8;
+  const viewport = Math.max(0, Number(input.viewport) || 0);
+  const scrollTop = Math.max(0, Number(input.scrollTop) || 0);
+  const span = Math.ceil(viewport / rowHeight) + overscan * 2;
+  const start = Math.min(count, Math.max(0, Math.floor(scrollTop / rowHeight) - overscan));
+  const end = Math.min(count, start + span);
+  return { start, end, topPad: start * rowHeight, bottomPad: Math.max(0, (count - end) * rowHeight) };
+}
+function ResultGrid({ t, result, onCell, onSort, order, dir, pkColumn = "", onEditCell, onDeleteRow, pendingDelete = -1 }) {
+  const columns = result.columns ?? [];
+  const rows = result.rows ?? [];
+  const wrapRef = useRef(null);
+  const [scrollTop, setScrollTop] = useState(0);
+  const [viewport, setViewport] = useState(360);
+  const [editing, setEditing] = useState(null);
+  useEffect(() => {
+    setScrollTop(0);
+    if (wrapRef.current) wrapRef.current.scrollTop = 0;
+  }, [result]);
+  useEffect(() => {
+    const node = wrapRef.current;
+    if (!node) return void 0;
+    const measure = () => setViewport(node.clientHeight || 360);
+    measure();
+    if (typeof ResizeObserver === "function") {
+      const observer = new ResizeObserver(measure);
+      observer.observe(node);
+      return () => observer.disconnect();
+    }
+    return void 0;
+  }, [columns.length]);
+  if (columns.length === 0) return h("div", { className: "cedb-placeholder-small" }, t("db.noRows"));
+  const window_ = gridWindow({ count: rows.length, scrollTop, viewport });
+  const slice = rows.slice(window_.start, window_.end);
+  const pad = (height, key) => height > 0 ? h("tr", { key, className: "cedb-grid-pad", "aria-hidden": "true" }, h("td", { colSpan: columns.length + 1, style: { height: `${height}px`, padding: 0, border: 0 } })) : null;
+  return h(
+    "div",
+    { className: "cedb-grid-wrap", ref: wrapRef, onScroll: (event) => setScrollTop(event.currentTarget.scrollTop) },
+    h(
+      "table",
+      { className: "cedb-grid" },
+      h(
+        "thead",
+        null,
+        h(
+          "tr",
+          null,
+          h("th", { className: "cedb-grid-gutter" }, "#"),
+          columns.map((column, index) => h("th", {
+            key: `${column}-${index}`,
+            className: `cedb-grid-th${onSort ? " cedb-grid-sortable" : ""}${order === column ? " cedb-grid-sorted" : ""}`,
+            onClick: onSort ? () => onSort(column) : void 0,
+            title: column
+          }, column, order === column ? dir === "desc" ? " ↓" : " ↑" : ""))
+        )
+      ),
+      onDeleteRow ? h("th", { className: "cedb-grid-gutter", title: t("db.deleteRow") }, "") : null,
+      h(
+        "tbody",
+        null,
+        pad(window_.topPad, "pad-top"),
+        slice.map((row, offset) => {
+          const rowIndex = window_.start + offset;
+          const editable = Boolean(onEditCell) && pkColumn !== "";
+          return h(
+            "tr",
+            { key: rowIndex, className: "cedb-grid-row" },
+            h("td", { className: "cedb-grid-gutter" }, rowIndex + 1),
+            row.map((cell, cellIndex) => {
+              const isEditing = editing?.rowIndex === rowIndex && editing?.cellIndex === cellIndex;
+              if (isEditing) {
+                return h(
+                  "td",
+                  { key: cellIndex, className: "cedb-grid-td cedb-grid-editing" },
+                  h("input", {
+                    className: "ce-input cedb-cell-input",
+                    autoFocus: true,
+                    value: editing.value,
+                    spellCheck: false,
+                    onChange: (event) => setEditing({ ...editing, value: event.target.value }),
+                    onKeyDown: (event) => {
+                      event.stopPropagation();
+                      if (event.key === "Enter") {
+                        onEditCell?.(rowIndex, columns[cellIndex], editing.value);
+                        setEditing(null);
+                      } else if (event.key === "Escape") setEditing(null);
+                    },
+                    onBlur: () => setEditing(null)
+                  })
+                );
+              }
+              return h("td", {
+                key: cellIndex,
+                className: `cedb-grid-td${cell === null ? " cedb-null" : ""}${editable ? " cedb-grid-editable" : ""}`,
+                title: editable ? `${formatCell(cell)} · ${t("db.editHint")}` : formatCell(cell),
+                onClick: () => onCell?.({ title: `${columns[cellIndex]} · ${t("db.row")} ${rowIndex + 1}`, value: cell }),
+                onDoubleClick: editable ? () => setEditing({ rowIndex, cellIndex, value: formatCell(cell) }) : void 0
+              }, truncateCell(cell));
+            }),
+            onDeleteRow ? h(
+              "td",
+              { className: "cedb-grid-gutter" },
+              h("button", {
+                type: "button",
+                className: `ce-tool ce-tiny${pendingDelete === rowIndex ? " cedb-del-armed" : ""}`,
+                title: t("db.deleteRow"),
+                onClick: () => onDeleteRow(rowIndex)
+              }, "✕")
+            ) : null
+          );
+        }),
+        pad(window_.bottomPad, "pad-bottom")
+      )
+    )
+  );
+}
+
+// src/client/db/rail.js
+function renderRail(props) {
+  const {
+    t,
+    profiles,
+    connections,
+    databasesFor,
+    openConns,
+    collapsedDbs,
+    expanded,
+    activeConn,
+    activeDb,
+    activeTableKey,
+    profileErrors,
+    schemaBusy,
+    schemaError,
+    filter,
+    onFilter,
+    onConnect,
+    onForget,
+    onToggleConn,
+    onDisconnect,
+    onSelectDatabase,
+    onSelectTable,
+    onOpenQuery
+  } = props;
+  return h(
+    "aside",
+    { className: "cedb-rail" },
+    profiles.length > 0 ? h(
+      Fragment,
+      null,
+      h(
+        "div",
+        { className: "cedb-rail-head cedb-rail-head-sub" },
+        h("span", { className: "cedb-rail-title" }, t("db.savedConnections"))
+      ),
+      profiles.map((profile) => h(
+        "div",
+        { key: profile.id, className: "cedb-conn cedb-saved" },
+        h(
+          "button",
+          {
+            type: "button",
+            className: "cedb-conn-main",
+            title: `${profile.address || profile.path} — ${t("db.connectSaved")}`,
+            onClick: () => void onConnect(profile)
+          },
+          profile.color ? h("span", { className: "cedb-color-dot", style: { background: profile.color }, "aria-hidden": "true" }) : null,
+          h("span", { className: `cedb-driver cedb-driver-${profile.driver}` }, profile.driver),
+          h("span", { className: "cedb-conn-label" }, profile.label),
+          profile.note ? h("span", { className: "cedb-conn-note", title: profile.note }, "…") : null,
+          profileErrors[profile.id] ? h("span", { className: "cedb-conn-bad", title: profileErrors[profile.id], "aria-label": profileErrors[profile.id] }, "⚠") : null
+        ),
+        h("button", { type: "button", className: "ce-tool ce-tiny", title: t("db.forget"), onClick: () => void onForget(profile) }, "✕")
+      ))
+    ) : null,
+    h(
+      "div",
+      { className: "cedb-rail-head cedb-rail-head-split" },
+      h("span", { className: "cedb-rail-title" }, t("db.connections")),
+      h("input", {
+        className: "ce-input cedb-filter",
+        placeholder: t("db.search"),
+        value: filter,
+        onChange: (event) => onFilter(event.target.value)
+      })
+    ),
+    connections.length === 0 ? h("div", { className: "cedb-empty" }, t("db.noConnections")) : connections.map((connection) => {
+      const open = openConns[connection.id] === true;
+      const loaded = schemas[connection.id];
+      return h(
+        "div",
+        { key: connection.id, className: `cedb-instance${connection.id === activeConn ? " cedb-instance-on" : ""}` },
+        h(
+          "div",
+          { className: "cedb-conn" },
+          h(
+            "button",
+            {
+              type: "button",
+              className: "cedb-conn-main",
+              title: connection.path || connection.label,
+              "aria-expanded": open,
+              onClick: () => {
+                onToggleConn(connection, !open);
+              }
+            },
+            h("span", { className: "cedb-caret" }, open ? "▾" : "▸"),
+            h("span", { className: `cedb-driver cedb-driver-${connection.driver}` }, connection.driver),
+            h("span", { className: "cedb-conn-label" }, connection.label),
+            connection.impl === "module" ? h("span", { className: "cedb-ctx cedb-ctx-dim" }, "module") : null
+          ),
+          h("button", { type: "button", className: "ce-tool ce-tiny", title: t("db.disconnect"), onClick: () => void onDisconnect(connection.id) }, "✕")
+        ),
+        open ? h(
+          "div",
+          { className: "cedb-instance-body" },
+          schemaBusy && !loaded ? h("div", { className: "cedb-empty" }, t("loading")) : null,
+          schemaError && connection.id === activeConn ? h("div", { className: "cedb-error cedb-pad" }, schemaError) : null,
+          databasesFor(connection.id).map((database) => {
+            const dbKey = `${connection.id}:${database.name}`;
+            const selected = activeDb.conn === connection.id && activeDb.database === database.name;
+            const collapsed = collapsedDbs[dbKey] === true;
+            return h(
+              "div",
+              { key: database.name, className: "cedb-db" },
+              h(
+                "button",
+                {
+                  type: "button",
+                  className: `cedb-db-name${selected ? " cedb-db-on" : ""}`,
+                  "aria-expanded": !collapsed,
+                  title: `${database.name} · ${database.tables.length} ${t("db.tables")}`,
+                  onClick: () => {
+                    onSelectDatabase(connection.id, database.name);
+                  }
+                },
+                h("span", { className: "cedb-caret" }, collapsed ? "▸" : "▾"),
+                h("span", { className: "cedb-db-label" }, database.name),
+                database.tables.length === 0 ? h("span", { className: "cedb-db-hint" }, t("db.notLoaded")) : null
+              ),
+              collapsed ? null : database.tables.map((entry) => {
+                const key = `${connection.id}:${database.name}:${entry.name}`;
+                const expandedTable = expanded.has(key);
+                const tabKey = `table:${connection.id}:${database.name}:${entry.name}`;
+                return h(
+                  "div",
+                  { key, className: "cedb-table" },
+                  h(
+                    "button",
+                    {
+                      type: "button",
+                      className: `cedb-table-row${activeTableKey === tabKey ? " cedb-table-on" : ""}`,
+                      title: `${entry.name} · ${entry.columns?.length ?? 0} ${t("db.columns")}`,
+                      onClick: () => {
+                        onSelectTable(connection.id, database.name, entry);
+                      },
+                      onDoubleClick: () => onOpenQuery(entry.name)
+                    },
+                    h("span", { className: `cedb-kind cedb-kind-${entry.kind}` }, entry.kind === "view" ? "◇" : "▤"),
+                    h("span", { className: "cedb-table-name" }, entry.name)
+                  ),
+                  expandedTable && entry.columns?.length ? h("ul", { className: "cedb-cols" }, entry.columns.map((column) => h(
+                    "li",
+                    { key: column.name, className: "cedb-col" },
+                    h("span", { className: "cedb-col-name" }, column.name),
+                    h("span", { className: "cedb-col-type" }, column.type),
+                    column.primaryKey ? h("span", { className: "cedb-pk" }, "PK") : null,
+                    column.nullable === false ? h("span", { className: "cedb-nn" }, "NN") : null
+                  ))) : null
+                );
+              })
+            );
+          })
+        ) : null
+      );
+    })
+  );
+}
+
+// src/client/db/view.js
+function renderWorkbench(wb) {
+  const { DbView: DbView2, absolute, activeConn, activeDb, activeTab, activeTabId, allowModule, anchor, applyAddress, blob, body, canConnect, cancelQuery, category, cellDetail, cellEdit, closeTab, collapsedDbs, commitCell, conn, connectOpen, connectParams, connectProfile, connectRef, connections, copyCommand, copyResult, counts, csv, cwd, database, databases, databasesOf, dbxState, defaultNow, detailRef, dir, doConnect, doDisconnect, doTest, driver, driverReady, drivers, editingProfileId, entries, existing, expanded, explainState, exportOpen, exportResult, fetchRows, fetched, filter, forgetProfile, form, history, historyOpen, id, index, installDriverModule, keep, key, known, label, list, loadRows, modal, ms, needle, next, notice, onKeyDown, openConnect, openConns, openQueryTab, openTab, openTable, params, parsed, patchTab, pendingDelete, pickCategory, pickQuery, pickableDrivers, pkColumn, pkIndex, pkValue, probeDrivers, profileErrors, profileRevision, profiles, refreshSchema, rememberConnection, removeRow, res, result, runDbxImport, runMutation, runQuery, saveProfile, schema, schemaBusy, schemaError, schemaFor, schemas: schemas2, selectDatabase, setActiveConn, setActiveDb, setActiveTabId, setAllowModule, setCellDetail, setCellEdit, setCollapsedDbs, setConnectOpen, setConnections, setDbxState, setDriver, setDrivers, setEditingProfileId, setExpanded, setExplainState, setExportOpen, setFilter, setForm, setHistory, setHistoryOpen, setModal, setNotice, setOpenConns, setPendingDelete, setPickCategory, setPickQuery, setProfileErrors, setProfiles, setSaveProfile, setSchemaBusy, setSchemaError, setSchemas, setShowPassword, setStep, setTab, setTabs, setTestState, showPassword, sortBy, sql, sqlRef, started, step, t, tab, tableEntry, tabs, target, testState, text, toggleTable, token, url, useSavedProfile, value } = wb;
+  if (!cwd) return h("div", { className: "ce-root" }, h("div", { className: "ce-empty" }, t("editor.noSession")));
   return h(
     "div",
     { className: "ce-root cedb-root", onKeyDown },
@@ -14851,19 +14874,19 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
           setOpenConns((current) => ({ ...current, [connection.id]: open }));
           if (open && !schemas2[connection.id]) void refreshSchema(connection.id);
         },
-        onDisconnect: (id) => void doDisconnect(id),
-        onSelectDatabase: (connId, database) => {
-          void selectDatabase(connId, database);
+        onDisconnect: (id2) => void doDisconnect(id2),
+        onSelectDatabase: (connId, database2) => {
+          void selectDatabase(connId, database2);
           setCollapsedDbs((current) => {
-            const key = `${connId}:${database}`;
-            return { ...current, [key]: current[key] !== true };
+            const key2 = `${connId}:${database2}`;
+            return { ...current, [key2]: current[key2] !== true };
           });
         },
-        onSelectTable: (connId, database, entry) => {
-          toggleTable(`${connId}:${database}:${entry.name}`);
+        onSelectTable: (connId, database2, entry) => {
+          toggleTable(`${connId}:${database2}:${entry.name}`);
           setActiveConn(connId);
-          setActiveDb({ conn: connId, database });
-          openTable(connId, database, entry);
+          setActiveDb({ conn: connId, database: database2 });
+          openTable(connId, database2, entry);
         },
         onOpenQuery: (table) => openQueryTab(`SELECT * FROM "${String(table).replace(/"/g, '""')}" LIMIT 100;`)
       }),
@@ -14920,12 +14943,12 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
                   value: activeTab.conn || activeConn,
                   "aria-label": t("db.connections"),
                   onChange: async (event) => {
-                    const value = event.target.value;
-                    if (!value.startsWith("profile:")) {
-                      patchTab(activeTab.id, { conn: value });
+                    const value2 = event.target.value;
+                    if (!value2.startsWith("profile:")) {
+                      patchTab(activeTab.id, { conn: value2 });
                       return;
                     }
-                    const profile = profiles.find((entry) => entry.id === value.slice("profile:".length));
+                    const profile = profiles.find((entry) => entry.id === value2.slice("profile:".length));
                     if (!profile) return;
                     const connected = await connectProfile(profile);
                     if (connected) patchTab(activeTab.id, { conn: connected });
@@ -14949,14 +14972,14 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
                   disabled: !String(activeTab.sql ?? "").trim() || activeTab.loading,
                   title: t("db.explainHint"),
                   onClick: () => {
-                    const conn = activeTab.conn || activeConn;
-                    const sql = activeTab.sql ?? "";
+                    const conn2 = activeTab.conn || activeConn;
+                    const sql2 = activeTab.sql ?? "";
                     setModal({ kind: "explain" });
                     setExplainState({ busy: true, result: null, error: "" });
-                    api("db.explain", { id: conn, sql }).then((res) => {
-                      const value = res.ok ? res.value : null;
-                      if (!value || value.error) setExplainState({ busy: false, result: null, error: value?.error ?? res.error ?? "" });
-                      else setExplainState({ busy: false, result: value, error: "" });
+                    api("db.explain", { id: conn2, sql: sql2 }).then((res2) => {
+                      const value2 = res2.ok ? res2.value : null;
+                      if (!value2 || value2.error) setExplainState({ busy: false, result: null, error: value2?.error ?? res2.error ?? "" });
+                      else setExplainState({ busy: false, result: value2, error: "" });
                     });
                   }
                 }, t("db.explain")),
@@ -15072,7 +15095,7 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
               order: activeTab.order,
               dir: activeTab.dir,
               pkColumn,
-              onEditCell: (rowIndex, column, value) => void commitCell(rowIndex, column, value),
+              onEditCell: (rowIndex, column, value2) => void commitCell(rowIndex, column, value2),
               onDeleteRow: (rowIndex) => void removeRow(rowIndex),
               pendingDelete
             }) : h(
@@ -15128,10 +15151,10 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
       database: modal.database,
       onClose: () => setModal(null),
       onInsert: async (values) => {
-        const sql = insertRowSql({ driver: connections.find((entry) => entry.id === modal.conn)?.driver, table: modal.table, database: modal.database, values });
-        if (sql === "") return t("db.importEmpty");
-        const res = await api("db.query", { id: modal.conn, sql });
-        if (!res.ok || res.value?.error) return res.value?.error ?? res.error;
+        const sql2 = insertRowSql({ driver: connections.find((entry) => entry.id === modal.conn)?.driver, table: modal.table, database: modal.database, values });
+        if (sql2 === "") return t("db.importEmpty");
+        const res2 = await api("db.query", { id: modal.conn, sql: sql2 });
+        if (!res2.ok || res2.value?.error) return res2.value?.error ?? res2.error;
         setModal(null);
         setNotice(t("db.rowInserted"));
         modal.onDone?.();
@@ -15142,15 +15165,15 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
       table: modal.table,
       driver: connections.find((entry) => entry.id === modal.conn)?.driver,
       onClose: () => setModal(null),
-      onInsert: async (text) => {
-        const parsed = parseDataText(text);
-        if (parsed.error !== "") return parsed.error;
-        const sql = toInsertSql(parsed, modal.table, connections.find((entry) => entry.id === modal.conn)?.driver);
-        if (sql === "") return t("db.importEmpty");
-        const res = await api("db.query", { id: modal.conn, sql, limit: 1 });
-        if (!res.ok || res.value?.error) return res.value?.error ?? res.error;
+      onInsert: async (text2) => {
+        const parsed2 = parseDataText(text2);
+        if (parsed2.error !== "") return parsed2.error;
+        const sql2 = toInsertSql(parsed2, modal.table, connections.find((entry) => entry.id === modal.conn)?.driver);
+        if (sql2 === "") return t("db.importEmpty");
+        const res2 = await api("db.query", { id: modal.conn, sql: sql2, limit: 1 });
+        if (!res2.ok || res2.value?.error) return res2.value?.error ?? res2.error;
         setModal(null);
-        setNotice(t("db.imported").replace("{n}", String(parsed.rows.length)));
+        setNotice(t("db.imported").replace("{n}", String(parsed2.rows.length)));
         if (modal.onDone) modal.onDone();
         return "";
       }
@@ -15189,31 +15212,31 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
           "div",
           { className: "cedb-pick-tools" },
           h("input", { className: "ce-input", value: pickQuery, placeholder: t("db.pickSearch"), spellCheck: false, onChange: (event) => setPickQuery(event.target.value) }),
-          CATEGORIES.map((category) => h("button", {
-            key: category.id,
+          CATEGORIES.map((category2) => h("button", {
+            key: category2.id,
             type: "button",
-            className: `cedb-cat${pickCategory === category.id ? " cedb-cat-on" : ""}`,
-            onClick: () => setPickCategory(category.id)
-          }, t(category.key)))
+            className: `cedb-cat${pickCategory === category2.id ? " cedb-cat-on" : ""}`,
+            onClick: () => setPickCategory(category2.id)
+          }, t(category2.key)))
         ),
-        h("div", { className: "cedb-pick" }, pickableDrivers.map((id) => {
-          const known = drivers.find((entry) => entry.id === id);
+        h("div", { className: "cedb-pick" }, pickableDrivers.map((id2) => {
+          const known2 = drivers.find((entry) => entry.id === id2);
           return h(
             "button",
             {
-              key: id,
+              key: id2,
               type: "button",
-              className: `cedb-pick-card${form.driver === id ? " cedb-pick-on" : ""}`,
-              "aria-pressed": form.driver === id,
-              onClick: () => setForm((current) => ({ ...current, driver: id, port: defaultPort(id) })),
+              className: `cedb-pick-card${form.driver === id2 ? " cedb-pick-on" : ""}`,
+              "aria-pressed": form.driver === id2,
+              onClick: () => setForm((current) => ({ ...current, driver: id2, port: defaultPort(id2) })),
               onDoubleClick: () => {
-                setForm((current) => ({ ...current, driver: id, port: defaultPort(id) }));
+                setForm((current) => ({ ...current, driver: id2, port: defaultPort(id2) }));
                 setStep("form");
               }
             },
-            h("span", { className: `cedb-pick-glyph cedb-driver-${id}`, "aria-hidden": "true" }, driverLabel(id).slice(0, 2)),
-            h("span", { className: "cedb-pick-label" }, driverLabel(id)),
-            h("span", { className: "cedb-pick-note" }, known?.ready ? known.bin || known.version || t("db.notReady") : known?.note ?? "")
+            h("span", { className: `cedb-pick-glyph cedb-driver-${id2}`, "aria-hidden": "true" }, driverLabel(id2).slice(0, 2)),
+            h("span", { className: "cedb-pick-label" }, driverLabel(id2)),
+            h("span", { className: "cedb-pick-note" }, known2?.ready ? known2.bin || known2.version || t("db.notReady") : known2?.note ?? "")
           );
         }))
       ) : h(
@@ -15224,19 +15247,19 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
           ["tls", "db.tabTls"],
           ["tunnel", "db.tabTunnel"],
           ["advanced", "db.tabAdvanced"]
-        ].map(([id, key]) => h(
+        ].map(([id2, key2]) => h(
           "button",
           {
-            key: id,
+            key: id2,
             type: "button",
             role: "tab",
-            "aria-selected": tab === id,
-            className: `cedb-wtab${tab === id ? " cedb-wtab-on" : ""}`,
-            onClick: () => setTab(id)
+            "aria-selected": tab === id2,
+            className: `cedb-wtab${tab === id2 ? " cedb-wtab-on" : ""}`,
+            onClick: () => setTab(id2)
           },
-          t(key),
-          id === "tls" && String(form.sslMode ?? "") !== "" ? h("span", { className: "cedb-wtab-dot" }) : null,
-          id === "tunnel" && String(form.tunnelHost ?? "").trim() !== "" ? h("span", { className: "cedb-wtab-dot" }) : null
+          t(key2),
+          id2 === "tls" && String(form.sslMode ?? "") !== "" ? h("span", { className: "cedb-wtab-dot" }) : null,
+          id2 === "tunnel" && String(form.tunnelHost ?? "").trim() !== "" ? h("span", { className: "cedb-wtab-dot" }) : null
         ))),
         tab === "info" ? h(
           Fragment,
@@ -15320,7 +15343,7 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
                   "div",
                   { className: "cedb-password" },
                   h("input", { className: "ce-input", type: showPassword ? "text" : "password", value: form.password, autoComplete: "off", onChange: (event) => setForm({ ...form, password: event.target.value }) }),
-                  h("button", { type: "button", className: "ce-tool ce-tiny", title: showPassword ? t("db.hidePassword") : t("db.showPassword"), onClick: () => setShowPassword((value) => !value) }, showPassword ? "🙈" : "👁")
+                  h("button", { type: "button", className: "ce-tool ce-tiny", title: showPassword ? t("db.hidePassword") : t("db.showPassword"), onClick: () => setShowPassword((value2) => !value2) }, showPassword ? "🙈" : "👁")
                 )
               )
             ),
@@ -15516,17 +15539,17 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
         h("span", null, t("db.history")),
         h("button", { type: "button", className: "ce-tool ce-tiny", onClick: () => setHistoryOpen(false) }, "✕")
       ),
-      history.map((entry, index) => h(
+      history.map((entry, index2) => h(
         "button",
         {
-          key: `${entry.at}-${index}`,
+          key: `${entry.at}-${index2}`,
           type: "button",
           className: "cedb-history-row",
           title: entry.sql,
           onClick: () => {
-            const id = openQueryTab(entry.sql);
+            const id2 = openQueryTab(entry.sql);
             setHistoryOpen(false);
-            setActiveTabId(id);
+            setActiveTabId(id2);
           }
         },
         h("span", { className: "cedb-history-sql" }, entry.sql.slice(0, 120)),
@@ -15547,30 +15570,17 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
     ) : null
   );
 }
+
+// src/client/db.js
+function DbView(props) {
+  return renderWorkbench(useWorkbench(props));
+}
 function DbTitle({ useTabInfo }) {
   const info = useTabInfo ? useTabInfo() : null;
   const title = info?.tab?.title;
   const label = typeof title === "string" && title !== "" ? title : "数据库";
   return h(Fragment, null, h("span", { className: "ce-title-ico" }, h(ToolGlyph, { size: 14, glyph: "db" })), label);
 }
-var CATEGORIES = [
-  { id: "all", key: "db.catAll", ids: null },
-  { id: "relational", key: "db.catRelational", ids: ["mysql", "postgres"] },
-  { id: "file", key: "db.catFile", ids: ["sqlite"] }
-];
-var CONNECTION_COLORS = ["", "#e5484d", "#f5a524", "#3fb950", "#58a6ff", "#a371f7"];
-function defaultPort(driver) {
-  if (driver === "mysql") return "3306";
-  if (driver === "postgres") return "5432";
-  return "";
-}
-function implSuffix(driver, t) {
-  if (!driver || !driver.impl) return "";
-  if (driver.impl === "module") return ` · ${driver.version || t("db.implModule")}`;
-  if (driver.impl === "cli") return ` · ${t("db.implCli")}`;
-  return ` · ${t("db.implEmbedded")}`;
-}
-var QUERY_PAGE = 200;
 
 // src/client/grpcaddr.js
 var GRPC_SCHEMES = ["grpc://", "grpcs://"];

@@ -37,14 +37,17 @@ lib/host/db.js                 facade: connect ladder, profiles, routes, re-expo
 ## Client
 
 ```
-src/client/db.js               DbView (state + orchestration) + definitions + re-exports
-        │
-        ├── db/rail.js         renderRail(): instances → databases → tables (no hooks)
-        ├── db/grid.js         ResultGrid: virtualization, inline edit, row delete
-        ├── db/dialogs.js      DriverManager, ErDiagram, ExplainPanel, Import, AddRow
-        ├── db/format.js       PAGE_SIZE, toCsv, tableSql, requestToken, countOf
-        ├── dbtools.js         pure SQL/CSV/ER helpers (also used by the host tests)
-        └── dbconnect.js       address parsing (postgres://, mysql://, SQLite path)
+src/client/db.js               54   the tab's public face: definition, title, DbView
+        │                            (DbView = renderWorkbench(useWorkbench(props)))
+        ├── db/state.js       739   useWorkbench(): every hook, effect and action
+        ├── db/view.js        547   renderWorkbench(wb): the markup, pure
+        ├── db/rail.js        130   renderRail(wb): instances → databases → tables
+        ├── db/grid.js        149   ResultGrid: virtualization, inline edit, row delete
+        ├── db/dialogs.js     188   DriverManager, ErDiagram, ExplainPanel, Import, AddRow
+        ├── db/format.js       58   PAGE_SIZE, toCsv, tableSql, requestToken, countOf
+        ├── db/meta.js         43   engine categories, colour tags, default ports
+        ├── dbtools.js              pure SQL/CSV/ER helpers (also used by the host tests)
+        └── dbconnect.js            address parsing (postgres://, mysql://, SQLite path)
 ```
 
 `renderRail` is a plain function rather than an element: it has no hooks, and
@@ -53,13 +56,16 @@ assert against the rail.
 
 **Rules the code follows**
 
-1. `db/grid.js` and `db/dialogs.js` are **presentational**: they take props and
+1. **One state owner**: `db/state.js` holds every hook, effect and action and
+   returns a single object; `db/view.js` and `db/rail.js` destructure what they
+   need and hold no state. A new field is added in the hook, then read in the
+   view — never the other way round.
+2. `db/grid.js` and `db/dialogs.js` are **presentational**: they take props and
    callbacks, never read connection state. That is also why they can be rendered
    in isolation by the tests.
-2. `db.js` owns state and orchestration; it re-exports everything the tab
-   registry and the tests import, so the file layout can change without touching
-   callers.
-3. Anything that talks to the Host goes through `api()` with a `db.*` route; a
+3. `db.js` re-exports everything the tab registry and the tests import, so the
+   file layout can change without touching callers.
+4. Anything that talks to the Host goes through `api()` with a `db.*` route; a
    new route is added to the `dbRoutes` table and nowhere else.
 
 ## Testing

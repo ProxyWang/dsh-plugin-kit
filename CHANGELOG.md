@@ -8,10 +8,13 @@ No behaviour change; the files now match the responsibilities.
   `db/registry.js` (the live-connection map), `db/operations.js` (schema/rows/query/columns/explain),
   `db/cli.js` (the mysql/psql adapters) and `db/sql.js` (pure quoting and parsing). Imports only point downwards;
   adding an engine no longer means editing the workbench.
-- **Client**: `ResultGrid` and its virtualization/editing helpers moved to `db/grid.js`; the five dialog surfaces
-  moved to `db/dialogs.js`; the rail became `db/rail.js` (`renderRail`, no hooks); the formatters and SQL text moved
-  to `db/format.js`. All four are presentational (props in, callbacks out), so they can be rendered and tested
-  without a connection. `db.js` keeps the stateful `DbView` and re-exports the public surface, so no caller changed.
+- **Client**: the 1763-line `db.js` is now a 54-line facade plus six modules —
+  `db/state.js` (`useWorkbench()`: every hook, effect and action, the single state owner),
+  `db/view.js` (`renderWorkbench(wb)`: pure markup), `db/rail.js` (`renderRail`),
+  `db/grid.js` (`ResultGrid` + virtualization/editing), `db/dialogs.js` (the five modal
+  surfaces), `db/format.js` (formatters and SQL text) and `db/meta.js` (categories, colours, ports).
+  `DbView` is now `renderWorkbench(useWorkbench(props))`, so rendering is a pure function of the
+  state object and every caller still imports from `db.js`.
 - `docs/database-panel.md` records the module map, the dependency direction and the extension points (new engine,
   new SQL helper, new saved-connection field).
 
