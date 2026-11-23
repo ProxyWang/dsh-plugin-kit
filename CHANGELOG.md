@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased — one live connection per saved connection
+
+The rail showed ten rows for four databases. Every click on a saved connection opened a *new* host connection, the client appended it, and a page refresh forgot the ones it had opened — so they piled up invisibly and reappeared on the next click.
+
+- **A connection remembers its profile** (`profileId` in `db.connect`'s result and in `db.connections`); clicking a saved connection that is already open now focuses it instead of opening a second one.
+- **The client rebuilds the list from the Host on mount** (`db.connections`), so a refresh shows the live connections rather than an empty rail, and folds duplicates of the same profile by disconnecting the extras.
+- Cleared the accumulated state on the running Host: 23 live connections → 4.
+
 ## Unreleased — the blank tab and the database that would not switch
 
 Two real defects, both found after the previous "fix" did not change what the screenshot showed:

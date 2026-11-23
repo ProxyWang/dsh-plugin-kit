@@ -427,6 +427,13 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 			setNotice(t("db.needPassword"));
 			return;
 		}
+		const existing = connections.find((entry) => entry.profileId === profile.id);
+		if (existing) {
+			setActiveConn(existing.id);
+			setOpenConns((current) => ({ ...current, [existing.id]: true }));
+			if (!schemas[existing.id]) void refreshSchema(existing.id);
+			return;
+		}
 		const res = await api("db.connect", { profileId: profile.id, cwd });
 		if (!res.ok) {
 			setNotice(res.error);
@@ -444,7 +451,7 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 		setActiveDb({ conn: res.value.id, database: res.value.database ?? "" });
 		setNotice("");
 		await refreshSchema(res.value.id);
-	}, [refreshSchema, cwd, useSavedProfile, t]);
+	}, [refreshSchema, cwd, useSavedProfile, t, connections, schemas]);
 
 	const forgetProfile = useCallback(async (profile) => {
 		await api("db.profile.delete", { id: profile.id });
