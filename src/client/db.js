@@ -614,7 +614,7 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 		return id;
 	}, [openTab, activeConn, t]);
 
-	const runQuery = useCallback(async (id) => {
+	const runQuery = useCallback(async (id, offset = 0) => {
 		const tab = tabs.find((entry) => entry.id === id);
 		if (!tab || tab.kind !== "query") return;
 		const sql = String(tab.sql ?? "").trim();
@@ -624,10 +624,11 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 		const token = requestToken("query");
 		patchTab(id, { loading: true, error: "", runToken: token });
 		const started = Date.now();
-		const res = await api("db.query", { id: conn, token, sql, limit: 5000 });
+		// One page per run: a 12 MB result was the reason Run felt slow.
+		const res = await api("db.query", { id: conn, token, sql, limit: QUERY_PAGE, offset });
 		const ms = Date.now() - started;
 		if (!res.ok) { patchTab(id, { loading: false, error: res.error, result: null }); return; }
-		patchTab(id, { loading: false, result: res.value, error: "", ms, runToken: "" });
+		patchTab(id, { loading: false, result: res.value, error: "", ms, runToken: "", offset });
 		setHistory((current) => [{ sql, at: Date.now(), ms, ok: !res.value.error }, ...current.filter((entry) => entry.sql !== sql)].slice(0, HISTORY_CAP));
 		// A statement that changes the schema (CREATE/DROP/ALTER) refreshes the tree.
 		if (/^\s*(create|drop|alter)\b/i.test(sql)) void refreshSchema(conn);
@@ -1085,6 +1086,12 @@ export function DbView({ t, useTabInfo, sessionId, useSessions }) {
 									pkColumn === "" ? h("span", { className: "cedb-nopk", title: t("db.noPkHint") }, t("db.noPk")) : null,
 								),
 								activeTab.error ? h("div", { className: "cedb-error" }, activeTab.error) : null,
+								activeTab.result && (activeTab.result.hasMore || activeTab.offset > 0)
+									? h("div", { className: "cedb-pager" },
+										h("button", { type: "button", className: "ce-sk-btn", disabled: activeTab.loading || (activeTab.offset ?? 0) <= 0, onClick: () => void runQuery(activeTab.id, Math.max((activeTab.offset ?? 0) - QUERY_PAGE, 0)) }, "‹ " + t("db.prevPage")),
+										h("span", { className: "cedb-pager-info" }, `${t("db.rows")} ${(activeTab.offset ?? 0) + 1}–${(activeTab.offset ?? 0) + (activeTab.result.rows?.length ?? 0)}`),
+										h("button", { type: "button", className: "ce-sk-btn", disabled: activeTab.loading || !activeTab.result.hasMore, onClick: () => void runQuery(activeTab.id, (activeTab.offset ?? 0) + QUERY_PAGE) }, t("db.nextPage") + " ›"))
+									: null,
 								activeTab.result
 									? h(ResultGrid, {
 										t,
@@ -1450,6 +1457,8 @@ export function implSuffix(driver, t) {
 
 /** One grid row's height, in px — must match `.cedb-grid-row` in the stylesheet. */
 export const GRID_ROW_H = 24;
+/** Rows fetched per page for ad-hoc queries; bigger pages were slow to send. */
+const QUERY_PAGE = 200;
 
 /**
  * Which rows a virtualized grid should render.

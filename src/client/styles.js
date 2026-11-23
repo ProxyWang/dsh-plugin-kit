@@ -535,7 +535,8 @@ export const CSS = `
 .cedb-empty-hint{font-size:11px;color:var(--dsw-alias-label-tertiary,#778)}
 .cedb-sql{min-height:88px;max-height:34vh;resize:vertical;margin:0 10px 8px;padding:8px 10px;border:.5px solid var(--dsw-alias-border-l1,#333);border-radius:6px;background:var(--dsw-alias-bg-base,#141618);color:var(--dsw-alias-label-primary,#dde);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;line-height:1.5;outline:none;tab-size:2}
 .cedb-sql:focus{border-color:var(--dsw-alias-button-info-fill,#58a6ff)}
-.cedb-result-head{flex:none;display:flex;align-items:center;gap:6px;padding:4px 10px;font-size:11px;color:var(--dsw-alias-label-tertiary,#889);min-height:24px}
+.cedb-result-head{flex:none;display:flex;align-items:center;gap:6px;padding:4px 10px;font-size:11px;color:var(--dsw-alias-label-tertiary,#889);min-height:24px;flex-wrap:nowrap;white-space:nowrap}
+.cedb-result-head .ce-tool,.cedb-result-head .ce-sk-btn{flex:0 0 auto;white-space:nowrap}
 .cedb-result-hint{font-size:11px;color:var(--dsw-alias-label-tertiary,#667)}
 .cedb-tablebar{flex:none;display:flex;align-items:center;gap:6px;padding:6px 10px;border-bottom:.5px solid var(--dsw-alias-border-l1,#333)}
 .cedb-tablebar-name{font-size:12px;font-weight:600;color:var(--dsw-alias-label-primary,#dde);font-family:ui-monospace,SFMono-Regular,Menlo,monospace}

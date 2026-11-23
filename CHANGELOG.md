@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased — Run returns a page, not the whole table
+
+`select * from chat_telemetry` shipped **12.3 MB** of JSON and took ~3.5 s on the Host before the panel could draw anything: 2584 rows × 30 wide columns.
+
+- **SELECTs are paged on the server**: the statement is wrapped as `SELECT * FROM (<sql>) AS __ce_page LIMIT n OFFSET m`, one page (200 rows) per Run, with `hasMore` telling the panel there is a next one. Measured on the same table: 12.3 MB → ~1 MB for a page.
+- **A pager under the result** (上一页 / 下一页 with the current row range) replaces "give me everything and hope".
+- **Writes are untouched**: only statements that start with `select`/`with` and contain no `;` are wrapped, so `INSERT`/`UPDATE`/`DELETE` still run as written.
+- The result header no longer squeezes the 导出 button into a vertical `导 出`.
+- Regressions: a 300-row table pages 200 + 100 with the right offsets, and a `DELETE` is not wrapped.
+
 ## Unreleased — the table page is editable
 
 The grid could only read. It now edits, inserts and deletes, with the primary key as the safety rail.

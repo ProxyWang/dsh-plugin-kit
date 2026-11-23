@@ -891,6 +891,17 @@ for (const cleanup of cleanups) cleanup();
 		check("db.schema marks the primary key and NOT NULL", table.columns.find((c) => c.name === "id").primaryKey === true && table.columns.find((c) => c.name === "name").nullable === false, table.columns);
 		check("db.schema lists the index", table.indexes.some((index) => index.name === "users_name" && index.columns.includes("name")), table.indexes);
 
+		// Ad-hoc queries are paged on the server: a wide `select *` used to ship
+		// megabytes to the panel on every Run.
+		await db.query(conn.id, "CREATE TABLE big(n INTEGER)");
+		for (let i = 0; i < 300; i += 1) await db.query(conn.id, `INSERT INTO big(n) VALUES(${i})`);
+		const firstPage = await db.query(conn.id, "select * from big", 200, "", 0);
+		check("a select is paged", firstPage.rows.length === 200 && firstPage.hasMore === true, { rows: firstPage.rows.length, hasMore: firstPage.hasMore });
+		const secondPage = await db.query(conn.id, "select * from big", 200, "", 200);
+		check("the second page starts where the first ended", secondPage.rows.length === 100 && secondPage.hasMore === false && secondPage.rows[0][0] === 200, { rows: secondPage.rows.length, first: secondPage.rows[0] });
+		const write = await db.query(conn.id, "DELETE FROM big WHERE n < 2");
+		check("a write is not wrapped in a subquery", write.changes === 2 || write.changes === undefined, write);
+
 		const page = await db.rows(conn.id, "users", { limit: 2, offset: 0, order: "id", dir: "asc" });
 		check("db.rows pages a table with the total", page.rows.length === 2 && page.total === 3 && page.columns.includes("name"), page);
 		const second = await db.rows(conn.id, "users", { limit: 2, offset: 2, order: "id", dir: "asc" });
@@ -907,7 +918,7 @@ for (const cleanup of cleanups) cleanup();
 		const written = await db.query(conn.id, "UPDATE users SET age = age + 1");
 		check("db.query reports the affected row count", written.changes === 3, written);
 		const capped = await db.query(conn.id, "SELECT * FROM users", 1);
-		check("db.query truncates at the limit and says so", capped.rows.length === 1 && capped.truncated === true, capped);
+		check("db.query pages at the limit and says there is more", capped.rows.length === 1 && (capped.hasMore === true || capped.truncated === true), capped);
 		check("db.query refuses an empty statement", await db.query(conn.id, "   ").then(() => false, () => true), null);
 
 		// The same operations through the HTTP dispatcher the panel uses.

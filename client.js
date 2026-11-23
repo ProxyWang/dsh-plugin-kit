@@ -482,6 +482,8 @@ var zh = {
   "db.exportSql": "SQL INSERT",
   "db.copied": "已复制到剪贴板",
   "db.copyFailed": "复制失败（浏览器可能不允许）",
+  "db.nextPage": "下一页",
+  "db.prevPage": "上一页",
   "db.addRow": "新增行",
   "db.addRowHint": "填写要插入的列，留空的列交给数据库默认值",
   "db.addRowEmpty": "至少填一列",
@@ -1305,6 +1307,8 @@ var en = {
   "db.exportSql": "SQL INSERT",
   "db.copied": "Copied to the clipboard",
   "db.copyFailed": "Copy failed (the browser may block it)",
+  "db.nextPage": "Next",
+  "db.prevPage": "Prev",
   "db.addRow": "Add row",
   "db.addRowHint": "Fill the columns you want; empty ones fall back to the database default",
   "db.addRowEmpty": "Fill at least one column",
@@ -9104,7 +9108,8 @@ var CSS2 = `
 .cedb-empty-hint{font-size:11px;color:var(--dsw-alias-label-tertiary,#778)}
 .cedb-sql{min-height:88px;max-height:34vh;resize:vertical;margin:0 10px 8px;padding:8px 10px;border:.5px solid var(--dsw-alias-border-l1,#333);border-radius:6px;background:var(--dsw-alias-bg-base,#141618);color:var(--dsw-alias-label-primary,#dde);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;line-height:1.5;outline:none;tab-size:2}
 .cedb-sql:focus{border-color:var(--dsw-alias-button-info-fill,#58a6ff)}
-.cedb-result-head{flex:none;display:flex;align-items:center;gap:6px;padding:4px 10px;font-size:11px;color:var(--dsw-alias-label-tertiary,#889);min-height:24px}
+.cedb-result-head{flex:none;display:flex;align-items:center;gap:6px;padding:4px 10px;font-size:11px;color:var(--dsw-alias-label-tertiary,#889);min-height:24px;flex-wrap:nowrap;white-space:nowrap}
+.cedb-result-head .ce-tool,.cedb-result-head .ce-sk-btn{flex:0 0 auto;white-space:nowrap}
 .cedb-result-hint{font-size:11px;color:var(--dsw-alias-label-tertiary,#667)}
 .cedb-tablebar{flex:none;display:flex;align-items:center;gap:6px;padding:6px 10px;border-bottom:.5px solid var(--dsw-alias-border-l1,#333)}
 .cedb-tablebar-name{font-size:12px;font-weight:600;color:var(--dsw-alias-label-primary,#dde);font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
@@ -14142,7 +14147,7 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
     });
     return id;
   }, [openTab, activeConn, t]);
-  const runQuery = useCallback(async (id) => {
+  const runQuery = useCallback(async (id, offset = 0) => {
     const tab2 = tabs.find((entry) => entry.id === id);
     if (!tab2 || tab2.kind !== "query") return;
     const sql = String(tab2.sql ?? "").trim();
@@ -14155,13 +14160,13 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
     const token = requestToken("query");
     patchTab(id, { loading: true, error: "", runToken: token });
     const started = Date.now();
-    const res = await api("db.query", { id: conn, token, sql, limit: 5e3 });
+    const res = await api("db.query", { id: conn, token, sql, limit: QUERY_PAGE, offset });
     const ms = Date.now() - started;
     if (!res.ok) {
       patchTab(id, { loading: false, error: res.error, result: null });
       return;
     }
-    patchTab(id, { loading: false, result: res.value, error: "", ms, runToken: "" });
+    patchTab(id, { loading: false, result: res.value, error: "", ms, runToken: "", offset });
     setHistory((current) => [{ sql, at: Date.now(), ms, ok: !res.value.error }, ...current.filter((entry) => entry.sql !== sql)].slice(0, HISTORY_CAP2));
     if (/^\s*(create|drop|alter)\b/i.test(sql)) void refreshSchema(conn);
   }, [tabs, activeConn, patchTab, refreshSchema, t]);
@@ -14665,6 +14670,13 @@ function DbView({ t, useTabInfo, sessionId, useSessions }) {
               pkColumn === "" ? h("span", { className: "cedb-nopk", title: t("db.noPkHint") }, t("db.noPk")) : null
             ),
             activeTab.error ? h("div", { className: "cedb-error" }, activeTab.error) : null,
+            activeTab.result && (activeTab.result.hasMore || activeTab.offset > 0) ? h(
+              "div",
+              { className: "cedb-pager" },
+              h("button", { type: "button", className: "ce-sk-btn", disabled: activeTab.loading || (activeTab.offset ?? 0) <= 0, onClick: () => void runQuery(activeTab.id, Math.max((activeTab.offset ?? 0) - QUERY_PAGE, 0)) }, "‹ " + t("db.prevPage")),
+              h("span", { className: "cedb-pager-info" }, `${t("db.rows")} ${(activeTab.offset ?? 0) + 1}–${(activeTab.offset ?? 0) + (activeTab.result.rows?.length ?? 0)}`),
+              h("button", { type: "button", className: "ce-sk-btn", disabled: activeTab.loading || !activeTab.result.hasMore, onClick: () => void runQuery(activeTab.id, (activeTab.offset ?? 0) + QUERY_PAGE) }, t("db.nextPage") + " ›")
+            ) : null,
             activeTab.result ? h(ResultGrid, {
               t,
               result: activeTab.result,
@@ -15172,6 +15184,7 @@ function implSuffix(driver, t) {
   return ` · ${t("db.implEmbedded")}`;
 }
 var GRID_ROW_H = 24;
+var QUERY_PAGE = 200;
 function gridWindow(input = {}) {
   const count = Math.max(0, Math.floor(Number(input.count) || 0));
   const rawRowHeight = Number(input.rowHeight);
