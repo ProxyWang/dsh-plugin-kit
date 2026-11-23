@@ -14756,7 +14756,7 @@ function DriverManager({ t, drivers, dbxState, onImportDbx, onRedetect, onClose 
     dbxState?.imported !== void 0 && dbxState.imported > 0 ? h("span", { className: "cedb-dbx-ok" }, `${t("db.importDbxDone")} ${dbxState.imported}`) : null,
     dbxState?.supported ? h("span", { className: "cedb-dbx-info" }, `${dbxState.supported.length} ${t("db.importDbxFound")}${dbxState.withPassword > 0 ? ` · ${dbxState.withPassword} ${t("db.importDbxPassword")}` : ""}`) : null,
     h("span", { className: "ce-spacer" }),
-    dbxState?.supported && dbxState.imported === void 0 ? h("button", { type: "button", className: "ce-sk-btn ce-sk-primary", disabled: dbxState.busy, onClick: () => void onImportDbx(true) }, dbxState.busy ? t("loading") : t("db.importDbxApply")) : h("button", { type: "button", className: "ce-sk-btn", disabled: dbxState?.busy === true, onClick: () => void onImportDbx(false) }, dbxState?.busy ? t("loading") : t("db.importDbxScan"))
+    dbxState?.supported && dbxState.imported === void 0 ? h("button", { type: "button", className: "ce-sk-btn ce-sk-primary", disabled: dbxState.busy, onClick: () => void onImportDbx?.(true) }, dbxState.busy ? t("loading") : t("db.importDbxApply")) : h("button", { type: "button", className: "ce-sk-btn", disabled: dbxState?.busy === true, onClick: () => void onImportDbx?.(false) }, dbxState?.busy ? t("loading") : t("db.importDbxScan"))
   );
   return h(
     "div",

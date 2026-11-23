@@ -1,6 +1,16 @@
+## 2.4.0 (2026-11-23)
+
+The database panel stops needing anything installed: the plugin now ships `mysql2` and `pg` as its own dependencies, so a fresh install connects to MySQL and PostgreSQL without a system client. The connection dialog becomes dbx-shaped (engine picker, four tabs, TLS, SSH tunnels, colours, notes), and existing dbx connections can be migrated in one click. The editor opens references on click.
+
+### bundled drivers: install the plugin, get the driver
+
+- `mysql2` and `pg` are now real dependencies (`package.json`), resolved from the plugin's own `node_modules`. A server driver is **ready out of the box**; the CLI client becomes an explicit choice (`clientPath`) and the project's own copy still needs permission.
+- The adapter loads `mysql2/promise` rather than the callback build — using the wrong entry made every `await connection.query(...)` fail with the "you have tried to call .then()" error.
+- Verified on this machine: `db.drivers` reports `mysql2@3.24.6` / `pg@8.23.1` as ready modules, and connecting to a dead port surfaces the driver's own `ECONNREFUSED` instead of "install a client".
+
 # Changelog
 
-## Unreleased — migrate the connections from dbx
+### migrate the connections from dbx
 
 Nobody wants to retype five hostnames. The 驱动 dialog now has **从 dbx 迁移连接**: it scans dbx's own `dbx.db`, shows what it found, and imports on a second click.
 
@@ -11,7 +21,7 @@ Nobody wants to retype five hostnames. The 驱动 dialog now has **从 dbx 迁�
 - **Unsupported engines are reported, not dropped silently** (redis, mongodb, …), and a corrupt row says "unreadable config" rather than failing the whole import.
 - Regressions: a fixture dbx database with four rows (two importable, one redis, one broken), field mapping, SSL/colour/URL-parameter carry-over, the password count, apply creating exactly two profiles, the second apply importing zero, and the dialog's preview strip.
 
-## Unreleased — the wizard's chrome, fixed
+### the wizard's chrome, fixed
 
 The first pass reused the panel's tab-strip class names, so the connection tabs inherited the query-tab styling (boxed, cramped) and every wizard rule I wrote was skipped by a name guard. Three other things read as broken in the same screenshot.
 
@@ -20,7 +30,7 @@ The first pass reused the panel's tab-strip class names, so the connection tabs 
 - **The colour swatches are uniform**, with the "no colour" option drawn as a slashed ring rather than an oversized empty circle.
 - **One reason, not a pile of them**: the driver catalog used to join every implementation's complaint (`mysql2 is not resolvable here · mysql client not found — …`). It now picks the actionable sentence, and the dialog shows it on one ellipsized line instead of a red paragraph.
 
-## Unreleased — TLS, tunnels and the engine picker: the dbx dialog, made real
+### TLS, tunnels and the engine picker: the dbx dialog, made real
 
 - **Engine picker with search and categories**: the first step filters like dbx's — a search box plus 全部 / 关系型 / 文件 chips — and every card says which implementation will run or why it cannot.
 - **Four tabs on the connection step**: 连接信息 (name, colour, host/port, user, password with reveal, database, URL parameters, note), **TLS/SSL** (mode: default/disabled/preferred/required/verify-ca/verify-full, plus CA/cert/key paths), **隧道/代理** (jump host, port, user, key path, local port), and 高级 (client binary, project driver).
@@ -30,7 +40,7 @@ The first pass reused the panel's tab-strip class names, so the connection tabs 
 - URL parameters are honoured by the module drivers (`charset`, `application_name`); the CLI path ignores them, which the field's hint says.
 - Regressions: tab content, TLS mode + tunnel reaching the connect payload, tunnel validation without a jump host/target/port, an unreachable tunnel reporting the ssh reason, and a profile round-tripping colour, note and options.
 
-## Unreleased — the new-connection dialog is a wizard
+### the new-connection dialog is a wizard
 
 The single address field made the user type a scheme the dialog already knew, and put every field behind an "advanced" disclosure. It now follows dbx's shape.
 
@@ -40,7 +50,7 @@ The single address field made the user type a scheme the dialog already knew, an
 - The scheme (`postgres://`, `mysql://`) is implied by the engine — typing it is no longer required anywhere.
 - Regressions rewritten for the flow: three cards with reasons, fields hidden until chosen, the port following the engine, a paste filling the fields, a bad paste explaining itself, and the connect payload carrying what was typed.
 
-## Unreleased — clicking a symbol opens its references
+### clicking a symbol opens its references
 
 The reference-count chip was one click too many: clicking a function asked "where is this used?" and the answer was a number you then had to click.
 
@@ -49,16 +59,7 @@ The reference-count chip was one click too many: clicking a function asked "wher
 - The intermediate "N 个引用" chip and its CSS are gone.
 - Regressions: a plain click asks for definition and references and opens the list with every returned row; the click-opened list reports `focus: false`; blank space still dismisses.
 
-## Unreleased — clicking a function tells you how many references it has
-
-"Click the function and I get no reference list" was half true: the peek existed, but a plain click only placed the cursor, so nothing answered the question the click was asking.
-
-- **A reference-count lens** now appears on the clicked line (`N 个引用`), like VS Code's CodeLens. One click → one count; clicking the chip opens the reference list, and it disappears on Escape, on a scroll-free click elsewhere, or when another file loads.
-- The click still does not open a panel on its own — selecting text to copy must stay quiet — so the pattern is: click to see the count, click the count to see the list. ⌘/Ctrl-click still jumps to the definition, ⇧F12 and the toolbar ⌖ open the list directly.
-- A keyword or a file type with no language server clears the lens instead of showing a stale number.
-- Regressions: a plain click fires exactly one `references` request and opens no peek; the lens renders the count; clicking it opens the list.
-
-## Unreleased — the inline create row has a way out
+### the inline create row has a way out
 
 Clicking "+" in the file tree by accident left a name field with no visible escape: Escape only worked while that input held focus, and clicking elsewhere did nothing.
 
@@ -66,7 +67,7 @@ Clicking "+" in the file tree by accident left a name field with no visible esca
 - It is a **transient layer**: clicking anywhere outside, or pressing Escape with focus elsewhere, cancels it — the same dismissal every other popup in the plugin uses.
 - `TreeInputRow` is exported so the contract is tested directly: both buttons render with labels, × and Escape cancel, ✓ and Enter confirm with the typed value, and typing is reported.
 
-## Unreleased — the module rung is real
+### the module rung is real
 
 The driver ladder described a project-local `mysql2` / `pg` but only the catalog knew about it: a connection always went through the CLI. Now it connects through the module when the user allows it.
 

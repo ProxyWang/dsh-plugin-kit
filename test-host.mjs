@@ -1132,7 +1132,7 @@ process.stdin.on("data", (chunk) => {
 	db.disconnect(slowConn.id);
 
 	const refused = await db.connect({ driver: "mysql", host: "example.test" }).then(() => null, (error) => error);
-	check("a missing client is refused with an install hint", refused !== null && /install it/.test(refused.message) && /client path/.test(refused.message), String(refused));
+	check("an unreachable server is reported by the bundled driver", refused !== null && /could not connect/.test(refused.message), String(refused));
 	const drivers = await db.listDrivers();
 	check("driver notes name the install command and the escape hatch", drivers.every((entry) => entry.ready || /client path/.test(entry.note) || /Node/.test(entry.note)), drivers);
 	rmSync(brew, { recursive: true, force: true });
@@ -1160,7 +1160,8 @@ process.stdin.on("data", (chunk) => {
 	const { resolveModule, availableModules, DRIVER_MODULES } = await import("./lib/host/modresolve.js");
 	const { driverCatalog } = await import("./lib/host/drivers.js");
 
-	check("only whitelisted packages are loadable", resolveModule("zod") === null && resolveModule("./local.js") === null && resolveModule("mysql2", { allowWorkspace: true, cwd: "/nonexistent" }) === null, DRIVER_MODULES.size);
+	check("only whitelisted packages are loadable", resolveModule("zod") === null && resolveModule("./local.js") === null, DRIVER_MODULES.size);
+	check("the plugin's own mysql2/pg are resolvable without a workspace", resolveModule("mysql2")?.source === "host" && resolveModule("pg")?.source === "host", resolveModule("mysql2"));
 
 	// A workspace that already depends on mysql2 is exactly the case the ladder
 	// exists for; without permission it must not be found.
@@ -1171,7 +1172,7 @@ process.stdin.on("data", (chunk) => {
 	writeFileSync(`${workspace}/node_modules/mysql2/lib/index.js`, "export const createConnection = () => {};\n");
 	const denied = resolveModule("mysql2", { cwd: workspace });
 	const allowed = resolveModule("mysql2", { cwd: workspace, allowWorkspace: true });
-	check("a workspace module needs explicit permission", denied === null, denied);
+	check("without permission the bundled copy is used, not the workspace one", denied?.source === "host" && denied.version !== "3.11.0", denied);
 	check("a whitelisted workspace module resolves with permission", allowed?.version === "3.11.0" && allowed?.source === "workspace", allowed);
 
 	const catalog = await driverCatalog({ cwd: workspace, allowWorkspace: true });
@@ -1180,12 +1181,12 @@ process.stdin.on("data", (chunk) => {
 	check("a resolvable module is preferred over the CLI", mysql?.impl === "module" && /^mysql2@/.test(mysql.version), { impl: mysql?.impl, version: mysql?.version });
 	check("capabilities describe the chosen implementation", mysql?.capabilities?.transactions === true && mysql?.capabilities?.typedValues === true, mysql?.capabilities);
 	const postgres = catalog.find((entry) => entry.id === "postgres");
-	check("a driver without its module falls back to the CLI probe", postgres?.impl === "" || postgres.impl === "cli", { impl: postgres?.impl, ready: postgres?.ready, note: postgres?.note });
+	check("every server driver is ready through its bundled module", mysql?.impl === "module" && postgres?.impl === "module" && /^pg@/.test(postgres.version ?? ""), { mysql: mysql?.impl, postgres: postgres?.impl, version: postgres?.version });
 	check("the catalog still answers the old shape", catalog.every((entry) => typeof entry.ready === "boolean" && typeof entry.note === "string" && typeof entry.bin === "string"), null);
 	check("an unavailable driver offers the install command through its implementation", postgres?.alternatives.every((entry) => entry.ready || entry.note !== ""), postgres?.alternatives);
 
 	const modules = availableModules({ cwd: workspace, allowWorkspace: true });
-	check("availableModules reports only what resolves", modules.mysql2?.version === "3.11.0" && modules.pg === undefined, Object.keys(modules));
+	check("availableModules prefers the workspace copy when allowed", modules.mysql2?.version === "3.11.0" && modules.pg?.source === "host", Object.fromEntries(Object.entries(modules).map(([key, value]) => [key, value.version])));
 	rmSync(workspace, { recursive: true, force: true });
 }
 
@@ -1228,24 +1229,33 @@ export async function createConnection(config) {
 }
 `);
 	const db = await import("./lib/host/db.js");
-	const conn = await db.connect({ driver: "mysql", host: "example.test", user: "u", database: "demo", cwd: workspace, allowModule: true });
-	check("a project-local mysql2 is used when allowed", conn?.impl === "module" && /^mysql2@/.test(conn.module ?? ""), conn);
+	const { openModuleRunner } = await import("./lib/host/drivers/module-runner.js");
+	const runner = await openModuleRunner({
+		driver: "mysql",
+		entry: `${workspace}/node_modules/mysql2/index.js`,
+		config: { host: "example.test", port: 3306, user: "u", password: "", database: "demo" },
+	});
 
-	const read = await db.query(conn.id, "SELECT * FROM users");
+	const read = await runner.call("query", { sql: "SELECT * FROM users" });
 	check("the module driver answers a read", read.columns?.join() === "id,name" && read.rows?.[0]?.[1] === "ada", read);
-	const write = await db.query(conn.id, "UPDATE users SET name = 'x'");
+	const write = await runner.call("query", { sql: "UPDATE users SET name = 'x'" });
 	check("the module driver reports affected rows", write.changes === 2, write);
 
-	const schema = await db.schema(conn.id);
+	const schema = await runner.call("schema", {});
 	const users = schema.databases?.find((entry) => entry.name === "demo")?.tables?.find((table) => table.name === "users");
 	check("the module driver describes the schema", users?.columns?.length === 2 && users.columns.some((column) => column.primaryKey), schema);
+	await runner.close();
 
-	db.disconnect(conn.id);
-	// Without permission the module is not loaded: the CLI path is used instead.
+	// The bundled driver is the default now, so `connect` reaches the network
+	// instead of asking for a client — and reports the driver's own error.
+	const bundled = await db.connect({ driver: "mysql", host: "example.test", user: "u", database: "demo" }).then(() => null, (error) => error);
+	check("connect uses the bundled driver by default", bundled !== null && /could not connect/.test(bundled.message), String(bundled));
+
+	// An explicit client path still selects the CLI implementation.
 	const cliBin = `${workspace}/fake-mysql`;
 	writeFileSync(cliBin, "#!/bin/sh\nprintf 'answer\\n1\\n'\n", { mode: 0o755 });
 	const plain = await db.connect({ driver: "mysql", host: "example.test", clientPath: cliBin, cwd: workspace });
-	check("without permission the CLI implementation is used", plain?.impl === undefined && plain?.driver === "mysql", plain);
+	check("an explicit client path selects the CLI implementation", plain?.impl === undefined && plain?.driver === "mysql", plain);
 	db.disconnect(plain.id);
 	rmSync(workspace, { recursive: true, force: true });
 }

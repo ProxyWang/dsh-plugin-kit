@@ -1,6 +1,6 @@
 {
   "name": "dsh-plugin-kit",
-  "version": "2.3.0",
+  "version": "2.4.0",
   "description": "Harness developer workspace: code IDE with a multi-tab editor, LSP navigation, search, Git review, API client, file browser, and skills manager.",
   "license": "MIT",
   "repository": {
@@ -52,6 +52,8 @@
     "esbuild": "^0.28.2"
   },
   "dependencies": {
+    "mysql2": "^3.24.6",
+    "pg": "^8.23.1",
     "zod": "^4.6.7"
   }
 }
