@@ -18,9 +18,10 @@
   instead of printing `HEAD`; a non-repository workspace renders nothing.
 - **The row cell is icon-sized, so the full name cannot live there.** The host's contract puts the leading seat in a
   16px cell and the trailing seat in a narrow icon strip (that is why the chip clipped even at `min(26em, 62%)`).
-  The chip now shortens from the **middle** (`feat/profile-match` and `feat/profile-matrix` stay distinguishable),
-  and the **complete branch moved to the session hover card** — `sidebar.session.row.hover`, the host's text area
-  between the relative time and the status line.
+  The chip now keeps the **ending complete**: when the part after the last `/` fits it is shown alone
+  (`feat/checkout-panel` → `checkout-panel`), otherwise the front is cut at a separator (`…match-api`), so two
+  branches that differ in their tail never look identical. The **complete name moved to the session hover card** —
+  `sidebar.session.row.hover`, the host's text area between the relative time and the status line.
 - Tests: the route (branch + non-repo), the chip (branch shown, workspace-scoped request, live update after a
   switch, disappears outside a repo, detached label, unmount stops the poll, rows of one workspace share a poll).
 

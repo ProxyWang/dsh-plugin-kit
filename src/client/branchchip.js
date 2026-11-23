@@ -55,27 +55,37 @@ export function watchBranch(cwd, listener) {
 }
 
 /** Character budget for the always-visible row chip (the cell is ~16px tall). */
-export const BRANCH_CHIP_MAX = 22;
+export const BRANCH_CHIP_MAX = 18;
 
 /**
- * Shorten a branch name from the middle.
+ * Shorten a branch name so its **ending stays complete**.
  *
- * The row cell is narrow and the host clips it; end-truncation kept only the
- * common prefix, so `feat/profile-match` and `feat/profile-matrix` looked the
- * same. Keeping both ends (and the full name in the hover card) makes the chip
- * identifiable at a glance.
+ * The row cell is narrow, and end-truncation (`feat/profile-match…`) hid exactly
+ * the part that tells branches apart. Two rules keep the tail intact:
+ *
+ * 1. when the part after the last `/` fits, show it alone (`feat/checkout-panel`
+ *    → `checkout-panel`) — no ellipsis, nothing lost at the end;
+ * 2. otherwise keep the last characters, cutting at a `/`, `-` or `_` boundary so
+ *    the label does not start mid-word (`…match-api`).
+ *
+ * The complete name (prefix included) is in the session hover card.
  *
  * @param name - the branch name
  * @param max - the character budget
- * @returns the name unchanged when it fits, otherwise `head…tail`
+ * @returns the label for the narrow row cell
  */
 export function shortBranch(name, max = BRANCH_CHIP_MAX) {
 	const text = String(name ?? "");
 	if (text.length <= max) return text;
-	const budget = max - 1; // the ellipsis
-	const head = Math.ceil(budget * 0.45);
-	const tail = budget - head;
-	return `${text.slice(0, head)}…${text.slice(text.length - tail)}`;
+	const slash = text.lastIndexOf("/");
+	if (slash !== -1) {
+		const leaf = text.slice(slash + 1);
+		if (leaf.length <= max) return leaf;
+	}
+	let tail = text.slice(text.length - (max - 1));
+	const boundary = tail.search(/[/_-]/);
+	if (boundary > 0 && boundary < 6) tail = tail.slice(boundary + 1);
+	return `…${tail}`;
 }
 
 /**

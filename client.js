@@ -19465,14 +19465,19 @@ function watchBranch(cwd, listener) {
     branches.delete(cwd);
   };
 }
-var BRANCH_CHIP_MAX = 22;
+var BRANCH_CHIP_MAX = 18;
 function shortBranch(name, max = BRANCH_CHIP_MAX) {
   const text = String(name ?? "");
   if (text.length <= max) return text;
-  const budget = max - 1;
-  const head = Math.ceil(budget * 0.45);
-  const tail = budget - head;
-  return `${text.slice(0, head)}…${text.slice(text.length - tail)}`;
+  const slash = text.lastIndexOf("/");
+  if (slash !== -1) {
+    const leaf = text.slice(slash + 1);
+    if (leaf.length <= max) return leaf;
+  }
+  let tail = text.slice(text.length - (max - 1));
+  const boundary = tail.search(/[/_-]/);
+  if (boundary > 0 && boundary < 6) tail = tail.slice(boundary + 1);
+  return `…${tail}`;
 }
 function sessionCwd(useSessions, sessionId) {
   const id = String(sessionId ?? "");
