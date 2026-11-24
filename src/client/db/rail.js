@@ -11,15 +11,15 @@ import { Fragment, h } from "../react.js";
  * Rendered as a plain function rather than an element: the rail has no hooks, and
  * calling it keeps the tree flat, which is what the tests already assert against.
  *
- * @param props - `{t, profiles, connections, databasesFor, openConns, collapsedDbs,
- *   expanded, activeConn, activeDb, activeTableKey, profileErrors, schemaBusy,
- *   schemaError, filter, onFilter, onConnect, onForget, onToggleConn,
+ * @param props - `{t, profiles, connections, databasesFor, schemas, openConns,
+ *   collapsedDbs, expanded, activeConn, activeDb, activeTableKey, profileErrors,
+ *   schemaBusy, schemaErrors, filter, onFilter, onConnect, onForget, onToggleConn,
  *   onDisconnect, onSelectDatabase, onSelectTable, onOpenQuery}`
  */
 export function renderRail(props) {
 	const {
-		t, profiles, connections, databasesFor, openConns, collapsedDbs, expanded,
-		activeConn, activeDb, activeTableKey, profileErrors, schemaBusy, schemaError, filter,
+		t, profiles, connections, databasesFor, schemas, openConns, collapsedDbs, expanded,
+		activeConn, activeDb, activeTableKey, profileErrors, schemaBusy, schemaErrors, filter,
 		onFilter, onConnect, onForget, onToggleConn, onDisconnect, onSelectDatabase,
 		onSelectTable, onOpenQuery,
 	} = props;
@@ -78,7 +78,7 @@ export function renderRail(props) {
 				open
 					? h("div", { className: "cedb-instance-body" },
 						schemaBusy && !loaded ? h("div", { className: "cedb-empty" }, t("loading")) : null,
-						schemaError && connection.id === activeConn ? h("div", { className: "cedb-error cedb-pad" }, schemaError) : null,
+						schemaErrors[connection.id] ? h("div", { className: "cedb-error cedb-pad" }, schemaErrors[connection.id]) : null,
 						databasesFor(connection.id).map((database) => {
 							const dbKey = `${connection.id}:${database.name}`;
 							const selected = activeDb.conn === connection.id && activeDb.database === database.name;

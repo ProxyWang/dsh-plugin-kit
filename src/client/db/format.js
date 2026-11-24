@@ -6,6 +6,8 @@
 
 /** Rows per table page. */
 export const PAGE_SIZE = 100;
+/** Page size for free-form SQL tabs (larger than a table page). */
+export const QUERY_PAGE = 200;
 /** Remembered queries in the history drawer. */
 export const HISTORY_CAP = 40;
 

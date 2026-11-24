@@ -68,6 +68,33 @@ function paintCase() {
 	return { ms: Number((now() - started).toFixed(1)), chars, msPerFrame: Number(((now() - started) / 100).toFixed(3)) };
 }
 
+function largeCase() {
+	const screen = createScreen({ cols: 500, rows: 200, scrollback: 1000 });
+	const chunk = Array.from({ length: 100 }, (_, i) => coloredLine(i)).join("");
+	const bytes = Buffer.byteLength(chunk);
+	let written = 0;
+	const parseStarted = now();
+	while (written < 2 * MiB) {
+		screen.write(chunk);
+		written += bytes;
+	}
+	const parseMs = now() - parseStarted;
+	const lines = screen.viewport();
+	const paintStarted = now();
+	let chars = 0;
+	for (let n = 0; n < 20; n++) for (const line of lines) chars += rowHtml(line, { fg: "#fff", bg: "#000" }).length;
+	const paintMs = now() - paintStarted;
+	const scrollStarted = now();
+	for (let i = 0; i < 500; i++) screen.write(chunk);
+	return {
+		geometry: "500x200",
+		parseMiBPerSecond: Number((written / MiB / (parseMs / 1000)).toFixed(1)),
+		rowHtmlMsPerFrame: Number((paintMs / 20).toFixed(2)),
+		scroll500LinesMs: Number((now() - scrollStarted).toFixed(1)),
+		chars,
+	};
+}
+
 function memoryCase() {
 	const screen = createScreen({ cols: 200, rows: 50, scrollback: 1000 });
 	const chunk = Array.from({ length: 200 }, (_, i) => coloredLine(i)).join("");
@@ -83,6 +110,7 @@ const report = {
 	unwrapped: [parseUnwrapped(0), parseUnwrapped(1000)],
 	scroll: [1000, 5000, 20000].map(scrollCase),
 	paint: paintCase(),
+	large: largeCase(),
 	memory: memoryCase(),
 };
 

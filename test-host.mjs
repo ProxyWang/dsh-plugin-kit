@@ -1226,9 +1226,15 @@ process.stdin.on("data", (chunk) => {
 	writeFileSync(`${workspace}/node_modules/mysql2/index.js`, `
 const fields = (...names) => names.map((name) => ({ name }));
 export async function createConnection(config) {
+  globalThis.__mysqlConnections = (globalThis.__mysqlConnections ?? 0) + 1;
   return {
     config,
+    on() {},
     async query(sqlOrObject) {
+      if (globalThis.__mysqlClosedOnce) {
+        globalThis.__mysqlClosedOnce = false;
+        throw new Error("Can't add new command when connection is in closed state");
+      }
       const sql = typeof sqlOrObject === "string" ? sqlOrObject : sqlOrObject.sql;
       const text = String(sql).trim();
       globalThis.__mysqlSql = [...(globalThis.__mysqlSql ?? []), text];
@@ -1272,6 +1278,13 @@ export async function createConnection(config) {
 	const schema = await runner.call("schema", {});
 	const users = schema.databases?.find((entry) => entry.name === "demo")?.tables?.find((table) => table.name === "users");
 	check("the module driver describes the schema", users?.columns?.length === 2 && users.columns.some((column) => column.primaryKey), schema);
+
+	// MySQL closes idle sockets; the next read must rebuild the session instead
+	// of surfacing "Can't add new command when connection is in closed state".
+	globalThis.__mysqlConnections = 0;
+	globalThis.__mysqlClosedOnce = true;
+	const recovered = await runner.call("query", { sql: "SELECT * FROM users" });
+	check("a closed module connection reconnects once", recovered.rows?.[0]?.[1] === "ada" && globalThis.__mysqlConnections >= 1, { recovered, connections: globalThis.__mysqlConnections });
 	await runner.close();
 
 	// The bundled driver is the default now, so `connect` reaches the network

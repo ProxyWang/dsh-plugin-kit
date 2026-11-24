@@ -215,6 +215,15 @@ var zh = {
   "terminal.searchNext": "下一个匹配",
   "terminal.searchClose": "关闭查找",
   "terminal.reconnect": "重新连接",
+  "terminal.copyMode": "复制模式",
+  "terminal.copyVisual": "选择中",
+  "terminal.copyHint": "h/j/k/l 移动 · v 选择 · y 复制 · Esc 退出",
+  "terminal.copyDone": "已复制",
+  "terminal.copyFailed": "复制失败",
+  "terminal.bell": "终端响铃",
+  "terminal.screenReader": "终端输出",
+  "terminal.commandDone": "命令完成（{seconds}s，退出码 {code}）",
+  "terminal.commandNone": "没有可复制的命令输出",
   "toolbar.files": "资源管理器",
   "toolbar.changes": "变更",
   refresh: "刷新",
@@ -1046,6 +1055,15 @@ var en = {
   "terminal.searchNext": "Next match",
   "terminal.searchClose": "Close find",
   "terminal.reconnect": "Reconnect",
+  "terminal.copyMode": "Copy mode",
+  "terminal.copyVisual": "Visual",
+  "terminal.copyHint": "h/j/k/l move · v select · y copy · Esc exit",
+  "terminal.copyDone": "Copied",
+  "terminal.copyFailed": "Copy failed",
+  "terminal.bell": "Terminal bell",
+  "terminal.screenReader": "Terminal output",
+  "terminal.commandDone": "Command finished ({seconds}s, exit {code})",
+  "terminal.commandNone": "No command output to copy",
   "toolbar.files": "Explorer",
   "toolbar.changes": "Changes",
   refresh: "Refresh",
@@ -9781,6 +9799,14 @@ var CSS2 = `
 .ce-term-find-count{min-width:42px;text-align:center;font-size:11px;color:var(--dsw-alias-label-secondary,#999);font-variant-numeric:tabular-nums}
 .ce-term-find-btn{width:22px;height:22px;display:inline-flex;align-items:center;justify-content:center;border:0;border-radius:4px;background:transparent;color:var(--dsw-alias-label-secondary,#999);font:inherit;font-size:12px;cursor:pointer}
 .ce-term-find-btn:hover{background:var(--dsw-alias-interactive-bg-hover,#2b2b2b);color:var(--dsw-alias-label-primary,#eee)}
+.ce-term-copy-cursor{position:absolute;top:8px;left:8px;border:1.5px solid var(--dsw-alias-brand-primary,#59b7ff);box-sizing:border-box;pointer-events:none;z-index:2;border-radius:2px;box-shadow:0 0 0 1px rgba(0,0,0,.35)}
+.ce-term-copybar{position:absolute;left:10px;bottom:8px;z-index:4;display:flex;align-items:center;gap:8px;max-width:calc(100% - 20px);padding:4px 9px;border-radius:6px;border:.5px solid var(--dsw-alias-border-l2,#444);background:color-mix(in srgb,var(--dsw-alias-bg-layer-1,#1d2126) 92%,transparent);box-shadow:0 4px 16px rgba(0,0,0,.3)}
+.ce-term-copy-mode{font-size:10.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--dsw-alias-brand-primary,#59b7ff)}
+.ce-term-copy-hint{font-size:11px;color:var(--dsw-alias-label-secondary,#999);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ce-term-a11y{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:pre-wrap;border:0}
+@media(prefers-reduced-motion:reduce){.ce-term-focused .ce-term-cursor-blink{animation:none}.ce-term-notice{animation:none}}
+.ce-term-notice{position:absolute;left:50%;bottom:12px;transform:translateX(-50%);z-index:5;max-width:min(520px,calc(100% - 24px));padding:5px 11px;border-radius:6px;border:.5px solid var(--dsw-alias-border-l2,#444);background:var(--dsw-alias-bg-layer-1,#1d2126);color:var(--dsw-alias-label-primary,#eee);font-size:11.5px;box-shadow:0 6px 20px rgba(0,0,0,.35);animation:ce-term-notice-in .16s ease-out}
+@keyframes ce-term-notice-in{from{opacity:0;transform:translate(-50%,4px)}to{opacity:1;transform:translate(-50%,0)}}
 .ce-term-reconnect{position:absolute;right:10px;bottom:8px;z-index:4;font:inherit;font-size:11.5px;padding:3px 9px;border-radius:5px;border:.5px solid var(--dsw-alias-border-l2,#444);background:var(--dsw-alias-bg-layer-1,#1d2126);color:var(--dsw-alias-label-primary,#eee);cursor:pointer}
 .ce-term-reconnect:hover{background:var(--dsw-alias-interactive-bg-hover,#2b2b2b)}
 .ce-term-title{display:inline-flex;align-items:center;gap:4px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
@@ -13551,6 +13577,7 @@ function driverLabel(driver) {
 
 // src/client/db/format.js
 var PAGE_SIZE = 100;
+var QUERY_PAGE = 200;
 var HISTORY_CAP2 = 40;
 function toCsv(columns, rows) {
   const quote = (value) => {
@@ -13604,32 +13631,42 @@ function implSuffix(driver, t) {
 
 // src/client/db/hooks/use-schema-cache.js
 function useSchemaCache({ activeConn, connections, t, onSelect, onNotice }) {
-  const [schemas2, setSchemas] = useState({});
+  const [schemas, setSchemas] = useState({});
   const [openConns, setOpenConns] = useState({});
   const [schemaBusy, setSchemaBusy] = useState(false);
-  const [schemaError, setSchemaError] = useState("");
+  const [schemaErrors, setSchemaErrors] = useState({});
+  const schemaError = schemaErrors[activeConn] ?? "";
   const [filter, setFilter] = useState("");
+  const clearSchemaError = useCallback((id) => {
+    setSchemaErrors((current) => {
+      if (!(id in current)) return current;
+      const next = { ...current };
+      delete next[id];
+      return next;
+    });
+  }, []);
   const refreshSchema = useCallback(async (id = activeConn) => {
     if (!id) return;
     setSchemaBusy(true);
-    setSchemaError("");
+    clearSchemaError(id);
     const res = await api("db.schema", { id });
     setSchemaBusy(false);
     if (res.ok) {
       setSchemas((current) => ({ ...current, [id]: res.value }));
       setOpenConns((current) => ({ ...current, [id]: true }));
+      clearSchemaError(id);
     } else {
       setSchemas((current) => {
         const next = { ...current };
         delete next[id];
         return next;
       });
-      setSchemaError(res.error);
+      setSchemaErrors((current) => ({ ...current, [id]: res.error }));
     }
-  }, [activeConn]);
+  }, [activeConn, clearSchemaError]);
   const selectDatabase = useCallback(async (connId, databaseName) => {
     onSelect(connId, databaseName);
-    const known = schemas2[connId]?.databases?.find((entry) => entry.name === databaseName);
+    const known = schemas[connId]?.databases?.find((entry) => entry.name === databaseName);
     if (known && known.tables.length > 0) return;
     if (connections.find((entry) => entry.id === connId)?.driver === "postgres") {
       onNotice(t("db.pgCrossDatabase"));
@@ -13637,11 +13674,12 @@ function useSchemaCache({ activeConn, connections, t, onSelect, onNotice }) {
     }
     const res = await api("db.schema", { id: connId, database: databaseName });
     if (!res.ok || !res.value) {
-      setSchemaError(res.error ?? "");
+      setSchemaErrors((current) => ({ ...current, [connId]: res.error ?? "" }));
       return;
     }
     const fetched = (res.value.databases ?? []).find((entry) => entry.name === databaseName);
     if (!fetched) return;
+    clearSchemaError(connId);
     setSchemas((current) => {
       const schemaFor = current[connId];
       if (!schemaFor) return { ...current, [connId]: res.value };
@@ -13654,25 +13692,26 @@ function useSchemaCache({ activeConn, connections, t, onSelect, onNotice }) {
         }
       };
     });
-  }, [schemas2, connections, t, onSelect, onNotice]);
+  }, [schemas, connections, t, onSelect, onNotice, clearSchemaError]);
   const databasesOf = useCallback((connId) => {
     const needle = filter.trim().toLowerCase();
-    const databases = (schemas2[connId]?.databases ?? []).map((database) => {
+    const databases = (schemas[connId]?.databases ?? []).map((database) => {
       const entries = (database.tables ?? []).filter((entry) => !needle || entry.name.toLowerCase().includes(needle));
       return { ...database, tables: entries };
     });
     return needle ? databases.filter((database) => database.tables.length > 0) : databases;
-  }, [schemas2, filter]);
+  }, [schemas, filter]);
   return {
-    schemas: schemas2,
+    schemas,
     setSchemas,
     openConns,
     setOpenConns,
-    schema: schemas2[activeConn] ?? null,
+    schema: schemas[activeConn] ?? null,
     schemaBusy,
     setSchemaBusy,
     schemaError,
-    setSchemaError,
+    schemaErrors,
+    clearSchemaError,
     filter,
     setFilter,
     refreshSchema,
@@ -13753,8 +13792,7 @@ function useProfiles({ cwd, onNotice }) {
 }
 
 // src/client/db/hooks/use-tabs.js
-var QUERY_PAGE2 = 200;
-function useTabs({ connections, setConnections, activeConn, setActiveConn, t, refreshSchema, onNotice }) {
+function useTabs({ connections, setConnections, activeConn, setActiveConn, t, refreshSchema, onNotice, onConnectionOk }) {
   const [tabs, setTabs] = useState([]);
   const [activeTabId, setActiveTabId] = useState("");
   const [history, setHistory] = useState([]);
@@ -13800,7 +13838,8 @@ function useTabs({ connections, setConnections, activeConn, setActiveConn, t, re
       return;
     }
     patchTab(tab.id, { loading: false, result: res.value, error: "", runToken: "" });
-  }, [patchTab]);
+    onConnectionOk?.(tab.conn);
+  }, [patchTab, onConnectionOk]);
   const loadRows = useCallback((tabId, override) => {
     const tab = tabs.find((entry) => entry.id === tabId);
     if (!tab || tab.kind !== "table") return;
@@ -13869,7 +13908,7 @@ function useTabs({ connections, setConnections, activeConn, setActiveConn, t, re
     const token = requestToken("query");
     patchTab(id, { loading: true, error: "", runToken: token });
     const started = Date.now();
-    const res = await api("db.query", { id: conn, token, sql, limit: QUERY_PAGE2, offset });
+    const res = await api("db.query", { id: conn, token, sql, limit: QUERY_PAGE, offset });
     const ms = Date.now() - started;
     setHistory((current) => [{ sql, at: Date.now(), ms, ok: res.ok && !res.value?.error }, ...current.filter((entry) => entry.sql !== sql)].slice(0, HISTORY_CAP2));
     if (!res.ok) {
@@ -13877,8 +13916,9 @@ function useTabs({ connections, setConnections, activeConn, setActiveConn, t, re
       return;
     }
     patchTab(id, { loading: false, result: res.value, error: "", ms, runToken: "", offset });
+    onConnectionOk?.(conn);
     if (/^\s*(create|drop|alter|rename|truncate)\b/i.test(sql)) void refreshSchema(conn);
-  }, [tabs, activeConn, patchTab, refreshSchema, t]);
+  }, [tabs, activeConn, patchTab, refreshSchema, onConnectionOk, t]);
   const cancelQuery = useCallback(async (tab) => {
     const conn = tab.conn || activeConn;
     if (!conn) return;
@@ -14206,17 +14246,17 @@ function useConnectWizard({ cwd, t, drivers, allowModule, saveDraft, onConnected
 }
 
 // src/client/db/hooks/use-mutations.js
-function useMutations({ t, connections, activeConn, activeTab, schemas: schemas2, loadRows, onNotice, onModal }) {
+function useMutations({ t, connections, activeConn, activeTab, schemas, loadRows, onNotice, onModal }) {
   const [cellEdit, setCellEdit] = useState(null);
   const [pendingDelete, setPendingDelete] = useState(-1);
   const [cellDetail, setCellDetail] = useState(null);
   const [explainState, setExplainState] = useState({ busy: false, result: null, error: "" });
   const tableEntry = useMemo(() => {
     if (activeTab?.kind !== "table") return null;
-    const schemaFor = schemas2[activeTab.conn || activeConn];
+    const schemaFor = schemas[activeTab.conn || activeConn];
     const database = (schemaFor?.databases ?? []).find((entry) => entry.name === activeTab.database);
     return (database?.tables ?? []).find((entry) => entry.name === activeTab.table) ?? null;
-  }, [activeTab, schemas2, activeConn]);
+  }, [activeTab, schemas, activeConn]);
   const pkColumn = tableEntry?.columns?.find((column) => column.primaryKey)?.name ?? "";
   const driverOf = (conn) => connections.find((entry) => entry.id === conn)?.driver;
   const runMutation = useCallback(async (sql, message) => {
@@ -14265,7 +14305,7 @@ function useMutations({ t, connections, activeConn, activeTab, schemas: schemas2
     });
     await runMutation(sql, t("db.rowDeleted"));
   }, [activeTab, pkColumn, pendingDelete, connections, activeConn, runMutation, t]);
-  const insertRow2 = useCallback(async (target, table, database, values) => {
+  const insertRow = useCallback(async (target, table, database, values) => {
     const sql = insertRowSql({ driver: driverOf(target), table, database, values });
     if (sql === "") return t("db.importEmpty");
     const res = await api("db.query", { id: target, sql });
@@ -14274,7 +14314,7 @@ function useMutations({ t, connections, activeConn, activeTab, schemas: schemas2
     onNotice(t("db.rowInserted"));
     return "";
   }, [connections, t, onModal, onNotice]);
-  const importRows2 = useCallback(async (target, table, text) => {
+  const importRows = useCallback(async (target, table, text) => {
     const parsed = parseDataText(text);
     if (parsed.error !== "") return parsed.error;
     const sql = toInsertSql(parsed, table, driverOf(target));
@@ -14285,7 +14325,7 @@ function useMutations({ t, connections, activeConn, activeTab, schemas: schemas2
     onNotice(t("db.imported").replace("{n}", String(parsed.rows.length)));
     return "";
   }, [connections, t, onModal, onNotice]);
-  const runExplain2 = useCallback(() => {
+  const runExplain = useCallback(() => {
     const conn = activeTab?.conn || activeConn;
     const sql = activeTab?.sql ?? "";
     onModal({ kind: "explain" });
@@ -14310,9 +14350,9 @@ function useMutations({ t, connections, activeConn, activeTab, schemas: schemas2
     runMutation,
     commitCell,
     removeRow,
-    insertRow: insertRow2,
-    importRows: importRows2,
-    runExplain: runExplain2
+    insertRow,
+    importRows,
+    runExplain
   };
 }
 
@@ -14360,7 +14400,7 @@ function useWorkbench({ t, useTabInfo, sessionId, useSessions }) {
     onNotice: setNotice
   });
   const {
-    schemas: schemas2,
+    schemas,
     setSchemas,
     openConns,
     setOpenConns,
@@ -14368,7 +14408,8 @@ function useWorkbench({ t, useTabInfo, sessionId, useSessions }) {
     schemaBusy,
     setSchemaBusy,
     schemaError,
-    setSchemaError,
+    schemaErrors,
+    clearSchemaError,
     filter,
     setFilter,
     refreshSchema,
@@ -14382,7 +14423,8 @@ function useWorkbench({ t, useTabInfo, sessionId, useSessions }) {
     setActiveConn,
     t,
     refreshSchema,
-    onNotice: setNotice
+    onNotice: setNotice,
+    onConnectionOk: clearSchemaError
   });
   const {
     tabs,
@@ -14457,7 +14499,7 @@ function useWorkbench({ t, useTabInfo, sessionId, useSessions }) {
     connections,
     activeConn,
     activeTab,
-    schemas: schemas2,
+    schemas,
     loadRows,
     onNotice: setNotice,
     onModal: setModal
@@ -14476,9 +14518,9 @@ function useWorkbench({ t, useTabInfo, sessionId, useSessions }) {
     runMutation,
     commitCell,
     removeRow,
-    insertRow: insertRow2,
-    importRows: importRows2,
-    runExplain: runExplain2
+    insertRow,
+    importRows,
+    runExplain
   } = mutationStore;
   const [exportOpen, setExportOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -14514,7 +14556,7 @@ function useWorkbench({ t, useTabInfo, sessionId, useSessions }) {
     if (existing) {
       setActiveConn(existing.id);
       setOpenConns((current) => ({ ...current, [existing.id]: true }));
-      if (!schemas2[existing.id]) void refreshSchema(existing.id);
+      if (!schemas[existing.id]) void refreshSchema(existing.id);
       return existing.id;
     }
     const res = await api("db.connect", { profileId: profile.id, cwd });
@@ -14535,7 +14577,7 @@ function useWorkbench({ t, useTabInfo, sessionId, useSessions }) {
     setNotice("");
     await refreshSchema(res.value.id);
     return res.value.id;
-  }, [refreshSchema, cwd, useSavedProfile, t, connections, schemas2]);
+  }, [refreshSchema, cwd, useSavedProfile, t, connections, schemas]);
   const doDisconnect = useCallback(async (id) => {
     await disconnect(id);
     setTabs((current) => current.filter((tab2) => tab2.conn !== id));
@@ -14560,7 +14602,7 @@ function useWorkbench({ t, useTabInfo, sessionId, useSessions }) {
       if (activeTab?.kind === "query") void runQuery(activeTab.id);
     }
   }, [activeTab, runQuery]);
-  return { activeConn, activeDb, activeTab, activeTabId, allowModule, applyAddress, canConnect, cancelQuery, cellDetail, cellEdit, closeTab, collapsedDbs, commitCell, connectOpen, connectParams, connectProfile, connectRef, connections, copyCommand, copyResult, counts, cwd, databasesOf, dbxState, detailRef, doConnect, doDisconnect, doTest, driverReady, drivers, editingProfileId, expanded, explainState, exportOpen, exportResult, fetchRows, filter, forgetProfile, form, history, historyOpen, installDriverModule, loadRows, modal, notice, onKeyDown, openConnect, openConns, openQueryTab, openTab, openTable, patchTab, pendingDelete, pickCategory, pickQuery, pickableDrivers, pkColumn, probeDrivers, profileErrors, profileRevision, profiles, refreshSchema, rememberConnection, removeRow, runDbxImport, runMutation, runQuery, saveProfile, schema, schemaBusy, schemaError, schemas: schemas2, selectDatabase, setActiveConn, setActiveDb, setActiveTabId, setAllowModule, setCellDetail, setCellEdit, setCollapsedDbs, setConnectOpen, setConnections, setDriver, setEditingProfileId, setExpanded, setExplainState, setExportOpen, setFilter, setForm, setHistory, setHistoryOpen, setModal, setNotice, setOpenConns, setPendingDelete, setPickCategory, setPickQuery, setProfileErrors, setProfiles, setSaveProfile, setSchemaBusy, setSchemaError, setSchemas, setShowPassword, setStep, setTab, setTabs, setTestState, showPassword, sortBy, sqlRef, step, t, tab, tableEntry, tabs, testState, toggleTable, useSavedProfile };
+  return { activeConn, activeDb, activeTab, activeTabId, allowModule, applyAddress, canConnect, cancelQuery, cellDetail, cellEdit, closeTab, collapsedDbs, commitCell, connectOpen, connectParams, connectProfile, connectRef, connections, copyCommand, copyResult, counts, cwd, databasesOf, dbxState, detailRef, doConnect, doDisconnect, doTest, driverReady, drivers, editingProfileId, expanded, explainState, exportOpen, exportResult, fetchRows, filter, forgetProfile, form, history, historyOpen, installDriverModule, loadRows, modal, notice, onKeyDown, openConnect, openConns, openQueryTab, openTab, openTable, patchTab, pendingDelete, pickCategory, pickQuery, pickableDrivers, pkColumn, probeDrivers, profileErrors, profileRevision, profiles, refreshSchema, rememberConnection, removeRow, runDbxImport, runExplain, importRows, insertRow, runMutation, runQuery, saveProfile, schema, schemaBusy, schemaError, schemaErrors, schemas, selectDatabase, setActiveConn, setActiveDb, setActiveTabId, setAllowModule, setCellDetail, setCellEdit, setCollapsedDbs, setConnectOpen, setConnections, setDriver, setEditingProfileId, setExpanded, setExplainState, setExportOpen, setFilter, setForm, setHistory, setHistoryOpen, setModal, setNotice, setOpenConns, setPendingDelete, setPickCategory, setPickQuery, setProfileErrors, setProfiles, setSaveProfile, setSchemaBusy, setSchemas, setShowPassword, setStep, setTab, setTabs, setTestState, showPassword, sortBy, sqlRef, step, t, tab, tableEntry, tabs, testState, toggleTable, useSavedProfile };
 }
 
 // src/client/db/grid.js
@@ -14908,6 +14950,7 @@ function renderRail(props) {
     profiles,
     connections,
     databasesFor,
+    schemas,
     openConns,
     collapsedDbs,
     expanded,
@@ -14916,7 +14959,7 @@ function renderRail(props) {
     activeTableKey,
     profileErrors,
     schemaBusy,
-    schemaError,
+    schemaErrors,
     filter,
     onFilter,
     onConnect,
@@ -15000,7 +15043,7 @@ function renderRail(props) {
           "div",
           { className: "cedb-instance-body" },
           schemaBusy && !loaded ? h("div", { className: "cedb-empty" }, t("loading")) : null,
-          schemaError && connection.id === activeConn ? h("div", { className: "cedb-error cedb-pad" }, schemaError) : null,
+          schemaErrors[connection.id] ? h("div", { className: "cedb-error cedb-pad" }, schemaErrors[connection.id]) : null,
           databasesFor(connection.id).map((database) => {
             const dbKey = `${connection.id}:${database.name}`;
             const selected = activeDb.conn === connection.id && activeDb.database === database.name;
@@ -15064,7 +15107,7 @@ function renderRail(props) {
 
 // src/client/db/view.js
 function renderWorkbench(wb) {
-  const { DbView: DbView2, absolute, activeConn, activeDb, activeTab, activeTabId, allowModule, anchor, applyAddress, blob, body, canConnect, cancelQuery, category, cellDetail, cellEdit, closeTab, collapsedDbs, commitCell, conn, connectOpen, connectParams, connectProfile, connectRef, connections, copyCommand, copyResult, counts, csv, cwd, database, databases, databasesOf, dbxState, defaultNow, detailRef, dir, doConnect, doDisconnect, doTest, driver, driverReady, drivers, editingProfileId, entries, existing, expanded, explainState, exportOpen, exportResult, fetchRows, fetched, filter, forgetProfile, form, history, historyOpen, id, index, installDriverModule, keep, key, known, label, list, loadRows, modal, ms, needle, next, notice, onKeyDown, openConnect, openConns, openQueryTab, openTab, openTable, params, parsed, patchTab, pendingDelete, pickCategory, pickQuery, pickableDrivers, pkColumn, pkIndex, pkValue, probeDrivers, profileErrors, profileRevision, profiles, refreshSchema, rememberConnection, removeRow, res, result, runDbxImport, runMutation, runQuery, saveProfile, schema, schemaBusy, schemaError, schemaFor, schemas: schemas2, selectDatabase, setActiveConn, setActiveDb, setActiveTabId, setAllowModule, setCellDetail, setCellEdit, setCollapsedDbs, setConnectOpen, setConnections, setDbxState, setDriver, setDrivers, setEditingProfileId, setExpanded, setExplainState, setExportOpen, setFilter, setForm, setHistory, setHistoryOpen, setModal, setNotice, setOpenConns, setPendingDelete, setPickCategory, setPickQuery, setProfileErrors, setProfiles, setSaveProfile, setSchemaBusy, setSchemaError, setSchemas, setShowPassword, setStep, setTab, setTabs, setTestState, showPassword, sortBy, sql, sqlRef, started, step, t, tab, tableEntry, tabs, target, testState, text, toggleTable, token, url, useSavedProfile, value } = wb;
+  const { DbView: DbView2, absolute, activeConn, activeDb, activeTab, activeTabId, allowModule, anchor, applyAddress, blob, body, canConnect, cancelQuery, category, cellDetail, cellEdit, closeTab, collapsedDbs, commitCell, conn, connectOpen, connectParams, connectProfile, connectRef, connections, copyCommand, copyResult, counts, csv, cwd, database, databases, databasesOf, dbxState, defaultNow, detailRef, dir, doConnect, doDisconnect, doTest, driver, driverReady, drivers, editingProfileId, entries, existing, expanded, explainState, exportOpen, exportResult, fetchRows, fetched, filter, forgetProfile, form, history, historyOpen, id, index, installDriverModule, keep, key, known, label, list, loadRows, modal, ms, needle, next, notice, onKeyDown, openConnect, openConns, openQueryTab, openTab, openTable, params, parsed, patchTab, pendingDelete, pickCategory, pickQuery, pickableDrivers, pkColumn, pkIndex, pkValue, probeDrivers, profileErrors, profileRevision, profiles, refreshSchema, rememberConnection, removeRow, res, result, runDbxImport, runExplain, importRows, insertRow, runMutation, runQuery, saveProfile, schema, schemaBusy, schemaErrors, schemaFor, schemas, selectDatabase, setActiveConn, setActiveDb, setActiveTabId, setAllowModule, setCellDetail, setCellEdit, setCollapsedDbs, setConnectOpen, setConnections, setDbxState, setDriver, setDrivers, setEditingProfileId, setExpanded, setExplainState, setExportOpen, setFilter, setForm, setHistory, setHistoryOpen, setModal, setNotice, setOpenConns, setPendingDelete, setPickCategory, setPickQuery, setProfileErrors, setProfiles, setSaveProfile, setSchemaBusy, setSchemaError, setSchemas, setShowPassword, setStep, setTab, setTabs, setTestState, showPassword, sortBy, sql, sqlRef, started, step, t, tab, tableEntry, tabs, target, testState, text, toggleTable, token, url, useSavedProfile, value } = wb;
   if (!cwd) return h("div", { className: "ce-root" }, h("div", { className: "ce-empty" }, t("editor.noSession")));
   return h(
     "div",
@@ -15091,6 +15134,7 @@ function renderWorkbench(wb) {
         profiles,
         connections,
         databasesFor: databasesOf,
+        schemas,
         openConns,
         collapsedDbs,
         expanded,
@@ -15099,7 +15143,7 @@ function renderWorkbench(wb) {
         activeTableKey: activeTab?.key ?? "",
         profileErrors,
         schemaBusy,
-        schemaError,
+        schemaErrors,
         filter,
         onFilter: setFilter,
         onConnect: (profile) => void connectProfile(profile),
@@ -15107,7 +15151,7 @@ function renderWorkbench(wb) {
         onToggleConn: (connection, open) => {
           setActiveConn(connection.id);
           setOpenConns((current) => ({ ...current, [connection.id]: open }));
-          if (open && !schemas2[connection.id]) void refreshSchema(connection.id);
+          if (open && (!schemas[connection.id] || schemaErrors[connection.id])) void refreshSchema(connection.id);
         },
         onDisconnect: (id2) => void doDisconnect(id2),
         onSelectDatabase: (connId, database2) => {
@@ -15367,7 +15411,9 @@ function renderWorkbench(wb) {
     // ---- modal layer: drivers / ER / plan / import ------------------------------------
     modal === null ? null : modal.kind === "drivers" ? h(DriverManager, { t, drivers, dbxState, onImportDbx: runDbxImport, onInstall: installDriverModule, onCopy: copyCommand, onRedetect: () => void probeDrivers(true), onClose: () => setModal(null) }) : modal.kind === "er" ? h(ErDiagram, { t, schema, onOpenTable: (table) => {
       setModal(null);
-      openTableTab(table);
+      const database2 = activeDb.database || schema?.current || "";
+      const entry = schema?.databases?.find((entry2) => entry2.name === database2)?.tables?.find((entry2) => entry2.name === table);
+      if (entry) openTable(activeDb.conn || activeConn, database2, entry);
     }, onClose: () => setModal(null) }) : modal.kind === "explain" ? h(ExplainPanel, { t, state: explainState, onClose: () => setModal(null) }) : modal.kind === "addrow" ? h(AddRowDialog, {
       t,
       table: modal.table,
@@ -18912,10 +18958,29 @@ var BASE16 = [
   "#00ffff",
   "#ffffff"
 ];
-var paletteCache = null;
-function palette256() {
-  if (paletteCache) return paletteCache;
-  const colors = BASE16.slice();
+var BASE16_LIGHT = [
+  "#000000",
+  "#cc0000",
+  "#4e9a06",
+  "#c4a000",
+  "#3465a4",
+  "#75507b",
+  "#06989a",
+  "#d3d7cf",
+  "#555753",
+  "#ef2929",
+  "#8ae234",
+  "#fce94f",
+  "#729fcf",
+  "#ad7fa8",
+  "#34e2e2",
+  "#eeeeec"
+];
+var paletteCache = { dark: null, light: null };
+function palette256(dark = true) {
+  const slot = dark ? "dark" : "light";
+  if (paletteCache[slot]) return paletteCache[slot];
+  const colors = (dark ? BASE16 : BASE16_LIGHT).slice();
   const steps = [0, 95, 135, 175, 215, 255];
   for (let r = 0; r < 6; r++) {
     for (let g = 0; g < 6; g++) {
@@ -18926,19 +18991,19 @@ function palette256() {
     const level = 8 + i * 10;
     colors.push(rgbHex(level, level, level));
   }
-  paletteCache = colors;
+  paletteCache[slot] = colors;
   return colors;
 }
 function rgbHex(r, g, b) {
   return `#${[r, g, b].map((value) => value.toString(16).padStart(2, "0")).join("")}`;
 }
-function colorCss(value, fallback) {
+function colorCss(value, fallback, dark = true) {
   if (value === -1 || value === void 0 || value === null) return fallback;
   if (value & TRUECOLOR2) {
     const rgb = value & 16777215;
     return rgbHex(rgb >> 16 & 255, rgb >> 8 & 255, rgb & 255);
   }
-  return palette256()[value] ?? fallback;
+  return palette256(dark)[value] ?? fallback;
 }
 function escapeHtml(text) {
   if (text === "&") return "&amp;";
@@ -18950,8 +19015,9 @@ function escapeHtml(text) {
 }
 function signature(cell, theme) {
   const inverse = (cell.fl & FLAG2.inverse) !== 0;
-  const fg = colorCss(inverse ? cell.bg : cell.fg, inverse ? theme.bg : theme.fg);
-  const bg = colorCss(inverse ? cell.fg : cell.bg, inverse ? theme.fg : theme.bg);
+  const dark = theme.dark !== false;
+  const fg = colorCss(inverse ? cell.bg : cell.fg, inverse ? theme.bg : theme.fg, dark);
+  const bg = colorCss(inverse ? cell.fg : cell.bg, inverse ? theme.fg : theme.bg, dark);
   const parts = [];
   if (cell.fl & FLAG2.bold) parts.push("font-weight:600");
   if (cell.fl & FLAG2.dim) parts.push("opacity:.65");
@@ -19089,7 +19155,7 @@ function createRenderer({ container, doc = globalThis.document, theme = () => ({
     cache.set(line, { version: line.version, key, html });
     return html;
   }
-  function paint(screen, { offset = 0, damage = null } = {}) {
+  function paint(screen, { offset = 0, damage = null, hideCursor = false } = {}) {
     const started = typeof performance !== "undefined" ? performance.now() : Date.now();
     themeValue = theme();
     const nextThemeKey = signatureTheme(themeValue);
@@ -19118,7 +19184,7 @@ function createRenderer({ container, doc = globalThis.document, theme = () => ({
       painted++;
     }
     const cursor = screen.cursor;
-    const show = cursor.visible && offset === 0;
+    const show = cursor.visible && offset === 0 && !hideCursor;
     cursorEl.style.display = show ? "block" : "none";
     if (show) {
       const style = cursor.style === "bar" ? "ce-term-cursor-bar" : cursor.style === "underline" ? "ce-term-cursor-underline" : "ce-term-cursor-block";
@@ -19404,6 +19470,15 @@ function selectionRow(selection, row, cols) {
   const to = row === end.row ? end.col : cols;
   return to > from ? { from, to: Math.min(to, cols) } : null;
 }
+function lineText(line) {
+  if (!line?.cells) return "";
+  let text = "";
+  for (const cell of line.cells) {
+    if (!cell || cell.w === 0) continue;
+    text += cell.c;
+  }
+  return text.replace(/\s+$/u, "");
+}
 function selectionText(selection, lineAt, cols) {
   const { start, end, empty } = normalizeSelection(selection);
   if (empty || start === null) return "";
@@ -19610,6 +19685,7 @@ function classAt(char, big) {
   return WORD.test(char) ? 1 : 2;
 }
 function nextWordStart(screen, position, big) {
+  const origin = position;
   let index = screen.indexOfSeq(position.seq);
   let info = infoAt(screen, index);
   let at = textIndexAt(info, position.col);
@@ -19624,7 +19700,7 @@ function nextWordStart(screen, position, big) {
     at = 0;
     while (at < info.text.length && classAt(info.text[at], big) === 0) at++;
     if (at < info.text.length) return { seq: screen.lineSeqAt(index), col: colAt(info, at) };
-    if (index >= screen.bufferRows - 1) return { seq: screen.lineSeqAt(index), col: 0 };
+    if (index >= screen.bufferRows - 1) return origin;
   }
 }
 function previousWordStart(screen, position, big) {
@@ -19646,6 +19722,7 @@ function previousWordStart(screen, position, big) {
   }
 }
 function nextWordEnd(screen, position, big) {
+  const origin = position;
   let index = screen.indexOfSeq(position.seq);
   let info = infoAt(screen, index);
   let at = textIndexAt(info, position.col) + 1;
@@ -19659,7 +19736,7 @@ function nextWordEnd(screen, position, big) {
     index = clampIndex(screen, index + 1);
     info = infoAt(screen, index);
     at = 0;
-    if (index >= screen.bufferRows - 1) return { seq: screen.lineSeqAt(index), col: lastCol(info) };
+    if (index >= screen.bufferRows - 1) return origin;
   }
 }
 function moveParagraph(screen, position, direction) {
@@ -19734,10 +19811,11 @@ function lineSelection(screen, position) {
 
 // src/client/vt/body.js
 var DEFAULT_THEME = {
-  fg: "#d4d4d4",
-  bg: "#1e1e1e",
+  fg: "var(--dsw-alias-label-primary, #d4d4d4)",
+  bg: "var(--dsw-alias-bg-base, #1e1e1e)",
   fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
-  fontSize: 13
+  fontSize: 13,
+  dark: true
 };
 var SEARCH_DEBOUNCE_MS = 140;
 var SYNC_OUTPUT_TIMEOUT_MS = 150;
@@ -19751,7 +19829,10 @@ function themeOf(snapshot) {
     fg: DEFAULT_THEME.fg,
     bg: DEFAULT_THEME.bg,
     fontFamily: family === "" ? DEFAULT_THEME.fontFamily : `${family}, ${DEFAULT_THEME.fontFamily}`,
-    fontSize: Number.isFinite(size) ? size : DEFAULT_THEME.fontSize
+    fontSize: Number.isFinite(size) ? size : DEFAULT_THEME.fontSize,
+    // The theme service resolves `system` before publishing the snapshot, so
+    // this is the effective palette, not the persisted preference.
+    dark: snapshot.active?.colorScheme !== "light"
   };
 }
 function applyRenderFrame(screen, render) {
@@ -19786,6 +19867,7 @@ function TerminalBody({ useTabInfo, useTerminal, useTheme, view, t }) {
   const [searchInfo, setSearchInfo] = useState({ index: 0, count: 0 });
   const [copyInfo, setCopyInfo] = useState(null);
   const [notice, setNotice] = useState("");
+  const [a11yText, setA11yText] = useState("");
   searchOpenRef.current = searchOpen;
   const latest = useRef({ state, writable: Boolean(state?.writable), theme, visible: tab.visible !== false });
   latest.current = { state, writable: Boolean(state?.writable), theme, visible: tab.visible !== false };
@@ -19831,10 +19913,26 @@ function TerminalBody({ useTabInfo, useTerminal, useTheme, view, t }) {
     let lastClick = { at: 0, row: -1, col: -1 };
     let search = { query: "", matches: [], index: -1 };
     let copy = null;
+    let copyInfoKey = "";
     let noticeTimer = 0;
+    let a11yTimer = 0;
+    let lastNotice = { text: "", at: 0 };
+    let marks = /* @__PURE__ */ new Map();
+    let promptSeqs = [];
+    let lastCommand = null;
+    let commandStartedAt = 0;
+    let markFirstSeq = screen.firstSeq;
     let lastAlt = screen.alt;
     const now = () => typeof performance !== "undefined" ? performance.now() : Date.now();
     const maxOffset = () => screen.alt ? 0 : screen.scrollbackRows;
+    const updateA11y = () => {
+      if (!visible) return;
+      const first = screen.topRow(offset);
+      const lines = [];
+      for (let row = 0; row < screen.rows; row++) lines.push(lineText(screen.lineAt(first + row)));
+      const text = lines.join("\n").replace(/\s+$/u, "");
+      setA11yText((previous) => previous === text ? previous : text);
+    };
     const toRows = () => {
       if (selection === null) return null;
       const toRow = (position) => {
@@ -19900,7 +19998,7 @@ function TerminalBody({ useTabInfo, useTerminal, useTheme, view, t }) {
       if (!dirty || !visible) return;
       dirty = false;
       const damage = screen.consumeDamage();
-      renderer.paint(screen, { offset, damage });
+      renderer.paint(screen, { offset, damage, hideCursor: copy !== null });
       renderer.paintSelection(rectsForSelection());
       renderer.paintCopyCursor(copyCursorRect());
       renderer.paintSearch(searchRects());
@@ -20047,20 +20145,130 @@ function TerminalBody({ useTabInfo, useTerminal, useTheme, view, t }) {
       setSearchQuery("");
       clearSearch();
     };
-    const announce = (text) => {
+    const announce = (text, { system = false } = {}) => {
       if (typeof text !== "string" || text === "") return;
-      setNotice(text.slice(0, 160));
+      const trimmed = text.slice(0, 160);
+      const at = now();
+      if (trimmed === lastNotice.text && at - lastNotice.at < 1200) return;
+      lastNotice = { text: trimmed, at };
+      setNotice(trimmed);
       if (noticeTimer !== 0) clearTimeout(noticeTimer);
       noticeTimer = setTimeout(() => {
         noticeTimer = 0;
         setNotice("");
       }, 2600);
+      if (system && typeof Notification !== "undefined" && Notification.permission === "granted" && globalThis.document?.hidden === true) {
+        try {
+          new Notification("DSH terminal", { body: trimmed });
+        } catch {
+        }
+      }
+    };
+    const currentSeq = () => screen.lineSeqAt(screen.topRow(0) + screen.cursor.y);
+    const mark = (seq, field, value) => {
+      if (seq < 0) return null;
+      let entry = marks.get(seq);
+      if (entry === void 0) {
+        entry = {};
+        marks.set(seq, entry);
+      }
+      entry[field] = value ?? true;
+      return entry;
+    };
+    const rememberPrompt = (seq) => {
+      if (seq < 0 || promptSeqs.includes(seq)) return;
+      promptSeqs.push(seq);
+      if (promptSeqs.length > 500) promptSeqs = promptSeqs.slice(-500);
+    };
+    const pruneMarks = () => {
+      if (screen.alt) return;
+      const first = screen.firstSeq;
+      if (first === markFirstSeq) return;
+      markFirstSeq = first;
+      promptSeqs = promptSeqs.filter((seq) => seq >= first);
+      for (const seq of marks.keys()) if (seq < first) marks.delete(seq);
+    };
+    const lastPromptBefore = (seq) => {
+      const current = screen.indexOfSeq(seq);
+      let best = null;
+      let bestRow = -1;
+      for (const prompt of promptSeqs) {
+        const row = screen.indexOfSeq(prompt);
+        if (row >= 0 && row <= current && row > bestRow) {
+          best = prompt;
+          bestRow = row;
+        }
+      }
+      return best ?? seq;
+    };
+    const handleShellMark = (payload) => {
+      const parts = payload.split(";");
+      const kind = (parts[0] ?? "").toUpperCase();
+      const seq = currentSeq();
+      if (kind === "A") {
+        mark(seq, "prompt");
+        rememberPrompt(seq);
+        lastCommand = null;
+      } else if (kind === "B") {
+        mark(seq, "command");
+      } else if (kind === "C") {
+        mark(seq, "output");
+        commandStartedAt = now();
+      } else if (kind === "D") {
+        const code = Number.parseInt(parts[1] ?? "0", 10);
+        const exitCode = Number.isFinite(code) ? code : 0;
+        const elapsed = commandStartedAt === 0 ? 0 : now() - commandStartedAt;
+        mark(seq, "exit", exitCode);
+        lastCommand = { startSeq: lastPromptBefore(seq), endSeq: seq };
+        commandStartedAt = 0;
+        if (elapsed >= 5e3 || exitCode !== 0) {
+          announce(t("terminal.commandDone", { seconds: Math.max(0, Math.round(elapsed / 1e3)), code: exitCode }), { system: true });
+        }
+      }
+    };
+    const jumpPrompt = (direction) => {
+      if (promptSeqs.length === 0) return false;
+      const rows = promptSeqs.map((seq) => ({ seq, row: screen.indexOfSeq(seq) })).filter((entry) => entry.row >= 0).sort((a, b) => a.row - b.row);
+      if (rows.length === 0) return false;
+      const top = screen.topRow(offset);
+      const target = direction < 0 ? [...rows].reverse().find((entry) => entry.row < top) : rows.find((entry) => entry.row >= top + screen.rows);
+      if (target === void 0) return false;
+      const next = offsetForRow(screen, target.row, 1);
+      offset = next;
+      anchorSeq = next === 0 ? null : screen.lineSeqAt(screen.topRow(next));
+      schedule();
+      return true;
+    };
+    const copyLastCommand = async () => {
+      if (lastCommand === null) {
+        announce(t("terminal.commandNone"));
+        return false;
+      }
+      const text = copyText(screen, { seq: lastCommand.startSeq, col: 0 }, { seq: lastCommand.endSeq, col: screen.cols });
+      if (text === "") {
+        announce(t("terminal.commandNone"));
+        return false;
+      }
+      try {
+        await navigator.clipboard.writeText(text);
+      } catch {
+        announce(t("terminal.copyFailed"));
+        return false;
+      }
+      announce(t("terminal.copyDone"));
+      return true;
     };
     const syncCopyInfo = () => {
       if (copy === null) {
-        setCopyInfo(null);
+        if (copyInfoKey !== "") {
+          copyInfoKey = "";
+          setCopyInfo(null);
+        }
         return;
       }
+      const key = `${copy.anchor === null ? "0" : "1"}:${copy.cursor.seq}:${copy.cursor.col}`;
+      if (key === copyInfoKey) return;
+      copyInfoKey = key;
       setCopyInfo({ selecting: copy.anchor !== null, row: screen.indexOfSeq(copy.cursor.seq), col: copy.cursor.col });
     };
     const ensureCopyVisible = () => {
@@ -20089,8 +20297,7 @@ function TerminalBody({ useTabInfo, useTerminal, useTheme, view, t }) {
     };
     const yankCopy = async () => {
       if (copy === null) return false;
-      const rows = copy.anchor !== null ? copyRows(screen, copy.anchor, copy.cursor) : lineSelection(screen, copy.cursor);
-      const text = copyText(screen, rows.anchor, rows.head);
+      const text = copy.anchor !== null ? copyText(screen, copy.anchor, copy.cursor) : copyText(screen, lineSelection(screen, copy.cursor).anchor, lineSelection(screen, copy.cursor).head);
       if (text === "") {
         exitCopyMode();
         return false;
@@ -20221,6 +20428,10 @@ function TerminalBody({ useTabInfo, useTerminal, useTheme, view, t }) {
       if (changed && widthChanged) {
         offset = 0;
         anchorSeq = null;
+        if (copy !== null) {
+          copy = null;
+          syncCopyInfo();
+        }
       } else if (changed && anchor !== null) {
         const index = screen.indexOfSeq(anchor);
         if (index < 0) {
@@ -20298,6 +20509,16 @@ function TerminalBody({ useTabInfo, useTerminal, useTheme, view, t }) {
         event.preventDefault();
         event.stopPropagation?.();
         enterCopyMode();
+        return;
+      }
+      if ((event.ctrlKey || event.metaKey) && event.shiftKey && (event.key === "ArrowUp" || event.key === "ArrowDown")) {
+        event.preventDefault();
+        jumpPrompt(event.key === "ArrowUp" ? -1 : 1);
+        return;
+      }
+      if ((event.ctrlKey || event.metaKey) && event.shiftKey && (event.key === "y" || event.key === "Y" || event.key === "o" || event.key === "O")) {
+        event.preventDefault();
+        void copyLastCommand();
         return;
       }
       if (!latest.current.writable) return;
@@ -20555,6 +20776,11 @@ function TerminalBody({ useTabInfo, useTerminal, useTheme, view, t }) {
       lastRevision = render.revision;
       if (snapshot) {
         selection = null;
+        marks.clear();
+        promptSeqs = [];
+        lastCommand = null;
+        commandStartedAt = 0;
+        markFirstSeq = screen.firstSeq;
         if (copy !== null) {
           copy = null;
           syncCopyInfo();
@@ -20566,6 +20792,7 @@ function TerminalBody({ useTabInfo, useTerminal, useTheme, view, t }) {
         if (search.query !== "") scheduleSearchRefresh();
       } else {
         followOutput();
+        pruneMarks();
         if (copy !== null) {
           copy.cursor = normalizeCopyPosition(screen, copy.cursor);
           ensureCopyVisible();
@@ -20579,6 +20806,8 @@ function TerminalBody({ useTabInfo, useTerminal, useTheme, view, t }) {
       if (modes.alt === lastAlt) return;
       lastAlt = modes.alt;
       selection = null;
+      lastCommand = null;
+      commandStartedAt = 0;
       if (copy !== null) {
         copy = null;
         syncCopyInfo();
@@ -20590,6 +20819,10 @@ function TerminalBody({ useTabInfo, useTerminal, useTheme, view, t }) {
     });
     const offBell = screen.onBell(() => announce(t("terminal.bell")));
     const offOsc = screen.onOsc(({ command, body }) => {
+      if (command === "133" || command === "633") {
+        handleShellMark(body);
+        return;
+      }
       if (command !== "9" && command !== "777") return;
       const text = command === "777" && body.startsWith("notify;") ? body.slice("notify;".length).replace(/;/gu, " ") : body;
       if (text !== "") announce(text);
@@ -20619,6 +20852,8 @@ function TerminalBody({ useTabInfo, useTerminal, useTheme, view, t }) {
     observer.observe(host);
     fitNow();
     schedule();
+    a11yTimer = setInterval(updateA11y, 600);
+    updateA11y();
     engine.current = {
       screen,
       renderer,
@@ -20668,6 +20903,7 @@ function TerminalBody({ useTabInfo, useTerminal, useTheme, view, t }) {
         if (searchTimer !== 0) clearTimeout(searchTimer);
         if (pasteTimer !== 0) clearTimeout(pasteTimer);
         if (noticeTimer !== 0) clearTimeout(noticeTimer);
+        if (a11yTimer !== 0) clearInterval(a11yTimer);
         pasteQueue = [];
         offState?.();
         offMode();
@@ -20698,7 +20934,7 @@ function TerminalBody({ useTabInfo, useTerminal, useTheme, view, t }) {
     const current = engine.current;
     if (!current) return;
     current.measureAndFit();
-  }, [theme.fontFamily, theme.fontSize, engineReady]);
+  }, [theme.fontFamily, theme.fontSize, theme.fg, theme.bg, theme.dark, engineReady]);
   useEffect(() => {
     engine.current?.setVisible(tab.visible !== false);
   }, [tab.visible, engineReady]);
@@ -20751,11 +20987,21 @@ function TerminalBody({ useTabInfo, useTerminal, useTheme, view, t }) {
     h("button", { type: "button", className: "ce-term-find-btn", "aria-label": t("terminal.searchNext"), onClick: () => engine.current?.nextMatch() }, "↓"),
     h("button", { type: "button", className: "ce-term-find-btn", "aria-label": t("terminal.searchClose"), onClick: () => engine.current?.closeSearch() }, "✕")
   ) : null;
+  const copyBar = copyInfo ? h(
+    "div",
+    { className: "ce-term-copybar", role: "status" },
+    h("span", { className: "ce-term-copy-mode" }, copyInfo.selecting ? t("terminal.copyVisual") : t("terminal.copyMode")),
+    h("span", { className: "ce-term-copy-hint" }, t("terminal.copyHint"))
+  ) : null;
+  const noticeBar = notice === "" ? null : h("div", { className: "ce-term-notice", role: "status" }, notice);
   return h(
     "div",
     { className: "ce-term-shell" },
     h("div", { className: "ce-term", ref: hostRef, "data-ce-terminal": "" }),
     searchBar,
+    copyBar,
+    noticeBar,
+    h("pre", { className: "ce-term-a11y", "aria-label": t("terminal.screenReader") }, a11yText),
     state?.info === void 0 && !failed ? h("div", { className: "ce-term-status", role: "status" }, t("terminal.connecting")) : null,
     failed ? h("div", { className: "ce-term-status ce-term-status-error", role: "alert" }, state?.error ?? t("terminal.failed")) : null,
     (disconnected || state?.phase === "failed") && typeof model.connect === "function" ? h("button", { type: "button", className: "ce-term-reconnect", onClick: () => model.connect() }, t("terminal.reconnect")) : null

@@ -17,16 +17,17 @@ import { h, useEffect, useRef, useState } from "../react.js";
 import { createScreen } from "./screen.js";
 import { createRenderer } from "./render.js";
 import { keyToBytes, pasteChunks } from "./keys.js";
-import { selectionRow, selectionText, selectAll, selectLine, selectWord } from "./selection.js";
+import { lineText, selectionRow, selectionText, selectAll, selectLine, selectWord } from "./selection.js";
 import { encodeMouse, encodeWheel, mouseOwned, reportsMotion, reportsHover } from "./mouse.js";
 import { offsetForRow, searchScreen } from "./search.js";
 import { copyRows, copyStart, copyText, lineSelection, moveCopy, normalizeCopyPosition } from "./copy.js";
 
 const DEFAULT_THEME = {
-	fg: "#d4d4d4",
-	bg: "#1e1e1e",
+	fg: "var(--dsw-alias-label-primary, #d4d4d4)",
+	bg: "var(--dsw-alias-bg-base, #1e1e1e)",
 	fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
 	fontSize: 13,
+	dark: true,
 };
 
 const SEARCH_DEBOUNCE_MS = 140;
@@ -44,6 +45,9 @@ function themeOf(snapshot) {
 		bg: DEFAULT_THEME.bg,
 		fontFamily: family === "" ? DEFAULT_THEME.fontFamily : `${family}, ${DEFAULT_THEME.fontFamily}`,
 		fontSize: Number.isFinite(size) ? size : DEFAULT_THEME.fontSize,
+		// The theme service resolves `system` before publishing the snapshot, so
+		// this is the effective palette, not the persisted preference.
+		dark: snapshot.active?.colorScheme !== "light",
 	};
 }
 
@@ -99,6 +103,7 @@ export function TerminalBody({ useTabInfo, useTerminal, useTheme, view, t }) {
 	const [searchInfo, setSearchInfo] = useState({ index: 0, count: 0 });
 	const [copyInfo, setCopyInfo] = useState(null);
 	const [notice, setNotice] = useState("");
+	const [a11yText, setA11yText] = useState("");
 	searchOpenRef.current = searchOpen;
 	const latest = useRef({ state, writable: Boolean(state?.writable), theme, visible: tab.visible !== false });
 	latest.current = { state, writable: Boolean(state?.writable), theme, visible: tab.visible !== false };
@@ -152,10 +157,25 @@ export function TerminalBody({ useTabInfo, useTerminal, useTheme, view, t }) {
 		let copy = null;
 		let copyInfoKey = "";
 		let noticeTimer = 0;
+		let a11yTimer = 0;
+		let lastNotice = { text: "", at: 0 };
+		let marks = new Map();
+		let promptSeqs = [];
+		let lastCommand = null;
+		let commandStartedAt = 0;
+		let markFirstSeq = screen.firstSeq;
 		let lastAlt = screen.alt;
 
 		const now = () => (typeof performance !== "undefined" ? performance.now() : Date.now());
 		const maxOffset = () => (screen.alt ? 0 : screen.scrollbackRows);
+		const updateA11y = () => {
+			if (!visible) return;
+			const first = screen.topRow(offset);
+			const lines = [];
+			for (let row = 0; row < screen.rows; row++) lines.push(lineText(screen.lineAt(first + row)));
+			const text = lines.join("\n").replace(/\s+$/u, "");
+			setA11yText((previous) => (previous === text ? previous : text));
+		};
 
 		const toRows = () => {
 			if (selection === null) return null;
@@ -225,7 +245,7 @@ export function TerminalBody({ useTabInfo, useTerminal, useTheme, view, t }) {
 			if (!dirty || !visible) return;
 			dirty = false;
 			const damage = screen.consumeDamage();
-			renderer.paint(screen, { offset, damage });
+			renderer.paint(screen, { offset, damage, hideCursor: copy !== null });
 			renderer.paintSelection(rectsForSelection());
 			renderer.paintCopyCursor(copyCursorRect());
 			renderer.paintSearch(searchRects());
@@ -385,14 +405,122 @@ export function TerminalBody({ useTabInfo, useTerminal, useTheme, view, t }) {
 			clearSearch();
 		};
 
-		const announce = (text) => {
+		const announce = (text, { system = false } = {}) => {
 			if (typeof text !== "string" || text === "") return;
-			setNotice(text.slice(0, 160));
+			const trimmed = text.slice(0, 160);
+			const at = now();
+			if (trimmed === lastNotice.text && at - lastNotice.at < 1200) return;
+			lastNotice = { text: trimmed, at };
+			setNotice(trimmed);
 			if (noticeTimer !== 0) clearTimeout(noticeTimer);
 			noticeTimer = setTimeout(() => {
 				noticeTimer = 0;
 				setNotice("");
 			}, 2600);
+			if (system && typeof Notification !== "undefined" && Notification.permission === "granted" && globalThis.document?.hidden === true) {
+				try { new Notification("DSH terminal", { body: trimmed }); } catch { /* notification permission or platform refused */ }
+			}
+		};
+
+		const currentSeq = () => screen.lineSeqAt(screen.topRow(0) + screen.cursor.y);
+		const mark = (seq, field, value) => {
+			if (seq < 0) return null;
+			let entry = marks.get(seq);
+			if (entry === undefined) {
+				entry = {};
+				marks.set(seq, entry);
+			}
+			entry[field] = value ?? true;
+			return entry;
+		};
+		const rememberPrompt = (seq) => {
+			if (seq < 0 || promptSeqs.includes(seq)) return;
+			promptSeqs.push(seq);
+			// Keep the oldest marks bounded; the screen itself already bounds rows.
+			if (promptSeqs.length > 500) promptSeqs = promptSeqs.slice(-500);
+		};
+		const pruneMarks = () => {
+			if (screen.alt) return;
+			const first = screen.firstSeq;
+			if (first === markFirstSeq) return;
+			markFirstSeq = first;
+			promptSeqs = promptSeqs.filter((seq) => seq >= first);
+			for (const seq of marks.keys()) if (seq < first) marks.delete(seq);
+		};
+		const lastPromptBefore = (seq) => {
+			const current = screen.indexOfSeq(seq);
+			let best = null;
+			let bestRow = -1;
+			for (const prompt of promptSeqs) {
+				const row = screen.indexOfSeq(prompt);
+				if (row >= 0 && row <= current && row > bestRow) {
+					best = prompt;
+					bestRow = row;
+				}
+			}
+			return best ?? seq;
+		};
+		const handleShellMark = (payload) => {
+			const parts = payload.split(";");
+			const kind = (parts[0] ?? "").toUpperCase();
+			const seq = currentSeq();
+			if (kind === "A") {
+				mark(seq, "prompt");
+				rememberPrompt(seq);
+				lastCommand = null;
+			} else if (kind === "B") {
+				mark(seq, "command");
+			} else if (kind === "C") {
+				mark(seq, "output");
+				commandStartedAt = now();
+			} else if (kind === "D") {
+				const code = Number.parseInt(parts[1] ?? "0", 10);
+				const exitCode = Number.isFinite(code) ? code : 0;
+				const elapsed = commandStartedAt === 0 ? 0 : now() - commandStartedAt;
+				mark(seq, "exit", exitCode);
+				lastCommand = { startSeq: lastPromptBefore(seq), endSeq: seq };
+				commandStartedAt = 0;
+				if (elapsed >= 5000 || exitCode !== 0) {
+					announce(t("terminal.commandDone", { seconds: Math.max(0, Math.round(elapsed / 1000)), code: exitCode }), { system: true });
+				}
+			}
+		};
+		const jumpPrompt = (direction) => {
+			if (promptSeqs.length === 0) return false;
+			const rows = promptSeqs
+				.map((seq) => ({ seq, row: screen.indexOfSeq(seq) }))
+				.filter((entry) => entry.row >= 0)
+				.sort((a, b) => a.row - b.row);
+			if (rows.length === 0) return false;
+			const top = screen.topRow(offset);
+			const target = direction < 0
+				? [...rows].reverse().find((entry) => entry.row < top)
+				: rows.find((entry) => entry.row >= top + screen.rows);
+			if (target === undefined) return false;
+			const next = offsetForRow(screen, target.row, 1);
+			offset = next;
+			anchorSeq = next === 0 ? null : screen.lineSeqAt(screen.topRow(next));
+			schedule();
+			return true;
+		};
+		const copyLastCommand = async () => {
+			if (lastCommand === null) {
+				announce(t("terminal.commandNone"));
+				return false;
+			}
+			const text = copyText(screen, { seq: lastCommand.startSeq, col: 0 }, { seq: lastCommand.endSeq, col: screen.cols });
+			if (text === "") {
+				announce(t("terminal.commandNone"));
+				return false;
+			}
+			try {
+				await navigator.clipboard.writeText(text);
+			} catch {
+				announce(t("terminal.copyFailed"));
+				return false;
+			}
+			announce(t("terminal.copyDone"));
+			return true;
 		};
 
 		const syncCopyInfo = () => {
@@ -434,10 +562,9 @@ export function TerminalBody({ useTabInfo, useTerminal, useTheme, view, t }) {
 		};
 		const yankCopy = async () => {
 			if (copy === null) return false;
-			const rows = copy.anchor !== null
-				? copyRows(screen, copy.anchor, copy.cursor)
-				: lineSelection(screen, copy.cursor);
-			const text = copyText(screen, rows.anchor, rows.head);
+			const text = copy.anchor !== null
+				? copyText(screen, copy.anchor, copy.cursor)
+				: copyText(screen, lineSelection(screen, copy.cursor).anchor, lineSelection(screen, copy.cursor).head);
 			if (text === "") {
 				exitCopyMode();
 				return false;
@@ -558,6 +685,10 @@ export function TerminalBody({ useTabInfo, useTerminal, useTheme, view, t }) {
 				// mapped, so the reader starts again at the live bottom.
 				offset = 0;
 				anchorSeq = null;
+				if (copy !== null) {
+					copy = null;
+					syncCopyInfo();
+				}
 			} else if (changed && anchor !== null) {
 				const index = screen.indexOfSeq(anchor);
 				if (index < 0) {
@@ -640,6 +771,16 @@ export function TerminalBody({ useTabInfo, useTerminal, useTheme, view, t }) {
 				event.preventDefault();
 				event.stopPropagation?.();
 				enterCopyMode();
+				return;
+			}
+			if ((event.ctrlKey || event.metaKey) && event.shiftKey && (event.key === "ArrowUp" || event.key === "ArrowDown")) {
+				event.preventDefault();
+				jumpPrompt(event.key === "ArrowUp" ? -1 : 1);
+				return;
+			}
+			if ((event.ctrlKey || event.metaKey) && event.shiftKey && (event.key === "y" || event.key === "Y" || event.key === "o" || event.key === "O")) {
+				event.preventDefault();
+				void copyLastCommand();
 				return;
 			}
 			if (!latest.current.writable) return;
@@ -895,6 +1036,11 @@ export function TerminalBody({ useTabInfo, useTerminal, useTheme, view, t }) {
 			lastRevision = render.revision;
 			if (snapshot) {
 				selection = null;
+				marks.clear();
+				promptSeqs = [];
+				lastCommand = null;
+				commandStartedAt = 0;
+				markFirstSeq = screen.firstSeq;
 				if (copy !== null) {
 					copy = null;
 					syncCopyInfo();
@@ -909,6 +1055,7 @@ export function TerminalBody({ useTabInfo, useTerminal, useTheme, view, t }) {
 				if (search.query !== "") scheduleSearchRefresh();
 			} else {
 				followOutput();
+				pruneMarks();
 				if (copy !== null) {
 					copy.cursor = normalizeCopyPosition(screen, copy.cursor);
 					ensureCopyVisible();
@@ -923,6 +1070,10 @@ export function TerminalBody({ useTabInfo, useTerminal, useTheme, view, t }) {
 			if (modes.alt === lastAlt) return;
 			lastAlt = modes.alt;
 			selection = null;
+			// Prompt marks are per-row identities; alternate-screen rows use a
+			// disjoint seq namespace, so keep the primary marks for the return.
+			lastCommand = null;
+			commandStartedAt = 0;
 			if (copy !== null) {
 				copy = null;
 				syncCopyInfo();
@@ -935,6 +1086,10 @@ export function TerminalBody({ useTabInfo, useTerminal, useTheme, view, t }) {
 
 		const offBell = screen.onBell(() => announce(t("terminal.bell")));
 		const offOsc = screen.onOsc(({ command, body }) => {
+			if (command === "133" || command === "633") {
+				handleShellMark(body);
+				return;
+			}
 			if (command !== "9" && command !== "777") return;
 			const text = command === "777" && body.startsWith("notify;")
 				? body.slice("notify;".length).replace(/;/gu, " ")
@@ -969,6 +1124,8 @@ export function TerminalBody({ useTabInfo, useTerminal, useTheme, view, t }) {
 		observer.observe(host);
 		fitNow();
 		schedule();
+		a11yTimer = setInterval(updateA11y, 600);
+		updateA11y();
 
 		engine.current = {
 			screen,
@@ -1011,6 +1168,7 @@ export function TerminalBody({ useTabInfo, useTerminal, useTheme, view, t }) {
 				if (searchTimer !== 0) clearTimeout(searchTimer);
 				if (pasteTimer !== 0) clearTimeout(pasteTimer);
 				if (noticeTimer !== 0) clearTimeout(noticeTimer);
+				if (a11yTimer !== 0) clearInterval(a11yTimer);
 				pasteQueue = [];
 				offState?.();
 				offMode();
@@ -1045,7 +1203,7 @@ export function TerminalBody({ useTabInfo, useTerminal, useTheme, view, t }) {
 		const current = engine.current;
 		if (!current) return;
 		current.measureAndFit();
-	}, [theme.fontFamily, theme.fontSize, engineReady]);
+	}, [theme.fontFamily, theme.fontSize, theme.fg, theme.bg, theme.dark, engineReady]);
 
 	// Hidden tabs still parse, but they do not touch the DOM.
 	useEffect(() => {
@@ -1125,6 +1283,7 @@ export function TerminalBody({ useTabInfo, useTerminal, useTheme, view, t }) {
 		searchBar,
 		copyBar,
 		noticeBar,
+		h("pre", { className: "ce-term-a11y", "aria-label": t("terminal.screenReader") }, a11yText),
 		state?.info === undefined && !failed
 			? h("div", { className: "ce-term-status", role: "status" }, t("terminal.connecting"))
 			: null,

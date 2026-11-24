@@ -1200,6 +1200,8 @@ export const CSS = `
 .ce-term-copybar{position:absolute;left:10px;bottom:8px;z-index:4;display:flex;align-items:center;gap:8px;max-width:calc(100% - 20px);padding:4px 9px;border-radius:6px;border:.5px solid var(--dsw-alias-border-l2,#444);background:color-mix(in srgb,var(--dsw-alias-bg-layer-1,#1d2126) 92%,transparent);box-shadow:0 4px 16px rgba(0,0,0,.3)}
 .ce-term-copy-mode{font-size:10.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--dsw-alias-brand-primary,#59b7ff)}
 .ce-term-copy-hint{font-size:11px;color:var(--dsw-alias-label-secondary,#999);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ce-term-a11y{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:pre-wrap;border:0}
+@media(prefers-reduced-motion:reduce){.ce-term-focused .ce-term-cursor-blink{animation:none}.ce-term-notice{animation:none}}
 .ce-term-notice{position:absolute;left:50%;bottom:12px;transform:translateX(-50%);z-index:5;max-width:min(520px,calc(100% - 24px));padding:5px 11px;border-radius:6px;border:.5px solid var(--dsw-alias-border-l2,#444);background:var(--dsw-alias-bg-layer-1,#1d2126);color:var(--dsw-alias-label-primary,#eee);font-size:11.5px;box-shadow:0 6px 20px rgba(0,0,0,.35);animation:ce-term-notice-in .16s ease-out}
 @keyframes ce-term-notice-in{from{opacity:0;transform:translate(-50%,4px)}to{opacity:1;transform:translate(-50%,0)}}
 .ce-term-reconnect{position:absolute;right:10px;bottom:8px;z-index:4;font:inherit;font-size:11.5px;padding:3px 9px;border-radius:5px;border:.5px solid var(--dsw-alias-border-l2,#444);background:var(--dsw-alias-bg-layer-1,#1d2126);color:var(--dsw-alias-label-primary,#eee);cursor:pointer}

@@ -5,7 +5,7 @@
 > 参考实现：`herdrdev/herdr` 0.9.5，提交 `e8d7d9705a7a2c89cef4dd42079379f05685af87`（Apache-2.0）  
 > 参考代码位置：`/Users/proxy/orca/herdr`（GitHub：<https://github.com/herdrdev/herdr>）  
 > 方案范围：插件自带终端（`src/client/vt/` 与 `src/client/termtab.js`），不包含 DSH 自带终端、系统终端入口和浏览器工具。
-> 实现状态（2026-11-24）：P0 已落地；P1 的搜索、滚动条、OSC 8 链接、大粘贴分片已落地；`copy mode`、OSC 133、主题/无障碍和 P3 项仍在路线中。实现记录见文末 §13。
+> 实现状态（2026-11-24）：P0 已落地；P1 的搜索、滚动条、OSC 8 链接、大粘贴分片、copy mode、BEL/OSC 9/777 通知、OSC 133/633 shell 集成、系统通知回退、明暗 ANSI 调色板与屏幕阅读器镜像已落地；解析时间片、500×200 DOM 实测和 P3 项仍在路线中。实现记录见文末 §13。
 
 ---
 
@@ -919,20 +919,27 @@ const chunk = Array.from({ length: 200 }, (_, i) =>
 | 搜索（smart-case、全部高亮、循环、滚动定位） | 完成 | `vt/search.js`、`vt/body.js` |
 | 滚动条 overlay + 拖拽 | 完成 | `vt/render.js`、`vt/body.js`、`styles.js` |
 | OSC 8 链接 hover/点击 + scheme 白名单 | 完成 | `vt/body.js` |
-| copy mode / OSC 133 / 通知铃铛 / 主题调色板 / 无障碍 / 分屏 / 历史持久化 | 未开始 | 路线 P1–P3 |
+| copy mode（移动/选择/复制/状态栏） | 完成 | `vt/copy.js`、`vt/body.js`、`vt/render.js` |
+| BEL 与 OSC 9/777 面板内通知（限频） | 完成 | `vt/body.js` |
+| 明暗 ANSI 调色板、主题 token 前景/背景 | 完成 | `vt/render.js`、`vt/body.js` |
+| 屏幕阅读器文本镜像、reduced motion | 完成 | `vt/body.js`、`styles.js` |
+| OSC 133/633 提示符/命令标记、跳转、复制命令输出 | 完成 | `vt/body.js` |
+| 页面隐藏时的系统通知回退（已授权才用） | 完成 | `vt/body.js` |
+| 解析时间片 / 500×200 DOM 实测 / 分屏 / 历史持久化 | 未开始 | 路线 P2–P3 |
 
 实施后基线（M1、Node 20.20.1、`node --expose-gc scripts/bench-terminal.mjs`）：
 
 | 场景 | 改造前 | 改造后 |
 | --- | --- | --- |
-| 8 MiB 解析，1000 行回滚 | 21.8 MiB/s | 18–21 MiB/s |
-| 8 MiB 解析，5000 行回滚 | 15.1 MiB/s | 15–17.5 MiB/s（10 MiB 字节预算生效） |
-| 20 万行滚动，20000 行回滚 | 4269 ms | 约 0.3 s（10 万行）/ 约 0.6 s（20 万行） |
-| 1050 行 × 200 列保留 | RSS 32.5 → 107.2 MiB | RSS 约 100–110 MiB，回滚字节 6.8 MiB |
+| 8 MiB 解析，1000 行回滚 | 21.8 MiB/s | 约 12–21 MiB/s（随负载波动） |
+| 8 MiB 解析，5000 行回滚 | 15.1 MiB/s | 约 10–18 MiB/s（10 MiB 字节预算生效，随负载波动） |
+| 20 万行滚动，20000 行回滚 | 4269 ms | 约 0.3–1.2 s（10 万行约 0.16–0.6 s） |
+| 1050 行 × 200 列保留 | RSS 32.5 → 107.2 MiB | RSS 约 100–140 MiB（随 GC/几何波动），回滚字节 6.8 MiB |
 | 全屏滚动绘制 | 整屏重写 | 只移动行元素 + 画新行；`stats.movedRows` 可断言 |
+| 500×200 行 HTML | — | 约 1.4–1.7 ms/帧（200 行、500 列）；DOM 布局另计 |
 
-解析吞吐没有因为新增 damage/reflow 而下降；收益集中在滚动、内存上限、reflow 正确性和交互层。剩下的主要性能项是解析快路径/属性 interning、时间片 backlog 和 500×200 的帧预算验证，放在 P2。
+解析吞吐与基线同量级（受机器负载影响约 12–21 MiB/s）；收益集中在滚动、内存上限、reflow 正确性和交互层。剩下的主要性能项是解析快路径/属性 interning、时间片 backlog 和 500×200 的帧预算验证，放在 P2。
 
-本轮测试：`npm test` 全绿；`test-client.mjs` 增加 50 项终端检查（环形/伤害/reflow/字素/协议/搜索/滚动渲染/body 搜索与滚动锚点/隐藏页签/大粘贴/fuzz），并新增 `scripts/bench-terminal.mjs`。
+本轮测试：`npm test` 全绿；`test-client.mjs` 增加 67 项终端检查（环形/伤害/reflow/字素/协议/搜索/滚动渲染/copy mode/BEL 与 OSC 9/OSC 133 命令标记/明暗调色板/无障碍镜像/body 搜索与滚动锚点/隐藏页签/大粘贴/fuzz），并新增 `scripts/bench-terminal.mjs`。
 
-**下一步建议**：P1 剩余 copy mode 与通知铃铛；P2 优先做主题调色板、无障碍、解析时间片与 500×200 帧预算验证；P3 再评估分屏和历史持久化。每个阶段完成后用同一套 bench 和 fixture 回归，避免“功能加了、终端变卡了”。
+**下一步建议**：P2 优先做解析时间片与 500×200 的 DOM 帧验证；P3 再评估分屏和历史持久化。每个阶段完成后用同一套 bench 和 fixture 回归，避免“功能加了、终端变卡了”。

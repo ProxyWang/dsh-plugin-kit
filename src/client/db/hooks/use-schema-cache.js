@@ -19,25 +19,38 @@ export function useSchemaCache({ activeConn, connections, t, onSelect, onNotice 
 	const [schemas, setSchemas] = useState({});
 	const [openConns, setOpenConns] = useState({});
 	const [schemaBusy, setSchemaBusy] = useState(false);
-	const [schemaError, setSchemaError] = useState("");
+	// Per connection: a stale error from another connection must not be shown
+	// under whichever connection happens to be active now.
+	const [schemaErrors, setSchemaErrors] = useState({});
+	const schemaError = schemaErrors[activeConn] ?? "";
 	// The rail's search box: it narrows table names inside every expanded instance.
 	const [filter, setFilter] = useState("");
+
+	const clearSchemaError = useCallback((id) => {
+		setSchemaErrors((current) => {
+			if (!(id in current)) return current;
+			const next = { ...current };
+			delete next[id];
+			return next;
+		});
+	}, []);
 
 	/** Load (or reload) one connection's tree. */
 	const refreshSchema = useCallback(async (id = activeConn) => {
 		if (!id) return;
 		setSchemaBusy(true);
-		setSchemaError("");
+		clearSchemaError(id);
 		const res = await api("db.schema", { id });
 		setSchemaBusy(false);
 		if (res.ok) {
 			setSchemas((current) => ({ ...current, [id]: res.value }));
 			setOpenConns((current) => ({ ...current, [id]: true }));
+			clearSchemaError(id);
 		} else {
 			setSchemas((current) => { const next = { ...current }; delete next[id]; return next; });
-			setSchemaError(res.error);
+			setSchemaErrors((current) => ({ ...current, [id]: res.error }));
 		}
-	}, [activeConn]);
+	}, [activeConn, clearSchemaError]);
 
 	/**
 	 * Select a database, loading its tables the first time.
@@ -55,9 +68,13 @@ export function useSchemaCache({ activeConn, connections, t, onSelect, onNotice 
 			return;
 		}
 		const res = await api("db.schema", { id: connId, database: databaseName });
-		if (!res.ok || !res.value) { setSchemaError(res.error ?? ""); return; }
+		if (!res.ok || !res.value) {
+			setSchemaErrors((current) => ({ ...current, [connId]: res.error ?? "" }));
+			return;
+		}
 		const fetched = (res.value.databases ?? []).find((entry) => entry.name === databaseName);
 		if (!fetched) return;
+		clearSchemaError(connId);
 		setSchemas((current) => {
 			const schemaFor = current[connId];
 			if (!schemaFor) return { ...current, [connId]: res.value };
@@ -70,7 +87,7 @@ export function useSchemaCache({ activeConn, connections, t, onSelect, onNotice 
 				},
 			};
 		});
-	}, [schemas, connections, t, onSelect, onNotice]);
+	}, [schemas, connections, t, onSelect, onNotice, clearSchemaError]);
 
 	/** The databases of one instance, filtered by the rail's search box. */
 	const databasesOf = useCallback((connId) => {
@@ -85,7 +102,7 @@ export function useSchemaCache({ activeConn, connections, t, onSelect, onNotice 
 	return {
 		schemas, setSchemas, openConns, setOpenConns,
 		schema: schemas[activeConn] ?? null,
-		schemaBusy, setSchemaBusy, schemaError, setSchemaError,
+		schemaBusy, setSchemaBusy, schemaError, schemaErrors, clearSchemaError,
 		filter, setFilter,
 		refreshSchema, selectDatabase, databasesOf,
 	};

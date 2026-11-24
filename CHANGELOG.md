@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased — the database tab opens with a live connection
+
+- **Fix: the panel went blank as soon as a connection existed.** The rail's live-connection branch read a
+  `schemas` map it never received, so `renderRail` threw while rendering and the host showed an empty tab. The
+  workbench now passes `schemas` through, and a regression test renders the rail with a live SQLite connection.
+- The same split had left three action bindings out of the view/state surface: the SQL Explain button
+  (`runExplain`), Add Row (`insertRow`), and Import (`importRows`) referenced names that were not in the
+  destructured view object or the `useWorkbench` return. They are wired again, and the ER dialog's
+  `openTableTab` now resolves the table from the active schema and calls `openTable` instead of throwing.
+- `QUERY_PAGE` moved to `db/format.js` so the view and `useTabs` share one value; `tsc --checkJs` now reports no
+  unresolved names across the client modules.
+- **Schema errors are per connection, and success clears them.** The rail used one global `schemaError`, so a stale error from one connection was painted under whichever connection was active (and survived a successful table read). Errors are now keyed by connection id, shown only under that connection, cleared by a successful schema load, and cleared by a successful table/SQL read through `onConnectionOk`.
+- **A closed MySQL socket reconnects once.** mysql2 reports `Can't add new command when connection is in closed
+  state` after the server's `wait_timeout` or a cancelled statement. The module runner now watches the socket,
+  rebuilds the session on the next schema/page/query call, and retries exactly once; user-requested close/cancel
+  still keeps the connection closed. A host test simulates the closed error and asserts a fresh connection serves
+  the read.
+
 ## Unreleased — the terminal keeps up with long output
 
 - **The screen is a ring with stable row identities.** The old buffer used `Array.shift()` for every scrolled
@@ -29,13 +47,27 @@
   finally inserts, DECSCUSR keeps its steady/blink bit, `?1004` focus reports, `?1007` alternate scroll and
   `?9` X10 mouse are tracked, and OSC 7/8 are parsed. ZWJ emoji, flags and skin-tone modifiers use grapheme
   width; plain CJK still takes the fast path.
+- **Light/dark ANSI palettes and a screen-reader mirror.** The renderer now resolves the 16-colour ANSI set
+  against a Tango-flavoured light palette when the host theme reports `colorScheme: "light"`, while the default
+  foreground/background follow the host CSS tokens. The pane publishes a visually hidden `<pre>` mirror of the
+  visible screen (throttled to 600 ms) for screen readers, and reduced-motion preferences stop cursor/notice
+  animations.
+- **OSC 133/633 shell integration.** Prompt/command/output/exit marks now drive `⌘/Ctrl+Shift+↑/↓` prompt jumps and
+  `⌘/Ctrl+Shift+Y` last-command-output copy; a failed or long command raises a notice. Marks are pruned with
+  scrollback eviction and cleared on snapshots/alternate-screen switches. When the page is hidden and system
+  notification permission was already granted, bells/OSC notices/command results also go to a native notification
+  (permission is never requested automatically).
+- **Copy mode and in-pane notifications.** `⌘/Ctrl+Shift+Space` enters a tmux-shaped copy mode with h/j/k/l, w/b/e,
+  W/B/E, {/}, PageUp/PageDown, g/G, 0/$, v/Space selection and y/Enter copy; it never types into the shell, keeps
+  working while output continues, and clamps to a stable row when history is evicted. BEL and OSC 9/777 now surface
+  as a rate-limited in-pane notice instead of being counted silently.
 - **Large paste no longer detaches the terminal.** Pastes are split into adaptive ~4 KiB chunks and paced so the Host's
   unacknowledged-input window can drain; bracketed-paste markers stay outside the chunks. The old path sent one
   write that the Host refused above 64 KiB, and a synchronous chunk loop could still exceed the cumulative budget.
 - **React sees chrome only.** `termtab.js` derives a store that omits `render`, so output frames do not re-render
   the tab; hidden tabs parse but do not paint, and their damage collapses to one full repaint. The body consumes
   raw frames directly and acknowledges after parsing.
-- **Tests and benchmark:** 50 new terminal checks (ring/damage/reflow, grapheme width, protocol modes, OSC 8/7,
+- **Tests and benchmark:** 67 new terminal checks (ring/damage/reflow, grapheme width, protocol modes, OSC 8/7,
   chunked paste, search geometry, renderer scroll stats, body search/paste/focus/scroll-anchor/hidden-tab) plus
   `scripts/bench-terminal.mjs` (`pnpm bench:terminal`) for the numbers in `docs/terminal-design.md`.
 

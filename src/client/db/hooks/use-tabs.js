@@ -9,17 +9,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "../../react.js";
 import { api } from "../../api.js";
 import { useAutoHeight } from "../../autosize.js";
-import { PAGE_SIZE, HISTORY_CAP, requestToken, toCsv } from "../format.js";
+import { PAGE_SIZE, QUERY_PAGE, HISTORY_CAP, requestToken, toCsv } from "../format.js";
 import { toInsertSql, toJsonRows } from "../../dbtools.js";
 
 /** Rows fetched per page for ad-hoc queries; bigger pages were slow to send. */
-const QUERY_PAGE = 200;
 
 /**
  * @param options - `{connections, setConnections, activeConn, setActiveConn, t, refreshSchema, onNotice}`
  * @returns the tab list, the active tab, and every action that touches them
  */
-export function useTabs({ connections, setConnections, activeConn, setActiveConn, t, refreshSchema, onNotice }) {
+export function useTabs({ connections, setConnections, activeConn, setActiveConn, t, refreshSchema, onNotice, onConnectionOk }) {
 	const [tabs, setTabs] = useState([]);
 	const [activeTabId, setActiveTabId] = useState("");
 	const [history, setHistory] = useState([]);
@@ -72,7 +71,8 @@ export function useTabs({ connections, setConnections, activeConn, setActiveConn
 		});
 		if (!res.ok) { patchTab(tab.id, { loading: false, error: res.error }); return; }
 		patchTab(tab.id, { loading: false, result: res.value, error: "", runToken: "" });
-	}, [patchTab]);
+		onConnectionOk?.(tab.conn);
+	}, [patchTab, onConnectionOk]);
 
 	/**
 	 * Load one table page. `override` carries the new offset/order/filter so the
@@ -160,9 +160,10 @@ export function useTabs({ connections, setConnections, activeConn, setActiveConn
 		setHistory((current) => [{ sql, at: Date.now(), ms, ok: res.ok && !res.value?.error }, ...current.filter((entry) => entry.sql !== sql)].slice(0, HISTORY_CAP));
 		if (!res.ok) { patchTab(id, { loading: false, error: res.error, result: null }); return; }
 		patchTab(id, { loading: false, result: res.value, error: "", ms, runToken: "", offset });
+		onConnectionOk?.(conn);
 		// A statement that changes the schema (CREATE/DROP/ALTER) refreshes the tree.
 		if (/^\s*(create|drop|alter|rename|truncate)\b/i.test(sql)) void refreshSchema(conn);
-	}, [tabs, activeConn, patchTab, refreshSchema, t]);
+	}, [tabs, activeConn, patchTab, refreshSchema, onConnectionOk, t]);
 
 	/**
 	 * Stop the statement running on this tab's connection.

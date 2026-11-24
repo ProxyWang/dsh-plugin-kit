@@ -11,14 +11,14 @@ import { renderRail } from "./rail.js";
 import { CONNECTION_COLORS, CATEGORIES, defaultPort, implSuffix } from "./meta.js";
 import { driverLabel } from "../dbconnect.js";
 import { formatCell } from "./grid.js";
-import { PAGE_SIZE, tableSql } from "./format.js";
+import { PAGE_SIZE, QUERY_PAGE, tableSql } from "./format.js";
 
 /**
  * @param wb - everything `useWorkbench` returns
  * @returns the panel tree, or the "no session" placeholder
  */
 export function renderWorkbench(wb) {
-	const { DbView, absolute, activeConn, activeDb, activeTab, activeTabId, allowModule, anchor, applyAddress, blob, body, canConnect, cancelQuery, category, cellDetail, cellEdit, closeTab, collapsedDbs, commitCell, conn, connectOpen, connectParams, connectProfile, connectRef, connections, copyCommand, copyResult, counts, csv, cwd, database, databases, databasesOf, dbxState, defaultNow, detailRef, dir, doConnect, doDisconnect, doTest, driver, driverReady, drivers, editingProfileId, entries, existing, expanded, explainState, exportOpen, exportResult, fetchRows, fetched, filter, forgetProfile, form, history, historyOpen, id, index, installDriverModule, keep, key, known, label, list, loadRows, modal, ms, needle, next, notice, onKeyDown, openConnect, openConns, openQueryTab, openTab, openTable, params, parsed, patchTab, pendingDelete, pickCategory, pickQuery, pickableDrivers, pkColumn, pkIndex, pkValue, probeDrivers, profileErrors, profileRevision, profiles, refreshSchema, rememberConnection, removeRow, res, result, runDbxImport, runMutation, runQuery, saveProfile, schema, schemaBusy, schemaError, schemaFor, schemas, selectDatabase, setActiveConn, setActiveDb, setActiveTabId, setAllowModule, setCellDetail, setCellEdit, setCollapsedDbs, setConnectOpen, setConnections, setDbxState, setDriver, setDrivers, setEditingProfileId, setExpanded, setExplainState, setExportOpen, setFilter, setForm, setHistory, setHistoryOpen, setModal, setNotice, setOpenConns, setPendingDelete, setPickCategory, setPickQuery, setProfileErrors, setProfiles, setSaveProfile, setSchemaBusy, setSchemaError, setSchemas, setShowPassword, setStep, setTab, setTabs, setTestState, showPassword, sortBy, sql, sqlRef, started, step, t, tab, tableEntry, tabs, target, testState, text, toggleTable, token, url, useSavedProfile, value } = wb;
+	const { DbView, absolute, activeConn, activeDb, activeTab, activeTabId, allowModule, anchor, applyAddress, blob, body, canConnect, cancelQuery, category, cellDetail, cellEdit, closeTab, collapsedDbs, commitCell, conn, connectOpen, connectParams, connectProfile, connectRef, connections, copyCommand, copyResult, counts, csv, cwd, database, databases, databasesOf, dbxState, defaultNow, detailRef, dir, doConnect, doDisconnect, doTest, driver, driverReady, drivers, editingProfileId, entries, existing, expanded, explainState, exportOpen, exportResult, fetchRows, fetched, filter, forgetProfile, form, history, historyOpen, id, index, installDriverModule, keep, key, known, label, list, loadRows, modal, ms, needle, next, notice, onKeyDown, openConnect, openConns, openQueryTab, openTab, openTable, params, parsed, patchTab, pendingDelete, pickCategory, pickQuery, pickableDrivers, pkColumn, pkIndex, pkValue, probeDrivers, profileErrors, profileRevision, profiles, refreshSchema, rememberConnection, removeRow, res, result, runDbxImport, runExplain, importRows, insertRow, runMutation, runQuery, saveProfile, schema, schemaBusy, schemaErrors, schemaFor, schemas, selectDatabase, setActiveConn, setActiveDb, setActiveTabId, setAllowModule, setCellDetail, setCellEdit, setCollapsedDbs, setConnectOpen, setConnections, setDbxState, setDriver, setDrivers, setEditingProfileId, setExpanded, setExplainState, setExportOpen, setFilter, setForm, setHistory, setHistoryOpen, setModal, setNotice, setOpenConns, setPendingDelete, setPickCategory, setPickQuery, setProfileErrors, setProfiles, setSaveProfile, setSchemaBusy, setSchemaError, setSchemas, setShowPassword, setStep, setTab, setTabs, setTestState, showPassword, sortBy, sql, sqlRef, started, step, t, tab, tableEntry, tabs, target, testState, text, toggleTable, token, url, useSavedProfile, value } = wb;
 	if (!cwd) return h("div", { className: "ce-root" }, h("div", { className: "ce-empty" }, t("editor.noSession")));
 
 	return h("div", { className: "ce-root cedb-root", onKeyDown },
@@ -40,6 +40,7 @@ export function renderWorkbench(wb) {
 				profiles,
 				connections,
 				databasesFor: databasesOf,
+				schemas,
 				openConns,
 				collapsedDbs,
 				expanded,
@@ -48,7 +49,7 @@ export function renderWorkbench(wb) {
 				activeTableKey: activeTab?.key ?? "",
 				profileErrors,
 				schemaBusy,
-				schemaError,
+				schemaErrors,
 				filter,
 				onFilter: setFilter,
 				onConnect: (profile) => void connectProfile(profile),
@@ -56,7 +57,9 @@ export function renderWorkbench(wb) {
 				onToggleConn: (connection, open) => {
 					setActiveConn(connection.id);
 					setOpenConns((current) => ({ ...current, [connection.id]: open }));
-					if (open && !schemas[connection.id]) void refreshSchema(connection.id);
+					// Retry after a stale/closed-connection error; the Host rebuilds the
+					// mysql session on demand now, so expanding is a natural retry.
+					if (open && (!schemas[connection.id] || schemaErrors[connection.id])) void refreshSchema(connection.id);
 				},
 				onDisconnect: (id) => void doDisconnect(id),
 				onSelectDatabase: (connId, database) => {
@@ -255,7 +258,12 @@ export function renderWorkbench(wb) {
 			: modal.kind === "drivers"
 				? h(DriverManager, { t, drivers, dbxState, onImportDbx: runDbxImport, onInstall: installDriverModule, onCopy: copyCommand, onRedetect: () => void probeDrivers(true), onClose: () => setModal(null) })
 				: modal.kind === "er"
-					? h(ErDiagram, { t, schema, onOpenTable: (table) => { setModal(null); openTableTab(table); }, onClose: () => setModal(null) })
+					? h(ErDiagram, { t, schema, onOpenTable: (table) => {
+						setModal(null);
+						const database = activeDb.database || schema?.current || "";
+						const entry = schema?.databases?.find((entry) => entry.name === database)?.tables?.find((entry) => entry.name === table);
+						if (entry) openTable(activeDb.conn || activeConn, database, entry);
+					}, onClose: () => setModal(null) })
 					: modal.kind === "explain"
 						? h(ExplainPanel, { t, state: explainState, onClose: () => setModal(null) })
 						: modal.kind === "addrow"

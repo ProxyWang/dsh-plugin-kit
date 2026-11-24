@@ -24,12 +24,19 @@ const BASE16 = [
 	"#7f7f7f", "#ff0000", "#00ff00", "#ffff00", "#5c5cff", "#ff00ff", "#00ffff", "#ffffff",
 ];
 
-let paletteCache = null;
+/** Tango-flavoured light ANSI set; normal/black are darkened for contrast. */
+const BASE16_LIGHT = [
+	"#000000", "#cc0000", "#4e9a06", "#c4a000", "#3465a4", "#75507b", "#06989a", "#d3d7cf",
+	"#555753", "#ef2929", "#8ae234", "#fce94f", "#729fcf", "#ad7fa8", "#34e2e2", "#eeeeec",
+];
 
-/** The 256-entry palette, computed once. */
-export function palette256() {
-	if (paletteCache) return paletteCache;
-	const colors = BASE16.slice();
+const paletteCache = { dark: null, light: null };
+
+/** The 256-entry palette, computed once per colour scheme. */
+export function palette256(dark = true) {
+	const slot = dark ? "dark" : "light";
+	if (paletteCache[slot]) return paletteCache[slot];
+	const colors = (dark ? BASE16 : BASE16_LIGHT).slice();
 	const steps = [0, 95, 135, 175, 215, 255];
 	for (let r = 0; r < 6; r++) {
 		for (let g = 0; g < 6; g++) {
@@ -40,7 +47,7 @@ export function palette256() {
 		const level = 8 + i * 10;
 		colors.push(rgbHex(level, level, level));
 	}
-	paletteCache = colors;
+	paletteCache[slot] = colors;
 	return colors;
 }
 
@@ -54,13 +61,13 @@ function rgbHex(r, g, b) {
  * @param fallback - CSS colour for the theme default.
  * @returns a CSS colour string.
  */
-export function colorCss(value, fallback) {
+export function colorCss(value, fallback, dark = true) {
 	if (value === -1 || value === undefined || value === null) return fallback;
 	if (value & TRUECOLOR) {
 		const rgb = value & 0xffffff;
 		return rgbHex((rgb >> 16) & 255, (rgb >> 8) & 255, rgb & 255);
 	}
-	return palette256()[value] ?? fallback;
+	return palette256(dark)[value] ?? fallback;
 }
 
 /** Escape the five characters that could break out of a text node. */
@@ -81,8 +88,9 @@ function escapeHtml(text) {
  */
 function signature(cell, theme) {
 	const inverse = (cell.fl & FLAG.inverse) !== 0;
-	const fg = colorCss(inverse ? cell.bg : cell.fg, inverse ? theme.bg : theme.fg);
-	const bg = colorCss(inverse ? cell.fg : cell.bg, inverse ? theme.fg : theme.bg);
+	const dark = theme.dark !== false;
+	const fg = colorCss(inverse ? cell.bg : cell.fg, inverse ? theme.bg : theme.fg, dark);
+	const bg = colorCss(inverse ? cell.fg : cell.bg, inverse ? theme.fg : theme.bg, dark);
 	const parts = [];
 	if (cell.fl & FLAG.bold) parts.push("font-weight:600");
 	if (cell.fl & FLAG.dim) parts.push("opacity:.65");
@@ -255,7 +263,7 @@ export function createRenderer({ container, doc = globalThis.document, theme = (
 	 * @param options - `{ offset, damage }`; `damage` may be omitted.
 	 * @returns paint statistics for the HUD and tests.
 	 */
-	function paint(screen, { offset = 0, damage = null } = {}) {
+	function paint(screen, { offset = 0, damage = null, hideCursor = false } = {}) {
 		const started = typeof performance !== "undefined" ? performance.now() : Date.now();
 		themeValue = theme();
 		const nextThemeKey = signatureTheme(themeValue);
@@ -288,7 +296,7 @@ export function createRenderer({ container, doc = globalThis.document, theme = (
 			painted++;
 		}
 		const cursor = screen.cursor;
-		const show = cursor.visible && offset === 0;
+		const show = cursor.visible && offset === 0 && !hideCursor;
 		cursorEl.style.display = show ? "block" : "none";
 		if (show) {
 			const style = cursor.style === "bar" ? "ce-term-cursor-bar" : cursor.style === "underline" ? "ce-term-cursor-underline" : "ce-term-cursor-block";

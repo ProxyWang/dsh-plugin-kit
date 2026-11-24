@@ -3225,6 +3225,29 @@ check("docAction reloads clean drafts, flags dirty ones, ignores others", docAct
 	};
 	try {
 		const { DbView } = await import("./src/client/db.js");
+		const { renderRail } = await import("./src/client/db/rail.js");
+		// Regression: a live Host connection made the rail read an undeclared
+		// `schemas` map, throwing during render and leaving the whole tab blank.
+		{
+			const connection = { id: "c1", driver: "sqlite", label: "app", path: "/tmp/app.db" };
+			const schema = { databases: [{ name: "main", tables: [{ name: "users", kind: "table", columns: [{ name: "id", type: "INTEGER" }] }] }] };
+			let rail = null;
+			let failure = null;
+			try {
+				rail = renderRail({
+					t: (key) => key, profiles: [], connections: [connection],
+					databasesFor: () => schema.databases, schemas: { c1: schema },
+					openConns: { c1: true }, collapsedDbs: {}, expanded: new Set(),
+					activeConn: "c1", activeDb: { conn: "c1", database: "main" }, activeTableKey: "",
+					profileErrors: {}, schemaBusy: false, schemaErrors: {}, filter: "",
+					onFilter() {}, onConnect() {}, onForget() {}, onToggleConn() {}, onDisconnect() {},
+					onSelectDatabase() {}, onSelectTable() {}, onOpenQuery() {},
+				});
+			} catch (error) {
+				failure = error;
+			}
+			check("a live connection renders the schema rail", rail !== null && JSON.stringify(rail).includes("users"), failure?.message ?? null);
+		}
 		const draw = createHookRenderer(DbView, { t: (key) => key, sessionId: "s1", useSessions: (select) => select({ byId: { s1: { cwd: "/w" } } }) }, { effects: true });
 		const flatten = (node) => {
 			if (!node || typeof node !== "object") return [];
@@ -3904,7 +3927,7 @@ check("docAction reloads clean drafts, flags dirty ones, ignores others", docAct
 
 		await probe.refreshSchema("bad");
 		draw();
-		check("a failed load keeps the previous tree and reports why", probe.schemaError === "boom" && probe.schemas.bad === undefined, probe.schemaError);
+		check("a failed load keeps the previous tree and reports why", probe.schemaErrors.bad === "boom" && probe.schemaError === "" && probe.schemas.bad === undefined, { errors: probe.schemaErrors, active: probe.schemaError });
 		draw.unmount();
 	} finally {
 		globalThis.fetch = fetchBackup;
@@ -4596,6 +4619,7 @@ check("docAction reloads clean drafts, flags dirty ones, ignores others", docAct
 	const { keyToBytes, pasteToBytes, pasteChunks } = await import("./src/client/vt/keys.js");
 	const { rowHtml, colorCss, palette256, createRenderer } = await import("./src/client/vt/render.js");
 	const { searchScreen, findInLine, offsetForRow } = await import("./src/client/vt/search.js");
+	const { copyStart, moveCopy, copyText, lineSelection, normalizeCopyPosition } = await import("./src/client/vt/copy.js");
 	const { applyRenderFrame } = await import("./src/client/vt/body.js");
 	const { terminalDefinition, canInstallTerminalTab, installTerminalTab, TERM_TAB_KIND, TERM_TAB_ID } = await import("./src/client/termtab.js");
 	const vtRows = (screen) => screen.viewport().map((line) => line.cells.map((cell) => (cell ? cell.c : " ")).join("").replace(/\s+$/u, ""));
@@ -4728,6 +4752,9 @@ check("docAction reloads clean drafts, flags dirty ones, ignores others", docAct
 		spaced[5] = { c: "f", fg: -1, bg: -1, fl: 0, w: 1 };
 		check("leading and interior blanks keep their columns", rowHtml({ cells: spaced }, { fg: "#fff", bg: "#000" }).includes(">     f<"), rowHtml({ cells: spaced }, { fg: "#fff", bg: "#000" }));
 		check("palette has 256 entries with the ANSI base", palette256().length === 256 && palette256()[1] === "#cd0000", palette256().length);
+		check("the light palette has its own ANSI base", palette256(false).length === 256 && palette256(false)[1] === "#cc0000" && colorCss(1, "#fff", false) === "#cc0000", palette256(false)[1]);
+		const lightRow = rowHtml({ cells: [{ c: "x", fg: 1, bg: -1, fl: 0, w: 1 }] }, { fg: "#000", bg: "#fff", dark: false });
+		check("a light theme resolves ANSI colors against its palette", lightRow.includes("#cc0000"), lightRow);
 		check("colours resolve palette, truecolor and defaults", colorCss(196, "#fff") === "#ff0000" && colorCss((1 << 24) | 0x102030, "#fff") === "#102030" && colorCss(-1, "#abcdef") === "#abcdef", [colorCss(196, "#fff"), colorCss(-1, "#abc")]);
 	}
 
@@ -4863,6 +4890,21 @@ check("docAction reloads clean drafts, flags dirty ones, ignores others", docAct
 		const matches = searchScreen(s, "line 8");
 		const offset = matches.length === 1 ? offsetForRow(s, s.indexOfSeq(matches[0].seq), 1) : -1;
 		check("search reaches scrollback and yields a viewport offset", matches.length === 1 && offset >= 0 && offset <= s.scrollbackRows, { matches, offset });
+	}
+	{ // copy mode: motions stay inside the buffer and selections read stable rows
+		const s = vtScreen({ cols: 40, rows: 5, scrollback: 10 });
+		s.write("git commit --amend\r\nsecond line here\r\n");
+		let position = { seq: s.lineSeqAt(0), col: 0 };
+		position = moveCopy(s, position, "word", { page: 3 });
+		check("w lands on the next word start", position.col === 4, position);
+		position = moveCopy(s, position, "word-end", { page: 3 });
+		check("e lands on the end of the word", position.col === 9, position);
+		const selected = copyText(s, { seq: s.lineSeqAt(0), col: 0 }, { seq: s.lineSeqAt(1), col: 6 });
+		check("copy text spans stable rows", selected === "git commit --amend\nsecond", JSON.stringify(selected));
+		const line = lineSelection(s, { seq: s.lineSeqAt(0), col: 0 });
+		check("V selects the whole line", copyText(s, line.anchor, line.head) === "git commit --amend", copyText(s, line.anchor, line.head));
+		const clamped = normalizeCopyPosition(s, { seq: s.lineSeqAt(0), col: 999 });
+		check("a copy cursor clamps to the row's last column", clamped.col <= 18, clamped);
 	}
 	{ // renderer: a scroll moves rows instead of rebuilding the viewport
 		const shimDoc = {
@@ -5304,6 +5346,88 @@ check("docAction reloads clean drafts, flags dirty ones, ignores others", docAct
 		}
 
 		check("a scrollbar appears once history exists", host.children.some((child) => child.className === "ce-term-scrollbar"), host.children.map((child) => child.className));
+
+		// Copy mode owns the keyboard, copies a stable row, and never types into
+		// the shell. Bell/OSC notifications surface as an in-pane notice.
+		{
+			const copiedCopy = [];
+			const savedNav = globalThis.navigator;
+			Object.defineProperty(globalThis, "navigator", { value: { clipboard: { writeText: async (text) => { copiedCopy.push(text); } } }, configurable: true, writable: true });
+			try {
+				state.render = { revision: 44, frame: { type: "snapshot", info: { cols: 40, rows: 5 }, screen: "copy me\r\nsecond line" } };
+				tree = draw();
+				draw.flushEffects();
+				for (const fn of frames.splice(0)) fn();
+				await new Promise((resolve) => setTimeout(resolve, 650));
+				tree = draw();
+				draw.flushEffects();
+				const a11y = (() => {
+					const flatNode = (node) => {
+						if (!node || typeof node !== "object") return [];
+						if (Array.isArray(node)) return node.flatMap(flatNode);
+						return [node, ...(node.children ?? []).flatMap(flatNode)];
+					};
+					return flatNode(tree).find((node) => node.props?.className === "ce-term-a11y");
+				})();
+				check("the screen-reader mirror carries the visible text", JSON.stringify(a11y).includes("second line"), a11y?.children);
+				const writesBefore = written.length;
+				input.dispatch("keydown", { key: " ", ctrlKey: true, shiftKey: true, preventDefault() {}, stopPropagation() {} });
+				tree = draw();
+				draw.flushEffects();
+				const flat = (node) => {
+					if (!node || typeof node !== "object") return [];
+					if (Array.isArray(node)) return node.flatMap(flat);
+					return [node, ...(node.children ?? []).flatMap(flat)];
+				};
+				const bar = () => flat(tree).find((node) => node.props?.className === "ce-term-copybar");
+				check("the copy shortcut opens a copy status bar", Boolean(bar()), flat(tree).map((node) => node.props?.className));
+				input.dispatch("keydown", { key: "V", preventDefault() {}, stopPropagation() {} });
+				input.dispatch("keydown", { key: "y", preventDefault() {}, stopPropagation() {} });
+				await new Promise((resolve) => setImmediate(resolve));
+				check("copy mode yanks the whole current line", copiedCopy.at(-1) === "second line", copiedCopy);
+				check("copy mode never sends its keys to the shell", written.length === writesBefore, written.slice(writesBefore));
+				tree = draw();
+				draw.flushEffects();
+				check("a successful yank leaves copy mode", !bar(), flat(tree).map((node) => node.props?.className));
+
+				state.render = { revision: 45, frame: { type: "output", data: "\u0007" } };
+				tree = draw();
+				draw.flushEffects();
+				for (const fn of frames.splice(0)) fn();
+				tree = draw();
+				draw.flushEffects();
+				const bellNotice = flat(tree).find((node) => node.props?.className === "ce-term-notice");
+				check("a bell raises an in-pane notice", Boolean(bellNotice) && JSON.stringify(bellNotice).includes("terminal.bell"), bellNotice);
+				state.render = { revision: 46, frame: { type: "output", data: "\x1b]9;build done\x07" } };
+				tree = draw();
+				draw.flushEffects();
+				for (const fn of frames.splice(0)) fn();
+				tree = draw();
+				draw.flushEffects();
+				const oscNotice = flat(tree).find((node) => node.props?.className === "ce-term-notice");
+				check("OSC 9 surfaces its message", JSON.stringify(oscNotice).includes("build done"), oscNotice);
+
+				// OSC 133 marks a command, its output and its exit status.
+				const shellMarks = "\x1b]133;A\x07$ \x1b]133;B\x07echo hi\r\n\x1b]133;C\x07hi\r\n\x1b]133;D;1\x07";
+				state.render = { revision: 47, frame: { type: "output", data: shellMarks } };
+				tree = draw();
+				draw.flushEffects();
+				for (const fn of frames.splice(0)) fn();
+				tree = draw();
+				draw.flushEffects();
+				const commandNotice = flat(tree).find((node) => node.props?.className === "ce-term-notice");
+				check("OSC 133 reports a failed command", JSON.stringify(commandNotice).includes("terminal.commandDone"), commandNotice);
+				copiedCopy.length = 0;
+				input.dispatch("keydown", { key: "y", ctrlKey: true, shiftKey: true, preventDefault() {} });
+				await new Promise((resolve) => setImmediate(resolve));
+				check("the last command output can be copied", copiedCopy.at(-1)?.includes("hi"), copiedCopy.at(-1));
+				const writesBeforeJump = written.length;
+				input.dispatch("keydown", { key: "ArrowUp", ctrlKey: true, shiftKey: true, preventDefault() {} });
+				check("jumping between prompts never types into the shell", written.length === writesBeforeJump, written.slice(writesBeforeJump));
+			} finally {
+				Object.defineProperty(globalThis, "navigator", { value: savedNav, configurable: true, writable: true });
+			}
+		}
 
 		// Hidden tabs parse but do not paint; showing them catches up.
 		{

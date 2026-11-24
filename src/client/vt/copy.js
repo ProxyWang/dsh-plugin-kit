@@ -98,6 +98,7 @@ function classAt(char, big) {
 }
 
 function nextWordStart(screen, position, big) {
+	const origin = position;
 	let index = screen.indexOfSeq(position.seq);
 	let info = infoAt(screen, index);
 	let at = textIndexAt(info, position.col);
@@ -112,7 +113,7 @@ function nextWordStart(screen, position, big) {
 		at = 0;
 		while (at < info.text.length && classAt(info.text[at], big) === 0) at++;
 		if (at < info.text.length) return { seq: screen.lineSeqAt(index), col: colAt(info, at) };
-		if (index >= screen.bufferRows - 1) return { seq: screen.lineSeqAt(index), col: 0 };
+		if (index >= screen.bufferRows - 1) return origin;
 	}
 }
 
@@ -136,6 +137,7 @@ function previousWordStart(screen, position, big) {
 }
 
 function nextWordEnd(screen, position, big) {
+	const origin = position;
 	let index = screen.indexOfSeq(position.seq);
 	let info = infoAt(screen, index);
 	let at = textIndexAt(info, position.col) + 1;
@@ -149,7 +151,7 @@ function nextWordEnd(screen, position, big) {
 		index = clampIndex(screen, index + 1);
 		info = infoAt(screen, index);
 		at = 0;
-		if (index >= screen.bufferRows - 1) return { seq: screen.lineSeqAt(index), col: lastCol(info) };
+		if (index >= screen.bufferRows - 1) return origin;
 	}
 }
 
