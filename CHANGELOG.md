@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased — other plugins can drive the workspace
+
+- **`ctx.pluginKit` (v1).** Browser-side plugins can now ask the workspace to open a file, jump to a
+  line/column, or open one file's diff, instead of reimplementing the panel or guessing tab payloads. The
+  service only queues a navigation request through a small action bus (a request emitted before the tab mounts
+  is replayed once), so the editor keeps owning its navigation stack, dirty drafts and LSP state.
+  `registerViewer` is deliberately absent until the panel owns a viewer pipeline. Contract:
+  `docs/plugin-kit-service.md`.
+- Tests: 12 checks for the bus (buffer, replay, unsubscribe) and the service (version, openFile/openDiff/navigate,
+  empty-path rejection); client suite 1223 passed.
+
 ## Unreleased — one storage table for client state
 
 - **Every client storage key now comes from `src/client/storage.js`.** The panel used to spell out its keys in a

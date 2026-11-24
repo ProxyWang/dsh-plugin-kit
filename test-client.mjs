@@ -5890,5 +5890,43 @@ check(
 	check("migrateKey leaves a missing source alone", migrateKey("absent", "newer", store) === false);
 }
 
+/* ---------- pluginKit: action bus + versioned service ---------- */
+{
+	const actions = await import("./src/client/actions.js");
+	const { createPluginKitService, PLUGIN_KIT_VERSION } = await import("./src/client/plugin-service.js");
+	actions.resetActions();
+	const seen = [];
+	actions.emitAction({ type: "open-file", path: "main.go", line: 3 });
+	check("an action emitted before a subscriber is buffered", actions.hasPendingAction() === true);
+	const off = actions.subscribeActions((action) => seen.push(action));
+	await new Promise((resolve) => setTimeout(resolve, 200));
+	check("the buffered action reaches the first subscriber", seen.length === 1 && seen[0].path === "main.go" && seen[0].line === 3, seen);
+	check("the buffer is drained once", actions.hasPendingAction() === false);
+	actions.emitAction({ type: "open-diff", path: "main.go", scope: "staged" });
+	check("a subscribed action is delivered immediately", seen.length === 2 && seen[1].scope === "staged", seen);
+	off();
+	actions.emitAction({ type: "open-file", path: "x.go" });
+	check("unsubscribing stops delivery and buffers the next action", seen.length === 2 && actions.hasPendingAction() === true);
+
+	const emitted = [];
+	let opened = 0;
+	const service = createPluginKitService({ openWorkspace: () => { opened++; }, emit: (action) => emitted.push(action), delayMs: 10 });
+	check("pluginKit service is versioned", service.version === PLUGIN_KIT_VERSION && service.version === 1);
+	check("openFile raises the workspace", service.openFile("a.go", { line: 2, column: 5 }) === true && opened === 1);
+	await new Promise((resolve) => setTimeout(resolve, 30));
+	check("openFile forwards path and position", emitted[0]?.type === "open-file" && emitted[0].path === "a.go" && emitted[0].line === 2 && emitted[0].column === 5, emitted);
+	service.openDiff("a.go");
+	await new Promise((resolve) => setTimeout(resolve, 30));
+	check("openDiff defaults to the working scope", emitted[1]?.type === "open-diff" && emitted[1].scope === "working", emitted);
+	service.navigate({ path: "b.go", line: 9 });
+	await new Promise((resolve) => setTimeout(resolve, 30));
+	check("navigate is the openFile alias", emitted[2]?.type === "open-file" && emitted[2].path === "b.go" && emitted[2].line === 9, emitted);
+	let emptyPathThrew = false;
+	try { service.openFile(""); } catch { emptyPathThrew = true; }
+	check("openFile refuses an empty path", emptyPathThrew);
+	check("no registerViewer until the panel owns a viewer pipeline", service.registerViewer === undefined);
+	actions.resetActions();
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

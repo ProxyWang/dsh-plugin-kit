@@ -4,6 +4,7 @@ import { h } from "./react.js";
 import { NS, TAB_ID, TAB_KIND, SKILLS_TAB_ID, SKILLS_TAB_KIND, API_TAB_ID, API_TAB_KIND, DB_TAB_ID, DB_TAB_KIND, RPC_TAB_ID, RPC_TAB_KIND } from "./constants.js";
 import { en, zh } from "./locale.js";
 import { CodeBody, CodeTitle } from "./code.js";
+import { createPluginKitService } from "./plugin-service.js";
 import { definition, insertStyles, skillsDefinition, apiDefinition, dbDefinition, rpcDefinition } from "./register.js";
 import { CallDiffRow } from "./calldiff.js";
 import { SkillsTabBody, SkillsTitle } from "./skills.js";
@@ -84,6 +85,13 @@ export default {
 			browserCtx.effect(() => installBrowser(browserCtx, bound), "toolbox: enhanced browser");
 		});
 		safe("tab type", () => ctx.sidebarRightTabs.register(definition(bound)));
+		// Other plugins (and the model, through a plugin that wraps this service)
+		// drive the workspace through ctx.pluginKit: open a file, jump to a line,
+		// or open one diff. The tab keeps owning its navigation and draft state.
+		safe("pluginKit service", () => {
+			const service = createPluginKitService({ openWorkspace: () => ctx.sidebarRight.openTab(TAB_KIND, {}) });
+			if (typeof ctx.provide === "function") ctx.provide("pluginKit", service);
+		});
 		const Bound = (props) => h(CodeBody, { ...props, t: props.t ?? bound, terminal, openBuiltinTerminal, builtinTerminal: () => builtinTerminal });
 		safe("tab body", () => ctx.slots.inject("sidebar.right.pane.tab", () => ctx.slots.register({
 			name: "sidebar.right.pane.tab",

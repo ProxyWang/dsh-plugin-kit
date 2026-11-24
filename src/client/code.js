@@ -2,6 +2,7 @@
 
 import { Fragment, h, useCallback, useEffect, useMemo, useRef, useState } from "./react.js";
 import { keys, readRaw, writeRaw } from "./storage.js";
+import { subscribeActions } from "./actions.js";
 import { ROW, TAB_KIND } from "./constants.js";
 import { useToolCloseGuard } from "./closeguard.js";
 import { api } from "./api.js";
@@ -703,6 +704,16 @@ export function CodeBody(props) {
 		},
 		[cwd, canNavigate, dismissPanels],
 	);
+	// Requests from ctx.pluginKit: open a file or one file's diff. A request
+	// emitted before this body mounted is replayed once by the action bus.
+	useEffect(() => subscribeActions((action) => {
+		if (action.type === "open-file") {
+			setMode("files");
+			void loadFile(action.path, action.line ?? 1, action.column ?? 1, null);
+		} else if (action.type === "open-diff") {
+			void openDiff(action.path, action.scope ?? "working");
+		}
+	}), [loadFile, openDiff]);
 	// Whole-file presentation: load the current file and mark the changed
 	// new-side lines, keeping gopls jumps and edit mode available on top.
 	const openChangeSource = useCallback(async (path, scope) => {

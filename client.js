@@ -1811,6 +1811,40 @@ function writeRaw(key, value, storage = defaultStorage()) {
   }
 }
 
+// src/client/actions.js
+var listeners = /* @__PURE__ */ new Set();
+var pending = null;
+var PENDING_TTL_MS = 5e3;
+function emitAction(action) {
+  const stamped = { ...action, at: Date.now() };
+  if (listeners.size === 0) {
+    pending = stamped;
+    return false;
+  }
+  for (const listener of listeners) {
+    try {
+      listener(stamped);
+    } catch {
+    }
+  }
+  return true;
+}
+function subscribeActions(listener) {
+  listeners.add(listener);
+  if (pending !== null && Date.now() - pending.at <= PENDING_TTL_MS) {
+    const action = pending;
+    pending = null;
+    setTimeout(() => {
+      if (!listeners.has(listener)) return;
+      try {
+        listener(action);
+      } catch {
+      }
+    }, 120);
+  }
+  return () => listeners.delete(listener);
+}
+
 // src/client/closeguard.js
 var BEFORE_TOOL_CLOSE = "dsh-plugin-kit/before-tool-close";
 function useToolCloseGuard({ sessionId, kind, dirty, onBlocked }) {
@@ -2184,19 +2218,19 @@ function changedNewLines(text) {
 function deletedGroups(text) {
   const rows = parseDiff(text ?? "");
   const groups = /* @__PURE__ */ new Map();
-  let pending = [];
+  let pending2 = [];
   let lastNew = 0;
   const flush = (anchor) => {
-    if (pending.length === 0) return;
+    if (pending2.length === 0) return;
     const key = Math.max(1, anchor);
     const existing = groups.get(key);
-    if (existing) existing.push(...pending);
-    else groups.set(key, [...pending]);
-    pending = [];
+    if (existing) existing.push(...pending2);
+    else groups.set(key, [...pending2]);
+    pending2 = [];
   };
   for (const row of rows) {
     if (row.kind === "del") {
-      pending.push(row.text);
+      pending2.push(row.text);
       continue;
     }
     if (row.kind === "add" || row.kind === "ctx") {
@@ -6904,6 +6938,14 @@ function CodeBody(props) {
     },
     [cwd, canNavigate, dismissPanels]
   );
+  useEffect(() => subscribeActions((action) => {
+    if (action.type === "open-file") {
+      setMode("files");
+      void loadFile(action.path, action.line ?? 1, action.column ?? 1, null);
+    } else if (action.type === "open-diff") {
+      void openDiff(action.path, action.scope ?? "working");
+    }
+  }), [loadFile, openDiff]);
   const openChangeSource = useCallback(async (path, scope) => {
     if (!cwd || !canNavigate()) return;
     dismissPanels();
@@ -8658,6 +8700,39 @@ function CodeBody(props) {
 function CodeTitle({ useTabInfo }) {
   const tabInfo = useTabInfo ? useTabInfo() : null;
   return h(Fragment, null, h("span", { className: "ce-title-ico" }, h(IconCode)), tabInfo?.tab?.title ?? "Code");
+}
+
+// src/client/plugin-service.js
+var PLUGIN_KIT_VERSION = 1;
+function assertPath(method, path) {
+  if (typeof path !== "string" || path.trim() === "") {
+    throw new TypeError(`pluginKit.${method}(path): path must be a non-empty string`);
+  }
+}
+function createPluginKitService({ openWorkspace, emit = emitAction, delayMs = 120 }) {
+  const request = (action) => {
+    openWorkspace();
+    setTimeout(() => emit(action), delayMs);
+    return true;
+  };
+  return {
+    version: PLUGIN_KIT_VERSION,
+    /** Open `path` in the Code tab, optionally at a 1-based line/column. */
+    openFile(path, options = {}) {
+      assertPath("openFile", path);
+      return request({ type: "open-file", path, line: options.line, column: options.column });
+    },
+    /** Alias of openFile for callers that think in "navigate to a location". */
+    navigate(target = {}) {
+      assertPath("navigate", target.path);
+      return request({ type: "open-file", path: target.path, line: target.line, column: target.column });
+    },
+    /** Open one file's diff (scope: working | staged | branch | commit). */
+    openDiff(path, options = {}) {
+      assertPath("openDiff", path);
+      return request({ type: "open-diff", path, scope: options.scope ?? "working" });
+    }
+  };
 }
 
 // src/client/styles.js
@@ -11880,7 +11955,7 @@ function ApiView({ t, useTabInfo, sessionId, useSessions, incoming }) {
       return;
     }
     const refSnapshot = { ...snapshot2, auth: { ...auth } };
-    let pending = Promise.resolve();
+    let pending2 = Promise.resolve();
     for (const { stableKey } of secretEntries) {
       const existing = secretIdByKeyRef.current[stableKey];
       if (existing) {
@@ -11889,13 +11964,13 @@ function ApiView({ t, useTabInfo, sessionId, useSessions, incoming }) {
       }
     }
     storeJson(keys2.draft, refSnapshot);
-    pending = persistWithSecrets(keys2.draft, snapshot2, secretEntries).then(() => {
+    pending2 = persistWithSecrets(keys2.draft, snapshot2, secretEntries).then(() => {
       const finalSnapshot = { ...snapshot2, auth: { ...auth } };
       if (secretIdByKeyRef.current["auth.token"] && auth.mode === "bearer") finalSnapshot.auth.token = secretRef(secretIdByKeyRef.current["auth.token"]);
       if (secretIdByKeyRef.current["auth.pass"] && auth.mode === "basic") finalSnapshot.auth.pass = secretRef(secretIdByKeyRef.current["auth.pass"]);
       storeJson(keys2.draft, finalSnapshot);
     });
-    void pending;
+    void pending2;
   }, [method, url, headers, bodyType, rawSub, formPairs, body, paramPairs, timeoutMs, auth, extracts, keys2.draft, vaultReady, persistWithSecrets]);
   useEffect(() => {
     if (!vaultReady) {
@@ -13291,17 +13366,17 @@ function installLeftTools(ctx, t) {
   const registrations = /* @__PURE__ */ new Map();
   let tools = [];
   let message = "";
-  const listeners = /* @__PURE__ */ new Set();
+  const listeners2 = /* @__PURE__ */ new Set();
   const report = (next) => {
     message = next;
-    for (const listener of listeners) listener(next);
+    for (const listener of listeners2) listener(next);
   };
   function Notice() {
     const [text, setText] = useState(message);
     useEffect(() => {
-      listeners.add(setText);
+      listeners2.add(setText);
       setText(message);
-      return () => listeners.delete(setText);
+      return () => listeners2.delete(setText);
     }, []);
     useEffect(() => {
       if (!text) return void 0;
@@ -13340,7 +13415,7 @@ function installLeftTools(ctx, t) {
     if (tools.some((tool) => tool.id === ctx.layout.panelInfo.getSnapshot().activePanelId)) ctx.layout.selectPanel(null);
     for (const dispose of registrations.values()) dispose();
     registrations.clear();
-    listeners.clear();
+    listeners2.clear();
   };
 }
 
@@ -16619,7 +16694,7 @@ function normalizeBrowserUrl(input, applicationOrigin) {
 
 // src/client/browsercarrier.js
 function createBrowserCarrier({ host, bridge, workspace, applicationOrigin, onState, onOpen }) {
-  let disposed = false, element, reservation, offOpen, acquiring, ready = false, pending, lastUrl = "", firstDocument = true;
+  let disposed = false, element, reservation, offOpen, acquiring, ready = false, pending2, lastUrl = "", firstDocument = true;
   let state = { url: "", title: "", loading: false, unknown: false, canBack: false, canForward: false, error: "" };
   const removers = [];
   const releases = /* @__PURE__ */ new Set();
@@ -16671,9 +16746,9 @@ function createBrowserCarrier({ host, bridge, workspace, applicationOrigin, onSt
     }
   };
   const loadPending = () => {
-    if (!ready || !pending || disposed) return;
-    const url = pending;
-    pending = void 0;
+    if (!ready || !pending2 || disposed) return;
+    const url = pending2;
+    pending2 = void 0;
     const guest = element;
     try {
       Promise.resolve(guest.loadURL(url)).catch((error) => {
@@ -16709,7 +16784,7 @@ function createBrowserCarrier({ host, bridge, workspace, applicationOrigin, onSt
       });
       listen(element, "dom-ready", () => {
         ready = true;
-        observe(!pending);
+        observe(!pending2);
         loadPending();
       });
       listen(element, "did-navigate", () => observe(true));
@@ -16743,7 +16818,7 @@ function createBrowserCarrier({ host, bridge, workspace, applicationOrigin, onSt
       lastUrl = url;
       publish({ url, title: new URL(url).hostname, loading: true, unknown: false, error: "" });
       if (bridge) {
-        pending = url;
+        pending2 = url;
         initializeDesktop();
         loadPending();
       } else {
@@ -16805,7 +16880,7 @@ function createBrowserCarrier({ host, bridge, workspace, applicationOrigin, onSt
     async dispose() {
       if (disposed) return;
       disposed = true;
-      pending = void 0;
+      pending2 = void 0;
       await dropGuest();
       await acquiring;
       await Promise.all(releases);
@@ -17325,11 +17400,11 @@ function BrowserPage({ sessionId, tab, sub, active, confirmRestore, envelope, li
 // src/client/browsermodel.js
 function createBrowserDataModel(call = api) {
   let snapshot = { data: null, error: "", busy: false };
-  const listeners = /* @__PURE__ */ new Set();
+  const listeners2 = /* @__PURE__ */ new Set();
   let refresh;
   const publish = (patch) => {
     snapshot = { ...snapshot, ...patch };
-    for (const listener of listeners) listener();
+    for (const listener of listeners2) listener();
   };
   const accept = (data) => {
     if (!snapshot.data || data.revision >= snapshot.data.revision) publish({ data, error: "" });
@@ -17337,8 +17412,8 @@ function createBrowserDataModel(call = api) {
   return {
     getSnapshot: () => snapshot,
     subscribe(listener) {
-      listeners.add(listener);
-      return () => listeners.delete(listener);
+      listeners2.add(listener);
+      return () => listeners2.delete(listener);
     },
     load() {
       if (refresh) return refresh;
@@ -17870,7 +17945,7 @@ function createScreen({ cols = 80, rows = 24, scrollback = 1e3, scrollbackBytes 
   let currentLink = null;
   let damage = emptyDamage();
   let charsetG0 = "ascii";
-  const listeners = { title: [], bell: [], osc: [], mode: [] };
+  const listeners2 = { title: [], bell: [], osc: [], mode: [] };
   let state = "ground";
   let params = "";
   let prefix = "";
@@ -17903,7 +17978,7 @@ function createScreen({ cols = 80, rows = 24, scrollback = 1e3, scrollbackBytes 
     damage.scrolls.length = 0;
   }
   function emitMode() {
-    for (const listener of listeners.mode) listener({ ...modes });
+    for (const listener of listeners2.mode) listener({ ...modes });
   }
   function blankCell() {
     if (attrs.bg === -1 && attrs.fl === 0 && attrs.link === null) return void 0;
@@ -18547,11 +18622,11 @@ function createScreen({ cols = 80, rows = 24, scrollback = 1e3, scrollbackBytes 
     const semicolon = payload.indexOf(";");
     const command = semicolon === -1 ? payload : payload.slice(0, semicolon);
     const body = semicolon === -1 ? "" : payload.slice(semicolon + 1);
-    for (const listener of listeners.osc) listener({ command, body });
+    for (const listener of listeners2.osc) listener({ command, body });
     if (command === "0" || command === "2") {
       title = body;
       damage.title = true;
-      for (const listener of listeners.title) listener(title);
+      for (const listener of listeners2.title) listener(title);
       return;
     }
     if (command === "7") {
@@ -18619,7 +18694,7 @@ function createScreen({ cols = 80, rows = 24, scrollback = 1e3, scrollbackBytes 
         if (code === 7) {
           bell++;
           damage.bell++;
-          for (const listener of listeners.bell) listener();
+          for (const listener of listeners2.bell) listener();
           continue;
         }
         continue;
@@ -18936,31 +19011,31 @@ function createScreen({ cols = 80, rows = 24, scrollback = 1e3, scrollbackBytes 
       damage.scrolls.length = 0;
     },
     onTitle(listener) {
-      listeners.title.push(listener);
+      listeners2.title.push(listener);
       return () => {
-        const i = listeners.title.indexOf(listener);
-        if (i >= 0) listeners.title.splice(i, 1);
+        const i = listeners2.title.indexOf(listener);
+        if (i >= 0) listeners2.title.splice(i, 1);
       };
     },
     onBell(listener) {
-      listeners.bell.push(listener);
+      listeners2.bell.push(listener);
       return () => {
-        const i = listeners.bell.indexOf(listener);
-        if (i >= 0) listeners.bell.splice(i, 1);
+        const i = listeners2.bell.indexOf(listener);
+        if (i >= 0) listeners2.bell.splice(i, 1);
       };
     },
     onOsc(listener) {
-      listeners.osc.push(listener);
+      listeners2.osc.push(listener);
       return () => {
-        const i = listeners.osc.indexOf(listener);
-        if (i >= 0) listeners.osc.splice(i, 1);
+        const i = listeners2.osc.indexOf(listener);
+        if (i >= 0) listeners2.osc.splice(i, 1);
       };
     },
     onMode(listener) {
-      listeners.mode.push(listener);
+      listeners2.mode.push(listener);
       return () => {
-        const i = listeners.mode.indexOf(listener);
-        if (i >= 0) listeners.mode.splice(i, 1);
+        const i = listeners2.mode.indexOf(listener);
+        if (i >= 0) listeners2.mode.splice(i, 1);
       };
     }
   };
@@ -21083,22 +21158,22 @@ function chromeStore(state) {
   let store = chromeStores.get(state);
   if (store !== void 0) return store;
   let snapshot = chromeOf(state.getSnapshot());
-  const listeners = /* @__PURE__ */ new Set();
+  const listeners2 = /* @__PURE__ */ new Set();
   let off = null;
   const sync = () => {
     const next = chromeOf(state.getSnapshot());
     if (sameChrome(snapshot, next)) return;
     snapshot = next;
-    for (const listener of [...listeners]) listener();
+    for (const listener of [...listeners2]) listener();
   };
   store = {
     getSnapshot: () => snapshot,
     subscribe(listener) {
-      listeners.add(listener);
+      listeners2.add(listener);
       if (off === null) off = state.subscribe(sync);
       return () => {
-        listeners.delete(listener);
-        if (listeners.size === 0 && off !== null) {
+        listeners2.delete(listener);
+        if (listeners2.size === 0 && off !== null) {
           off();
           off = null;
         }
@@ -21473,6 +21548,10 @@ var index_default = {
       browserCtx.effect(() => installBrowser(browserCtx, bound), "toolbox: enhanced browser");
     });
     safe("tab type", () => ctx.sidebarRightTabs.register(definition(bound)));
+    safe("pluginKit service", () => {
+      const service = createPluginKitService({ openWorkspace: () => ctx.sidebarRight.openTab(TAB_KIND, {}) });
+      if (typeof ctx.provide === "function") ctx.provide("pluginKit", service);
+    });
     const Bound = (props) => h(CodeBody, { ...props, t: props.t ?? bound, terminal, openBuiltinTerminal, builtinTerminal: () => builtinTerminal });
     safe("tab body", () => ctx.slots.inject("sidebar.right.pane.tab", () => ctx.slots.register({
       name: "sidebar.right.pane.tab",
