@@ -87,6 +87,30 @@ function apply(ctx, config) {
 	ctx.inject(["skills"], (skillsCtx) => {
 		setSkillsRegistry(skillsCtx.skills);
 	});
+	/**
+	 * Whether this request may use the private API.
+	 *
+	 * The Host's `connection` service owns deployment trust and authentication;
+	 * ask it first and never infer the policy from flags. Hosts (and tests)
+	 * without the service fall back to a loopback Host-header check, so the API
+	 * is not open to a non-loopback Host just because the service is missing.
+	 * A request with no Host header is not a browser request and is allowed.
+	 */
+	function callerAllowed(req) {
+		const connection = typeof ctx.get === "function" ? ctx.get("connection") : undefined;
+		if (typeof connection?.requestRejection === "function") {
+			try {
+				return connection.requestRejection(req) === undefined;
+			} catch {
+				return false;
+			}
+		}
+		const host = req.headers?.host;
+		if (typeof host !== "string" || host === "") return true;
+		const name = host.replace(/:\d+$/, "").toLowerCase();
+		return name === "127.0.0.1" || name === "localhost" || name === "[::1]" || name === "::1";
+	}
+
 	ctx.inject(["webServer"], (webCtx) => {
 		const webServer = webCtx.webServer;
 		ctx.effect(() => {
@@ -95,6 +119,10 @@ function apply(ctx, config) {
 				kind: "prefix",
 				path: API_PREFIX,
 				handler: async (req, res) => {
+					if (!callerAllowed(req)) {
+						sendError(res, new ApiError("forbidden", "forbidden"));
+						return;
+					}
 					const route = (req.url ?? "/").split("?")[0].slice(API_PREFIX.length + 1);
 					// Three owners of the prefix: this package's route table, the two
 					// storage-backed endpoints, and the database driver table.

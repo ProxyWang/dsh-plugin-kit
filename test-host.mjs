@@ -1738,5 +1738,25 @@ service HelloService {
 	check("success envelope is 200 ok", ok.status === 200 && ok.body.ok === true, ok);
 }
 
+/* ---------- caller fence: connection service first, loopback fallback ---------- */
+{
+	const hostile = await callFull("fs.list", { cwd, path: "" }, { headers: { host: "evil.example" } });
+	check("non-loopback Host is refused without the connection service", hostile.status === 403 && hostile.body.code === "forbidden", hostile);
+	const loopback = await callFull("fs.list", { cwd, path: "" }, { headers: { host: "127.0.0.1:51215" } });
+	check("loopback Host is allowed without the connection service", loopback.status === 200, loopback);
+	const localhost = await callFull("fs.list", { cwd, path: "" }, { headers: { host: "localhost:7000" } });
+	check("localhost Host is allowed without the connection service", localhost.status === 200, localhost);
+	// The Host service, when present, is authoritative: it can reject a request
+	// the fallback would have allowed and accept one it would have refused.
+	ctx.get = (name) => name === "connection"
+		? { requestRejection: (req) => (req.headers?.["x-dsh-reject"] === "1" ? "rejected" : undefined) }
+		: undefined;
+	const rejected = await callFull("fs.list", { cwd, path: "" }, { headers: { host: "127.0.0.1", "x-dsh-reject": "1" } });
+	check("the connection service can reject a loopback request", rejected.status === 403 && rejected.body.code === "forbidden", rejected);
+	const accepted = await callFull("fs.list", { cwd, path: "" }, { headers: { host: "evil.example" } });
+	check("the connection service overrides the Host fallback", accepted.status === 200, accepted);
+	delete ctx.get;
+}
+
 console.log(`\n${pass} passed, ${fail} failed${skipped ? `, ${skipped} skipped` : ""}`);
 process.exit(fail ? 1 : 0);
