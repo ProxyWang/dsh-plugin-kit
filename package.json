@@ -39,17 +39,19 @@
     "check": "node scripts/check-manifest.mjs && node scripts/check-contract.mjs",
     "test": "node scripts/check-manifest.mjs && node scripts/check-contract.mjs && node scripts/build-client.mjs && node test-structure.mjs && node test-host.mjs && node test-client.mjs && node test-browser.mjs && node test-search.mjs && node test-nested.mjs && node test-parent.mjs && node test-remote.mjs",
     "test:contract": "ELECTRON_RUN_AS_NODE=1 \"$DSH_NODE_EXECUTABLE\" test-contract.mjs",
-    "bench:terminal": "node --expose-gc scripts/bench-terminal.mjs"
+    "bench:terminal": "node --expose-gc scripts/bench-terminal.mjs",
+    "smoke": "bash scripts/smoke-mount.sh"
   },
   "icon": "icon.svg",
   "files": [
     "index.js",
     "client.js",
-    "src/client/*.js",
-    "lib/host/*.js",
     "cordis.patch.yml",
     "locale/*.json",
-    "icon.svg"
+    "icon.svg",
+    "docs",
+    "lib/host/**",
+    "src/client/**"
   ],
   "devDependencies": {
     "esbuild": "^0.28.2"

@@ -33,8 +33,25 @@ function readText(path) {
 	}
 }
 
+/** Recursively list files under a package-relative directory. */
+function walkFiles(dir, out = []) {
+	let entries;
+	try {
+		entries = readdirSync(resolve(root, dir), { withFileTypes: true });
+	} catch {
+		return out;
+	}
+	for (const entry of entries) {
+		const rel = `${dir}/${entry.name}`;
+		if (entry.isDirectory()) walkFiles(rel, out);
+		else out.push(rel);
+	}
+	return out;
+}
+
 /** Expand a manifest glob such as `lib/host/*.js` against the checkout. */
 function matchesEntry(entry) {
+	if (entry.endsWith("/**")) return walkFiles(entry.slice(0, -3));
 	const star = entry.indexOf("*");
 	if (star < 0) return existsSync(resolve(root, entry)) ? [entry] : [];
 	const prefix = entry.slice(0, star);
@@ -63,6 +80,24 @@ for (const [specifier, target] of Object.entries(pkg.exports ?? {})) {
 for (const entry of pkg.files ?? []) {
 	expect(`files entry ${entry} matches something`, matchesEntry(entry).length > 0);
 }
+
+// Every runtime module must be covered by a `files` entry. A too-narrow glob
+// (lib/host/*.js) silently drops nested runtime directories from the tarball,
+// which only shows up after publish — so the coverage is walked, not assumed.
+function patternMatches(pattern, path) {
+	if (pattern === path) return true;
+	if (pattern.endsWith("/**")) {
+		const base = pattern.slice(0, -3);
+		return path === base || path.startsWith(`${base}/`);
+	}
+	if (pattern === "docs") return path === "docs" || path.startsWith("docs/");
+	const regex = new RegExp(`^${pattern.split("**").map((part) => part.split("*").map((piece) => piece.replace(/[.+?^${}()|[\]\\]/g, "\\$&")).join("[^/]*")).join(".*")}$`);
+	return regex.test(path);
+}
+
+const runtimeFiles = [...walkFiles("lib/host"), ...walkFiles("src/client"), "index.js", "client.js", "cordis.patch.yml", "icon.svg", ...walkFiles("locale"), ...walkFiles("docs")];
+const uncovered = runtimeFiles.filter((file) => !(pkg.files ?? []).some((pattern) => patternMatches(pattern, file)));
+expect("every runtime file is covered by files[]", uncovered.length === 0, uncovered.slice(0, 5).join(", "));
 
 const patchPath = pkg.dsh?.bundle?.patch;
 expect("dsh.bundle.patch is declared", typeof patchPath === "string", String(patchPath));

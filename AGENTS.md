@@ -20,8 +20,9 @@
 | `lib/host/constants.js`、`src/client/constants.js`、`lib/host/errors.js`、`routes.js` | `node scripts/check-contract.mjs` |
 | `lib/host/fence.js` | `node test-host.mjs`（含 fence / 原子写 / 冲突用例） |
 | 任何提交前 | `pnpm check && pnpm test` |
+| 发版前 / 改 `package.json` 的 `files`、`exports` | `pnpm smoke`（打包 → 临时 profile 安装 → 组合校验） |
 
-`pnpm check` = manifest 守护 + host/client 契约守护；`pnpm test` 已包含 `check`、构建与全部套件。
+`pnpm check` = manifest 守护 + host/client 契约守护（含"每个运行时文件都被 `files` 覆盖"）；`pnpm test` 已包含 `check`、构建与全部套件；`pnpm smoke` 在一次性 DSH_HOME 里验证打包安装。
 
 ## 提交与发布
 
