@@ -72,22 +72,32 @@ if (registered.length !== 1) throw new Error(`expected one route, got ${register
 const handler = registered[0].handler;
 const PREFIX = registered[0].path;
 
-function call(route, body) {
+function callFull(route, body, options = {}) {
 	return new Promise((resolvePromise) => {
-		const req = Readable.from([JSON.stringify(body)]);
-		req.method = "POST";
+		const payload = options.rawBody !== undefined ? options.rawBody : JSON.stringify(body ?? {});
+		const req = Readable.from([payload]);
+		req.method = options.method ?? "POST";
 		req.url = `${PREFIX}/${route}`;
+		req.headers = options.headers ?? {};
 		req.destroy = req.destroy ?? (() => {});
-		let out = null;
 		const res = {
-			writeHead() {},
+			status: 0,
+			writeHead(status) {
+				res.status = status;
+			},
 			end(text) {
-				out = text;
-				resolvePromise(JSON.parse(out));
+				resolvePromise({ status: res.status, body: JSON.parse(text) });
+			},
+			destroy() {
+				resolvePromise({ status: res.status, body: null });
 			},
 		};
 		handler(req, res);
 	});
+}
+
+function call(route, body) {
+	return callFull(route, body).then((result) => result.body);
 }
 
 const cwd = "/tmp/ce-test";
@@ -1704,6 +1714,28 @@ service HelloService {
 	check("descriptor fold keeps repeated-ness", folded.messages["demo.Outer"].fields.tags.repeated === true, folded.messages["demo.Outer"].fields.tags);
 	check("descriptor fold keeps enums", folded.enums["demo.Kind"]?.values?.B === 1, folded.enums["demo.Kind"]);
 	check("descriptor fold keeps streaming flags", folded.services["demo.Svc"].methods[0].serverStreaming === true, folded.services["demo.Svc"]);
+}
+
+/* ---------- error envelope: stable code + HTTP status ---------- */
+{
+	const unknown = await callFull("no.such.route", {});
+	check("unknown route is 404 not-found", unknown.status === 404 && unknown.body.code === "not-found", unknown);
+	const wrongMethod = await callFull("fs.list", {}, { method: "GET" });
+	check("non-POST is 405 method-error", wrongMethod.status === 405 && wrongMethod.body.code === "method-error", wrongMethod);
+	const missing = await callFull("fs.read", { cwd, path: "does-not-exist.txt" });
+	check("missing file is 404 not-found", missing.status === 404 && missing.body.code === "not-found", missing);
+	check("failure envelope keeps the error string", typeof missing.body.error === "string" && missing.body.error.length > 0, missing.body);
+	check("failure envelope is not ok", missing.body.ok === false, missing.body);
+	const outside = await callFull("fs.read", { cwd, path: "../../etc/passwd" });
+	check("escape attempt is 403 forbidden", outside.status === 403 && outside.body.code === "forbidden", outside);
+	const stale = await callFull("fs.write", { cwd, path: "extra.txt", content: "x", baseMtime: 1 });
+	check("stale baseMtime is 409 conflict", stale.status === 409 && stale.body.code === "conflict", stale);
+	const badJson = await callFull("fs.list", undefined, { rawBody: "{not json" });
+	check("malformed JSON is 400 bad-request", badJson.status === 400 && badJson.body.code === "bad-request", badJson);
+	const oversize = await callFull("fs.list", undefined, { rawBody: JSON.stringify({ cwd, padding: "x".repeat(1024 * 1024 + 16) }) });
+	check("oversize body is 413 too-large", oversize.status === 413 && oversize.body.code === "too-large", oversize);
+	const ok = await callFull("fs.list", { cwd, path: "" });
+	check("success envelope is 200 ok", ok.status === 200 && ok.body.ok === true, ok);
 }
 
 console.log(`\n${pass} passed, ${fail} failed${skipped ? `, ${skipped} skipped` : ""}`);

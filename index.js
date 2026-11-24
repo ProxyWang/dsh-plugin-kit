@@ -23,7 +23,8 @@
 import { z } from "zod";
 
 import { API_PREFIX } from "./lib/host/constants.js";
-import { readJsonBody, respondJson } from "./lib/host/http.js";
+import { readJsonBody, sendOk, sendError } from "./lib/host/http.js";
+import { ApiError } from "./lib/host/errors.js";
 import { textCache } from "./lib/host/fence.js";
 import { servers } from "./lib/host/lsp.js";
 import { routes } from "./lib/host/routes.js";
@@ -99,25 +100,25 @@ function apply(ctx, config) {
 					// storage-backed endpoints, and the database driver table.
 					const known = Object.hasOwn(routes, route) || Object.hasOwn(dbRoutes, route) || route === "browser.data" || route === "vault";
 					if (!known) {
-						respondJson(res, 404, { ok: false, error: `unknown route: ${route}` });
+						sendError(res, new ApiError("not-found", `unknown route: ${route}`));
 						return;
 					}
 					if (req.method !== "POST") {
-						respondJson(res, 405, { ok: false, error: "POST required" });
+						sendError(res, new ApiError("method-error", "POST required"));
 						return;
 					}
 					try {
 						const body = await readJsonBody(req);
-						if (route === "browser.data" && !browser) throw new Error("Browser storage is unavailable in this profile");
-						if (route === "vault" && !vault) throw new Error("Secret vault is unavailable in this profile");
+						if (route === "browser.data" && !browser) throw new ApiError("unavailable", "Browser storage is unavailable in this profile");
+						if (route === "vault" && !vault) throw new ApiError("unavailable", "Secret vault is unavailable in this profile");
 						let value;
 						if (route === "browser.data") value = await browser.execute(body);
 						else if (route === "vault") value = await vault.execute(body);
 						else if (Object.hasOwn(dbRoutes, route)) value = await dbRoutes[route](body);
 						else value = await routes[route](body, { req, res });
-						respondJson(res, 200, { ok: true, value });
+						sendOk(res, value);
 					} catch (error) {
-						respondJson(res, 200, { ok: false, error: String(error?.message ?? error) });
+						sendError(res, error);
 					}
 				},
 			});
