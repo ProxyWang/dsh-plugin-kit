@@ -75,28 +75,25 @@ kit 的数据面（LSP、Git、DB、API 调试、浏览器、技能）已经比 
 **设计**：新增 `lib/host/errors.js`，路由层统一出口。
 
 ```js
-// lib/host/errors.js
+// lib/host/errors.js（已实现）
 const STATUS = {
-  "bad-request": 400, forbidden: 403, "not-found": 404, conflict: 409,
-  "too-large": 413, unavailable: 503, internal: 500,
+  "bad-request": 400, forbidden: 403, "not-found": 404, "method-error": 405,
+  conflict: 409, "too-large": 413, unavailable: 503, internal: 500,
 };
 export class ApiError extends Error {
-  constructor(code, message, meta) {
-    super(message);
-    this.code = code;
-    this.status = STATUS[code] ?? 400;
-    this.meta = meta;
-  }
+  constructor(code, message, meta) { super(message); this.code = code; this.status = STATUS[code] ?? 400; this.meta = meta; }
 }
-export function sendOk(res, value) {
-  respondJson(res, 200, { ok: true, value });
-}
+// lib/host/http.js（已实现）
 export function sendError(res, error) {
-  const e = error instanceof ApiError ? error : new ApiError("internal", String(error?.message ?? error));
-  if (res.headersSent) { res.destroy(); return; }   // 不二次写头
-  respondJson(res, e.status, { ok: false, error: { code: e.code, message: e.message, ...(e.meta ? { meta: e.meta } : {}) } });
+  const e = toApiError(error);                       // 含 errno 映射
+  if (res.headersSent) { res.destroy(); return; }    // 不二次写头
+  respondJson(res, e.status, { ok: false, error: e.message, code: e.code });
 }
 ```
+
+**实现取舍（与初版设计的差异）**：信封保留顶层 `error` 字符串并新增 `code`，而不是把 `error` 改成
+`{code,message}` 对象。原因：12 个客户端消费点与 300+ 主机测试都按字符串断言，对象化会逼出一次全量
+客户端改造却没有额外收益——`code` 已经能分支。对象化留到客户端统一改版时再做。
 
 **改动清单**
 
@@ -119,15 +116,24 @@ export function sendError(res, error) {
 **设计**：把 fence 提到最外层，与 better-sidebar 同构。
 
 ```js
-ctx.inject(["connection"], (connCtx) => {
-  const fence = (req) => {
-    try { return connCtx.connection?.requestRejection?.(req) === undefined; }
-    catch { return false; }
-  };
-  // register 的 handler 内：
-  if (!fence(req)) { sendError(res, new ApiError("forbidden", "forbidden")); return; }
-});
+// index.js（已实现）：请求时取连接策略，缺失则退化为 loopback Host 校验
+function callerAllowed(req) {
+  const connection = typeof ctx.get === "function" ? ctx.get("connection") : undefined;
+  if (typeof connection?.requestRejection === "function") {
+    try { return connection.requestRejection(req) === undefined; } catch { return false; }
+  }
+  const host = req.headers?.host;
+  if (typeof host !== "string" || host === "") return true;   // 非浏览器调用
+  const name = host.replace(/:\d+$/, "").toLowerCase();
+  return name === "127.0.0.1" || name === "localhost" || name === "[::1]" || name === "::1";
+}
+// prefix handler 首行：
+if (!callerAllowed(req)) { sendError(res, new ApiError("forbidden", "forbidden")); return; }
 ```
+
+**实现取舍**：不用模块级 `inject: ['connection']`，改为请求时 `ctx.get` + 退化分支。原因：把注册绑在
+`connection` 上会让缺少该服务的宿主（以及测试 harness）永远挂不上 API；退化到 loopback 校验保证
+"服务缺失 ≠ 完全放开"。
 
 **要点**：`webServer.register` 与 `connection` 在同一 `ctx.inject` 内注册，避免服务晚到；未来 WS upgrade（终端、watch）同样首行 fence；`storageDomain`/`skills` 等可选服务的注入分支保持不变。
 
@@ -289,6 +295,20 @@ export function removeScopes(predicate) { /* orphans 清理复用 */ }
 6. `feat(client): pluginKit 服务（openFile/openDiff/navigate/registerViewer）`
 7. `perf(client): mermaid chunk 按需加载`
 8. `docs: host-contracts / 兼容矩阵 / 插件详情页`
+
+## 5.1 实施记录（P0 已完成，2026-11-24）
+
+| 项 | 状态 | 提交 | 验证 |
+|---|---|---|---|
+| A1 错误语义 | 完成 | `feat(api): machine-readable failure codes and HTTP statuses` | `test-host.mjs` 325 通过（含 9 条状态/码断言） |
+| A2 准入 fence | 完成 | `feat(api): gate every request on the Host connection policy` | 5 条 fallback/authoritative 断言 |
+| A3 原子写 | 完成 | `feat(api): write files atomically with temp + rename` | 7 条内容/mode/无残留/冲突断言 |
+| A8 工程守护 | 完成 | 随 P0 提交 | `check-manifest` 26 项、`check-contract` 11 项，均已接入 `pnpm test` |
+| A9 契约文档 | 部分 | 随 P0 提交 | `docs/host-contracts.md` §1–§11；版本矩阵与详情页留待 P2 |
+| A4/A5/A6/A7 | 未开始 | — | 见第 5 节 P1/P2 |
+
+与初版设计的差异（已回写各节）：A1 保留 `error` 字符串 + 新增 `code`；A2 用请求时 `ctx.get` + loopback
+退化，而不是模块级 inject。两个差异都是为了不破坏 12 个既有消费点与 300+ 既有断言，同时保住安全语义。
 
 ## 6. 风险与回滚
 

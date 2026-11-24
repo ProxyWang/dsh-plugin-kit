@@ -1,5 +1,28 @@
 # Changelog
 
+## Unreleased — the private API answers with codes and only its own page
+
+- **Failures carry a stable code and an HTTP status.** The Host API used to answer HTTP 200 with a bare string
+  for every failure, so callers could not tell a bad argument from a conflict or a missing file. Failures now
+  map to a closed code set with the matching status (`bad-request` 400, `forbidden` 403, `not-found` 404,
+  `method-error` 405, `conflict` 409, `too-large` 413, `unavailable` 503, `internal` 500), and file-system
+  errno values map onto the same codes. The historical `error` string stays in the envelope, so existing
+  client code (and older bundles) keep working while new callers branch on `code`. See `docs/host-contracts.md` §2–§3.
+- **Every request is gated on the Host connection policy.** The route prefix now asks the Host's `connection`
+  service first and answers 403 before parsing the route; without that service it falls back to a loopback
+  Host-header check instead of opening the API. Contract §4.
+- **Saves are atomic.** A file save writes a sibling dot-prefixed temp file, copies the target's mode,
+  re-checks the editor's `baseMtime` when the rename lands, then renames over the target; failures unlink the
+  temp. A kill or a full disk leaves either the old bytes or the new bytes, never a truncated source file. §6.
+- **Two guards run before the suite.** `scripts/check-manifest.mjs` (exports/files entries exist, bundle patch
+  name/id, patch config keys exist in `Config`, client bundle module id, zh/en key parity) and
+  `scripts/check-contract.mjs` (API prefix parity across host/client/bundle, unique namespaced route keys, every
+  `ApiError` code declared, no ad-hoc 200 failure envelope). Wired into `pnpm check` and `pnpm test`, plus the
+  new `AGENTS.md` red lines and `docs/host-contracts.md`.
+- **Tests:** 22 new host checks — error code/status table, caller fence (fallback and authoritative), atomic
+  write (content, mode, no temp leftovers, conflict). Verified with `node test-host.mjs` (325 passed),
+  `pnpm check`, and the full `pnpm test`.
+
 ## Unreleased — the database tab opens with a live connection
 
 - **Fix: the panel went blank as soon as a connection existed.** The rail's live-connection branch read a
