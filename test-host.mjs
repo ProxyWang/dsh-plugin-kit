@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { Readable } from "node:stream";
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdirSync, writeFileSync, appendFileSync, readFileSync, rmSync, symlinkSync, existsSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, writeFileSync, appendFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
@@ -1756,6 +1756,24 @@ service HelloService {
 	const accepted = await callFull("fs.list", { cwd, path: "" }, { headers: { host: "evil.example" } });
 	check("the connection service overrides the Host fallback", accepted.status === 200, accepted);
 	delete ctx.get;
+}
+
+/* ---------- atomic writes: temp + rename, conflict-safe ---------- */
+{
+	const dir = join(cwd, "atomic");
+	mkdirSync(dir, { recursive: true });
+	const file = join(dir, "note.txt");
+	writeFileSync(file, "old");
+	chmodSync(file, 0o600);
+	const written = await callFull("fs.write", { cwd, path: "atomic/note.txt", content: "new" });
+	check("atomic write succeeds", written.status === 200 && written.body.ok === true, written);
+	check("atomic write replaced the content", readFileSync(file, "utf8") === "new");
+	check("atomic write kept the file mode", (statSync(file).mode & 0o777) === 0o600, (statSync(file).mode & 0o777).toString(8));
+	check("atomic write leaves no temp files", readdirSync(dir).every((name) => !name.endsWith(".tmp")), readdirSync(dir));
+	const refused = await callFull("fs.write", { cwd, path: "atomic/note.txt", content: "clobber", baseMtime: 1 });
+	check("stale atomic write is 409 conflict", refused.status === 409 && refused.body.code === "conflict", refused);
+	check("refused write left the file untouched", readFileSync(file, "utf8") === "new");
+	check("refused write leaves no temp files", readdirSync(dir).every((name) => !name.endsWith(".tmp")), readdirSync(dir));
 }
 
 console.log(`\n${pass} passed, ${fail} failed${skipped ? `, ${skipped} skipped` : ""}`);
