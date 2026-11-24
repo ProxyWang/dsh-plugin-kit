@@ -305,10 +305,34 @@ export function removeScopes(predicate) { /* orphans 清理复用 */ }
 | A3 原子写 | 完成 | `feat(api): write files atomically with temp + rename` | 7 条内容/mode/无残留/冲突断言 |
 | A8 工程守护 | 完成 | 随 P0 提交 | `check-manifest` 26 项、`check-contract` 11 项，均已接入 `pnpm test` |
 | A9 契约文档 | 部分 | 随 P0 提交 | `docs/host-contracts.md` §1–§11；版本矩阵与详情页留待 P2 |
-| A4/A5/A6/A7 | 未开始 | — | 见第 5 节 P1/P2 |
+| A7 作用域收敛 | 完成 | `refactor(client): one storage table for every scoped key` | `test-client.mjs` 1211 通过（14 条存储断言） |
+| A6 pluginKit | 完成 v1（`registerViewer` 暂缓） | `feat(client): ctx.pluginKit drives the workspace tab` | 12 条 action bus / service 断言，client 1223 通过 |
+| A5 设置 | 决策完成 | `docs: plugin details, DSH support matrix and the settings decision` | 结论写入 `docs/settings.md`：沿用宿主插件行，不自绘 |
+| A8 工程守护 | 完成（manifest 28 项 / contract 11 项 / `pnpm smoke`） | `chore(release): pack-and-install smoke plus files[] coverage guard` | 冒烟 PASS；负向验证 glob 收窄会失败 |
+| A9 契约与详情 | 完成（host-contracts / 兼容矩阵 / 详情页） | `docs: ...` | 详情页渲染需在 GUI 手动确认 |
+| A4 按需加载 | 评估后暂缓 | — | 原前提不成立，见 5.2 |
 
 与初版设计的差异（已回写各节）：A1 保留 `error` 字符串 + 新增 `code`；A2 用请求时 `ctx.get` + loopback
 退化，而不是模块级 inject。两个差异都是为了不破坏 12 个既有消费点与 300+ 既有断言，同时保住安全语义。
+
+## 5.2 A4 评估：原方案的前提不成立
+
+初版写"先把 mermaid 拆出来"，但 kit 的客户端**没有使用 mermaid**（`src/client` 无引用），bundle 也不是第三方重依赖堆出来的：
+
+| 指标 | 值 |
+|---|---|
+| `client.js`（仓库内，未压缩） | 975,450 B |
+| `client.js`（`--min` 构建，发布走这条） | 626,284 B |
+| 客户端源码最大组成 | styles 140K、code 112K、locale 84K、db 136K、vt 148K（源文件 KB，自有代码） |
+
+可行方案改成"**lazy tab body**"：tab 壳先注册，终端渲染器（`vt/`）与数据库面板（`db/`）首次激活时再加载 chunk。需要：
+
+1. Host 侧新增同源静态资源路由（`/code-explorer/asset/<name>.js`，白名单 + ETag）；
+2. 构建脚本多 entry，chunk 通过 `globalThis.__dshChunks__` 暴露 factory；
+3. 客户端 loader（`<script>` + 失败重试 + HMR 失效），把现有 `installTerminalTab` / DB tab body 包成 lazy；
+4. tab 测试全部改走异步加载路径。
+
+预计核心降到 ~450–500KB（min），成本 2–4 天，回归面覆盖 terminal + db 两大块。**结论**：收益是首屏体积，不是能力缺口；当前 626KB 可接受，建议单独立项（先拆 `vt/`，改动面最小），不在本轮继续。
 
 ## 6. 风险与回滚
 
