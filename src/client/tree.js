@@ -373,7 +373,7 @@ export function TreePanel({ cwd, t, onOpenFile, activePath, revealPath, refreshK
 							...dropProps(childPath),
 						},
 						h("button", { type: "button", className: "ctp-entry-open", "aria-expanded": open },
-							h("span", { className: "ce-ico" }, h(IconFolder, { open })),
+							h("span", { className: "ce-ico ce-ico-dir" }, h(IconFolder, { open })),
 							h("span", { className: "ce-name" }, entry.name)),
 						acts(childPath, true),
 					),

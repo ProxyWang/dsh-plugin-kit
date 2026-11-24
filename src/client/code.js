@@ -1924,6 +1924,7 @@ export function CodeBody(props) {
 				h("button", { type: "button", className: `ce-seg-btn${mode === "files" ? " ce-seg-on" : ""}`, onClick: () => { setMode("files"); dismissPanels(); setRailVisible(true); setMobileView("files"); } }, t("toolbar.files")),
 				h("button", { type: "button", className: `ce-seg-btn${mode === "changes" ? " ce-seg-on" : ""}`, onClick: () => { setMode("changes"); dismissPanels(); setRailVisible(true); setMobileView("files"); refreshGit(); } }, `${t("toolbar.changes")}${git?.repo ? ` · ${git.working.length}` : ""}`),
 			),
+			h("span", { className: "ce-toolbar-rule", "aria-hidden": true }),
 			 h("button", { type: "button", className: `ce-command-trigger${commandOpen ? " ce-tool-on" : ""}`, title: `${t("command.title")} (⌘⇧P / Ctrl+Shift+P)`, "aria-expanded": commandOpen, onClick: toggleCommand }, h("span", { className: "ce-command-mark", "aria-hidden": true }, ">_"), h("span", null, t("command.title")), h("kbd", null, "⌘⇧P")),
 			(doc || diff) ? h("button", { type: "button", className: "ce-mobile-open-editor ce-link", onClick: () => { dismissPanels(); setMobileView("editor"); } }, t("layout.backEditor")) : null,
 
@@ -2368,7 +2369,7 @@ export function CodeBody(props) {
 								: null,
 						),
 					)
-						: h("div", { className: "ce-empty" }, t("editor.placeholder")),
+						: h("div", { className: "ce-empty" }, h("span", { className: "ce-empty-icon", "aria-hidden": "true" }, h(IconCode, { size: 20 })), h("strong", null, t("editor.placeholder"))),
 				overlay ? h(LocationList, { t, overlay, cwd, onPick: (item) => { const word = cursorRef.current?.word; setOverlay(null); void openFile(item.path, item.line, item.col, true, word ? { line: item.line, col: item.col, word } : null); }, onClose: () => setOverlay(null) }) : null,
 				palette ? h(QuickOpen, { t, state: palette, onQuery: onPaletteQuery, onPick: onPalettePick, onClose: closePalette }) : null,
 				gotoOpen && doc && !doc.image

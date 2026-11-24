@@ -63,16 +63,19 @@ export function filesUnder(node) {
 
 const EXT_TINT = {
 	go: "cet-go",
-	md: "cet-md",
-	sql: "cet-sql",
-	toml: "cet-toml",
-	zip: "cet-zip",
-	html: "cet-html",
-	js: "cet-js",
-	ts: "cet-js",
-	json: "cet-json",
-	yml: "cet-toml",
-	yaml: "cet-toml",
+	ts: "cet-ts", tsx: "cet-ts",
+	js: "cet-js", jsx: "cet-js", mjs: "cet-js", cjs: "cet-js",
+	json: "cet-json", jsonc: "cet-json",
+	md: "cet-md", mdx: "cet-md", txt: "cet-md",
+	sql: "cet-sql", db: "cet-sql", sqlite: "cet-sql",
+	toml: "cet-toml", yml: "cet-toml", yaml: "cet-toml", lock: "cet-toml", ini: "cet-toml",
+	html: "cet-html", htm: "cet-html", vue: "cet-html", astro: "cet-html", svelte: "cet-html",
+	css: "cet-css", scss: "cet-css", less: "cet-css",
+	py: "cet-py", rb: "cet-py", sh: "cet-py", bash: "cet-py", zsh: "cet-py",
+	rs: "cet-rs", java: "cet-rs", kt: "cet-rs", c: "cet-rs", h: "cet-rs", cpp: "cet-rs", hpp: "cet-rs", swift: "cet-rs",
+	zip: "cet-zip", tar: "cet-zip", gz: "cet-zip", rar: "cet-zip",
+	svg: "cet-img", png: "cet-img", jpg: "cet-img", jpeg: "cet-img", gif: "cet-img", webp: "cet-img", ico: "cet-img",
+	pdf: "cet-pdf",
 };
 
 export function fileTint(path) {

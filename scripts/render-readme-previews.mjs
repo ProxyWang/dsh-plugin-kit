@@ -22,6 +22,9 @@ const { RequestFields } = await import("../src/client/requestfields.js");
 const { CSS } = await import("../src/client/styles.js");
 const { zh } = await import("../src/client/locale.js");
 
+const VIEW_WIDTH = Number(process.env.PREVIEW_WIDTH ?? 1100);
+const VIEW_HEIGHT = Number(process.env.PREVIEW_HEIGHT ?? 760);
+const PREVIEW_DIR = process.env.PREVIEW_DIR ?? null;
 const t = (key, args = {}) => String(zh[key] ?? key).replace(/\{(\w+)\}/g, (all, name) => args[name] ?? all);
 const root = "/demo/workspace";
 const code = [
@@ -387,8 +390,8 @@ for (const [scene, tree] of Object.entries(scenes)) {
  if (/\/Users\/|\/home\/|bilibili|wang-jun|Bearer\s|localhost:\d|127\.0\.0\.1/i.test(markup)) throw Error(`Privacy check failed: ${scene}`);
  for (const theme of ["light", "dark"]) {
   const htmlPath = join(temporary, `${scene}-${theme}.html`);
-  const imagePath = fileURLToPath(new URL(`../docs/images/readme-${scene}-${theme}.png`, import.meta.url));
-  await writeFile(htmlPath, `<!doctype html><html lang="zh"><meta charset="utf-8"><style>html,body{margin:0;height:100%;width:1100px;font-family:system-ui,-apple-system,sans-serif;color-scheme:${theme};${theme === "light" ? light : dark}}body{display:flex;flex-direction:column}*{box-sizing:border-box}.preview-caption{height:28px;flex:none;display:flex;align-items:center;padding:0 14px;background:${theme === "light" ? "#f7f8fa" : "#181b1f"};color:${theme === "light" ? "#555d68" : "#aab5c1"};font-size:11px;border-bottom:1px solid ${theme === "light" ? "#d5dae0" : "#39414a"}}.preview-scene{flex:1;min-height:0;overflow:hidden}.preview-explorer{display:flex;flex:1;min-height:0}${CSS}</style><div class="preview-caption">DEMO · 完全虚构数据 / Fictional data · ${scene}</div><main class="preview-scene">${markup}</main></html>`);
+  const imagePath = PREVIEW_DIR ? join(PREVIEW_DIR, `readme-${scene}-${theme}.png`) : fileURLToPath(new URL(`../docs/images/readme-${scene}-${theme}.png`, import.meta.url));
+  await writeFile(htmlPath, `<!doctype html><html lang="zh"><meta charset="utf-8"><style>html,body{margin:0;height:100%;width:${VIEW_WIDTH}px;font-family:system-ui,-apple-system,sans-serif;color-scheme:${theme};${theme === "light" ? light : dark}}body{display:flex;flex-direction:column}*{box-sizing:border-box}.preview-caption{height:28px;flex:none;display:flex;align-items:center;padding:0 14px;background:${theme === "light" ? "#f7f8fa" : "#181b1f"};color:${theme === "light" ? "#555d68" : "#aab5c1"};font-size:11px;border-bottom:1px solid ${theme === "light" ? "#d5dae0" : "#39414a"}}.preview-scene{flex:1;min-height:0;overflow:hidden}.preview-explorer{display:flex;flex:1;min-height:0}${CSS}</style><div class="preview-caption">DEMO · 完全虚构数据 / Fictional data · ${scene}</div><main class="preview-scene">${markup}</main></html>`);
   shots.push({ scene, theme, htmlPath, imagePath });
  }
 }
@@ -402,7 +405,7 @@ try {
  client = createCdpClient(socket);
  const { targetId } = await client.send("Target.createTarget", { url: "about:blank" });
  const { sessionId } = await client.send("Target.attachToTarget", { targetId, flatten: true });
- await client.send("Emulation.setDeviceMetricsOverride", { width: 1100, height: 760, deviceScaleFactor: 1, mobile: false }, sessionId);
+ await client.send("Emulation.setDeviceMetricsOverride", { width: VIEW_WIDTH, height: VIEW_HEIGHT, deviceScaleFactor: 1, mobile: false }, sessionId);
  await client.send("Page.enable", {}, sessionId);
  for (const { scene, theme, htmlPath, imagePath } of shots) {
   const loaded = new Promise((resolve, reject) => {

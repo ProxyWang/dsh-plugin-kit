@@ -12,6 +12,7 @@ import { CONNECTION_COLORS, CATEGORIES, defaultPort, implSuffix } from "./meta.j
 import { driverLabel } from "../dbconnect.js";
 import { formatCell } from "./grid.js";
 import { PAGE_SIZE, QUERY_PAGE, tableSql } from "./format.js";
+import { IconRefresh } from "../icons.js";
 
 /**
  * @param wb - everything `useWorkbench` returns
@@ -28,7 +29,7 @@ export function renderWorkbench(wb) {
 			h("button", { type: "button", className: "ce-sk-btn", title: t("db.driversHint"), onClick: () => setModal({ kind: "drivers" }) }, t("db.driversButton")),
 			h("button", { type: "button", className: "ce-sk-btn", disabled: !schema, title: t("db.erHint"), onClick: () => setModal({ kind: "er" }) }, t("db.erButton")),
 			h("button", { type: "button", className: "ce-sk-btn", onClick: () => openQueryTab("") }, t("db.newQuery")),
-			activeConn ? h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost", title: t("db.refresh"), onClick: () => void refreshSchema() }, "⟳") : null,
+			activeConn ? h("button", { type: "button", className: "ce-tool", title: t("db.refresh"), "aria-label": t("db.refresh"), onClick: () => void refreshSchema() }, h(IconRefresh, { size: 14 })) : null,
 			h("span", { className: "ce-spacer" }),
 			schema ? h("span", { className: "cedb-chip" }, `${counts.tables} ${t("db.tables")}`) : null,
 			schema ? h("span", { className: "cedb-chip" }, `${counts.views} ${t("db.views")}`) : null,
@@ -159,7 +160,7 @@ export function renderWorkbench(wb) {
 											activeTab.result.changes !== undefined ? h("span", { className: "cedb-chip" }, `${activeTab.result.changes} ${t("db.affected")}`) : null,
 											activeTab.result.columns?.length
 												? h("span", { className: "cedb-export" },
-													h("button", { type: "button", className: "ce-tool ce-tiny", title: t("db.export"), onClick: () => setExportOpen((open) => !open) }, `⤓ ${t("db.export")}`),
+													h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost", title: t("db.export"), "aria-label": t("db.export"), onClick: () => setExportOpen((open) => !open) }, t("db.export")),
 													exportOpen
 														? h("div", { className: "cedb-menu" },
 															h("button", { type: "button", className: "cedb-menu-row", onClick: () => { exportResult(activeTab.result, activeTab.title); setExportOpen(false); } }, "CSV"),
@@ -188,10 +189,10 @@ export function renderWorkbench(wb) {
 										value: activeTab.filter,
 										onChange: (event) => patchTab(activeTab.id, { filter: event.target.value, offset: 0 }),
 										onKeyDown: (event) => { if (event.key === "Enter") void loadRows(activeTab.id, { filter: event.currentTarget.value, offset: 0 }); } }),
-									h("button", { type: "button", className: "ce-sk-btn", disabled: activeTab.loading, onClick: () => void loadRows(activeTab.id) }, activeTab.loading ? t("loading") : "⟳"),
+									h("button", { type: "button", className: "ce-sk-btn", disabled: activeTab.loading, title: t("db.refresh"), onClick: () => void loadRows(activeTab.id) }, activeTab.loading ? t("loading") : t("db.refresh")),
 									h("button", { type: "button", className: "ce-sk-btn", title: t("db.sqlForTable"), onClick: () => openQueryTab(`${tableSql(activeTab.table, { ...activeTab, limit: PAGE_SIZE, driver: connections.find((entry) => entry.id === activeTab.conn)?.driver }).replace(/;\s*$/, "")};`) }, "SQL"),
 									h("span", { className: "ce-spacer" }),
-									activeTab.result ? h("button", { type: "button", className: "ce-tool ce-tiny", title: t("db.export"), onClick: () => exportResult(activeTab.result, activeTab.table) }, "⤓ CSV") : null,
+									activeTab.result ? h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost", title: t("db.export"), onClick: () => exportResult(activeTab.result, activeTab.table) }, "CSV") : null,
 									h("button", {
 										type: "button",
 										className: "ce-sk-btn",
@@ -233,7 +234,7 @@ export function renderWorkbench(wb) {
 										h("span", { className: "cedb-empty-icon", "aria-hidden": "true" }, "▤"),
 										h("div", { className: "cedb-empty-title" }, activeTab.loading ? t("loading") : t("db.reloadTable")),
 										h("div", { className: "cedb-empty-hint" }, t("db.reloadTableHint")),
-										activeTab.loading ? null : h("button", { type: "button", className: "ce-sk-btn", onClick: () => void loadRows(activeTab.id) }, `⟳ ${t("db.refresh")}`)),
+										activeTab.loading ? null : h("button", { type: "button", className: "ce-sk-btn", onClick: () => void loadRows(activeTab.id) }, t("db.refresh"))),
 								h("div", { className: "cedb-pager" },
 									h("button", {
 										type: "button",

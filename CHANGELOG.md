@@ -1,5 +1,36 @@
 # Changelog
 
+## Unreleased — a quieter, theme-native visual system
+
+- **The panel's chrome was redrawn as one system instead of two stacked skin passes.** The old
+  monolith (`src/client/styles.js`, ~1.2k lines) mixed a pre-token layer with a later override
+  layer, so the same control could be a boxed segment in one tab and a pill in another. The rules
+  now live in `src/client/css/*` (tokens, shell, editor, api, data, skills, browser) and are
+  composed by `styles.js`; every color, line and radius comes from one token block mapped to
+  `--dsw-alias-*`, so light and dark stay in step by construction.
+- **Shell.** A flat 44 px toolbar (mode labels with a filled active pill, a quiet command field,
+  ghost branch and icon actions), 37 px pill tab strip with hover-only close buttons, 26 px tree
+  rows with rounded selection and a 2 px accent bar, and a compact search field replace the
+  bordered chips and tab boxes. The status bar is a 24 px hairline strip.
+- **Files read like a file tree, not a monospace list.** Folders are amber, TypeScript/Go blue,
+  JavaScript amber, JSON green, SQL amber, Markdown neutral; `EXT_TINT` now covers ts/tsx, css,
+  py, rs, images, PDFs and archives as well. File tints come from `color-mix` over the semantic
+  tokens and contain no fixed hex.
+- **Shared control vocabulary.** Buttons (filled / ghost / primary / danger-ghost), fields
+  (hairline + 3 px soft focus ring), chips, section labels, tables, popovers, dialogs and empty
+  states are defined once and reused across API, Database, gRPC and Skills. HTTP verbs are tinted
+  by method; SQL grids, key/value tables and diff rows use hairlines instead of grids.
+- **Craft pass.** Decorative glyph labels (`⧉ curl`, `☆ 收藏`, `⤓ CSV`, `⟳`) were replaced with
+  real words or the existing SVG icon set; the Skills refresh and Database refresh are now proper
+  icons. The editor's empty state gained an icon tile, dialogs and popovers share one radius and
+  shadow, and focus-visible rings, caret color and reduced-motion rules were added throughout.
+- **Preview tooling.** `scripts/render-readme-previews.mjs` accepts `PREVIEW_WIDTH`,
+  `PREVIEW_HEIGHT` and `PREVIEW_DIR`, so the same fixtures can be rendered at sidebar width
+  (430 px) as well as the 1100 px README size.
+
+验证：`pnpm test`（manifest、contract、构建、client 1223 项、host、browser、search、nested、parent、remote 全绿）；
+README 预览在 1100×760 与 430×760 下按 light/dark 重新渲染并逐屏检查。
+
 ## Unreleased — packaging is verified, not assumed
 
 - **Nested runtime directories were missing from the published tarball.** `files` carried

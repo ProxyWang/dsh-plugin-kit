@@ -6,6 +6,7 @@ import { SKILLS_TAB_KIND } from "./constants.js";
 import { useToolCloseGuard } from "./closeguard.js";
 import { MarkdownView } from "./markdown.js";
 import { useDismissLayer } from "./dismiss.js";
+import { IconRefresh } from "./icons.js";
 
 /** Group installation sources into the three scopes users choose between. */
 export function skillScope(source) {
@@ -145,7 +146,7 @@ export function SkillsView({ cwd, t, say, visible, sessionId }) {
 				h("h2", null, t("skills.manager")),
 				h("span", { className: "ce-sk-total" }, skills === null ? "…" : t("skills.total", { n: skills.length })),
 			),
-			h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost", title: t("skills.refresh"), "aria-label": t("skills.refresh"), disabled: listing || busy, onClick: load }, "⟳"),
+			h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost", title: t("skills.refresh"), "aria-label": t("skills.refresh"), disabled: listing || busy, onClick: load }, h(IconRefresh, { size: 14 })),
 			h("button", { type: "button", className: "ce-sk-btn ce-sk-primary", "aria-expanded": createOpen, "data-ce-popup-trigger": "skill-create", disabled: busy, onClick: () => { if (canLeave()) { setConfirmDel(false); setCreateOpen((v) => !v); } } }, `+ ${t("skills.new")}`),
 		),
 		createOpen ? h("div", { className: "ce-sk-create", ref: createRef },
@@ -210,7 +211,7 @@ export function SkillsView({ cwd, t, say, visible, sessionId }) {
 							h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost", disabled: busy, onClick: cancelEdit }, t("editor.cancel")),
 							h("button", { type: "button", className: "ce-sk-btn ce-sk-primary", disabled: !dirty || busy, title: "⌘S / Ctrl+S", onClick: save }, t("editor.save")),
 						) : h("button", { type: "button", className: "ce-sk-btn", disabled: busy, onClick: () => setEditMode(true) }, t("editor.edit"))) : null,
-						!readonly && !editMode ? h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost", disabled: busy, "data-ce-popup-trigger": "skill-delete", "aria-expanded": confirmDel, onClick: () => { setCreateOpen(false); setConfirmDel((v) => !v); } }, t("skills.delete")) : null,
+						!readonly && !editMode ? h("button", { type: "button", className: "ce-sk-btn ce-sk-btn-ghost ce-sk-btn-danger-text", disabled: busy, "data-ce-popup-trigger": "skill-delete", "aria-expanded": confirmDel, onClick: () => { setCreateOpen(false); setConfirmDel((v) => !v); } }, t("skills.delete")) : null,
 					),
 					confirmDel ? h("div", { className: "ce-sk-delete-confirm", ref: deleteRef, role: "alert" },
 						h("span", null, t("skills.deleteQuestion", { name: sel.name })),

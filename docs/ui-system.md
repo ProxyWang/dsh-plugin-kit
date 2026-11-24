@@ -17,39 +17,67 @@ The right column opens at the widest the frame allows. The host seeds its width 
 ## Hierarchy
 
 - The toolbar identifies the current view and exposes navigation; the content rail carries search and file/change lists.
-- Editors and response bodies use the base surface. Toolbars use layer 1; compact metadata and grouped file headers use layer 2.
-- Primary text names the object or action. Secondary text describes it. Tertiary text supplies supporting metadata.
-- Selection and keyboard focus use the informational blue accent. Git success/warning/error colors keep their existing semantic meanings.
-- No gradient is needed for empty states. Quiet copy and sufficient space communicate what to do next.
+- Editors and response bodies use the base surface. The navigator rail, fields and table headers step up with a faint foreground wash; popovers use layer 1, a stronger hairline and one shadow.
+- Primary text names the object or action. Secondary text describes it. Tertiary text supplies supporting metadata. Counts and line numbers are tabular.
+- Selection and keyboard focus use the informational blue accent; a selected row is a 12 % tint plus a 2 px inset bar. Git, HTTP and SQL success/warning/error colors keep their semantic meanings.
+- There are no gradients, and no bordered box inside another bordered box. Empty states use one quiet tile icon, one short line of copy and space.
+
+## Visual system v2
+
+The stylesheet is split by surface and composed by [styles.js](../src/client/styles.js):
+
+| File | Owns |
+| --- | --- |
+| `src/client/css/tokens.js` | Theme tokens, reset, type scale, buttons, fields, chips, empty states |
+| `src/client/css/shell.js` | Toolbar, navigator, tree, editor tabs/header, status bar, palettes, peeks, menus |
+| `src/client/css/editor.js` | Source view, unified/side-by-side diffs, search results, blame, edit mode |
+| `src/client/css/api.js` | HTTP request builder, response pane, history, SSE, protocol workbench |
+| `src/client/css/data.js` | Database workbench and gRPC console |
+| `src/client/css/skills.js` | Skills manager, markdown reader, launcher rows |
+| `src/client/css/browser.js` | Embedded browser chrome and terminal overlays |
+
+- Radii: 6 px for controls, 8 px for rows/fields/cards, 12 px for popovers and dialogs. Buttons are filled, ghost or primary; a border is an affordance for an input, never decoration for a label.
+- Type: 13 px/1.45 body, 12.5 px controls, 11 px metadata, 10.5 px mono badges. Monospace is reserved for code, paths, ports, counts and keyboard hints; the file tree uses the interface font with a colored glyph.
+- Density: 44 px toolbar, 37 px tab strip, 26 px rows, 26–32 px controls, 24 px status bar. Section labels are 11 px/600; no uppercase transform on CJK copy.
+- File tints are semantic: folders amber, TypeScript/Go blue, JavaScript amber, JSON green, SQL amber, Markdown neutral. They are `color-mix` over `--ce-ok/--ce-warn/--ce-accent`, so there is no fixed hex.
+- Motion is one 130 ms background/color transition. `prefers-reduced-motion` disables it, and coarse pointers raise icon buttons and rows to 32 px.
 
 ## Theme contract
 
-Local `--ce-*` aliases are defined on both `.ce-root` and `.cel-root` (the launcher is not a descendant of the code root).
+Local `--ce-*` aliases are defined once on every plugin root (`.ce-root`, `.cel-root`, `.cedb-root`, `.cerpc-root`, `.cea-root`, `.ceb-root`, `.ce-sk-root`).
 
-| Role | Host token |
-| --- | --- |
-| Canvas / surfaces | `--dsw-alias-bg-base`, `--dsw-alias-bg-layer-1`, `--dsw-alias-bg-layer-2` |
-| Text hierarchy | `--dsw-alias-label-primary`, `--dsw-alias-label-secondary`, `--dsw-alias-label-tertiary` |
-| Selection accent | `--dsw-alias-button-info-fill` |
-| Primary button background | `--dsw-alias-button-primary-fill` / `--dsw-alias-button-primary-hover` |
-| Primary button text | `--dsw-alias-label-primary-foreground` |
+| Role | Host token | Local alias |
+| --- | --- | --- |
+| Canvas | `--dsw-alias-bg-base` | `--ce-bg` |
+| Group headers / popovers | `--dsw-alias-bg-layer-1` | `--ce-s1` |
+| Secondary surfaces | `--dsw-alias-bg-layer-2` | `--ce-s2` |
+| Field and hover wash | foreground tint | `--ce-fill` (4.5 % of label-primary over the canvas) |
+| Text hierarchy | `--dsw-alias-label-primary/secondary/tertiary` | `--ce-fg/-2/-3` |
+| Hairline | `--dsw-alias-border-l1` at 62 % | `--ce-line` |
+| Popover edge | `--dsw-alias-border-l2` at 88 % | `--ce-line-strong` |
+| Selection / focus accent | `--dsw-alias-button-info-fill` | `--ce-accent` |
+| Primary button | `--dsw-alias-button-primary-fill` / `-hover` | `--ce-accent` fallback |
+| Primary button text | `--dsw-alias-label-primary-foreground` | `--ce-on-accent` |
+| Git / HTTP / SQL state | `--dsw-alias-state-success/warn/error-primary` | `--ce-ok/-warn/-bad` |
 
 DSH's `brand-primary` is neutral ink in the light theme and near-white in the dark theme; it must not be assumed to mean blue. A primary button's text must use the matching foreground token. A fixed white foreground on the dark theme's near-white button is unreadable.
 
+The foreground wash is deliberate: layer tokens flip direction between themes, while a 4.5 % tint of the text color always reads as one step deeper than the canvas. Shadows stay neutral (black at low alpha) because the host exposes no shadow token.
+
 ## Density and adaptation
 
-Controls use 6–8 px corner radii and consistent compact spacing. Code and request editors retain their monospace font and the code renderer's fixed row height.
+Code and request editors retain their monospace font and the code renderer's fixed row height.
 
 - At 620 px and below, Code uses a full-width file/change list or a full-width editor. Opening a document or search shows the editor region; Back returns to the list without reloading the document. The toolbar avoids duplicate search actions while the rail is visible.
 - Skills switch from list/detail columns to one page with a back action below 620 px.
-- API method and URL stay together; Send moves to a full-width row below 380 px.
+- API method and URL stay together; Send moves to a full-width row below 380 px; the description column drops below 560 px.
 - Peek headers let the keyboard hint wrap below the symbol and count instead of squeezing the symbol to a few characters.
 - Hidden file-row actions keep zero width; only the hovered/focused row reserves action space.
-- Reduced-motion preferences disable decorative button transitions and spinner motion.
+- Reduced-motion preferences disable decorative transitions and the spinner.
 
 ## Verification
 
-In addition to the functional test suites, v1.5.0 was checked in headless Chrome using the DSH theme stylesheet and fixture content: API, Skills, Changes, launcher and references peek, each at 360 px and 1000 px in both themes. These are component previews, not an authenticated end-to-end GUI test. The measurement checks control bounds and the contrast of enabled primary buttons; it does not prove that every text/background combination in the application meets an accessibility standard.
+In addition to the functional suites, the v2 system was checked with headless Chrome fixtures through `scripts/render-readme-previews.mjs`: workspace, API, Skills, Database and RPC, each in both themes at 1100×760 and at 430×760 (set `PREVIEW_WIDTH`, `PREVIEW_HEIGHT` and `PREVIEW_DIR`). These are component previews, not an authenticated end-to-end GUI test. They validate layout, hierarchy and theme tokens; they do not prove that every text/background pair meets an accessibility standard.
 
 ## Task-oriented page layout
 
