@@ -1,5 +1,24 @@
 # Changelog
 
+## Unreleased — packaging is verified, not assumed
+
+- **Nested runtime directories were missing from the published tarball.** `files` carried
+  `lib/host/*.js` and `src/client/*.js`, which match only top-level files: `lib/host/db/**`,
+  `lib/host/drivers/**`, `src/client/db/**`, `src/client/vt/**` and friends were dropped, so a
+  packed install could not load the DB or terminal code. `files` now uses `lib/host/**` and
+  `src/client/**`.
+- **`pnpm smoke` packs the real tarball and installs it.** `scripts/smoke-mount.sh` runs
+  `npm pack` (scripts skipped so the checkout stays clean), asserts the tarball carries the
+  entry points, nested runtime modules and docs, installs it into a throwaway `DSH_HOME` profile
+  with `dsh plugin add`, then requires the composed profile to contain the package and its row.
+- **`check-manifest` walks runtime files against `files`.** A too-narrow glob now fails the gate
+  with the uncovered paths listed (negative-tested by narrowing the globs again).
+- **Plugin details for the manager page.** `locale/*.json` declares `meta.detail`
+  (`docs/DETAIL.md` / `docs/DETAIL.zh.md`, one text-free illustration each), and `docs` ships.
+- **Docs:** `docs/dsh-compat.md` (support matrix and the five-step baseline bump),
+  `docs/settings.md` (the seven Config fields, where they persist, and the decision not to build
+  a custom settings page).
+
 ## Unreleased — other plugins can drive the workspace
 
 - **`ctx.pluginKit` (v1).** Browser-side plugins can now ask the workspace to open a file, jump to a

@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="300" viewBox="0 0 640 300" role="img" aria-label="Right sidebar with code, skills and API tabs">
+  <!-- Chat column (inactive) -->
+  <rect x="24" y="24" width="368" height="252" rx="10" fill="none" stroke="#8a8f98" stroke-width="1.5" opacity="0.45"/>
+  <rect x="44" y="52" width="200" height="10" rx="5" fill="#8a8f98" opacity="0.35"/>
+  <rect x="44" y="74" width="300" height="10" rx="5" fill="#8a8f98" opacity="0.22"/>
+  <rect x="44" y="96" width="250" height="10" rx="5" fill="#8a8f98" opacity="0.22"/>
+  <rect x="44" y="222" width="328" height="34" rx="8" fill="none" stroke="#8a8f98" stroke-width="1.5" opacity="0.4"/>
+
+  <!-- Right sidebar -->
+  <rect x="408" y="24" width="208" height="252" rx="10" fill="none" stroke="#4d6bfe" stroke-width="2"/>
+  <!-- Tab chips -->
+  <rect x="420" y="38" width="52" height="22" rx="6" fill="#4d6bfe" opacity="0.85"/>
+  <rect x="478" y="38" width="52" height="22" rx="6" fill="none" stroke="#4d6bfe" stroke-width="1.5"/>
+  <rect x="536" y="38" width="52" height="22" rx="6" fill="none" stroke="#4d6bfe" stroke-width="1.5"/>
+
+  <!-- File tree column -->
+  <rect x="420" y="72" width="56" height="8" rx="4" fill="#8a8f98" opacity="0.45"/>
+  <rect x="420" y="90" width="44" height="8" rx="4" fill="#8a8f98" opacity="0.3"/>
+  <rect x="430" y="108" width="46" height="8" rx="4" fill="#8a8f98" opacity="0.22"/>
+  <rect x="430" y="126" width="38" height="8" rx="4" fill="#4d6bfe" opacity="0.6"/>
+
+  <!-- Editor pane -->
+  <line x1="486" y1="72" x2="486" y2="252" stroke="#8a8f98" stroke-width="1" opacity="0.3"/>
+  <rect x="498" y="76" width="80" height="8" rx="4" fill="#4d6bfe" opacity="0.7"/>
+  <rect x="498" y="96" width="104" height="8" rx="4" fill="#8a8f98" opacity="0.28"/>
+  <rect x="510" y="114" width="88" height="8" rx="4" fill="#8a8f98" opacity="0.28"/>
+  <rect x="510" y="132" width="96" height="8" rx="4" fill="#8a8f98" opacity="0.22"/>
+  <rect x="510" y="150" width="72" height="8" rx="4" fill="#8a8f98" opacity="0.22"/>
+  <rect x="498" y="168" width="60" height="8" rx="4" fill="#4d6bfe" opacity="0.35"/>
+  <rect x="510" y="186" width="92" height="8" rx="4" fill="#8a8f98" opacity="0.22"/>
+
+  <!-- Diff strip: added / removed lines -->
+  <rect x="498" y="214" width="104" height="8" rx="4" fill="#2f9e6e" opacity="0.55"/>
+  <rect x="498" y="230" width="88" height="8" rx="4" fill="#d05c5c" opacity="0.55"/>
+
+  <!-- API tab hint: method pill + path line -->
+  <rect x="420" y="252" width="34" height="14" rx="7" fill="#4d6bfe" opacity="0.5"/>
+  <rect x="462" y="255" width="120" height="8" rx="4" fill="#8a8f98" opacity="0.35"/>
+</svg>
