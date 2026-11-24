@@ -22,7 +22,9 @@ import { useDismissLayer } from "./dismiss.js";
 import { clearHistoryEntries, entryLabel, entryProtocol, filterByProtocol, mergeProtocols, removeHistoryEntry } from "./apientries.js";
 
 /** Preference key for the last protocol used. */
-export const PROTOCOL_KEY = "dsh.plugin-kit.workbench.protocol";
+import { keys } from "./storage.js";
+
+export const PROTOCOL_KEY = keys.protocol();
 
 /** Protocols the workbench can show, in bar order. */
 export const PROTOCOLS = ["http", "grpc"];

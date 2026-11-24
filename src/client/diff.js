@@ -4,7 +4,9 @@ import { Fragment, h, useEffect, useMemo, useRef, useState } from "./react.js";
 
 import { useDismissLayer } from "./dismiss.js";
 
-const SBS_KEY = "dsh.ce.diff.sbs.v1";
+import { keys } from "./storage.js";
+
+const SBS_KEY = keys.diffSideBySide();
 
 function loadSbs() {
 	try {

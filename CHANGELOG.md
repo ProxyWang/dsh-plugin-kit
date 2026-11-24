@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased — one storage table for client state
+
+- **Every client storage key now comes from `src/client/storage.js`.** The panel used to spell out its keys in a
+  dozen modules under three different naming rules, so a new store could pick the wrong scope by accident. The
+  table declares each family's scope explicitly — session (navigation, browser sub-tabs), workspace (API
+  drafts/history/envs, keyed by cwd) and global (layout and provider preferences) — and keeps the historical key
+  spellings, so existing installs keep reading the same data. `migrateKey`/`readJson`/`writeJson`/`readFlag`
+  give the rest of the client one implementation for the try/catch dance.
+- `apistore.js` keeps exporting `apiKey`/`legacyApiKey`/`workspaceScope` (now delegating), so its callers did not
+  change. Tests: 14 storage checks (scope isolation, historical names, collision safety, migration).
+  Verified with `node test-client.mjs` (1211 passed) and `node scripts/build-client.mjs`.
+
 ## Unreleased — the private API answers with codes and only its own page
 
 - **Failures carry a stable code and an HTTP status.** The Host API used to answer HTTP 200 with a bare string

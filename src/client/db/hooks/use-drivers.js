@@ -9,7 +9,9 @@
 import { useCallback, useEffect, useState } from "../../react.js";
 import { api } from "../../api.js";
 
-const ALLOW_MODULE_KEY = "dsh.plugin-kit.db.allowModule";
+import { keys } from "../../storage.js";
+
+const ALLOW_MODULE_KEY = keys.allowModule();
 
 /**
  * @param options - `{cwd, t, onNotice}`

@@ -14,26 +14,20 @@
  * rather than losing data.
  */
 
-const PREFIX = "dsh.ce.api";
-const LEGACY_SUFFIX = { draft: "draft.v1", history: "history.v1", saved: "saved.v1", env: "env.v1", colldir: "colldir.v1" };
-const MIGRATED_FLAG = "dsh.ce.api.migrated.v1";
+import { LEGACY_API_SUFFIX, keys, workspaceScope } from "./storage.js";
 
-/** Stable, filesystem-safe scope id for a workspace path. */
-export function workspaceScope(cwd) {
-	const clean = String(cwd ?? "").trim();
-	if (clean === "") return "global";
-	// encodeURIComponent keeps any path byte reversible and key-safe.
-	return encodeURIComponent(clean);
-}
+export { workspaceScope } from "./storage.js";
+
+const MIGRATED_FLAG = keys.apiMigrated();
 
 /** Scoped storage key for one store kind in one workspace. */
 export function apiKey(kind, cwd) {
-	return `${PREFIX}.${kind}.v2.${workspaceScope(cwd)}`;
+	return keys.api(kind, cwd);
 }
 
 /** Legacy global key (pre-scoping). */
 export function legacyApiKey(kind) {
-	return `${PREFIX}.${LEGACY_SUFFIX[kind] ?? kind}`;
+	return keys.apiLegacy(kind);
 }
 
 /**
@@ -48,7 +42,7 @@ export function migrateLegacyApiStores(cwd, storage = globalThis.localStorage) {
 		if (storage.getItem(MIGRATED_FLAG) !== null) return [];
 	} catch { return []; }
 	const moved = [];
-	for (const kind of Object.keys(LEGACY_SUFFIX)) {
+	for (const kind of Object.keys(LEGACY_API_SUFFIX)) {
 		let raw = null;
 		try { raw = storage.getItem(legacyApiKey(kind)); } catch { continue; }
 		if (raw === null) continue;

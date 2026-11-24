@@ -5861,5 +5861,34 @@ check(
 	descriptor?.inject,
 );
 
+/* ---------- scoped storage: one rule for where client state lives ---------- */
+{
+	const storage = await import("./src/client/storage.js");
+	const { keys, KEY_SCOPES, SESSION_KEY_PREFIXES, workspaceScope, readJson, writeJson, readFlag, writeFlag, migrateKey } = storage;
+	check("session keys differ per session", keys.nav("s1") !== keys.nav("s2") && keys.browserSub("s1", "t") !== keys.browserSub("s2", "t"));
+	check("session nav keeps its historical name", keys.nav("s1") === "dsh.plugin-kit.v1.s1", keys.nav("s1"));
+	check("browser sub-tab keys carry session and tab id", keys.browserSub("s1", "t1") === "dsh.plugin-kit.browser.tabs.v2.s1.t1", keys.browserSub("s1", "t1"));
+	check("workspace keys are cwd-scoped and key-safe", keys.api("draft", "/tmp/a b") !== keys.api("draft", "/tmp/a-b") && !keys.api("draft", "/tmp/a b").includes("/"), keys.api("draft", "/tmp/a b"));
+	check("empty cwd collapses to the global workspace scope", workspaceScope("") === "global" && keys.api("draft", "") === "dsh.ce.api.draft.v2.global");
+	check("legacy API keys keep the pre-scoping names", keys.apiLegacy("draft") === "dsh.ce.api.draft.v1");
+	check("global preference keys are stable", keys.protocol() === "dsh.plugin-kit.workbench.protocol" && keys.width() === "dsh-kit.rightbar-width");
+	check("every key family declares a scope", Object.keys(KEY_SCOPES).every((kind) => ["session", "workspace", "global"].includes(KEY_SCOPES[kind])), KEY_SCOPES);
+	check("session prefixes match the session key builders", SESSION_KEY_PREFIXES.every((prefix) => keys.nav("x").startsWith(prefix) || keys.browserSub("x", "y").startsWith(prefix)), SESSION_KEY_PREFIXES);
+
+	const fake = new Map();
+	const store = {
+		getItem: (key) => (fake.has(key) ? fake.get(key) : null),
+		setItem: (key, value) => { fake.set(key, String(value)); },
+		removeItem: (key) => { fake.delete(key); },
+	};
+	check("readJson round-trips and tolerates junk", writeJson("k", { a: 1 }, store) && readJson("k", store).a === 1);
+	fake.set("junk", "{not json");
+	check("readJson returns null for junk", readJson("junk", store) === null);
+	check("flags round-trip as on/off", writeFlag("f", true, store) && readFlag("f", store) === true && writeFlag("f", false, store) && readFlag("f", store) === false);
+	fake.set("old", JSON.stringify({ moved: true }));
+	check("migrateKey moves a value once", migrateKey("old", "new", store) && readJson("new", store).moved === true && !fake.has("old"));
+	check("migrateKey leaves a missing source alone", migrateKey("absent", "newer", store) === false);
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

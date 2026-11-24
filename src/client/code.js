@@ -1,6 +1,7 @@
 /* ---------------- Code tab: stateful orchestrator (toolbar, rail, editor, diff, status) ---------------- */
 
 import { Fragment, h, useCallback, useEffect, useMemo, useRef, useState } from "./react.js";
+import { keys, readRaw, writeRaw } from "./storage.js";
 import { ROW, TAB_KIND } from "./constants.js";
 import { useToolCloseGuard } from "./closeguard.js";
 import { api } from "./api.js";
@@ -71,7 +72,7 @@ export function CodeBody(props) {
 	const [conflictDiff, setConflictDiff] = useState(null); // {path,text,add,del,busy,error} draft-vs-disk view
 	const [overwriteArm, setOverwriteArm] = useState(false); // two-step "save over disk" confirmation
 	const [liveOn, setLiveOn] = useState(() => {
-		try { return localStorage.getItem("dsh.plugin-kit.live") !== "off"; } catch { return true; }
+		try { return readRaw(keys.liveRefresh()) !== "off"; } catch { return true; }
 	});
 	const [flash, setFlash] = useState(null); // {line, col, word}
 	const [scroll, setScroll] = useState(0);
@@ -117,7 +118,7 @@ export function CodeBody(props) {
 	const [symPalette, setSymPalette] = useState(null); // {query}
 	const [wsym, setWsym] = useState(null); // workspace-symbol palette state {query, results, busy, error, seq}
 	const [formatOnSave, setFormatOnSave] = useState(() => {
-		try { return localStorage.getItem("dsh.plugin-kit.format") !== "off"; } catch { return true; }
+		try { return readRaw(keys.formatOnSave()) !== "off"; } catch { return true; }
 	});
 	const [commandOpen, setCommandOpen] = useState(false);
 	const [fileDropOver, setFileDropOver] = useState(false);
@@ -207,7 +208,7 @@ export function CodeBody(props) {
 		setWrapOn((v) => !v);
 	}, [say, t]);
 
-	const persistKey = sessionId && cwd ? `dsh.plugin-kit.v1.${sessionId}` : null;
+	const persistKey = sessionId && cwd ? keys.nav(sessionId) : null;
 
 	/* P0-5: while gopls starts or indexes, poll its progress for the status surfaces */
 	useEffect(() => {
@@ -1815,13 +1816,13 @@ export function CodeBody(props) {
 		{ id: "live", icon: liveOn ? "◉" : "○", label: `${t("command.live")} — ${t(liveOn ? "watch.state.on" : "watch.state.off")}`, run: () => {
 			const next = !liveOn;
 			setLiveOn(next);
-			try { localStorage.setItem("dsh.plugin-kit.live", next ? "on" : "off"); } catch { /* storage may be denied */ }
+			try { writeRaw(keys.liveRefresh(), next ? "on" : "off"); } catch { /* storage may be denied */ }
 			say(t(next ? "watch.on" : "watch.off"));
 		} },
 		{ id: "format", icon: "⌘.", label: `${t("command.formatOnSave")} — ${t(formatOnSave ? "watch.state.on" : "watch.state.off")}`, hint: "⌥⇧F", run: () => {
 			const next = !formatOnSave;
 			setFormatOnSave(next);
-			try { localStorage.setItem("dsh.plugin-kit.format", next ? "on" : "off"); } catch { /* storage may be denied */ }
+			try { writeRaw(keys.formatOnSave(), next ? "on" : "off"); } catch { /* storage may be denied */ }
 			say(t(next ? "editor.formatOn" : "editor.formatOff"));
 		} },
 		...(builtinAvailable() ? [{ id: "terminal", icon: "‣", label: t("command.terminal"), run: () => { if (!openBuiltin()) void openTerminal(); } }] : []),

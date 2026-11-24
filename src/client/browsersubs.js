@@ -1,8 +1,10 @@
 /* Sub-tab document: the pages one host browser tab keeps inside its window. */
 
 export const MAX_SUBTABS = 10;
-export const subDocKey = (sessionId, tabId) => `dsh.plugin-kit.browser.tabs.v2.${sessionId}.${tabId}`;
-const legacyPageKey = (sessionId, tabId) => `dsh.plugin-kit.browser.page.v1.${sessionId}.${tabId}`;
+import { keys } from "./storage.js";
+
+export const subDocKey = (sessionId, tabId) => keys.browserSub(sessionId, tabId);
+const legacyPageKey = (sessionId, tabId) => keys.browserLegacyPage(sessionId, tabId);
 
 export function newSubId() {
 	return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;

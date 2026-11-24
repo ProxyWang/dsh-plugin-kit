@@ -11,9 +11,10 @@
  * mounts don't re-scan). It never touches keys from other plugins or the host.
  */
 
-const NAV_PREFIX = "dsh.plugin-kit.v1.";
-const BROWSER_PREFIX = "dsh.plugin-kit.browser.tabs.v2.";
-const CLEANED_FLAG = "dsh.plugin-kit.orphans.cleaned";
+import { SESSION_KEY_PREFIXES, keys } from "./storage.js";
+
+const [NAV_PREFIX, BROWSER_PREFIX] = SESSION_KEY_PREFIXES;
+const CLEANED_FLAG = keys.orphansCleaned();
 
 /**
  * Remove localStorage keys belonging to sessions that no longer exist.

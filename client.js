@@ -1755,6 +1755,62 @@ var en = {
   "quickopen.command": "Quick Open File (Code IDE)"
 };
 
+// src/client/storage.js
+var LEGACY_API_SUFFIX = {
+  draft: "draft.v1",
+  history: "history.v1",
+  saved: "saved.v1",
+  env: "env.v1",
+  colldir: "colldir.v1"
+};
+function workspaceScope(cwd) {
+  const clean = String(cwd ?? "").trim();
+  if (clean === "") return "global";
+  return encodeURIComponent(clean);
+}
+var keys = {
+  // session
+  nav: (sessionId) => `dsh.plugin-kit.v1.${sessionId}`,
+  browserSub: (sessionId, tabId) => `dsh.plugin-kit.browser.tabs.v2.${sessionId}.${tabId}`,
+  browserLegacyPage: (sessionId, tabId) => `dsh.plugin-kit.browser.page.v1.${sessionId}.${tabId}`,
+  // workspace
+  api: (kind, cwd) => `dsh.ce.api.${kind}.v2.${workspaceScope(cwd)}`,
+  apiLegacy: (kind) => `dsh.ce.api.${LEGACY_API_SUFFIX[kind] ?? kind}`,
+  // global preferences and one-shot flags
+  protocol: () => "dsh.plugin-kit.workbench.protocol",
+  width: () => "dsh-kit.rightbar-width",
+  diffSideBySide: () => "dsh.ce.diff.sbs.v1",
+  allowModule: () => "dsh.plugin-kit.db.allowModule",
+  liveRefresh: () => "dsh.plugin-kit.live",
+  formatOnSave: () => "dsh.plugin-kit.format",
+  // meta flags (never user state)
+  apiMigrated: () => "dsh.ce.api.migrated.v1",
+  orphansCleaned: () => "dsh.plugin-kit.orphans.cleaned"
+};
+var SESSION_KEY_PREFIXES = ["dsh.plugin-kit.v1.", "dsh.plugin-kit.browser.tabs.v2."];
+function defaultStorage() {
+  try {
+    return globalThis.localStorage;
+  } catch {
+    return void 0;
+  }
+}
+function readRaw(key, storage = defaultStorage()) {
+  try {
+    return storage?.getItem(key) ?? null;
+  } catch {
+    return null;
+  }
+}
+function writeRaw(key, value, storage = defaultStorage()) {
+  try {
+    storage?.setItem(key, value);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // src/client/closeguard.js
 var BEFORE_TOOL_CLOSE = "dsh-plugin-kit/before-tool-close";
 function useToolCloseGuard({ sessionId, kind, dirty, onBlocked }) {
@@ -2073,7 +2129,7 @@ function useDismissLayer({ open = true, onDismiss, ignoreSelector } = {}) {
 }
 
 // src/client/diff.js
-var SBS_KEY = "dsh.ce.diff.sbs.v1";
+var SBS_KEY = keys.diffSideBySide();
 function loadSbs() {
   try {
     return localStorage.getItem(SBS_KEY) === "1";
@@ -5156,8 +5212,8 @@ function SearchPanel({ t, cwd, state, onQuery, onInclude, onDirectory, onToggleR
           }
           setCtxCache((c) => {
             const next2 = { ...c, [r.path]: { lines: res.value.content.split("\n") } };
-            const keys = Object.keys(next2);
-            while (keys.length > 30) delete next2[keys.shift()];
+            const keys2 = Object.keys(next2);
+            while (keys2.length > 30) delete next2[keys2.shift()];
             return next2;
           });
         });
@@ -6264,7 +6320,7 @@ function CodeBody(props) {
   const [overwriteArm, setOverwriteArm] = useState(false);
   const [liveOn, setLiveOn] = useState(() => {
     try {
-      return localStorage.getItem("dsh.plugin-kit.live") !== "off";
+      return readRaw(keys.liveRefresh()) !== "off";
     } catch {
       return true;
     }
@@ -6314,7 +6370,7 @@ function CodeBody(props) {
   const [wsym, setWsym] = useState(null);
   const [formatOnSave, setFormatOnSave] = useState(() => {
     try {
-      return localStorage.getItem("dsh.plugin-kit.format") !== "off";
+      return readRaw(keys.formatOnSave()) !== "off";
     } catch {
       return true;
     }
@@ -6395,7 +6451,7 @@ function CodeBody(props) {
     }
     setWrapOn((v) => !v);
   }, [say, t]);
-  const persistKey = sessionId && cwd ? `dsh.plugin-kit.v1.${sessionId}` : null;
+  const persistKey = sessionId && cwd ? keys.nav(sessionId) : null;
   useEffect(() => {
     if (!cwd || status.state !== "starting" && !status.progress) return void 0;
     const timer = setInterval(() => {
@@ -7893,7 +7949,7 @@ function CodeBody(props) {
       const next = !liveOn;
       setLiveOn(next);
       try {
-        localStorage.setItem("dsh.plugin-kit.live", next ? "on" : "off");
+        writeRaw(keys.liveRefresh(), next ? "on" : "off");
       } catch {
       }
       say(t(next ? "watch.on" : "watch.off"));
@@ -7902,7 +7958,7 @@ function CodeBody(props) {
       const next = !formatOnSave;
       setFormatOnSave(next);
       try {
-        localStorage.setItem("dsh.plugin-kit.format", next ? "on" : "off");
+        writeRaw(keys.formatOnSave(), next ? "on" : "off");
       } catch {
       }
       say(t(next ? "editor.formatOn" : "editor.formatOff"));
@@ -11517,19 +11573,12 @@ function RequestFields({ t, label, rows, onChange, hint }) {
 }
 
 // src/client/apistore.js
-var PREFIX = "dsh.ce.api";
-var LEGACY_SUFFIX = { draft: "draft.v1", history: "history.v1", saved: "saved.v1", env: "env.v1", colldir: "colldir.v1" };
-var MIGRATED_FLAG = "dsh.ce.api.migrated.v1";
-function workspaceScope(cwd) {
-  const clean = String(cwd ?? "").trim();
-  if (clean === "") return "global";
-  return encodeURIComponent(clean);
-}
+var MIGRATED_FLAG = keys.apiMigrated();
 function apiKey(kind, cwd) {
-  return `${PREFIX}.${kind}.v2.${workspaceScope(cwd)}`;
+  return keys.api(kind, cwd);
 }
 function legacyApiKey(kind) {
-  return `${PREFIX}.${LEGACY_SUFFIX[kind] ?? kind}`;
+  return keys.apiLegacy(kind);
 }
 function migrateLegacyApiStores(cwd, storage = globalThis.localStorage) {
   if (!cwd || !storage) return [];
@@ -11539,7 +11588,7 @@ function migrateLegacyApiStores(cwd, storage = globalThis.localStorage) {
     return [];
   }
   const moved = [];
-  for (const kind of Object.keys(LEGACY_SUFFIX)) {
+  for (const kind of Object.keys(LEGACY_API_SUFFIX)) {
     let raw = null;
     try {
       raw = storage.getItem(legacyApiKey(kind));
@@ -11642,7 +11691,7 @@ function ApiView({ t, useTabInfo, sessionId, useSessions, incoming }) {
   const cwd = useSessions ? useSessions((sessions) => sessionId ? sessions.byId[sessionId]?.cwd : void 0) : void 0;
   const hostTab = useTabInfo ? useTabInfo()?.tab : null;
   const scopeCwd = cwd ?? "";
-  const keys = useMemo(() => ({
+  const keys2 = useMemo(() => ({
     draft: apiKey("draft", scopeCwd),
     history: apiKey("history", scopeCwd),
     saved: apiKey("saved", scopeCwd),
@@ -11738,10 +11787,10 @@ function ApiView({ t, useTabInfo, sessionId, useSessions, incoming }) {
     if (loadScopeRef.current === scopeCwd) return;
     loadScopeRef.current = scopeCwd;
     let cancelled = false;
-    const draftRaw = loadJson(keys.draft);
-    const envRaw = normalizeEnvStore(loadJson(keys.env));
-    const histRaw = loadList(keys.history);
-    const savedRaw = loadList(keys.saved);
+    const draftRaw = loadJson(keys2.draft);
+    const envRaw = normalizeEnvStore(loadJson(keys2.env));
+    const histRaw = loadList(keys2.history);
+    const savedRaw = loadList(keys2.saved);
     const applyStores = (lookup) => {
       if (cancelled) return;
       for (const [id, value] of Object.entries(lookup ?? {})) secretCacheRef.current[id] = value;
@@ -11749,7 +11798,7 @@ function ApiView({ t, useTabInfo, sessionId, useSessions, incoming }) {
       setSaved(savedRaw.map((row) => row?.request ? { ...row, request: resolveSecrets(row.request, lookup) } : row));
       setEnvStore(resolveSecrets(envRaw, lookup));
       try {
-        setCollectionDir(localStorage.getItem(keys.colldir) ?? "");
+        setCollectionDir(localStorage.getItem(keys2.colldir) ?? "");
       } catch {
         setCollectionDir("");
       }
@@ -11797,7 +11846,7 @@ function ApiView({ t, useTabInfo, sessionId, useSessions, incoming }) {
     return () => {
       cancelled = true;
     };
-  }, [scopeCwd, keys]);
+  }, [scopeCwd, keys2]);
   const persistWithSecrets = useCallback(async (key, snapshot2, secretEntries) => {
     if (!vaultReady || secretEntries.length === 0) {
       storeJson(key, snapshot2);
@@ -11827,7 +11876,7 @@ function ApiView({ t, useTabInfo, sessionId, useSessions, incoming }) {
       }
     }
     if (secretEntries.length === 0) {
-      storeJson(keys.draft, snapshot2);
+      storeJson(keys2.draft, snapshot2);
       return;
     }
     const refSnapshot = { ...snapshot2, auth: { ...auth } };
@@ -11839,18 +11888,18 @@ function ApiView({ t, useTabInfo, sessionId, useSessions, incoming }) {
         else refSnapshot.auth.pass = secretRef(existing);
       }
     }
-    storeJson(keys.draft, refSnapshot);
-    pending = persistWithSecrets(keys.draft, snapshot2, secretEntries).then(() => {
+    storeJson(keys2.draft, refSnapshot);
+    pending = persistWithSecrets(keys2.draft, snapshot2, secretEntries).then(() => {
       const finalSnapshot = { ...snapshot2, auth: { ...auth } };
       if (secretIdByKeyRef.current["auth.token"] && auth.mode === "bearer") finalSnapshot.auth.token = secretRef(secretIdByKeyRef.current["auth.token"]);
       if (secretIdByKeyRef.current["auth.pass"] && auth.mode === "basic") finalSnapshot.auth.pass = secretRef(secretIdByKeyRef.current["auth.pass"]);
-      storeJson(keys.draft, finalSnapshot);
+      storeJson(keys2.draft, finalSnapshot);
     });
     void pending;
-  }, [method, url, headers, bodyType, rawSub, formPairs, body, paramPairs, timeoutMs, auth, extracts, keys.draft, vaultReady, persistWithSecrets]);
+  }, [method, url, headers, bodyType, rawSub, formPairs, body, paramPairs, timeoutMs, auth, extracts, keys2.draft, vaultReady, persistWithSecrets]);
   useEffect(() => {
     if (!vaultReady) {
-      storeJson(keys.env, envStore);
+      storeJson(keys2.env, envStore);
       return;
     }
     const entries = [];
@@ -11862,17 +11911,17 @@ function ApiView({ t, useTabInfo, sessionId, useSessions, incoming }) {
       const existing = secretIdByKeyRef.current[stableKey];
       return existing ? { ...v, value: secretRef(existing) } : v;
     }) })) };
-    storeJson(keys.env, refStore);
+    storeJson(keys2.env, refStore);
     if (entries.length === 0) return;
-    void persistWithSecrets(keys.env, envStore, entries).then(() => {
+    void persistWithSecrets(keys2.env, envStore, entries).then(() => {
       const finalStore = { ...envStore, envs: envStore.envs.map((env) => ({ ...env, vars: (env.vars ?? []).map((v) => {
         const stableKey = `env:${env.id}:${v.name}`;
         const id = secretIdByKeyRef.current[stableKey];
         return id && String(v?.value ?? "") !== "" ? { ...v, value: secretRef(id) } : v;
       }) })) };
-      storeJson(keys.env, finalStore);
+      storeJson(keys2.env, finalStore);
     });
-  }, [envStore, keys.env, vaultReady, persistWithSecrets]);
+  }, [envStore, keys2.env, vaultReady, persistWithSecrets]);
   useEffect(() => () => {
     if (copiedTimer.current) clearTimeout(copiedTimer.current);
   }, []);
@@ -11965,7 +12014,7 @@ function ApiView({ t, useTabInfo, sessionId, useSessions, incoming }) {
       };
       setHistory((prev) => {
         const next = pushEntry(prev, entry, HIST_CAP);
-        storeJson(keys.history, next);
+        storeJson(keys2.history, next);
         return next;
       });
       const { store: nextStore, applied, missed } = applyExtracts(extracts, value, resolved, envStore);
@@ -11976,7 +12025,7 @@ function ApiView({ t, useTabInfo, sessionId, useSessions, incoming }) {
         setExtractNote("");
       }
     });
-  }, [url, sending, editorState, snapshot, snapshotWithRefs, envStore, extracts, t, keys.history]);
+  }, [url, sending, editorState, snapshot, snapshotWithRefs, envStore, extracts, t, keys2.history]);
   const streamEpoch = useRef(0);
   useEffect(() => {
     if (!stream || stream.state.done) return void 0;
@@ -12044,7 +12093,7 @@ function ApiView({ t, useTabInfo, sessionId, useSessions, incoming }) {
       setSaved((prev) => {
         const names = new Set(entries.map((e) => e.name));
         const next = [...entries, ...prev.filter((e) => e && !names.has(e.name))].slice(0, SAVED_CAP);
-        storeJson(keys.saved, next);
+        storeJson(keys2.saved, next);
         return next;
       });
       const first = collection.requests[0];
@@ -12105,7 +12154,7 @@ function ApiView({ t, useTabInfo, sessionId, useSessions, incoming }) {
   const loadCollection = useCallback(async () => {
     if (collectionDir.trim() === "") return;
     try {
-      localStorage.setItem(keys.colldir, collectionDir);
+      localStorage.setItem(keys2.colldir, collectionDir);
     } catch {
     }
     const res = await api("collection.load", { cwd: cwd ?? "", dir: collectionDir.trim() });
@@ -12134,7 +12183,7 @@ function ApiView({ t, useTabInfo, sessionId, useSessions, incoming }) {
     setSaved((prev) => {
       const names = new Set(entries.map((e) => e.name));
       const next = [...entries, ...prev.filter((e) => e && !names.has(e.name))].slice(0, SAVED_CAP);
-      storeJson(keys.saved, next);
+      storeJson(keys2.saved, next);
       return next;
     });
     setImportNote(`${(res.value.files ?? []).length} · ${t("api.collectionLoaded")}`);
@@ -12163,31 +12212,31 @@ function ApiView({ t, useTabInfo, sessionId, useSessions, incoming }) {
     const entry = { id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, name, ts: Date.now(), request: snapshotWithRefs(snap) };
     setSaved((prev) => {
       const next = [entry, ...prev.filter((e) => e && e.name !== name)].slice(0, SAVED_CAP);
-      storeJson(keys.saved, next);
+      storeJson(keys2.saved, next);
       return next;
     });
     setSaveName("");
     setSaveOpen(false);
     setHistTab("saved");
     setHistOpen(true);
-  }, [saveName, snapshot, snapshotWithRefs, saveToCollection, collectionDir, cwd, keys.saved]);
+  }, [saveName, snapshot, snapshotWithRefs, saveToCollection, collectionDir, cwd, keys2.saved]);
   const removeHistory = useCallback((id) => {
     setHistory((prev) => {
       const next = prev.filter((e) => e && e.id !== id);
-      storeJson(keys.history, next);
+      storeJson(keys2.history, next);
       return next;
     });
   }, []);
   const removeSaved = useCallback((id) => {
     setSaved((prev) => {
       const next = prev.filter((e) => e && e.id !== id);
-      storeJson(keys.saved, next);
+      storeJson(keys2.saved, next);
       return next;
     });
   }, []);
   const clearHistory = useCallback(() => {
     setHistory([]);
-    storeJson(keys.history, []);
+    storeJson(keys2.history, []);
   }, []);
   const activeEnv = activeEnvOf(envStore);
   const envDraftName = envNameDraft && activeEnv && envNameDraft.id === activeEnv.id ? envNameDraft.name : activeEnv?.name ?? "";
@@ -12873,7 +12922,7 @@ function writeArray(key, rows, storage) {
 }
 
 // src/client/workbench.js
-var PROTOCOL_KEY = "dsh.plugin-kit.workbench.protocol";
+var PROTOCOL_KEY = keys.protocol();
 var PROTOCOLS2 = ["http", "grpc"];
 function readProtocol(storage = globalThis.localStorage) {
   try {
@@ -14015,7 +14064,7 @@ function useConnections() {
 }
 
 // src/client/db/hooks/use-drivers.js
-var ALLOW_MODULE_KEY = "dsh.plugin-kit.db.allowModule";
+var ALLOW_MODULE_KEY = keys.allowModule();
 function useDrivers({ cwd, t, onNotice }) {
   const [drivers, setDrivers] = useState([]);
   const [allowModule, setAllowModuleState] = useState(() => {
@@ -16001,7 +16050,7 @@ function RpcView({ t, useTabInfo, sessionId, useSessions, incoming }) {
   const [drawerTab, setDrawerTab] = useState("history");
   const [confirmClear, setConfirmClear] = useState(false);
   const drawerRef = useDismissLayer({ open: drawerOpen, onDismiss: () => setDrawerOpen(false), ignoreSelector: '[data-ce-popup-trigger="rpc-history"]' });
-  const keys = useMemo(() => ({
+  const keys2 = useMemo(() => ({
     history: apiKey("history", cwd ?? ""),
     saved: apiKey("saved", cwd ?? ""),
     env: apiKey("env", cwd ?? "")
@@ -16017,15 +16066,15 @@ function RpcView({ t, useTabInfo, sessionId, useSessions, incoming }) {
       }
     };
     if (cwd) migrateLegacyApiStores(cwd);
-    setHistory(filterByProtocol(read(keys.history), "grpc"));
-    setSaved(filterByProtocol(read(keys.saved), "grpc"));
+    setHistory(filterByProtocol(read(keys2.history), "grpc"));
+    setSaved(filterByProtocol(read(keys2.saved), "grpc"));
     try {
-      const env = JSON.parse(localStorage.getItem(keys.env) ?? "null");
+      const env = JSON.parse(localStorage.getItem(keys2.env) ?? "null");
       setEnvStore(env && typeof env === "object" && Array.isArray(env.envs) ? env : { envs: [], activeId: null });
     } catch {
       setEnvStore({ envs: [], activeId: null });
     }
-  }, [cwd, keys]);
+  }, [cwd, keys2]);
   useEffect(() => {
     readStored();
   }, [readStored]);
@@ -16160,18 +16209,18 @@ function RpcView({ t, useTabInfo, sessionId, useSessions, incoming }) {
     void loadProto(path);
   }, [loadProto]);
   const removeEntry = useCallback((entry) => {
-    removeHistoryEntry(drawerTab === "history" ? keys.history : keys.saved, entry.id);
+    removeHistoryEntry(drawerTab === "history" ? keys2.history : keys2.saved, entry.id);
     readStored();
-  }, [drawerTab, keys.history, keys.saved, readStored]);
+  }, [drawerTab, keys2.history, keys2.saved, readStored]);
   const clearEntries = useCallback(() => {
     if (!confirmClear) {
       setConfirmClear(true);
       return;
     }
-    clearHistoryEntries(drawerTab === "history" ? keys.history : keys.saved);
+    clearHistoryEntries(drawerTab === "history" ? keys2.history : keys2.saved);
     readStored();
     setConfirmClear(false);
-  }, [confirmClear, drawerTab, keys.history, keys.saved, readStored]);
+  }, [confirmClear, drawerTab, keys2.history, keys2.saved, readStored]);
   const chooseMethod = useCallback((method) => {
     setSelected(method.path);
     if (requestText.trim() === "{}" || requestText.trim() === "") setRequestText(JSON.stringify(method.sample ?? {}, null, 2));
@@ -16217,9 +16266,9 @@ function RpcView({ t, useTabInfo, sessionId, useSessions, incoming }) {
         metadata: metadata.filter((row) => String(row.name ?? "").trim() !== "" && row.enabled !== false).map((row) => ({ ...row }))
       }
     }, "grpc");
-    const merged = writeMerged(keys.history, entry, HISTORY_CAP);
+    const merged = writeMerged(keys2.history, entry, HISTORY_CAP);
     setHistory(filterByProtocol(merged, "grpc"));
-  }, [busy, cwd, protoPath, selectedMethod, address, request, metadata, timeoutMs, insecureTls, envStore, keys.history]);
+  }, [busy, cwd, protoPath, selectedMethod, address, request, metadata, timeoutMs, insecureTls, envStore, keys2.history]);
   const saveFavorite = useCallback(() => {
     if (!selectedMethod) return;
     const name = `${selectedMethod.name} → ${interpolateVariables(address.trim(), activeVariables(envStore)) || "?"}`;
@@ -16235,13 +16284,13 @@ function RpcView({ t, useTabInfo, sessionId, useSessions, incoming }) {
         metadata: metadata.filter((row) => String(row.name ?? "").trim() !== "" && row.enabled !== false).map((row) => ({ ...row }))
       }
     }, "grpc");
-    const merged = writeMerged(keys.saved, entry).filter((row) => row?.name !== name || row.id === entry.id);
+    const merged = writeMerged(keys2.saved, entry).filter((row) => row?.name !== name || row.id === entry.id);
     try {
-      localStorage.setItem(keys.saved, JSON.stringify(merged));
+      localStorage.setItem(keys2.saved, JSON.stringify(merged));
     } catch {
     }
     setSaved(filterByProtocol(merged, "grpc"));
-  }, [selectedMethod, address, envStore, protoPath, request, metadata, keys.saved]);
+  }, [selectedMethod, address, envStore, protoPath, request, metadata, keys2.saved]);
   const onKeyDown = useCallback((event) => {
     if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
       event.preventDefault();
@@ -16795,8 +16844,8 @@ async function resolveBrowserWorkspace(source, sessionId, signal) {
 
 // src/client/browsersubs.js
 var MAX_SUBTABS = 10;
-var subDocKey = (sessionId, tabId) => `dsh.plugin-kit.browser.tabs.v2.${sessionId}.${tabId}`;
-var legacyPageKey = (sessionId, tabId) => `dsh.plugin-kit.browser.page.v1.${sessionId}.${tabId}`;
+var subDocKey = (sessionId, tabId) => keys.browserSub(sessionId, tabId);
+var legacyPageKey = (sessionId, tabId) => keys.browserLegacyPage(sessionId, tabId);
 function newSubId() {
   return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
 }
@@ -21141,7 +21190,7 @@ function installTerminalTab(ctx, t) {
 }
 
 // src/client/rightbarwidth.js
-var WIDTH_KEY = "dsh-kit.rightbar-width";
+var WIDTH_KEY = keys.width();
 var MIN_WIDTH = 300;
 var MAX_REQUEST = 1e7;
 function rightbarWidthWriter(layout) {
@@ -21244,9 +21293,8 @@ function installRightbarWidth({
 }
 
 // src/client/orphans.js
-var NAV_PREFIX = "dsh.plugin-kit.v1.";
-var BROWSER_PREFIX = "dsh.plugin-kit.browser.tabs.v2.";
-var CLEANED_FLAG = "dsh.plugin-kit.orphans.cleaned";
+var [NAV_PREFIX, BROWSER_PREFIX] = SESSION_KEY_PREFIXES;
+var CLEANED_FLAG = keys.orphansCleaned();
 function pruneOrphanKeys(liveSessionIds, storage = globalThis.localStorage) {
   if (!storage || typeof storage.key !== "function") return 0;
   try {

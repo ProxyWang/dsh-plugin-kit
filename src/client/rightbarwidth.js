@@ -28,7 +28,9 @@
  */
 
 // The user's own width, remembered across reloads; absent = "never dragged".
-export const WIDTH_KEY = "dsh-kit.rightbar-width";
+import { keys } from "./storage.js";
+
+export const WIDTH_KEY = keys.width();
 // The host floors the panel at 300px and caps the drag below that as junk.
 export const MIN_WIDTH = 300;
 // Any request past the host ceiling clamps onto it, so "maximum" is never a
