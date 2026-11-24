@@ -37,7 +37,8 @@
     "build:min": "node scripts/build-client.mjs --min",
     "prepack": "node scripts/build-client.mjs --min",
     "test": "node scripts/build-client.mjs && node test-structure.mjs && node test-host.mjs && node test-client.mjs && node test-browser.mjs && node test-search.mjs && node test-nested.mjs && node test-parent.mjs && node test-remote.mjs",
-    "test:contract": "ELECTRON_RUN_AS_NODE=1 \"$DSH_NODE_EXECUTABLE\" test-contract.mjs"
+    "test:contract": "ELECTRON_RUN_AS_NODE=1 \"$DSH_NODE_EXECUTABLE\" test-contract.mjs",
+    "bench:terminal": "node --expose-gc scripts/bench-terminal.mjs"
   },
   "icon": "icon.svg",
   "files": [

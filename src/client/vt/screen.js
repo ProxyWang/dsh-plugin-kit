@@ -16,19 +16,28 @@
  *   - buffer rows are 0-based and include scrollback; the viewport is the last
  *     `rows` of them (or an alternate buffer with no scrollback at all);
  *   - the cursor is 0-based, `x` in columns and `y` relative to the viewport;
- *   - an absolute row for the primary buffer is `lines.length - rows + y`.
+ *   - every retained row carries a monotonic `seq`; selections, search hits
+ *     and scroll anchors refer to it, so eviction never silently retargets
+ *   - an absolute row for the primary buffer is `count - rows + y`.
  */
 
-import { cellWidth } from "./width.js";
+import { cellWidth, graphemeWidth } from "./width.js";
 
 /** Cell attribute bits; a small bitmask keeps equality checks cheap. */
-export const FLAG = { bold: 1, dim: 2, italic: 4, underline: 8, blink: 16, inverse: 32, invisible: 64, strike: 128 };
+export const FLAG = {
+	bold: 1, dim: 2, italic: 4, underline: 8, blink: 16,
+	inverse: 32, invisible: 64, strike: 128, overline: 256,
+};
 
 /** Default attributes. `-1` means "use the theme's default colour". */
 const DEFAULT_ATTR = { fg: -1, bg: -1, fl: 0, link: null };
 
 /** Truecolor values are stored above the 256 palette indices. */
 const TRUECOLOR = 1 << 24;
+
+/** Conservative per-cell accounting for the scrollback byte budget. */
+const CELL_BYTES = 32;
+const LINE_OVERHEAD = 64;
 
 /** DEC special graphics (ESC ( 0) to Unicode, for TUIs that draw boxes. */
 const DEC_GRAPHICS = {
@@ -37,44 +46,211 @@ const DEC_GRAPHICS = {
 	t: "├", u: "┤", v: "┴", w: "┬", x: "│", y: "≤", z: "≥", "{": "π", "|": "≠", "}": "£", "~": "·",
 };
 
-/** A blank line: the cells array is sparse, so an untouched row costs one array. */
-function blankLine(cols) {
-	return { cells: new Array(cols).fill(undefined), wrapped: false, version: 1 };
+/** One blank row; the cells array is sparse, so untouched cells cost nothing. */
+function blankLine(cols, seq, cells = null, wrapped = false) {
+	return {
+		cells: cells ?? new Array(cols).fill(undefined),
+		wrapped,
+		version: 1,
+		seq,
+		bytes: cols * CELL_BYTES + LINE_OVERHEAD,
+	};
 }
 
-/** One buffer: the primary screen with scrollback, or the alternate screen. */
+/** The second half of a wide glyph; erases and layout stay rectangular. */
+function continuation(cell) {
+	return { c: "", fg: cell.fg, bg: cell.bg, fl: cell.fl, w: 0, link: cell.link };
+}
+
+/** Split a logical line into rows at `cols`, keeping wide glyphs intact. */
+function wrapCells(cells, cols) {
+	const rows = [];
+	let row = [];
+	const flush = () => {
+		while (row.length < cols) row.push(undefined);
+		rows.push(row);
+		row = [];
+	};
+	for (const cell of cells) {
+		const width = cell === undefined ? 1 : (cell.w === 0 ? 0 : cell.w || 1);
+		if (width === 0) {
+			// A combining mark belongs to the preceding base cell. Reflow keeps
+			// the cluster intact; a mark with no base is dropped.
+			const base = row[row.length - 1];
+			if (base !== undefined) base.c += cell.c;
+			continue;
+		}
+		if (row.length + width > cols) flush();
+		row.push(cell);
+		if (width === 2) row.push(continuation(cell));
+	}
+	if (row.length > 0 || rows.length === 0) flush();
+	return rows;
+}
+
+/** One ordered ring of rows: O(1) append/evict instead of Array.shift(). */
 class Buffer {
-	constructor(cols, rows, scrollback) {
+	constructor(cols, rows, scrollback, maxBytes, seqBase = 0) {
 		this.cols = cols;
 		this.rows = rows;
-		this.scrollback = scrollback;
-		this.lines = [];
-		for (let i = 0; i < rows; i++) this.lines.push(blankLine(cols));
+		this.scrollback = Math.max(0, scrollback);
+		this.maxBytes = maxBytes;
+		this.seqBase = seqBase;
+		this.reset();
 	}
 
-	/** Grow/shrink the grid, keeping the bottom `rows` rows on screen. */
-	resize(cols, rows) {
-		for (const line of this.lines) {
-			if (line.cells.length !== cols) line.cells.length = cols;
-			line.version++;
+	get capacity() {
+		return Math.max(this.rows, this.rows + this.scrollback);
+	}
+
+	reset() {
+		this.slots = new Array(this.capacity).fill(null);
+		this.head = 0;
+		this.count = 0;
+		this.bytes = 0;
+		this.nextSeq = this.seqBase;
+		this.firstSeq = this.seqBase;
+		for (let i = 0; i < this.rows; i++) this.pushBlank();
+	}
+
+	at(index) {
+		if (index < 0 || index >= this.count) return null;
+		return this.slots[(this.head + index) % this.slots.length];
+	}
+
+	toArray() {
+		return this.slice(0, this.count);
+	}
+
+	slice(start, count) {
+		const out = new Array(count);
+		for (let i = 0; i < count; i++) out[i] = this.at(start + i);
+		return out;
+	}
+
+	indexOfSeq(seq) {
+		// Region scrolls can insert a fresh seq in the middle, so physical order
+		// is not always seq order. The retained buffer is bounded, so a scan is
+		// cheaper and safer than maintaining a shifting index map.
+		for (let i = 0; i < this.count; i++) if (this.at(i).seq === seq) return i;
+		return -1;
+	}
+
+	pushBlank() {
+		this.pushLine(blankLine(this.cols, this.nextSeq++));
+	}
+
+	pushLine(line) {
+		const length = this.slots.length;
+		if (this.count < length) {
+			this.slots[(this.head + this.count) % length] = line;
+			this.count++;
+		} else {
+			const victim = this.slots[this.head];
+			this.bytes -= victim?.bytes ?? 0;
+			this.slots[this.head] = line;
+			this.head = (this.head + 1) % length;
+			this.firstSeq = this.at(0)?.seq ?? victim.seq + 1;
 		}
-		while (this.lines.length < rows) this.lines.push(blankLine(cols));
-		while (this.lines.length > rows + this.scrollback) this.lines.shift();
+		this.bytes += line.bytes ?? 0;
+		this.nextSeq = Math.max(this.nextSeq, (line.seq ?? 0) + 1);
+		if (this.count === 1) this.firstSeq = line.seq;
+		this.firstSeq = this.at(0)?.seq ?? this.firstSeq;
+		this.trimBytes();
+	}
+
+	dropOldest() {
+		const victim = this.at(0);
+		if (victim === null) return;
+		this.bytes -= victim.bytes ?? 0;
+		this.slots[this.head] = null;
+		this.head = (this.head + 1) % this.slots.length;
+		this.count--;
+		this.firstSeq = this.at(0)?.seq ?? victim.seq + 1;
+	}
+
+	trimBytes() {
+		while (this.bytes > this.maxBytes && this.count > this.rows) this.dropOldest();
+	}
+
+	rebuild(cols, rows, scrollback, lines) {
 		this.cols = cols;
 		this.rows = rows;
+		this.scrollback = Math.max(0, scrollback);
+		const capacity = this.capacity;
+		this.slots = new Array(capacity).fill(null);
+		this.head = 0;
+		this.count = 0;
+		this.bytes = 0;
+		this.nextSeq = this.seqBase;
+		for (const line of lines) this.nextSeq = Math.max(this.nextSeq, (line.seq ?? 0) + 1);
+		for (const line of lines) this.pushLine(line);
+		while (this.count < rows) this.pushBlank();
+		this.firstSeq = this.at(0)?.seq ?? 1;
 	}
+
+	setRows(rows) {
+		const lines = this.toArray();
+		this.rebuild(this.cols, rows, this.scrollback, lines);
+	}
+
+	/** Alternate screen is top-anchored: shrinking drops rows from the bottom. */
+	resizeKeepTop(cols, rows) {
+		let lines = this.toArray();
+		if (cols !== this.cols) {
+			for (const line of lines) {
+				line.cells.length = cols;
+				line.version++;
+				line.bytes = cols * CELL_BYTES + LINE_OVERHEAD;
+			}
+		}
+		if (lines.length > rows) lines = lines.slice(0, rows);
+		this.rebuild(cols, rows, 0, lines);
+	}
+
+	readRegion(top, bottom) {
+		const out = [];
+		for (let i = top; i <= bottom; i++) out.push(this.at(i));
+		return out;
+	}
+
+	writeRegion(top, lines) {
+		for (let i = 0; i < lines.length; i++) {
+			const physical = (this.head + top + i) % this.slots.length;
+			const previous = this.slots[physical];
+			this.bytes -= previous?.bytes ?? 0;
+			this.slots[physical] = lines[i];
+			this.bytes += lines[i].bytes ?? 0;
+		}
+		if (top === 0) this.firstSeq = this.at(0)?.seq ?? this.firstSeq;
+	}
+
+	dropScrollback() {
+		while (this.count > this.rows) this.dropOldest();
+	}
+}
+
+/** An empty damage record; every frame starts from this shape. */
+function emptyDamage() {
+	return { full: true, scrolls: [], rows: new Set(), bell: 0, title: false, modes: 0 };
 }
 
 /**
  * Create one terminal screen.
  *
- * @param options - initial grid size and retained scrollback rows.
- * @returns the emulator: `write`, `resize`, viewport/cursor readers and the
- *   parser's saved state (so a frame boundary mid-sequence is harmless).
+ * @param options - initial grid size, retained scrollback rows and byte budget.
+ * @returns the emulator: `write`, `resize`, viewport/cursor readers, damage and
+ *   the parser's saved state (so a frame boundary mid-sequence is harmless).
  */
-export function createScreen({ cols = 80, rows = 24, scrollback = 1000 } = {}) {
-	const primary = new Buffer(cols, rows, scrollback);
-	const alternate = new Buffer(cols, rows, 0);
+export function createScreen({ cols = 80, rows = 24, scrollback = 1000, scrollbackBytes = 10 * 1024 * 1024 } = {}) {
+	cols = Math.max(2, Math.trunc(Number(cols) || 80));
+	rows = Math.max(1, Math.trunc(Number(rows) || 24));
+	scrollback = Math.max(0, Math.trunc(Number(scrollback) || 0));
+	scrollbackBytes = Math.max(0, Number(scrollbackBytes) || 0);
+	const primary = new Buffer(cols, rows, scrollback, scrollbackBytes);
+	// A distinct namespace keeps a stale selection/search hit from pointing at
+	// an unrelated alternate-screen row when seqs would otherwise collide.
+	const alternate = new Buffer(cols, rows, 0, Number.POSITIVE_INFINITY, 1_000_000_000);
 	let buffer = primary;
 	let alt = false;
 	let x = 0;
@@ -87,14 +263,17 @@ export function createScreen({ cols = 80, rows = 24, scrollback = 1000 } = {}) {
 	let modes = {
 		wrap: true, origin: false, insert: false, cursor: true, appCursor: false,
 		alt: false, bracketedPaste: false, mouse: "off", sgrMouse: false, echo: true,
+		focus: false, syncOutput: false, altScroll: false,
 	};
 	let cursorStyle = "block";
 	let cursorBlink = true;
 	let title = "";
+	let cwd = "";
 	let bell = 0;
-	let dirtyAll = true;
+	let currentLink = null;
+	let damage = emptyDamage();
 	let charsetG0 = "ascii";
-	const listeners = { title: [], bell: [] };
+	const listeners = { title: [], bell: [], osc: [], mode: [] };
 
 	// Parser state that must survive a frame boundary.
 	let state = "ground";
@@ -110,42 +289,60 @@ export function createScreen({ cols = 80, rows = 24, scrollback = 1000 } = {}) {
 		return stops;
 	}
 
-	const absRow = (row = y) => buffer.lines.length - buffer.rows + row;
+	const absRow = (row = y) => buffer.count - buffer.rows + row;
 
 	function lineAt(row) {
-		const index = absRow(row);
-		if (index < 0) return null;
-		return buffer.lines[index] ?? null;
+		return buffer.at(absRow(row));
 	}
 
-	function touch(row) {
-		const line = lineAt(row);
-		if (line) line.version++;
+	function mark(line) {
+		if (line === null || line === undefined) return;
+		line.version++;
+		if (damage.full) return;
+		damage.rows.add(line.seq);
+		if (damage.rows.size > 4096) markAll();
 	}
 
-	function touchAll() {
-		dirtyAll = true;
-		for (const line of buffer.lines) line.version++;
+	function recordScroll(shift) {
+		damage.scrolls.push({ whole: true, shift });
+		if (damage.scrolls.length > 64) markAll();
+	}
+
+	function markAll() {
+		damage.full = true;
+		damage.rows.clear();
+		damage.scrolls.length = 0;
+	}
+
+	function emitMode() {
+		for (const listener of listeners.mode) listener({ ...modes });
 	}
 
 	/* ---------------- writes ---------------- */
 
 	/** Blank cells carry the current background colour (BCE). */
 	function blankCell() {
-		return attrs.bg === -1 && attrs.fl === 0 ? undefined : { c: " ", fg: -1, bg: attrs.bg, fl: attrs.fl & FLAG.underline ? 0 : 0, w: 1, link: null };
+		if (attrs.bg === -1 && attrs.fl === 0 && attrs.link === null) return undefined;
+		return { c: " ", fg: -1, bg: attrs.bg, fl: 0, w: 1, link: null };
 	}
 
-	function put(codePoint, text) {
-		const width = cellWidth(codePoint);
+	function makeCell(text, width) {
+		return { c: text, fg: attrs.fg, bg: attrs.bg, fl: attrs.fl, w: width, link: currentLink };
+	}
+
+	/** Place one grapheme cluster; width 0 attaches it to the previous base. */
+	function putCluster(text, width) {
 		const line = lineAt();
 		if (!line) return;
 		if (width === 0) {
-			// Combining mark: attach to the previous cell, or drop it at column 0.
-			const col = Math.max(0, x - 1);
-			const cell = line.cells[col];
-			if (cell) {
-				cell.c = cell.c + text;
-				line.version++;
+			let col = x - 1;
+			while (col >= 0 && line.cells[col]?.w === 0) col--;
+			const base = col >= 0 ? line.cells[col] : undefined;
+			if (base !== undefined) {
+				// Blank cells from an erase share one object; clone so the mark
+				// cannot appear on every cell of the erased range.
+				line.cells[col] = { ...base, c: base.c + text };
+				mark(line);
 			}
 			return;
 		}
@@ -154,17 +351,78 @@ export function createScreen({ cols = 80, rows = 24, scrollback = 1000 } = {}) {
 			x = 0;
 			indexDown();
 		}
-		if (x + width > buffer.cols) x = buffer.cols - width;
+		if (x + width > buffer.cols) x = Math.max(0, buffer.cols - width);
 		if (modes.insert) insertCells(width);
 		const target = lineAt();
 		if (!target) return;
 		if (width === 2 && x + 1 < buffer.cols) {
-			// The continuation cell keeps the grid rectangular for erases.
-			target.cells[x + 1] = { c: "", fg: attrs.fg, bg: attrs.bg, fl: attrs.fl, w: 0, link: attrs.link };
+			target.cells[x + 1] = continuation(makeCell("", 2));
 		}
-		target.cells[x] = { c: text, fg: attrs.fg, bg: attrs.bg, fl: attrs.fl, w: width, link: attrs.link };
-		target.version++;
+		target.cells[x] = makeCell(text, width);
+		mark(target);
 		x += width;
+	}
+
+	/** Bulk ASCII path: default printable runs skip the grapheme machinery. */
+	function writeAsciiRun(data, start, end) {
+		let pos = start;
+		while (pos < end) {
+			const line = lineAt();
+			if (!line) return;
+			if (modes.insert) {
+				putCluster(data[pos], 1);
+				pos++;
+				continue;
+			}
+			if (x >= buffer.cols) {
+				if (!modes.wrap) {
+					x = buffer.cols - 1;
+				} else {
+					line.wrapped = true;
+					x = 0;
+					indexDown();
+					continue;
+				}
+			}
+			const available = buffer.cols - x;
+			const wanted = Math.min(end - pos, available);
+			for (let k = 0; k < wanted; k++) line.cells[x + k] = makeCell(data[pos + k], 1);
+			mark(line);
+			x += wanted;
+			pos += wanted;
+			if (pos < end && modes.wrap) {
+				line.wrapped = true;
+				x = 0;
+				indexDown();
+			}
+		}
+	}
+
+	/** Write a run of non-ASCII text, one grapheme cluster at a time. */
+	function writeText(text) {
+		if (charsetG0 === "dec") {
+			for (const ch of text) {
+				const mapped = DEC_GRAPHICS[ch];
+				if (mapped) putCluster(mapped, cellWidth(mapped.codePointAt(0) ?? 32));
+				else putCluster(ch, cellWidth(ch.codePointAt(0) ?? 32));
+			}
+			return;
+		}
+		// The segmenter is only needed when a cluster joins several base
+		// glyphs (ZWJ emoji). CJK, combining marks and skin-tone modifiers are
+		// already handled by per-code-point widths, and skipping the segmenter
+		// keeps plain CJK output at the fast-path rate.
+		if (segmenter !== null && text.includes("\u200d")) {
+			for (const part of segmenter.segment(text)) {
+				putCluster(part.segment, graphemeWidth(part.segment));
+			}
+			return;
+		}
+		for (const ch of text) {
+			const code = ch.codePointAt(0);
+			if (code === undefined || code < 0x20) continue;
+			putCluster(ch, graphemeWidth(ch));
+		}
 	}
 
 	/* ---------------- cursor and scrolling ---------------- */
@@ -179,42 +437,55 @@ export function createScreen({ cols = 80, rows = 24, scrollback = 1000 } = {}) {
 		else y = Math.max(0, y - 1);
 	}
 
+	function newSeq() {
+		return buffer.nextSeq++;
+	}
+
 	/**
-	 * Scroll the region up.
+	 * Scroll the optional scroll region up.
 	 *
-	 * The viewport is the last `rows` lines of the buffer, so a full-screen
-	 * scroll only has to append a blank line: the line that leaves the viewport
-	 * keeps sitting above it as scrollback. A region scroll (DECSTBM, IL/DL) has
-	 * to discard its top line instead, because nothing outside the region may
-	 * move.
+	 * A full-screen scroll appends one blank row to the ring; the row that
+	 * leaves the viewport simply stays above it as scrollback. A region scroll
+	 * cannot touch anything outside its rows, so it rewrites that small region.
 	 */
 	function scrollUp(count) {
 		const top = absRow(scrollTop);
 		const bottom = absRow(scrollBottom);
-		if (top < 0 || bottom >= buffer.lines.length) return;
+		if (top < 0 || bottom >= buffer.count) return;
 		const whole = scrollTop === 0 && scrollBottom === buffer.rows - 1;
-		for (let i = 0; i < count; i++) {
-			if (whole) buffer.lines.push(blankLine(buffer.cols));
-			else buffer.lines.splice(top, 0, blankLine(buffer.cols));
-			if (!whole) buffer.lines.splice(bottom + 1, 1);
-			while (buffer.lines.length > buffer.rows + buffer.scrollback) buffer.lines.shift();
+		let lines = Math.min(count, buffer.rows);
+		if (lines <= 0) return;
+		if (whole) {
+			while (lines-- > 0) buffer.pushBlank();
+			recordScroll(count);
+			return;
 		}
-		dirtyAll = true;
+		const region = buffer.readRegion(top, bottom);
+		const moves = Math.min(count, region.length);
+		for (let i = 0; i < moves; i++) {
+			region.shift();
+			region.push(blankLine(buffer.cols, newSeq()));
+		}
+		buffer.writeRegion(top, region);
+		for (const line of region) damage.rows.add(line.seq);
 	}
 
 	function scrollDown(count) {
 		const top = absRow(scrollTop);
 		const bottom = absRow(scrollBottom);
-		if (top < 0 || bottom >= buffer.lines.length) return;
-		for (let i = 0; i < count; i++) {
-			buffer.lines.splice(bottom, 1);
-			buffer.lines.splice(top, 0, blankLine(buffer.cols));
+		if (top < 0 || bottom >= buffer.count) return;
+		const region = buffer.readRegion(top, bottom);
+		const lines = Math.min(count, region.length);
+		for (let i = 0; i < lines; i++) {
+			region.pop();
+			region.unshift(blankLine(buffer.cols, newSeq()));
 		}
-		dirtyAll = true;
+		buffer.writeRegion(top, region);
+		for (const line of region) damage.rows.add(line.seq);
 	}
 
 	function carriageReturn() { x = 0; }
-	function lineFeed() { indexDown(); if (modes.echo) { /* column kept: VT semantics */ } }
+	function lineFeed() { indexDown(); }
 
 	/* ---------------- erasing ---------------- */
 
@@ -223,7 +494,7 @@ export function createScreen({ cols = 80, rows = 24, scrollback = 1000 } = {}) {
 		if (!line) return;
 		const blank = blankCell();
 		for (let col = Math.max(0, from); col < Math.min(buffer.cols, to); col++) line.cells[col] = blank;
-		line.version++;
+		mark(line);
 	}
 
 	function eraseInLine(mode) {
@@ -242,10 +513,8 @@ export function createScreen({ cols = 80, rows = 24, scrollback = 1000 } = {}) {
 		} else if (mode === 2) {
 			for (let row = 0; row < buffer.rows; row++) eraseCells(row, 0, buffer.cols);
 		} else if (mode === 3) {
-			// `clear` (ED 3) also drops the scrollback above the viewport.
-			const keep = Math.max(0, buffer.lines.length - buffer.rows);
-			buffer.lines.splice(0, keep);
-			dirtyAll = true;
+			buffer.dropScrollback();
+			markAll();
 		}
 	}
 
@@ -256,7 +525,7 @@ export function createScreen({ cols = 80, rows = 24, scrollback = 1000 } = {}) {
 		const rest = line.cells.slice(x, Math.max(0, buffer.cols - count));
 		line.cells = head.concat(new Array(count).fill(undefined), rest).slice(0, buffer.cols);
 		while (line.cells.length < buffer.cols) line.cells.push(undefined);
-		line.version++;
+		mark(line);
 	}
 
 	function deleteCells(count) {
@@ -266,7 +535,7 @@ export function createScreen({ cols = 80, rows = 24, scrollback = 1000 } = {}) {
 		const rest = line.cells.slice(x + count);
 		line.cells = head.concat(rest, new Array(count).fill(undefined)).slice(0, buffer.cols);
 		while (line.cells.length < buffer.cols) line.cells.push(undefined);
-		line.version++;
+		mark(line);
 	}
 
 	/* ---------------- alternate screen ---------------- */
@@ -276,11 +545,14 @@ export function createScreen({ cols = 80, rows = 24, scrollback = 1000 } = {}) {
 			alt = true;
 			modes.alt = true;
 			buffer = alternate;
-			if (clear) alternate.lines = Array.from({ length: alternate.rows }, () => blankLine(alternate.cols));
-			dirtyAll = true;
+			scrollTop = 0;
+			scrollBottom = alternate.rows - 1;
+			modes.origin = false;
+			if (clear) alternate.reset();
+			markAll();
 		} else if (clear) {
-			alternate.lines = Array.from({ length: alternate.rows }, () => blankLine(alternate.cols));
-			dirtyAll = true;
+			alternate.reset();
+			markAll();
 		}
 	}
 
@@ -289,15 +561,15 @@ export function createScreen({ cols = 80, rows = 24, scrollback = 1000 } = {}) {
 		alt = false;
 		modes.alt = false;
 		buffer = primary;
+		modes.origin = false;
 		scrollTop = 0;
 		scrollBottom = primary.rows - 1;
-		dirtyAll = true;
+		markAll();
 	}
 
 	/* ---------------- SGR ---------------- */
 
 	function setColor(target, params, index) {
-		// 38;5;n / 38;2;r;g;b (and the `:` sub-parameter form, normalised upstream).
 		const kind = Number(params[index + 1]);
 		if (kind === 5) {
 			const n = Number(params[index + 2]);
@@ -337,7 +609,8 @@ export function createScreen({ cols = 80, rows = 24, scrollback = 1000 } = {}) {
 				case 7: attrs.fl |= FLAG.inverse; break;
 				case 8: attrs.fl |= FLAG.invisible; break;
 				case 9: attrs.fl |= FLAG.strike; break;
-				case 21: case 22: attrs.fl &= ~(FLAG.bold | FLAG.dim); break;
+				case 21: attrs.fl &= ~FLAG.bold; break;
+				case 22: attrs.fl &= ~(FLAG.bold | FLAG.dim); break;
 				case 23: attrs.fl &= ~FLAG.italic; break;
 				case 24: attrs.fl &= ~FLAG.underline; break;
 				case 25: attrs.fl &= ~FLAG.blink; break;
@@ -348,6 +621,8 @@ export function createScreen({ cols = 80, rows = 24, scrollback = 1000 } = {}) {
 				case 48: i += setColor("bg", list, i); break;
 				case 39: attrs.fg = -1; break;
 				case 49: attrs.bg = -1; break;
+				case 53: attrs.fl |= FLAG.overline; break;
+				case 55: attrs.fl &= ~FLAG.overline; break;
 				default:
 					if (code >= 30 && code <= 37) attrs.fg = code - 30;
 					else if (code >= 40 && code <= 47) attrs.bg = code - 40;
@@ -368,6 +643,10 @@ export function createScreen({ cols = 80, rows = 24, scrollback = 1000 } = {}) {
 	let list = [];
 
 	function csi(final) {
+		// `CSI > …` is the keyboard-protocol query namespace (kitty /
+		// modifyOtherKeys). Its finals overlap legacy SGR/cursor commands, so
+		// consume it instead of guessing.
+		if (prefix === ">") return;
 		const params0 = list[0];
 		switch (final) {
 			case "@": insertCells(count()); break;
@@ -395,8 +674,10 @@ export function createScreen({ cols = 80, rows = 24, scrollback = 1000 } = {}) {
 			case "a": x = clampCol(x + count()); break;
 			case "b": {
 				const line = lineAt();
-				const previous = line?.cells[x - 1];
-				if (previous) for (let i = 0; i < count(); i++) put(previous.c.codePointAt(0) ?? 32, previous.c);
+				let col = x - 1;
+				while (col >= 0 && line?.cells[col]?.w === 0) col--;
+				const previous = col >= 0 ? line?.cells[col] : undefined;
+				if (previous) for (let i = 0; i < count(); i++) putCluster(previous.c, previous.w || 1);
 				break;
 			}
 			case "d": y = clampRow(count() - 1); break;
@@ -406,7 +687,13 @@ export function createScreen({ cols = 80, rows = 24, scrollback = 1000 } = {}) {
 			case "l": setModes(false); break;
 			case "m": applySgr(list.length === 0 ? [0] : list); break;
 			case "n": break; // status reports are answered by the host side, not us
-			case "q": cursorStyle = ["block", "block", "block", "underline", "underline", "bar", "bar"][Number.isFinite(params0) ? params0 : 0] ?? "block"; break;
+			case "q": {
+				const style = Number.isFinite(params0) ? params0 : 0;
+				const shapes = ["block", "block", "block", "underline", "underline", "bar", "bar"];
+				cursorStyle = shapes[style] ?? "block";
+				cursorBlink = style === 0 || style % 2 === 1;
+				break;
+			}
 			case "r": {
 				const top = (Number.isFinite(list[0]) ? list[0] : 1) - 1;
 				const bottom = (Number.isFinite(list[1]) ? list[1] : buffer.rows) - 1;
@@ -419,7 +706,7 @@ export function createScreen({ cols = 80, rows = 24, scrollback = 1000 } = {}) {
 				break;
 			}
 			case "s": saved = { x, y, attrs: { ...attrs }, origin: modes.origin }; break;
-			case "u": x = saved.x; y = saved.y; attrs = { ...saved.attrs }; break;
+			case "u": x = clampCol(saved.x); y = clampRow(saved.y); attrs = { ...saved.attrs }; break;
 			case "t": break; // window manipulation: ignored on purpose
 			default: break;
 		}
@@ -429,46 +716,70 @@ export function createScreen({ cols = 80, rows = 24, scrollback = 1000 } = {}) {
 	function scrollDownAt(countLines) {
 		const top = absRow(y);
 		const bottom = absRow(scrollBottom);
-		if (top < 0 || bottom >= buffer.lines.length) return;
-		for (let i = 0; i < countLines; i++) {
-			buffer.lines.splice(bottom, 1);
-			buffer.lines.splice(top, 0, blankLine(buffer.cols));
+		if (top < 0 || bottom >= buffer.count) return;
+		const region = buffer.readRegion(top, bottom);
+		const lines = Math.min(countLines, region.length);
+		for (let i = 0; i < lines; i++) {
+			region.pop();
+			region.unshift(blankLine(buffer.cols, newSeq()));
 		}
-		dirtyAll = true;
+		buffer.writeRegion(top, region);
+		for (const line of region) damage.rows.add(line.seq);
 	}
 
 	function scrollUpAt(countLines) {
 		const top = absRow(y);
 		const bottom = absRow(scrollBottom);
-		if (top < 0 || bottom >= buffer.lines.length) return;
-		for (let i = 0; i < countLines; i++) {
-			buffer.lines.splice(top, 1);
-			buffer.lines.splice(bottom, 0, blankLine(buffer.cols));
+		if (top < 0 || bottom >= buffer.count) return;
+		const region = buffer.readRegion(top, bottom);
+		const lines = Math.min(countLines, region.length);
+		for (let i = 0; i < lines; i++) {
+			region.shift();
+			region.push(blankLine(buffer.cols, newSeq()));
 		}
-		dirtyAll = true;
+		buffer.writeRegion(top, region);
+		for (const line of region) damage.rows.add(line.seq);
 	}
 
 	function setModes(on) {
 		const isPrivate = prefix === "?";
+		if (!isPrivate) {
+			for (const value of list) if (value === 4) modes.insert = on;
+			return;
+		}
 		for (const value of list) {
-			if (!isPrivate) continue;
 			switch (value) {
 				case 1: modes.appCursor = on; break;
 				case 6: modes.origin = on; y = on ? scrollTop : 0; x = 0; break;
 				case 7: modes.wrap = on; break;
-				case 4: modes.insert = on; break;
+				case 9: modes.mouse = on ? "9" : "off"; break;
+				case 12: cursorBlink = on; break;
 				case 25: modes.cursor = on; break;
 				case 47: case 1047: if (on) enterAlternate(false); else leaveAlternate(); break;
-				case 1049:
-					if (on) { saved = { x, y, attrs: { ...attrs }, origin: modes.origin }; enterAlternate(true); x = 0; y = 0; }
-					else { leaveAlternate(); x = saved.x; y = saved.y; }
-					break;
 				case 1000: case 1002: case 1003: modes.mouse = on ? String(value) : "off"; break;
+				case 1004: modes.focus = on; break;
 				case 1006: modes.sgrMouse = on; break;
+				case 1007: modes.altScroll = on; break;
+				case 1049:
+					if (on) {
+						saved = { x, y, attrs: { ...attrs }, origin: modes.origin };
+						enterAlternate(true);
+						x = 0;
+						y = 0;
+					} else {
+						leaveAlternate();
+						x = clampCol(saved.x);
+						y = clampRow(saved.y);
+						attrs = { ...saved.attrs };
+						modes.origin = saved.origin;
+					}
+					break;
 				case 2004: modes.bracketedPaste = on; break;
+				case 2026: modes.syncOutput = on; break;
 				default: break;
 			}
 		}
+		emitMode();
 	}
 
 	function clampCol(value) {
@@ -497,7 +808,7 @@ export function createScreen({ cols = 80, rows = 24, scrollback = 1000 } = {}) {
 			case "E": x = 0; indexDown(); break;
 			case "M": indexUp(); break;
 			case "7": saved = { x, y, attrs: { ...attrs }, origin: modes.origin }; break;
-			case "8": x = saved.x; y = saved.y; attrs = { ...saved.attrs }; break;
+			case "8": x = clampCol(saved.x); y = clampRow(saved.y); attrs = { ...saved.attrs }; break;
 			case "c": reset(); break;
 			case "H": tabs.add(x); break;
 			default: break;
@@ -505,30 +816,59 @@ export function createScreen({ cols = 80, rows = 24, scrollback = 1000 } = {}) {
 	}
 
 	function reset() {
+		// A snapshot can arrive mid-sequence; do not feed it into a stale OSC,
+		// CSI parameter list or DEC graphics state from the previous stream.
+		state = "ground";
+		params = "";
+		prefix = "";
+		intermediate = "";
+		osc = "";
+		dcsSkip = false;
+		charsetG0 = "ascii";
+		list = [];
 		alt = false;
 		modes.alt = false;
 		buffer = primary;
-		primary.lines = Array.from({ length: primary.rows }, () => blankLine(primary.cols));
-		alternate.lines = Array.from({ length: alternate.rows }, () => blankLine(alternate.cols));
+		primary.reset();
+		alternate.reset();
 		x = 0;
 		y = 0;
 		attrs = { ...DEFAULT_ATTR };
+		saved = { x: 0, y: 0, attrs: { ...DEFAULT_ATTR }, origin: false };
+		currentLink = null;
 		scrollTop = 0;
 		scrollBottom = primary.rows - 1;
 		tabs = defaultTabs(primary.cols);
-		modes = { ...modes, wrap: true, origin: false, insert: false, cursor: true, appCursor: false, bracketedPaste: false, mouse: "off", sgrMouse: false };
-		dirtyAll = true;
+		cursorStyle = "block";
+		cursorBlink = true;
+		modes = {
+			...modes, wrap: true, origin: false, insert: false, cursor: true,
+			appCursor: false, bracketedPaste: false, mouse: "off", sgrMouse: false,
+			focus: false, syncOutput: false, altScroll: false,
+		};
+		markAll();
 	}
 
 	function dispatchOsc(payload) {
 		const semicolon = payload.indexOf(";");
 		const command = semicolon === -1 ? payload : payload.slice(0, semicolon);
 		const body = semicolon === -1 ? "" : payload.slice(semicolon + 1);
+		for (const listener of listeners.osc) listener({ command, body });
 		if (command === "0" || command === "2") {
 			title = body;
+			damage.title = true;
 			for (const listener of listeners.title) listener(title);
+			return;
 		}
-		// 7 (cwd), 8 (hyperlinks), 10-19 (colours): consumed, not rendered here.
+		if (command === "7") {
+			cwd = fileUriToPath(body) ?? body;
+			return;
+		}
+		if (command === "8") {
+			const split = body.indexOf(";");
+			const uri = split === -1 ? "" : body.slice(split + 1);
+			currentLink = uri === "" ? null : uri;
+		}
 	}
 
 	/** Feed one frame of output. A sequence split across frames resumes here. */
@@ -538,19 +878,29 @@ export function createScreen({ cols = 80, rows = 24, scrollback = 1000 } = {}) {
 		let i = 0;
 		while (i < length) {
 			if (state === "ground") {
-				// Fast path: copy the printable run in one go.
-				let end = i;
-				while (end < length) {
-					const code = data.charCodeAt(end);
-					if (code < 0x20 || code === 0x7f || code === 0x1b) break;
-					end++;
+				let asciiEnd = i;
+				while (asciiEnd < length) {
+					const code = data.charCodeAt(asciiEnd);
+					if (code < 0x20 || code >= 0x7f || code === 0x1b) break;
+					asciiEnd++;
 				}
-				if (end > i) {
-					writeText(data.slice(i, end), end - i === 0);
-					i = end;
+				if (asciiEnd > i) {
+					if (charsetG0 === "ascii") writeAsciiRun(data, i, asciiEnd);
+					else writeText(data.slice(i, asciiEnd));
+					i = asciiEnd;
 					continue;
 				}
-				const ch = data[i];
+				let wideEnd = i;
+				while (wideEnd < length) {
+					const code = data.charCodeAt(wideEnd);
+					if (code < 0x20 || code === 0x7f || code === 0x1b || code <= 0x7e) break;
+					wideEnd++;
+				}
+				if (wideEnd > i) {
+					writeText(data.slice(i, wideEnd));
+					i = wideEnd;
+					continue;
+				}
 				const code = data.charCodeAt(i);
 				i++;
 				if (code === 0x1b) { state = "escape"; intermediate = ""; continue; }
@@ -558,8 +908,12 @@ export function createScreen({ cols = 80, rows = 24, scrollback = 1000 } = {}) {
 				if (code === 0x0a || code === 0x0b || code === 0x0c) { lineFeed(); continue; }
 				if (code === 0x08) { x = Math.max(0, x - 1); continue; }
 				if (code === 0x09) { x = nextTab(x); continue; }
-				if (code === 0x07) { bell++; for (const listener of listeners.bell) listener(); continue; }
-				void ch;
+				if (code === 0x07) {
+					bell++;
+					damage.bell++;
+					for (const listener of listeners.bell) listener();
+					continue;
+				}
 				continue;
 			}
 			if (state === "escape") {
@@ -599,7 +953,6 @@ export function createScreen({ cols = 80, rows = 24, scrollback = 1000 } = {}) {
 					intermediate = "";
 					continue;
 				}
-				// Malformed: drop the sequence rather than guess.
 				state = "ground";
 				continue;
 			}
@@ -608,7 +961,7 @@ export function createScreen({ cols = 80, rows = 24, scrollback = 1000 } = {}) {
 				if (ch === "\u0007") { state = "ground"; dispatchOsc(osc); osc = ""; continue; }
 				if (ch === "\u001b") { state = "oscEsc"; continue; }
 				osc += ch;
-				if (osc.length > 4096) { state = "ground"; osc = ""; }
+				if (osc.length > 8192) { state = "ground"; osc = ""; }
 				continue;
 			}
 			if (state === "oscEsc") {
@@ -624,9 +977,8 @@ export function createScreen({ cols = 80, rows = 24, scrollback = 1000 } = {}) {
 				continue;
 			}
 			if (state === "dcsEsc") {
-				const ch = data[i++];
+				i++;
 				state = "ground";
-				void ch;
 				dcsSkip = false;
 				continue;
 			}
@@ -642,86 +994,200 @@ export function createScreen({ cols = 80, rows = 24, scrollback = 1000 } = {}) {
 		return out;
 	}
 
-	/** Write a run of printable characters, applying the DEC graphics mapping. */
-	function writeText(text, _unused) {
-		if (charsetG0 === "dec") {
-			for (const ch of text) {
-				const mapped = DEC_GRAPHICS[ch];
-				if (mapped) put(mapped.codePointAt(0), mapped);
-				else put(ch.codePointAt(0), ch);
+	/* ---------------- resize and reflow ---------------- */
+
+	function restoreCursor(cursorAbs, cursorX, evicted = 0) {
+		y = clampRow(cursorAbs - evicted - (buffer.count - buffer.rows));
+		x = clampCol(cursorX);
+	}
+
+	/** Reflow the primary buffer at a new width, preserving the logical lines. */
+	function reflowPrimary(nextCols, nextRows, cursorAbs, cursorX) {
+		const lines = primary.toArray();
+		const output = [];
+		let cursorOut = null;
+		let lastContentRow = -1;
+		let index = 0;
+		while (index < lines.length) {
+			const start = index;
+			const group = [];
+			while (index < lines.length) {
+				group.push(lines[index]);
+				const more = lines[index].wrapped;
+				index++;
+				if (!more) break;
 			}
-			return;
+			const cells = [];
+			for (const line of group) {
+				const limit = Math.min(line.cells.length, primary.cols);
+				for (let col = 0; col < limit; col++) {
+					const cell = line.cells[col];
+					if (cell !== undefined && cell.w === 0) continue;
+					cells.push(cell);
+				}
+			}
+			while (cells.length > 0 && cells[cells.length - 1] === undefined) cells.pop();
+			const rows = wrapCells(cells, nextCols);
+			if (cursorAbs >= start && cursorAbs < index) {
+				const rowInGroup = cursorAbs - start;
+				let offset = 0;
+				const advance = (cell) => (cell === undefined ? 1 : (cell.w === 0 ? 0 : cell.w || 1));
+				for (let r = 0; r < rowInGroup; r++) {
+					for (let col = 0; col < group[r].cells.length; col++) offset += advance(group[r].cells[col]);
+				}
+				for (let col = 0; col < Math.min(cursorX, group[rowInGroup].cells.length); col++) offset += advance(group[rowInGroup].cells[col]);
+				let remaining = offset;
+				for (let r = 0; r < rows.length && cursorOut === null; r++) {
+					for (let col = 0; col < nextCols; col++) {
+						const cell = rows[r][col];
+						const width = cell === undefined ? 1 : (cell.w === 0 ? 0 : cell.w || 1);
+						if (remaining < width) {
+							cursorOut = { row: output.length + r, col };
+							break;
+						}
+						remaining -= width;
+					}
+				}
+				if (cursorOut === null) cursorOut = { row: output.length + rows.length - 1, col: nextCols - 1 };
+			}
+			for (let r = 0; r < rows.length; r++) {
+				if (rows[r].some((cell) => cell !== undefined)) lastContentRow = output.length;
+				output.push(blankLine(nextCols, primary.nextSeq++, rows[r], r < rows.length - 1));
+			}
 		}
-		for (const ch of text) {
-			const code = ch.codePointAt(0);
-			if (code === undefined) continue;
-			if (code < 0x20) continue;
-			put(code, ch);
+		// Trailing empty rows are padding, not history. Reflowing a wide screen
+		// would otherwise push real content into scrollback behind a blank tail.
+		const keep = Math.max(lastContentRow + 1, cursorOut === null ? 0 : cursorOut.row + 1, Math.min(nextRows, output.length));
+		if (keep > 0 && keep < output.length) output.length = keep;
+		primary.rebuild(nextCols, nextRows, primary.scrollback, output);
+		if (cursorOut !== null) {
+			const evicted = Math.max(0, output.length - primary.count);
+			y = clampRow(cursorOut.row - evicted - (primary.count - nextRows));
+			x = clampCol(cursorOut.col);
+		} else {
+			y = clampRow(y);
+			x = clampCol(x);
 		}
 	}
 
-	/* ---------------- readers ---------------- */
-
-	/** Rows the renderer should paint: the viewport, oldest first. */
-	function viewport() {
-		const start = Math.max(0, buffer.lines.length - buffer.rows);
-		return buffer.lines.slice(start, start + buffer.rows);
-	}
-
-	/**
-	 * The viewport shifted into scrollback.
-	 * @param offset - rows above the bottom, 0 for the live viewport.
-	 * @returns that many lines higher, clamped to the retained scrollback.
-	 */
-	function viewportAt(offset = 0) {
-		const maxOffset = buffer === primary ? Math.max(0, buffer.lines.length - buffer.rows) : 0;
-		const fromBottom = Math.min(Math.max(0, offset), maxOffset);
-		const start = Math.max(0, buffer.lines.length - buffer.rows - fromBottom);
-		if (fromBottom === 0) return viewport();
-		return buffer.lines.slice(start, start + buffer.rows);
+	function resizeAlt(nextCols, nextRows, cursorAbs, cursorX) {
+		alternate.resizeKeepTop(nextCols, nextRows);
+		if (buffer === alternate && cursorAbs >= 0) {
+			alternate.rows = nextRows;
+			y = clampRow(cursorAbs);
+			x = clampCol(cursorX);
+		}
 	}
 
 	return {
 		write,
 		reset,
 		resize(cols, rows) {
-			if (cols === buffer.cols && rows === buffer.rows) return false;
-			primary.resize(cols, rows);
-			alternate.resize(cols, rows);
+			cols = Math.max(2, Math.trunc(Number(cols) || primary.cols));
+			rows = Math.max(1, Math.trunc(Number(rows) || primary.rows));
+			if (cols === primary.cols && rows === primary.rows) return false;
+			const active = buffer;
+			const cursorAbs = active.count - active.rows + y;
+			const cursorX = x;
+			const widthChanged = cols !== primary.cols;
+			if (widthChanged) {
+				if (active === primary) reflowPrimary(cols, rows, cursorAbs, cursorX);
+				else reflowPrimary(cols, rows, -1, 0);
+				resizeAlt(cols, rows, active === alternate ? cursorAbs : -1, cursorX);
+			} else if (rows !== active.rows) {
+				if (active === primary) {
+					const previousCount = primary.count;
+					primary.setRows(rows);
+					restoreCursor(cursorAbs, cursorX, Math.max(0, previousCount - primary.count));
+					alternate.rows = rows;
+					alternate.setRows(rows);
+				} else {
+					alternate.resizeKeepTop(alternate.cols, rows);
+					restoreCursor(cursorAbs, cursorX);
+					primary.setRows(rows);
+				}
+			}
 			scrollTop = 0;
 			scrollBottom = rows - 1;
 			tabs = defaultTabs(cols);
 			x = clampCol(x);
 			y = clampRow(y);
-			dirtyAll = true;
+			markAll();
 			return true;
 		},
 		viewport,
 		viewportAt,
 		/** Absolute buffer index of the viewport's first row, at a scrollback offset. */
 		topRow(offset = 0) {
-			const maxOffset = buffer === primary ? Math.max(0, buffer.lines.length - buffer.rows) : 0;
+			const maxOffset = buffer === primary ? Math.max(0, buffer.count - buffer.rows) : 0;
 			const fromBottom = Math.min(Math.max(0, offset), maxOffset);
-			return Math.max(0, buffer.lines.length - buffer.rows - fromBottom);
+			return Math.max(0, buffer.count - buffer.rows - fromBottom);
 		},
 		/** One row by absolute buffer index, for selection and copy. */
 		lineAt(index) {
-			return buffer.lines[index] ?? null;
+			return buffer.at(index);
+		},
+		lineSeqAt(index) {
+			return buffer.at(index)?.seq ?? -1;
+		},
+		indexOfSeq(seq) {
+			return buffer.indexOfSeq(seq);
 		},
 		/** Total rows held, scrollback included. */
-		get bufferRows() { return buffer.lines.length; },
+		get bufferRows() { return buffer.count; },
 		get cols() { return buffer.cols; },
 		get rows() { return buffer.rows; },
 		get alt() { return alt; },
 		get title() { return title; },
+		get cwd() { return cwd; },
 		get bellCount() { return bell; },
 		get modes() { return { ...modes }; },
 		get cursor() { return { x, y, visible: modes.cursor, style: cursorStyle, blink: cursorBlink }; },
 		get attrs() { return { ...attrs }; },
-		get scrollbackRows() { return buffer === primary ? Math.max(0, buffer.lines.length - buffer.rows) : 0; },
-		get dirtyAll() { return dirtyAll; },
-		clearDirty() { dirtyAll = false; },
+		get scrollbackRows() { return buffer === primary ? Math.max(0, buffer.count - buffer.rows) : 0; },
+		get scrollbackBytes() { return buffer.bytes; },
+		get firstSeq() { return buffer.firstSeq; },
+		get dirtyAll() { return damage.full; },
+		get damage() { return damage; },
+		markFull() { markAll(); },
+		consumeDamage() {
+			const out = damage;
+			damage = emptyDamage();
+			damage.full = false;
+			return out;
+		},
+		clearDirty() { damage.full = false; damage.rows.clear(); damage.scrolls.length = 0; },
 		onTitle(listener) { listeners.title.push(listener); return () => { const i = listeners.title.indexOf(listener); if (i >= 0) listeners.title.splice(i, 1); }; },
 		onBell(listener) { listeners.bell.push(listener); return () => { const i = listeners.bell.indexOf(listener); if (i >= 0) listeners.bell.splice(i, 1); }; },
+		onOsc(listener) { listeners.osc.push(listener); return () => { const i = listeners.osc.indexOf(listener); if (i >= 0) listeners.osc.splice(i, 1); }; },
+		onMode(listener) { listeners.mode.push(listener); return () => { const i = listeners.mode.indexOf(listener); if (i >= 0) listeners.mode.splice(i, 1); }; },
 	};
+
+	function viewport() {
+		const start = Math.max(0, buffer.count - buffer.rows);
+		return buffer.slice(start, buffer.rows);
+	}
+
+	function viewportAt(offset = 0) {
+		const maxOffset = buffer === primary ? Math.max(0, buffer.count - buffer.rows) : 0;
+		const fromBottom = Math.min(Math.max(0, offset), maxOffset);
+		const start = Math.max(0, buffer.count - buffer.rows - fromBottom);
+		return buffer.slice(start, buffer.rows);
+	}
+}
+
+/** The parser runs one grapheme at a time; Intl.Segmenter is optional. */
+const segmenter = typeof Intl !== "undefined" && typeof Intl.Segmenter === "function"
+	? new Intl.Segmenter(undefined, { granularity: "grapheme" })
+	: null;
+
+/** OSC 7 reports a file URI; show the path, not the encoding. */
+function fileUriToPath(value) {
+	if (!value.startsWith("file://")) return null;
+	try {
+		const url = new URL(value);
+		return decodeURIComponent(url.pathname);
+	} catch {
+		return null;
+	}
 }

@@ -24,10 +24,82 @@ import { h } from "./react.js";
 import { TerminalBody } from "./vt/body.js";
 import { NS } from "./constants.js";
 
+
+/** Fields the React surface needs; render frames deliberately excluded. */
+function chromeOf(state) {
+	if (!state || typeof state !== "object") return { phase: "idle", writable: false };
+	return {
+		phase: state.phase,
+		writable: state.writable,
+		info: state.info,
+		environment: state.environment,
+		title: state.title,
+		error: state.error,
+		issue: state.issue,
+	};
+}
+
+function sameInfo(a, b) {
+	if (a === b) return true;
+	if (!a || !b) return false;
+	return a.cols === b.cols && a.rows === b.rows && a.state === b.state
+		&& a.exitCode === b.exitCode && a.error === b.error && a.title === b.title;
+}
+
+function sameChrome(a, b) {
+	return a.phase === b.phase && a.writable === b.writable && a.title === b.title
+		&& a.error === b.error && a.issue === b.issue
+		&& a.environment === b.environment && sameInfo(a.info, b.info);
+}
+
+/**
+ * A view of the terminal store that only changes when chrome does.
+ *
+ * The render stream is consumed directly by the terminal engine; letting
+ * `useSyncExternalStore` see every output frame would re-render the whole tab
+ * dozens of times per second. Subscribers are attached lazily and released when
+ * the last one leaves.
+ *
+ * @param state - the raw `TerminalView.state` snapshot store.
+ * @returns a store with the same getSnapshot/subscribe shape.
+ */
+function chromeStore(state) {
+	if (!state || typeof state.getSnapshot !== "function" || typeof state.subscribe !== "function") return state;
+	let store = chromeStores.get(state);
+	if (store !== undefined) return store;
+	let snapshot = chromeOf(state.getSnapshot());
+	const listeners = new Set();
+	let off = null;
+	const sync = () => {
+		const next = chromeOf(state.getSnapshot());
+		if (sameChrome(snapshot, next)) return;
+		snapshot = next;
+		for (const listener of [...listeners]) listener();
+	};
+	store = {
+		getSnapshot: () => snapshot,
+		subscribe(listener) {
+			listeners.add(listener);
+			if (off === null) off = state.subscribe(sync);
+			return () => {
+				listeners.delete(listener);
+				if (listeners.size === 0 && off !== null) {
+					off();
+					off = null;
+				}
+			};
+		},
+	};
+	chromeStores.set(state, store);
+	return store;
+}
+
 export const TERM_TAB_ID = "dsh-plugin-kit/terminal";
 export const TERM_TAB_KIND = "kit-terminal";
 /** Kinds whose processes this plugin's hold set must keep alive. */
 const HELD_KINDS = [TERM_TAB_KIND, "terminal"];
+/** One derived store per raw terminal state, so React sees chrome only. */
+const chromeStores = new WeakMap();
 
 /** Tab definition: one instance per open, body kept while inactive. */
 export function terminalDefinition(t) {
@@ -92,7 +164,7 @@ export function installTerminalTab(ctx, t) {
 	};
 	const injectBody = (sessionId) => ({
 		view: (key) => viewFor(sessionId, key),
-		keyedHooks: { terminal: (key) => viewFor(sessionId, key).state },
+		keyedHooks: { terminal: (key) => chromeStore(viewFor(sessionId, key).state) },
 		...(theme === undefined ? {} : { hooks: { theme } }),
 	});
 

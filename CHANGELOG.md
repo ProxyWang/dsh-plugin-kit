@@ -1,5 +1,44 @@
 # Changelog
 
+## Unreleased — the terminal keeps up with long output
+
+- **The screen is a ring with stable row identities.** The old buffer used `Array.shift()` for every scrolled
+  line and grew an object graph without a byte budget; 20k retained rows made scroll cost linear, and a
+  200×50×1000 screen retained ~107 MiB. Rows now carry a monotonic `seq`, a full-screen scroll appends/evicts
+  one row, and a 10 MiB byte budget keeps the primary buffer bounded (1622 rows at 200 columns in the benchmark).
+- **Damage replaces `dirtyAll`.** Cell writes mark one row; a full-screen scroll records a scroll op instead of
+  invalidating every row. The painter rotates the existing row elements (`stats.movedRows`) and repaints only
+  the newly exposed rows, so `cat`/`yes` no longer rebuild the whole viewport.
+- **Width changes reflow.** `Buffer.resize()` used to truncate each row and pad the rest, permanently losing the
+  right-hand side when the sidebar moved. Logical lines are now rebuilt at the new width, wide glyphs stay
+  intact, the cursor is mapped through the rewrap, and trailing padding is not pushed into scrollback.
+- **Scrollback is readable while output continues.** `apply()` no longer forces `offset = 0` on every frame; the
+  viewport anchors to a row `seq`, so new output extends the offset instead of yanking the reader to the bottom.
+- **Reconnect is a clean baseline.** `screen.reset()` now clears a parser left mid-CSI/OSC/charset, so a snapshot
+  cannot be swallowed as payload; alternate-screen entry resets DECSTBM margins and origin instead of inheriting the
+  primary screen's. A shrink with full scrollback subtracts the evicted rows when restoring the cursor, and region
+  scrolls keep `seq` addressable after inserting a fresh row in the middle.
+- **Row identity is unique across both screens.** The alternate buffer starts in a disjoint seq namespace, and a
+  body mode listener clears selection when `?1049` switches screens; a stale primary selection cannot retarget an
+  alt row. Region scroll/IL/DL no longer rely on contiguous seq arithmetic.
+- **Search and a real scrollbar.** `⌘F` (`Ctrl+Shift+F` on Windows/Linux) opens an in-terminal literal search with
+  smart-case, all-match highlights, current-match emphasis and `Enter`/`Shift+Enter` navigation; the scrollbar
+  overlay is draggable and does not change the column count. OSC 8 links are underlined and open on
+  `Cmd/Ctrl+click` behind an http/https/mailto allowlist.
+- **Protocol fixes:** `?2026` synchronized output defers paint (with a 150 ms escape hatch), IRM (`CSI 4h/l`)
+  finally inserts, DECSCUSR keeps its steady/blink bit, `?1004` focus reports, `?1007` alternate scroll and
+  `?9` X10 mouse are tracked, and OSC 7/8 are parsed. ZWJ emoji, flags and skin-tone modifiers use grapheme
+  width; plain CJK still takes the fast path.
+- **Large paste no longer detaches the terminal.** Pastes are split into adaptive ~4 KiB chunks and paced so the Host's
+  unacknowledged-input window can drain; bracketed-paste markers stay outside the chunks. The old path sent one
+  write that the Host refused above 64 KiB, and a synchronous chunk loop could still exceed the cumulative budget.
+- **React sees chrome only.** `termtab.js` derives a store that omits `render`, so output frames do not re-render
+  the tab; hidden tabs parse but do not paint, and their damage collapses to one full repaint. The body consumes
+  raw frames directly and acknowledges after parsing.
+- **Tests and benchmark:** 50 new terminal checks (ring/damage/reflow, grapheme width, protocol modes, OSC 8/7,
+  chunked paste, search geometry, renderer scroll stats, body search/paste/focus/scroll-anchor/hidden-tab) plus
+  `scripts/bench-terminal.mjs` (`pnpm bench:terminal`) for the numbers in `docs/terminal-design.md`.
+
 ## Unreleased — the branch next to the workspace, live
 
 - **Fix: the chip never appeared.** The real cause was mundane: `src/client/index.js` registered the chip but never

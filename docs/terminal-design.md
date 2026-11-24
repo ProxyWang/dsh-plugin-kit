@@ -5,6 +5,7 @@
 > 参考实现：`herdrdev/herdr` 0.9.5，提交 `e8d7d9705a7a2c89cef4dd42079379f05685af87`（Apache-2.0）  
 > 参考代码位置：`/Users/proxy/orca/herdr`（GitHub：<https://github.com/herdrdev/herdr>）  
 > 方案范围：插件自带终端（`src/client/vt/` 与 `src/client/termtab.js`），不包含 DSH 自带终端、系统终端入口和浏览器工具。
+> 实现状态（2026-11-24）：P0 已落地；P1 的搜索、滚动条、OSC 8 链接、大粘贴分片已落地；`copy mode`、OSC 133、主题/无障碍和 P3 项仍在路线中。实现记录见文末 §13。
 
 ---
 
@@ -461,7 +462,7 @@ damage = {
 
 **粘贴与 OSC 52**：
 
-- 大粘贴按 **32 KiB** 分片写入，保持顺序；括号粘贴模式下，序列为 `ESC[200~` + chunks + `ESC[201~`，分片不能拆开标记。每片都是独立的 `write` 命令，受 Host 64 KiB 限制。
+- 大粘贴按 **Host `maxInputBytes` 自适应分片（默认约 4 KiB）** 并节流写入，保持顺序；括号粘贴模式下，序列为 `ESC[200~` + chunks + `ESC[201~`，分片不能拆开标记。每片都是独立的 `write` 命令，受 Host 64 KiB 预算限制；同步连发多片会撞上“未确认输入”上限，所以片间留出 ack 排空时间。
 - 粘贴前把 `\r\n` 归一为 `\r`；保留 `\n` 语义与末尾换行。
 - OSC 52 写剪贴板默认 **拒绝**（可配置为 ask / allow）；读取剪贴板默认拒绝。终端程序请求写系统剪贴板是敏感操作，不能默认放行。
 - 粘贴图片/文件（P3）：浏览器剪贴板 API 只能取文本；文件路径可走插件现有工作区能力，不在 P0 范围。
@@ -574,7 +575,7 @@ damage = {
 | 回滚操作 | O(1) 全屏滚动；10k 行滚动 10k 次 ≤ 20 ms | 基准脚本 |
 | 内存 | 保留行 ≤ 64 B/cell（目标），回滚 ≤ 10 MiB 默认 | `process.memoryUsage` / 浏览器 heap |
 | 隐藏页签 | 不产生 DOM 写入；CPU 仅解析 | 计数/基准 |
-| 大粘贴 | 1 MiB 成功，分片 ≤ 32 KiB | 单测 + 真实终端 |
+| 大粘贴 | 1 MiB 成功；分片按 Host 预算自适应并节流 | 单测 + 真实终端 |
 
 ### 7.2 优化项与预期收益
 
@@ -588,7 +589,7 @@ damage = {
 | 解析快路径 | ASCII run、charCodeAt 循环、宽度预计算、避免 `for..of` | 纯文本解析目标 2–3× |
 | 属性/单元格复用 | 属性 interning、淘汰行回收 cell 对象（P2） | 降低 GC 与每 cell 内存 |
 | 字节预算 | 按估算字节淘汰 | 500×200 不再无界增长 |
-| 大粘贴分片 | 32 KiB chunk + 括号标记 | 消除 `inputFull` 断流 |
+| 大粘贴分片 | 自适应 chunk + 片间节流 + 括号标记 | 消除 `inputFull` 断流 |
 | 帧合并/同步输出 | rAF + `?2026` | 无半帧、无光标抖动 |
 | reflow 防抖 | 80 ms + 最后一次必做 | 拖拽侧栏不卡；结束时内容正确 |
 
@@ -711,7 +712,7 @@ renderer.stats;             // { paintedRows, movedRows, ms }
 3. `body.js`：直接订阅 `view.state`，移除每帧 React render；可见性门控；快照清理选择/搜索/锚点。
 4. 滚动锚点：输出不再重置 offset；底部跟随/阅读模式。
 5. 宽度 reflow + 高度调整；alt 不 reflow；防抖。
-6. 大粘贴 32 KiB 分片；`inputFull` 给出可恢复提示。
+6. 大粘贴按 Host 预算自适应分片并节流；`inputFull` 给出可恢复提示。
 7. 协议修正：IRM、DECSCUSR 闪烁、`?2026`、`?1004` 基础、OSC 8 解析（先存不渲染）。
 8. 重连按钮；序列缺口/失败不再只能关页签。
 
@@ -783,7 +784,7 @@ renderer.stats;             // { paintedRows, movedRows, ms }
 - damage：一次滚动只产生一个 scroll；重叠 scroll 降级 full；rows 只包含真正变化的 seq。
 - 选择：正向/反向、宽字符、wrapped、淘汰钳制、输出中存活。
 - 搜索：smart-case、跨行、宽字符列映射、当前匹配重校验。
-- 粘贴：32 KiB 分片、括号标记、CRLF 归一、1 MiB。
+- 粘贴：按 Host 预算自适应分片、片间节流、括号标记、CRLF 归一、1 MiB。
 - 链接：OSC 8 开始/结束、scheme 白名单、跨格命中。
 - fuzz：随机字节流不抛异常、光标不越界、单元格不出现 NaN/undefined 文本。
 
@@ -898,4 +899,40 @@ const chunk = Array.from({ length: 200 }, (_, i) =>
 
 ---
 
-**实施建议**：先做 P0 的 1–4 项（环形缓冲、damage、滚动锚点、React 解耦），它们同时改善正确性和性能，且不依赖新 UI；P1 再做搜索/滚动条，P2 做主题/无障碍/shell 集成。每个阶段完成后用同一套 bench 和 fixture 回归，避免“功能加了、终端变卡了”。
+## 13. 实施记录（2026-11-24）
+
+本轮按 P0 + P1 的核心项改造，未修改 DSH 宿主契约：
+
+| 项 | 状态 | 落点 |
+| --- | --- | --- |
+| 环形回滚 + 稳定 `seq` + 字节预算 | 完成 | `vt/screen.js` 的 `Buffer` |
+| damage（rows / scrolls / bell / title）与滚动位移 | 完成 | `vt/screen.js`、`vt/render.js` |
+| 宽度 reflow、宽字符、光标映射、尾部 padding 修剪 | 完成 | `vt/screen.js` |
+| 快照重置解析器状态、备用屏边距/origin、双屏 seq 命名空间 | 完成 | `vt/screen.js`、`vt/body.js` |
+| 区域滚动后的 seq 可寻址、回滚收缩时的光标校正 | 完成 | `vt/screen.js` |
+| 行 HTML 的前导/内部空白列 | 完成 | `vt/render.js` |
+| 滚动锚点、输出不踢回底部 | 完成 | `vt/body.js` |
+| React 只订阅 chrome、body 直接消费帧、隐藏页签不绘制 | 完成 | `vt/body.js`、`termtab.js` |
+| 自适应大粘贴分片、片间节流与括号标记 | 完成 | `vt/keys.js`、`vt/body.js` |
+| IRM、DECSCUSR、`?2026`、`?1004`、`?1007`、`?9`、OSC 7/8 | 完成 | `vt/screen.js` |
+| 字素簇宽度（ZWJ / 旗帜 / 肤色修饰符） | 完成 | `vt/width.js`、`vt/screen.js` |
+| 搜索（smart-case、全部高亮、循环、滚动定位） | 完成 | `vt/search.js`、`vt/body.js` |
+| 滚动条 overlay + 拖拽 | 完成 | `vt/render.js`、`vt/body.js`、`styles.js` |
+| OSC 8 链接 hover/点击 + scheme 白名单 | 完成 | `vt/body.js` |
+| copy mode / OSC 133 / 通知铃铛 / 主题调色板 / 无障碍 / 分屏 / 历史持久化 | 未开始 | 路线 P1–P3 |
+
+实施后基线（M1、Node 20.20.1、`node --expose-gc scripts/bench-terminal.mjs`）：
+
+| 场景 | 改造前 | 改造后 |
+| --- | --- | --- |
+| 8 MiB 解析，1000 行回滚 | 21.8 MiB/s | 18–21 MiB/s |
+| 8 MiB 解析，5000 行回滚 | 15.1 MiB/s | 15–17.5 MiB/s（10 MiB 字节预算生效） |
+| 20 万行滚动，20000 行回滚 | 4269 ms | 约 0.3 s（10 万行）/ 约 0.6 s（20 万行） |
+| 1050 行 × 200 列保留 | RSS 32.5 → 107.2 MiB | RSS 约 100–110 MiB，回滚字节 6.8 MiB |
+| 全屏滚动绘制 | 整屏重写 | 只移动行元素 + 画新行；`stats.movedRows` 可断言 |
+
+解析吞吐没有因为新增 damage/reflow 而下降；收益集中在滚动、内存上限、reflow 正确性和交互层。剩下的主要性能项是解析快路径/属性 interning、时间片 backlog 和 500×200 的帧预算验证，放在 P2。
+
+本轮测试：`npm test` 全绿；`test-client.mjs` 增加 50 项终端检查（环形/伤害/reflow/字素/协议/搜索/滚动渲染/body 搜索与滚动锚点/隐藏页签/大粘贴/fuzz），并新增 `scripts/bench-terminal.mjs`。
+
+**下一步建议**：P1 剩余 copy mode 与通知铃铛；P2 优先做主题调色板、无障碍、解析时间片与 500×200 帧预算验证；P3 再评估分屏和历史持久化。每个阶段完成后用同一套 bench 和 fixture 回归，避免“功能加了、终端变卡了”。

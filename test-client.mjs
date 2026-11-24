@@ -4592,9 +4592,10 @@ check("docAction reloads clean drafts, flags dirty ones, ignores others", docAct
 // --- Built-in terminal: emulator, key encoding, renderer and tab registration ----------
 {
 	const { createScreen } = await import("./src/client/vt/screen.js");
-	const { cellWidth } = await import("./src/client/vt/width.js");
-	const { keyToBytes, pasteToBytes } = await import("./src/client/vt/keys.js");
-	const { rowHtml, colorCss, palette256 } = await import("./src/client/vt/render.js");
+	const { cellWidth, graphemeWidth } = await import("./src/client/vt/width.js");
+	const { keyToBytes, pasteToBytes, pasteChunks } = await import("./src/client/vt/keys.js");
+	const { rowHtml, colorCss, palette256, createRenderer } = await import("./src/client/vt/render.js");
+	const { searchScreen, findInLine, offsetForRow } = await import("./src/client/vt/search.js");
 	const { applyRenderFrame } = await import("./src/client/vt/body.js");
 	const { terminalDefinition, canInstallTerminalTab, installTerminalTab, TERM_TAB_KIND, TERM_TAB_ID } = await import("./src/client/termtab.js");
 	const vtRows = (screen) => screen.viewport().map((line) => line.cells.map((cell) => (cell ? cell.c : " ")).join("").replace(/\s+$/u, ""));
@@ -4656,6 +4657,23 @@ check("docAction reloads clean drafts, flags dirty ones, ignores others", docAct
 		s.write("\x1b[?1049l");
 		check("leaving the alternate screen restores the primary", vtRows(s)[0] === "primary" && s.alt === false, vtRows(s)[0]);
 	}
+	{ // seq namespaces, alternate margins and region-scroll identity
+		const s = vtScreen({ cols: 10, rows: 4, scrollback: 4 });
+		s.write("primary");
+		const primarySeq = s.lineSeqAt(0);
+		s.write("\x1b[2;3r\x1b[?1049h");
+		s.write(Array.from({ length: 6 }, () => "x").join("\r\n"));
+		const altSeq = s.lineSeqAt(0);
+		check("alternate rows use a disjoint seq namespace", altSeq !== primarySeq && altSeq >= 1_000_000_000, [primarySeq, altSeq]);
+		check("alternate screen does not inherit DECSTBM margins", vtRows(s).every((row) => row === "x") || s.rows < 2, vtRows(s));
+		s.write("\x1b[?1049l");
+		check("leaving alternate restores the primary row identity", s.lineSeqAt(0) === primarySeq, [s.lineSeqAt(0), primarySeq]);
+		const region = vtScreen({ cols: 10, rows: 4 });
+		region.write("a\r\nb\r\nc\r\nd");
+		region.write("\x1b[2;3r\x1b[3;1H\n");
+		const seqs = Array.from({ length: region.bufferRows }, (_, i) => region.lineSeqAt(i));
+		check("region-scroll rows remain addressable by seq", seqs.every((seq) => region.indexOfSeq(seq) >= 0), { seqs, mapped: seqs.map((seq) => region.indexOfSeq(seq)) });
+	}
 	{ // wide glyphs and combining marks
 		const s = vtScreen({ cols: 10, rows: 2 });
 		s.write("中a");
@@ -4706,6 +4724,9 @@ check("docAction reloads clean drafts, flags dirty ones, ignores others", docAct
 		const inverse = rowHtml({ cells: [{ c: "x", fg: 2, bg: 4, fl: 32, w: 1 }] }, { fg: "#fff", bg: "#000" });
 		check("inverse video swaps foreground and background", inverse.includes("background:#00cd00") && inverse.includes("color:#0000ee"), inverse);
 		check("row HTML escapes markup characters", rowHtml({ cells: [{ c: "<", fg: -1, bg: -1, fl: 0, w: 1 }] }, { fg: "#fff", bg: "#000" }).includes("&lt;"), null);
+		const spaced = new Array(8).fill(undefined);
+		spaced[5] = { c: "f", fg: -1, bg: -1, fl: 0, w: 1 };
+		check("leading and interior blanks keep their columns", rowHtml({ cells: spaced }, { fg: "#fff", bg: "#000" }).includes(">     f<"), rowHtml({ cells: spaced }, { fg: "#fff", bg: "#000" }));
 		check("palette has 256 entries with the ANSI base", palette256().length === 256 && palette256()[1] === "#cd0000", palette256().length);
 		check("colours resolve palette, truecolor and defaults", colorCss(196, "#fff") === "#ff0000" && colorCss((1 << 24) | 0x102030, "#fff") === "#102030" && colorCss(-1, "#abcdef") === "#abcdef", [colorCss(196, "#fff"), colorCss(-1, "#abc")]);
 	}
@@ -4721,6 +4742,151 @@ check("docAction reloads clean drafts, flags dirty ones, ignores others", docAct
 		const resized = vtScreen({ cols: 20, rows: 4 });
 		applyRenderFrame(resized, { revision: 1, frame: { type: "snapshot", info: { cols: 10, rows: 2 }, screen: "x" } });
 		check("a snapshot adopts the Host grid size", resized.cols === 10 && resized.rows === 2, [resized.cols, resized.rows]);
+		const stalled = vtScreen({ cols: 20, rows: 3 });
+		stalled.write("\x1b]0;unfinished-title");
+		stalled.write("\x1b(0");
+		applyRenderFrame(stalled, { revision: 1, frame: { type: "snapshot", info: { cols: 20, rows: 3 }, screen: "hello" } });
+		check("a snapshot clears a parser state left mid-sequence", vtRows(stalled)[0] === "hello", vtRows(stalled));
+	}
+
+	{ // grapheme width: clusters, flags, emoji modifiers
+		check("a CJK cluster is two cells and a combining sequence is one", graphemeWidth("中") === 2 && graphemeWidth("e\u0301") === 1, [graphemeWidth("中"), graphemeWidth("e\u0301")]);
+		check("a ZWJ emoji and a flag stay two cells", graphemeWidth("👨‍👩‍👧") === 2 && graphemeWidth("🇨🇳") === 2, [graphemeWidth("👨‍👩‍👧"), graphemeWidth("🇨🇳")]);
+		check("a skin-tone modifier does not widen its base", graphemeWidth("👍🏽") === 2, graphemeWidth("👍🏽"));
+	}
+	{ // damage: cell writes are row-scoped; a full-screen scroll is a scroll, not a repaint
+		const s = vtScreen({ cols: 10, rows: 2, scrollback: 10 });
+		s.consumeDamage();
+		s.write("a");
+		const one = s.consumeDamage();
+		check("one write reports just its row", one.full === false && one.rows.size === 1 && one.scrolls.length === 0, [...one.rows]);
+		s.write("\r\nb\r\nc");
+		const scrolled = s.consumeDamage();
+		check("a full-screen scroll is recorded as a scroll", scrolled.scrolls.length >= 1 && scrolled.scrolls[0].whole === true, scrolled);
+	}
+	{ // line identity survives ring eviction
+		const s = vtScreen({ cols: 5, rows: 2, scrollback: 2 });
+		for (let i = 0; i < 8; i++) s.write(`${i}\r\n`);
+		check("only the requested scrollback rows are retained", s.bufferRows === 4 && s.scrollbackRows === 2, [s.bufferRows, s.scrollbackRows]);
+		const first = s.firstSeq;
+		const third = s.lineSeqAt(2);
+		check("rows carry stable, contiguous identities", third === first + 2 && s.indexOfSeq(third) === 2 && s.indexOfSeq(first - 1) === -1, [first, third, s.indexOfSeq(third)]);
+	}
+	{ // width reflow keeps logical lines and the cursor
+		const s = vtScreen({ cols: 20, rows: 3, scrollback: 10 });
+		s.write("0123456789abcdefghijKLMNOP");
+		s.resize(10, 3);
+		const narrow = vtRows(s);
+		check("a narrow reflow splits at the new width", narrow.join("|") === "0123456789|abcdefghij|KLMNOP", narrow);
+		s.resize(20, 3);
+		const back = vtRows(s);
+		check("a width round trip restores the logical line", back[0] === "0123456789abcdefghij" && back[1] === "KLMNOP", back);
+	}
+	{ // a shrink with full scrollback keeps the cursor on its original row
+		const s = vtScreen({ cols: 10, rows: 5, scrollback: 5 });
+		s.write(Array.from({ length: 12 }, (_, i) => `l${i}`).join("\r\n"));
+		const before = s.viewport()[s.cursor.y].cells.map((cell) => (cell ? cell.c : " ")).join("").trimEnd();
+		s.resize(10, 4);
+		const after = s.viewport()[s.cursor.y].cells.map((cell) => (cell ? cell.c : " ")).join("").trimEnd();
+		check("shrinking the height does not drift the cursor", before === after && after === "l11", { before, after, cursor: s.cursor });
+	}
+	{ // height resize and alternate-screen resize keep their own anchors
+		const s = vtScreen({ cols: 10, rows: 2, scrollback: 3 });
+		s.write("one\r\ntwo\r\nthree");
+		s.resize(10, 4);
+		check("growing the height keeps the bottom content", vtRows(s).slice(-1)[0] === "" && s.cursor.y === 2, [vtRows(s), s.cursor]);
+		s.resize(10, 1);
+		check("shrinking the height clamps the cursor", s.cursor.y >= 0 && s.cursor.y < s.rows, s.cursor);
+		const alt = vtScreen({ cols: 10, rows: 3, scrollback: 2 });
+		alt.write("primary");
+		alt.write("\x1b[?1049hALT");
+		alt.resize(5, 2);
+		alt.write("\x1b[?1049l");
+		check("the primary screen survives a resize taken in alternate mode", vtRows(alt).join("|").includes("prima") && alt.alt === false, vtRows(alt));
+	}
+	{ // deterministic fuzz: no throws, no NaN, cursor always inside the grid
+		let seed = 0x5eed;
+		const random = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 2 ** 32; };
+		let ok = true;
+		try {
+			for (let run = 0; run < 12 && ok; run++) {
+				const screen = vtScreen({ cols: 2 + Math.floor(random() * 20), rows: 1 + Math.floor(random() * 8), scrollback: Math.floor(random() * 6) });
+				for (let step = 0; step < 120; step++) {
+					const kind = Math.floor(random() * 8);
+					if (kind < 4) screen.write("x".repeat(Math.floor(random() * 12)));
+					else if (kind < 5) screen.write(`\x1b[${1 + Math.floor(random() * 20)};${1 + Math.floor(random() * 20)}H@`);
+					else if (kind < 6) screen.write("\x1b[?1049h");
+					else if (kind < 7) screen.write("\x1b[?1049l");
+					else screen.write("\x1b[2J\x1b[H");
+					if (step % 23 === 0) screen.resize(2 + Math.floor(random() * 20), 1 + Math.floor(random() * 8));
+					if (!Number.isFinite(screen.cursor.x) || !Number.isFinite(screen.cursor.y) || screen.cursor.x < 0 || screen.cursor.x > screen.cols || screen.cursor.y < 0 || screen.cursor.y > screen.rows) ok = false;
+					screen.consumeDamage();
+				}
+			}
+		} catch {
+			ok = false;
+		}
+		check("random resize/alt-screen streams keep the grid invariants", ok, null);
+	}
+	{ // IRM, DECSCUSR and the newer private modes
+		const s = vtScreen({ cols: 10, rows: 2 });
+		s.write("abc\x1b[1;2H\x1b[4hX");
+		check("IRM inserts instead of overwriting", vtRows(s)[0] === "aXbc", vtRows(s)[0]);
+		const cursor = vtScreen({ cols: 10, rows: 2 });
+		cursor.write("\x1b[2 q");
+		check("DECSCUSR 2 is a steady block", cursor.cursor.style === "block" && cursor.cursor.blink === false, cursor.cursor);
+		cursor.write("\x1b[5 q");
+		check("DECSCUSR 5 is a blinking bar", cursor.cursor.style === "bar" && cursor.cursor.blink === true, cursor.cursor);
+		const modes = vtScreen({ cols: 10, rows: 2 });
+		modes.write("\x1b[?2026h\x1b[?1004h\x1b[?1007h");
+		check("sync output, focus reporting and alternate scroll are tracked", modes.modes.syncOutput === true && modes.modes.focus === true && modes.modes.altScroll === true, modes.modes);
+	}
+	{ // OSC 8 links and OSC 7 cwd
+		const s = vtScreen({ cols: 30, rows: 2 });
+		s.write("\x1b]8;;https://example.test/x\x07AB\x1b]8;;\x07C\x1b]7;file:///tmp/work\x07");
+		const cells = s.viewport()[0].cells;
+		check("OSC 8 tags only the linked cells", cells[0].link === "https://example.test/x" && cells[1].link === "https://example.test/x" && cells[2].link === null, cells.slice(0, 3));
+		check("OSC 7 records the cwd", s.cwd === "/tmp/work", s.cwd);
+	}
+	{ // chunked paste
+		const chunks = pasteChunks("a".repeat(70000), true);
+		check("a large bracketed paste becomes bounded chunks", chunks.length === 3 && chunks[0].startsWith("\x1b[200~") && chunks.at(-1).endsWith("\x1b[201~"), chunks.map((chunk) => chunk.length));
+		check("non-bracketed chunks preserve the text", pasteChunks("a\nb", false).join("") === "a\rb", pasteChunks("a\nb", false));
+	}
+	{ // literal search and scroll targeting
+		const row = { cells: [..."git commit --amend"].map((ch) => ({ c: ch, fg: -1, bg: -1, fl: 0, w: 1 })) };
+		const hits = findInLine(row, 7, "commit");
+		check("search reports cell columns and stable row identity", hits.length === 1 && hits[0].seq === 7 && hits[0].col === 4 && hits[0].width === 6, hits);
+		check("smart-case is literal unless the query has uppercase", findInLine(row, 1, "COMMIT").length === 0 && findInLine(row, 1, "Git").length === 0 && findInLine(row, 1, "commit").length === 1, null);
+		const s = vtScreen({ cols: 20, rows: 2, scrollback: 20 });
+		s.write(Array.from({ length: 10 }, (_, i) => `line ${i}`).join("\r\n"));
+		const matches = searchScreen(s, "line 8");
+		const offset = matches.length === 1 ? offsetForRow(s, s.indexOfSeq(matches[0].seq), 1) : -1;
+		check("search reaches scrollback and yields a viewport offset", matches.length === 1 && offset >= 0 && offset <= s.scrollbackRows, { matches, offset });
+	}
+	{ // renderer: a scroll moves rows instead of rebuilding the viewport
+		const shimDoc = {
+			createElement(tag) {
+				const element = {
+					tagName: tag, children: [], style: {}, className: "", textContent: "", innerHTML: "",
+					appendChild(child) { this.children.push(child); return child; },
+					remove() {},
+					getBoundingClientRect() { return { width: 80, height: 16, top: 0, left: 0 }; },
+				};
+				return element;
+			},
+			defaultView: { getComputedStyle: () => ({ lineHeight: "16" }) },
+		};
+		const container = shimDoc.createElement("div");
+		const screen = vtScreen({ cols: 10, rows: 3, scrollback: 20 });
+		const renderer = createRenderer({ container, doc: shimDoc, theme: () => ({ fg: "#fff", bg: "#000" }), font: () => ({ fontFamily: "monospace", fontSize: 13 }) });
+		renderer.measure();
+		screen.write("a\r\nb\r\nc");
+		renderer.paint(screen, { damage: screen.consumeDamage() });
+		screen.write("\r\nd");
+		const stats = renderer.paint(screen, { damage: screen.consumeDamage() });
+		check("a one-line scroll reports moved rows and few repaints", stats.movedRows === 1 && stats.paintedRows <= 2, stats);
+		renderer.dispose();
 	}
 
 	{ // tab registration and process lifecycle
@@ -4771,6 +4937,32 @@ check("docAction reloads clean drafts, flags dirty ones, ignores others", docAct
 		check("the body exposes the terminal state as a keyed hook", typeof injected.keyedHooks.terminal("dock-1") === "object", Object.keys(injected));
 		closeHandlers.get(TERM_TAB_KIND)("s1", { id: "dock-1", contentId: "c1" });
 		check("closing the tab closes the Host terminal", opened.closed === "s1/dock-1", opened);
+
+		// The React hook sees connection chrome, never the render frame: otherwise
+		// a busy shell would re-render the tab on every output chunk.
+		{
+			const raw = { phase: "connected", writable: true, info: { cols: 80, rows: 24, state: "running" }, environment: { scrollback: 100 }, render: { revision: 1 } };
+			const rawListeners = new Set();
+			const rawStore = {
+				getSnapshot: () => raw,
+				subscribe(listener) { rawListeners.add(listener); return () => rawListeners.delete(listener); },
+			};
+			const previousView = ctx.webTerminals.view;
+			ctx.webTerminals.view = () => ({ state: rawStore, mount() {}, write() {}, resize() {}, acknowledge() {}, close() {} });
+			const chrome = injected.keyedHooks.terminal("dock-1");
+			let notifications = 0;
+			const off = chrome.subscribe(() => { notifications++; });
+			check("the keyed hook exposes chrome without render frames", chrome.getSnapshot().render === undefined && chrome.getSnapshot().phase === "connected", chrome.getSnapshot());
+			raw.render = { revision: 2 };
+			for (const listener of rawListeners) listener();
+			check("a render-only update does not notify React", notifications === 0, notifications);
+			raw.writable = false;
+			for (const listener of rawListeners) listener();
+			check("a chrome update notifies React once", notifications === 1 && chrome.getSnapshot().writable === false, notifications);
+			off();
+			check("the derived store releases its raw subscription", rawListeners.size === 0, rawListeners.size);
+			ctx.webTerminals.view = previousView;
+		}
 		tabListeners.forEach((listener) => listener());
 		check("hold changes are recomputed from the open tabs", holds.length >= 2, holds.length);
 		dispose();
@@ -4907,6 +5099,7 @@ check("docAction reloads clean drafts, flags dirty ones, ignores others", docAct
 		const { TerminalBody } = await import("./src/client/vt/body.js");
 		const written = [];
 		const acks = [];
+		let tabVisible = true;
 		const state = { phase: "connected", writable: true, info: { cols: 80, rows: 24, state: "running" }, environment: { scrollback: 100 }, render: undefined };
 		const model = {
 			acknowledge(revision) { acks.push(revision); },
@@ -4915,7 +5108,7 @@ check("docAction reloads clean drafts, flags dirty ones, ignores others", docAct
 			mount() { return () => {}; },
 		};
 		const draw = createHookRenderer(TerminalBody, {
-			useTabInfo: () => ({ tab: { id: "t1", visible: true } }),
+			useTabInfo: () => ({ tab: { id: "t1", visible: tabVisible } }),
 			useTerminal: () => state,
 			useTheme: (select) => select(null),
 			view: () => model,
@@ -5036,8 +5229,184 @@ check("docAction reloads clean drafts, flags dirty ones, ignores others", docAct
 			Object.defineProperty(globalThis, "navigator", { value: savedNavigator, configurable: true, writable: true });
 		}
 
+		// A large paste is chunked so one Host write limit cannot detach the terminal.
+		{
+			const before = written.length;
+			const pasted = "x".repeat(100000);
+			input.dispatch("paste", { clipboardData: { getData: () => pasted }, preventDefault() {} });
+			await new Promise((resolve) => setTimeout(resolve, 350));
+			const pieces = written.slice(before).map(([data]) => data);
+			check("a 100 KiB paste is paced into bounded chunks", pieces.length >= 20 && pieces.every((piece) => piece.length <= 4096) && pieces.join("") === pasted, pieces.map((piece) => piece.length));
+		}
+
+		// Focus reporting is opt-in and reaches the program that asked for it.
+		{
+			const before = written.length;
+			state.render = { revision: 30, frame: { type: "output", data: "\x1b[?1004h" } };
+			tree = draw();
+			draw.flushEffects();
+			for (const fn of frames.splice(0)) fn();
+			input.dispatch("focus", {});
+			input.dispatch("blur", {});
+			const reports = written.slice(before).map(([data]) => data);
+			check("focus/blur report only after ?1004h", reports.includes("\x1b[I") && reports.includes("\x1b[O"), reports);
+		}
+
+		// Search finds scrollback text, highlights it and closes with Escape.
+		{
+			state.render = { revision: 31, frame: { type: "output", data: "\r\nneedle-in-history" } };
+			tree = draw();
+			draw.flushEffects();
+			for (const fn of frames.splice(0)) fn();
+			input.dispatch("keydown", { key: "f", metaKey: true, preventDefault() {} });
+			tree = draw();
+			draw.flushEffects();
+			const finder = (() => {
+				const flat = (node) => {
+					if (!node || typeof node !== "object") return [];
+					if (Array.isArray(node)) return node.flatMap(flat);
+					return [node, ...(node.children ?? []).flatMap(flat)];
+				};
+				return flat(tree).find((node) => node.props?.className === "ce-input ce-term-find-input");
+			})();
+			check("the find shortcut opens a search field", Boolean(finder), null);
+			finder?.props?.onChange({ target: { value: "needle" } });
+			tree = draw();
+			draw.flushEffects();
+			for (const fn of frames.splice(0)) fn();
+			const searchLayer = host.children.find((child) => child.className === "ce-term-search-layer");
+			check("search highlights matches in the terminal layer", Boolean(searchLayer) && searchLayer.children.length >= 1, searchLayer?.children?.length);
+			finder?.props?.onKeyDown({ key: "Escape", preventDefault() {} });
+			tree = draw();
+			draw.flushEffects();
+			const flat = (node) => {
+				if (!node || typeof node !== "object") return [];
+				if (Array.isArray(node)) return node.flatMap(flat);
+				return [node, ...(node.children ?? []).flatMap(flat)];
+			};
+			check("Escape closes the search field", !flat(tree).some((node) => node.props?.className === "ce-input ce-term-find-input"), null);
+		}
+
+		// Output while the reader is scrolled back must not yank the viewport.
+		{
+			state.render = { revision: 32, frame: { type: "output", data: "\r\n" + Array.from({ length: 40 }, (_, i) => `anchor${i}`).join("\r\n") } };
+			tree = draw();
+			draw.flushEffects();
+			for (const fn of frames.splice(0)) fn();
+			input.dispatch("keydown", { key: "PageUp", shiftKey: true, preventDefault() {} });
+			for (const fn of frames.splice(0)) fn();
+			const top = painted()[0];
+			state.render = { revision: 33, frame: { type: "output", data: "\r\nlate-line" } };
+			tree = draw();
+			draw.flushEffects();
+			for (const fn of frames.splice(0)) fn();
+			check("new output keeps the scrolled-back top row", top !== undefined && painted()[0] === top, { top, after: painted()[0] });
+		}
+
+		check("a scrollbar appears once history exists", host.children.some((child) => child.className === "ce-term-scrollbar"), host.children.map((child) => child.className));
+
+		// Hidden tabs parse but do not paint; showing them catches up.
+		{
+			input.dispatch("keydown", { key: "End", ctrlKey: true, preventDefault() {} });
+			for (const fn of frames.splice(0)) fn();
+			tabVisible = false;
+			tree = draw();
+			draw.flushEffects();
+			const hiddenBefore = painted().join("\n");
+			state.render = { revision: 40, frame: { type: "output", data: "hidden-line" } };
+			tree = draw();
+			draw.flushEffects();
+			for (const fn of frames.splice(0)) fn();
+			check("a hidden terminal does not paint", painted().join("\n") === hiddenBefore && !painted().join("\n").includes("hidden-line"), painted().slice(0, 2));
+			tabVisible = true;
+			tree = draw();
+			draw.flushEffects();
+			for (const fn of frames.splice(0)) fn();
+			check("showing a hidden terminal paints the pending output", painted().join("\n").includes("hidden-line"), painted().slice(0, 2));
+		}
+
+		// A failed attachment offers a reconnect path instead of forcing a new tab.
+		{
+			let reconnects = 0;
+			model.connect = () => { reconnects++; };
+			state.phase = "failed";
+			state.error = "attachment ended";
+			tree = draw();
+			draw.flushEffects();
+			const flat = (node) => {
+				if (!node || typeof node !== "object") return [];
+				if (Array.isArray(node)) return node.flatMap(flat);
+				return [node, ...(node.children ?? []).flatMap(flat)];
+			};
+			const button = flat(tree).find((node) => node.props?.className === "ce-term-reconnect");
+			button?.props?.onClick();
+			check("a failed terminal offers reconnect", Boolean(button) && reconnects === 1, { button: Boolean(button), reconnects });
+			state.phase = "connected";
+			state.error = undefined;
+			tree = draw();
+			draw.flushEffects();
+		}
+
+		// Production composition: the body subscribes to the raw store itself, so
+		// frames arrive even though the React-facing state has no `render`.
+		{
+			const rawListeners = new Set();
+			let rawState = { phase: "connected", writable: true, info: { cols: 20, rows: 4 }, environment: { scrollback: 100 } };
+			const rawStore = {
+				getSnapshot: () => rawState,
+				subscribe(listener) { rawListeners.add(listener); return () => rawListeners.delete(listener); },
+			};
+			const directAcks = [];
+			const directModel = {
+				state: rawStore,
+				acknowledge(revision) { directAcks.push(revision); },
+				resize() {},
+				write() {},
+				mount() { return () => {}; },
+			};
+			const directDraw = createHookRenderer(TerminalBody, {
+				useTabInfo: () => ({ tab: { id: "direct", visible: true } }),
+				useTerminal: () => rawState,
+				useTheme: (select) => select(null),
+				view: () => directModel,
+				t: (key) => key,
+			}, { effects: true });
+			let directTree = directDraw();
+			const directHost = new ShimEl("div");
+			findHost(directTree).props.ref.current = directHost;
+			directDraw.flushEffects();
+			rawState = { ...rawState, render: { revision: 5, frame: { type: "output", data: "direct-frame" } } };
+			for (const listener of rawListeners) listener();
+			for (const fn of frames.splice(0)) fn();
+			const directRows = directHost.children.find((child) => child.className === "ce-term-rows");
+			check("the body consumes raw frames without a React render", (directRows?.children ?? []).some((row) => row.innerHTML.includes("direct-frame")) && directAcks.at(-1) === 5, { directAcks, rows: (directRows?.children ?? []).length });
+			rawState = { ...rawState, render: { revision: 5, frame: { type: "snapshot", info: { cols: 20, rows: 4 }, screen: "should-not-replay" } } };
+			for (const listener of rawListeners) listener();
+			for (const fn of frames.splice(0)) fn();
+			check("a re-delivered revision cannot replay a snapshot", (directRows?.children ?? []).some((row) => row.innerHTML.includes("direct-frame")) && !(directRows?.children ?? []).some((row) => row.innerHTML.includes("should-not-replay")), null);
+			// Simulate the Host's unacknowledged-input window: a synchronous
+			// chunk loop would exceed 64 KiB and detach; paced writes must not.
+			let pendingBytes = 0;
+			let maxPending = 0;
+			let overflow = false;
+			directModel.write = (data) => {
+				const bytes = Buffer.byteLength(String(data), "utf8");
+				pendingBytes += bytes;
+				maxPending = Math.max(maxPending, pendingBytes);
+				if (pendingBytes > 64 * 1024) overflow = true;
+				setTimeout(() => { pendingBytes -= bytes; }, 2);
+			};
+			const directInput = directHost.children.find((child) => child.className === "ce-term-input");
+			directInput.dispatch("paste", { clipboardData: { getData: () => "x".repeat(200000) }, preventDefault() {} });
+			await new Promise((resolve) => setTimeout(resolve, 700));
+			check("a paced paste stays inside the Host input window", !overflow && maxPending <= 64 * 1024, { maxPending, overflow });
+			directDraw.unmount();
+			check("the raw-store body releases its subscription", rawListeners.size === 0, rawListeners.size);
+		}
+
 		draw.unmount();
 		check("unmount removes every engine element", host.children.length === 0, host.children.length);
+
 	} finally {
 		Object.assign(globalThis, bodyGlobals);
 	}

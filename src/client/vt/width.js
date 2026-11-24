@@ -98,6 +98,7 @@ const ZERO = [
 	0x2028, 0x202e, // line/paragraph separators, bidi controls
 	0x20d0, 0x20f0, // combining marks for symbols
 	0xfe00, 0xfe0f, // variation selectors
+	0x1f3fb, 0x1f3ff, // emoji skin-tone modifiers
 	0xfe20, 0xfe2f, // combining half marks
 	0xfeff, 0xfeff, // zero width no-break space
 	0xe0100, 0xe01ef, // variation selectors supplement
@@ -133,4 +134,33 @@ export function cellWidth(code) {
 	if (inRanges(code, ZERO)) return 0;
 	if (inRanges(code, WIDE)) return 2;
 	return 1;
+}
+
+/** Regional-indicator code points form one two-cell flag when paired. */
+function isRegionalIndicator(code) {
+	return code >= 0x1f1e6 && code <= 0x1f1ff;
+}
+
+/**
+ * Cells one grapheme cluster occupies.
+ *
+ * A wide base wins over everything else; a ZWJ sequence with two emoji is one
+ * two-cell glyph, not two separate glyphs. A pair of regional indicators is a
+ * flag and also occupies two cells, even though each half is one cell alone.
+ *
+ * @param text - one user-perceived character (a grapheme cluster).
+ * @returns 0 for a lone combining mark, 2 for a wide glyph or flag, 1 otherwise.
+ */
+export function graphemeWidth(text) {
+	if (typeof text !== "string" || text === "") return 0;
+	const codes = Array.from(text, (char) => char.codePointAt(0));
+	if (codes.length === 2 && isRegionalIndicator(codes[0]) && isRegionalIndicator(codes[1])) return 2;
+	let width = 0;
+	for (const code of codes) {
+		if (code === undefined) continue;
+		const cells = cellWidth(code);
+		if (cells === 2) return 2;
+		if (cells === 1) width = 1;
+	}
+	return width;
 }

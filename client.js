@@ -209,6 +209,12 @@ var zh = {
   "terminal.fail.noSession": "没有当前会话，无法打开终端",
   "terminal.fail.unavailable": "当前环境无法打开系统终端",
   "terminal.fail.failed": "打开系统终端失败",
+  "terminal.searchPlaceholder": "在终端中查找",
+  "terminal.searchNone": "无匹配",
+  "terminal.searchPrevious": "上一个匹配",
+  "terminal.searchNext": "下一个匹配",
+  "terminal.searchClose": "关闭查找",
+  "terminal.reconnect": "重新连接",
   "toolbar.files": "资源管理器",
   "toolbar.changes": "变更",
   refresh: "刷新",
@@ -1034,6 +1040,12 @@ var en = {
   "terminal.fail.noSession": "No session is on screen to open a terminal",
   "terminal.fail.unavailable": "This environment cannot open a system terminal",
   "terminal.fail.failed": "Could not open the system terminal",
+  "terminal.searchPlaceholder": "Find in terminal",
+  "terminal.searchNone": "No matches",
+  "terminal.searchPrevious": "Previous match",
+  "terminal.searchNext": "Next match",
+  "terminal.searchClose": "Close find",
+  "terminal.reconnect": "Reconnect",
   "toolbar.files": "Explorer",
   "toolbar.changes": "Changes",
   refresh: "Refresh",
@@ -9627,8 +9639,8 @@ var CSS2 = `
 }
 
 /* Entry points live in native left PanelRows; the right guide is a work area. */
-.ce-branch-chip{display:inline-flex;align-items:center;gap:1px;flex:0 0 auto;padding:0 2px;margin-left:3px;border-radius:999px;background:var(--dsw-alias-bg-layer-1,#1d2126);border:.5px solid var(--dsw-alias-border-l1,#2a2e35);color:var(--dsw-alias-label-secondary,#aab);font-size:7.5px;line-height:13px;letter-spacing:-0.1px;vertical-align:middle;overflow:hidden;white-space:nowrap}
-.ce-branch-glyph{opacity:.75;flex:0 0 auto;font-size:9px}
+.ce-branch-chip{display:inline-flex;align-items:center;gap:2px;flex:0 0 auto;padding:0 3px;margin-left:4px;border-radius:999px;background:var(--dsw-alias-bg-layer-1,#1d2126);border:.5px solid var(--dsw-alias-border-l1,#2a2e35);color:var(--dsw-alias-label-secondary,#aab);font-size:9px;line-height:15px;vertical-align:middle;overflow:hidden;white-space:nowrap}
+.ce-branch-glyph{opacity:.75;flex:0 0 auto;font-size:10px}
 .ce-branch-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
 .ce-branch-card{display:flex;align-items:center;gap:5px;padding:4px 6px;margin:2px 0;border-radius:6px;background:var(--dsw-alias-bg-layer-1,#1d2126);color:var(--dsw-alias-label-secondary,#aab);font-size:11px;line-height:16px;min-width:0}
 .ce-branch-card-label{flex:0 0 auto;opacity:.8}
@@ -9756,6 +9768,21 @@ var CSS2 = `
 .ce-term-input{position:absolute;left:-9999px;top:0;width:1px;height:1px;opacity:0;border:0;padding:0;margin:0;resize:none;overflow:hidden}
 .ce-term-status{position:absolute;left:8px;bottom:6px;right:8px;font-size:11.5px;color:var(--dsw-alias-label-secondary,#999);pointer-events:none}
 .ce-term-status-error{color:var(--dsw-alias-state-error-primary,#f85149)}
+.ce-term-scrollbar{position:absolute;top:8px;right:2px;bottom:8px;width:8px;border-radius:4px;background:transparent;touch-action:none;z-index:3}
+.ce-term-scrollbar:hover{background:var(--dsw-alias-interactive-bg-hover,#2b2b2b)}
+.ce-term-scrollbar-thumb{position:absolute;top:0;right:1px;width:6px;border-radius:3px;background:var(--dsw-alias-label-tertiary,#778);opacity:.65;min-height:12px}
+.ce-term-scrollbar:hover .ce-term-scrollbar-thumb,.ce-term-scrollbar-thumb:active{opacity:1;background:var(--dsw-alias-label-secondary,#999)}
+.ce-term-search-layer{position:absolute;top:8px;left:8px;pointer-events:none;z-index:2}
+.ce-term-search-rect{position:absolute;top:0;left:0;background:color-mix(in srgb,var(--dsw-alias-state-warn-primary,#e3b341) 32%,transparent);border-radius:2px}
+.ce-term-search-current{background:color-mix(in srgb,var(--dsw-alias-brand-primary,#59b7ff) 45%,transparent);outline:1px solid var(--dsw-alias-brand-primary,#59b7ff)}
+.ce-term-find{position:absolute;top:6px;right:10px;z-index:4;display:flex;align-items:center;gap:4px;padding:4px 6px;border-radius:7px;border:.5px solid var(--dsw-alias-border-l2,#444);background:var(--dsw-alias-bg-layer-1,#1d2126);box-shadow:0 4px 16px rgba(0,0,0,.28)}
+.ce-term-find-input{width:190px;height:24px;box-sizing:border-box;padding:2px 6px;font:inherit;font-size:12px;border-radius:4px;border:.5px solid var(--dsw-alias-border-l2,#444);background:var(--dsw-alias-bg-base,#181818);color:var(--dsw-alias-label-primary,#eee);outline:none}
+.ce-term-find-input:focus{border-color:var(--dsw-alias-brand-primary,#59b7ff)}
+.ce-term-find-count{min-width:42px;text-align:center;font-size:11px;color:var(--dsw-alias-label-secondary,#999);font-variant-numeric:tabular-nums}
+.ce-term-find-btn{width:22px;height:22px;display:inline-flex;align-items:center;justify-content:center;border:0;border-radius:4px;background:transparent;color:var(--dsw-alias-label-secondary,#999);font:inherit;font-size:12px;cursor:pointer}
+.ce-term-find-btn:hover{background:var(--dsw-alias-interactive-bg-hover,#2b2b2b);color:var(--dsw-alias-label-primary,#eee)}
+.ce-term-reconnect{position:absolute;right:10px;bottom:8px;z-index:4;font:inherit;font-size:11.5px;padding:3px 9px;border-radius:5px;border:.5px solid var(--dsw-alias-border-l2,#444);background:var(--dsw-alias-bg-layer-1,#1d2126);color:var(--dsw-alias-label-primary,#eee);cursor:pointer}
+.ce-term-reconnect:hover{background:var(--dsw-alias-interactive-bg-hover,#2b2b2b)}
 .ce-term-title{display:inline-flex;align-items:center;gap:4px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
 /* ---------------- request workbench: one tab, two protocols ---------------- */
 .ce-wb{display:flex;flex-direction:column;height:100%;min-height:0}
@@ -11951,7 +11978,7 @@ function ApiView({ t, useTabInfo, sessionId, useSessions, incoming }) {
     if (copiedTimer.current) clearTimeout(copiedTimer.current);
     copiedTimer.current = setTimeout(() => setCopied(false), 1500);
   }, []);
-  const copyText = useCallback((text) => {
+  const copyText2 = useCallback((text) => {
     try {
       const p = navigator.clipboard?.writeText(text);
       return p && typeof p.then === "function" ? p : Promise.resolve();
@@ -11960,16 +11987,16 @@ function ApiView({ t, useTabInfo, sessionId, useSessions, incoming }) {
     }
   }, []);
   const copyCurl = useCallback(() => {
-    copyText(toCurl(editorState())).then(flashCopied);
-  }, [copyText, editorState, flashCopied]);
+    copyText2(toCurl(editorState())).then(flashCopied);
+  }, [copyText2, editorState, flashCopied]);
   const copySnippet = useCallback((kind) => {
     const text = kind.build(resolveRequest(editorState(), envMapOf(envStore)), editorState());
-    copyText(text).then(() => {
+    copyText2(text).then(() => {
       setCopiedCode(kind.id);
       if (copiedTimer.current) clearTimeout(copiedTimer.current);
       copiedTimer.current = setTimeout(() => setCopiedCode(""), 1500);
     });
-  }, [copyText, editorState, envStore]);
+  }, [copyText2, editorState, envStore]);
   const doImport = useCallback(() => {
     let collection = null;
     try {
@@ -17451,6 +17478,9 @@ var ZERO = [
   65024,
   65039,
   // variation selectors
+  127995,
+  127999,
+  // emoji skin-tone modifiers
   65056,
   65071,
   // combining half marks
@@ -17482,11 +17512,39 @@ function cellWidth(code) {
   if (inRanges(code, WIDE)) return 2;
   return 1;
 }
+function isRegionalIndicator(code) {
+  return code >= 127462 && code <= 127487;
+}
+function graphemeWidth(text) {
+  if (typeof text !== "string" || text === "") return 0;
+  const codes = Array.from(text, (char) => char.codePointAt(0));
+  if (codes.length === 2 && isRegionalIndicator(codes[0]) && isRegionalIndicator(codes[1])) return 2;
+  let width = 0;
+  for (const code of codes) {
+    if (code === void 0) continue;
+    const cells = cellWidth(code);
+    if (cells === 2) return 2;
+    if (cells === 1) width = 1;
+  }
+  return width;
+}
 
 // src/client/vt/screen.js
-var FLAG = { bold: 1, dim: 2, italic: 4, underline: 8, blink: 16, inverse: 32, invisible: 64, strike: 128 };
+var FLAG = {
+  bold: 1,
+  dim: 2,
+  italic: 4,
+  underline: 8,
+  blink: 16,
+  inverse: 32,
+  invisible: 64,
+  strike: 128,
+  overline: 256
+};
 var DEFAULT_ATTR = { fg: -1, bg: -1, fl: 0, link: null };
 var TRUECOLOR = 1 << 24;
+var CELL_BYTES = 32;
+var LINE_OVERHEAD = 64;
 var DEC_GRAPHICS = {
   "`": "◆",
   a: "▒",
@@ -17520,32 +17578,171 @@ var DEC_GRAPHICS = {
   "}": "£",
   "~": "·"
 };
-function blankLine(cols) {
-  return { cells: new Array(cols).fill(void 0), wrapped: false, version: 1 };
+function blankLine(cols, seq, cells = null, wrapped = false) {
+  return {
+    cells: cells ?? new Array(cols).fill(void 0),
+    wrapped,
+    version: 1,
+    seq,
+    bytes: cols * CELL_BYTES + LINE_OVERHEAD
+  };
+}
+function continuation(cell) {
+  return { c: "", fg: cell.fg, bg: cell.bg, fl: cell.fl, w: 0, link: cell.link };
+}
+function wrapCells(cells, cols) {
+  const rows = [];
+  let row = [];
+  const flush = () => {
+    while (row.length < cols) row.push(void 0);
+    rows.push(row);
+    row = [];
+  };
+  for (const cell of cells) {
+    const width = cell === void 0 ? 1 : cell.w === 0 ? 0 : cell.w || 1;
+    if (width === 0) {
+      const base = row[row.length - 1];
+      if (base !== void 0) base.c += cell.c;
+      continue;
+    }
+    if (row.length + width > cols) flush();
+    row.push(cell);
+    if (width === 2) row.push(continuation(cell));
+  }
+  if (row.length > 0 || rows.length === 0) flush();
+  return rows;
 }
 var Buffer2 = class {
-  constructor(cols, rows, scrollback) {
+  constructor(cols, rows, scrollback, maxBytes, seqBase = 0) {
     this.cols = cols;
     this.rows = rows;
-    this.scrollback = scrollback;
-    this.lines = [];
-    for (let i = 0; i < rows; i++) this.lines.push(blankLine(cols));
+    this.scrollback = Math.max(0, scrollback);
+    this.maxBytes = maxBytes;
+    this.seqBase = seqBase;
+    this.reset();
   }
-  /** Grow/shrink the grid, keeping the bottom `rows` rows on screen. */
-  resize(cols, rows) {
-    for (const line of this.lines) {
-      if (line.cells.length !== cols) line.cells.length = cols;
-      line.version++;
+  get capacity() {
+    return Math.max(this.rows, this.rows + this.scrollback);
+  }
+  reset() {
+    this.slots = new Array(this.capacity).fill(null);
+    this.head = 0;
+    this.count = 0;
+    this.bytes = 0;
+    this.nextSeq = this.seqBase;
+    this.firstSeq = this.seqBase;
+    for (let i = 0; i < this.rows; i++) this.pushBlank();
+  }
+  at(index) {
+    if (index < 0 || index >= this.count) return null;
+    return this.slots[(this.head + index) % this.slots.length];
+  }
+  toArray() {
+    return this.slice(0, this.count);
+  }
+  slice(start, count) {
+    const out = new Array(count);
+    for (let i = 0; i < count; i++) out[i] = this.at(start + i);
+    return out;
+  }
+  indexOfSeq(seq) {
+    for (let i = 0; i < this.count; i++) if (this.at(i).seq === seq) return i;
+    return -1;
+  }
+  pushBlank() {
+    this.pushLine(blankLine(this.cols, this.nextSeq++));
+  }
+  pushLine(line) {
+    const length = this.slots.length;
+    if (this.count < length) {
+      this.slots[(this.head + this.count) % length] = line;
+      this.count++;
+    } else {
+      const victim = this.slots[this.head];
+      this.bytes -= victim?.bytes ?? 0;
+      this.slots[this.head] = line;
+      this.head = (this.head + 1) % length;
+      this.firstSeq = this.at(0)?.seq ?? victim.seq + 1;
     }
-    while (this.lines.length < rows) this.lines.push(blankLine(cols));
-    while (this.lines.length > rows + this.scrollback) this.lines.shift();
+    this.bytes += line.bytes ?? 0;
+    this.nextSeq = Math.max(this.nextSeq, (line.seq ?? 0) + 1);
+    if (this.count === 1) this.firstSeq = line.seq;
+    this.firstSeq = this.at(0)?.seq ?? this.firstSeq;
+    this.trimBytes();
+  }
+  dropOldest() {
+    const victim = this.at(0);
+    if (victim === null) return;
+    this.bytes -= victim.bytes ?? 0;
+    this.slots[this.head] = null;
+    this.head = (this.head + 1) % this.slots.length;
+    this.count--;
+    this.firstSeq = this.at(0)?.seq ?? victim.seq + 1;
+  }
+  trimBytes() {
+    while (this.bytes > this.maxBytes && this.count > this.rows) this.dropOldest();
+  }
+  rebuild(cols, rows, scrollback, lines) {
     this.cols = cols;
     this.rows = rows;
+    this.scrollback = Math.max(0, scrollback);
+    const capacity = this.capacity;
+    this.slots = new Array(capacity).fill(null);
+    this.head = 0;
+    this.count = 0;
+    this.bytes = 0;
+    this.nextSeq = this.seqBase;
+    for (const line of lines) this.nextSeq = Math.max(this.nextSeq, (line.seq ?? 0) + 1);
+    for (const line of lines) this.pushLine(line);
+    while (this.count < rows) this.pushBlank();
+    this.firstSeq = this.at(0)?.seq ?? 1;
+  }
+  setRows(rows) {
+    const lines = this.toArray();
+    this.rebuild(this.cols, rows, this.scrollback, lines);
+  }
+  /** Alternate screen is top-anchored: shrinking drops rows from the bottom. */
+  resizeKeepTop(cols, rows) {
+    let lines = this.toArray();
+    if (cols !== this.cols) {
+      for (const line of lines) {
+        line.cells.length = cols;
+        line.version++;
+        line.bytes = cols * CELL_BYTES + LINE_OVERHEAD;
+      }
+    }
+    if (lines.length > rows) lines = lines.slice(0, rows);
+    this.rebuild(cols, rows, 0, lines);
+  }
+  readRegion(top, bottom) {
+    const out = [];
+    for (let i = top; i <= bottom; i++) out.push(this.at(i));
+    return out;
+  }
+  writeRegion(top, lines) {
+    for (let i = 0; i < lines.length; i++) {
+      const physical = (this.head + top + i) % this.slots.length;
+      const previous = this.slots[physical];
+      this.bytes -= previous?.bytes ?? 0;
+      this.slots[physical] = lines[i];
+      this.bytes += lines[i].bytes ?? 0;
+    }
+    if (top === 0) this.firstSeq = this.at(0)?.seq ?? this.firstSeq;
+  }
+  dropScrollback() {
+    while (this.count > this.rows) this.dropOldest();
   }
 };
-function createScreen({ cols = 80, rows = 24, scrollback = 1e3 } = {}) {
-  const primary = new Buffer2(cols, rows, scrollback);
-  const alternate = new Buffer2(cols, rows, 0);
+function emptyDamage() {
+  return { full: true, scrolls: [], rows: /* @__PURE__ */ new Set(), bell: 0, title: false, modes: 0 };
+}
+function createScreen({ cols = 80, rows = 24, scrollback = 1e3, scrollbackBytes = 10 * 1024 * 1024 } = {}) {
+  cols = Math.max(2, Math.trunc(Number(cols) || 80));
+  rows = Math.max(1, Math.trunc(Number(rows) || 24));
+  scrollback = Math.max(0, Math.trunc(Number(scrollback) || 0));
+  scrollbackBytes = Math.max(0, Number(scrollbackBytes) || 0);
+  const primary = new Buffer2(cols, rows, scrollback, scrollbackBytes);
+  const alternate = new Buffer2(cols, rows, 0, Number.POSITIVE_INFINITY, 1e9);
   let buffer = primary;
   let alt = false;
   let x = 0;
@@ -17565,15 +17762,20 @@ function createScreen({ cols = 80, rows = 24, scrollback = 1e3 } = {}) {
     bracketedPaste: false,
     mouse: "off",
     sgrMouse: false,
-    echo: true
+    echo: true,
+    focus: false,
+    syncOutput: false,
+    altScroll: false
   };
   let cursorStyle = "block";
   let cursorBlink = true;
   let title = "";
+  let cwd = "";
   let bell = 0;
-  let dirtyAll = true;
+  let currentLink = null;
+  let damage = emptyDamage();
   let charsetG0 = "ascii";
-  const listeners = { title: [], bell: [] };
+  const listeners = { title: [], bell: [], osc: [], mode: [] };
   let state = "ground";
   let params = "";
   let prefix = "";
@@ -17585,33 +17787,46 @@ function createScreen({ cols = 80, rows = 24, scrollback = 1e3 } = {}) {
     for (let i = 8; i < width; i += 8) stops.add(i);
     return stops;
   }
-  const absRow = (row = y) => buffer.lines.length - buffer.rows + row;
+  const absRow = (row = y) => buffer.count - buffer.rows + row;
   function lineAt(row) {
-    const index = absRow(row);
-    if (index < 0) return null;
-    return buffer.lines[index] ?? null;
+    return buffer.at(absRow(row));
   }
-  function touch(row) {
-    const line = lineAt(row);
-    if (line) line.version++;
+  function mark(line) {
+    if (line === null || line === void 0) return;
+    line.version++;
+    if (damage.full) return;
+    damage.rows.add(line.seq);
+    if (damage.rows.size > 4096) markAll();
   }
-  function touchAll() {
-    dirtyAll = true;
-    for (const line of buffer.lines) line.version++;
+  function recordScroll(shift) {
+    damage.scrolls.push({ whole: true, shift });
+    if (damage.scrolls.length > 64) markAll();
+  }
+  function markAll() {
+    damage.full = true;
+    damage.rows.clear();
+    damage.scrolls.length = 0;
+  }
+  function emitMode() {
+    for (const listener of listeners.mode) listener({ ...modes });
   }
   function blankCell() {
-    return attrs.bg === -1 && attrs.fl === 0 ? void 0 : { c: " ", fg: -1, bg: attrs.bg, fl: attrs.fl & FLAG.underline ? 0 : 0, w: 1, link: null };
+    if (attrs.bg === -1 && attrs.fl === 0 && attrs.link === null) return void 0;
+    return { c: " ", fg: -1, bg: attrs.bg, fl: 0, w: 1, link: null };
   }
-  function put(codePoint, text) {
-    const width = cellWidth(codePoint);
+  function makeCell(text, width) {
+    return { c: text, fg: attrs.fg, bg: attrs.bg, fl: attrs.fl, w: width, link: currentLink };
+  }
+  function putCluster(text, width) {
     const line = lineAt();
     if (!line) return;
     if (width === 0) {
-      const col = Math.max(0, x - 1);
-      const cell = line.cells[col];
-      if (cell) {
-        cell.c = cell.c + text;
-        line.version++;
+      let col = x - 1;
+      while (col >= 0 && line.cells[col]?.w === 0) col--;
+      const base = col >= 0 ? line.cells[col] : void 0;
+      if (base !== void 0) {
+        line.cells[col] = { ...base, c: base.c + text };
+        mark(line);
       }
       return;
     }
@@ -17620,16 +17835,70 @@ function createScreen({ cols = 80, rows = 24, scrollback = 1e3 } = {}) {
       x = 0;
       indexDown();
     }
-    if (x + width > buffer.cols) x = buffer.cols - width;
+    if (x + width > buffer.cols) x = Math.max(0, buffer.cols - width);
     if (modes.insert) insertCells(width);
     const target = lineAt();
     if (!target) return;
     if (width === 2 && x + 1 < buffer.cols) {
-      target.cells[x + 1] = { c: "", fg: attrs.fg, bg: attrs.bg, fl: attrs.fl, w: 0, link: attrs.link };
+      target.cells[x + 1] = continuation(makeCell("", 2));
     }
-    target.cells[x] = { c: text, fg: attrs.fg, bg: attrs.bg, fl: attrs.fl, w: width, link: attrs.link };
-    target.version++;
+    target.cells[x] = makeCell(text, width);
+    mark(target);
     x += width;
+  }
+  function writeAsciiRun(data, start, end) {
+    let pos = start;
+    while (pos < end) {
+      const line = lineAt();
+      if (!line) return;
+      if (modes.insert) {
+        putCluster(data[pos], 1);
+        pos++;
+        continue;
+      }
+      if (x >= buffer.cols) {
+        if (!modes.wrap) {
+          x = buffer.cols - 1;
+        } else {
+          line.wrapped = true;
+          x = 0;
+          indexDown();
+          continue;
+        }
+      }
+      const available = buffer.cols - x;
+      const wanted = Math.min(end - pos, available);
+      for (let k = 0; k < wanted; k++) line.cells[x + k] = makeCell(data[pos + k], 1);
+      mark(line);
+      x += wanted;
+      pos += wanted;
+      if (pos < end && modes.wrap) {
+        line.wrapped = true;
+        x = 0;
+        indexDown();
+      }
+    }
+  }
+  function writeText(text) {
+    if (charsetG0 === "dec") {
+      for (const ch of text) {
+        const mapped = DEC_GRAPHICS[ch];
+        if (mapped) putCluster(mapped, cellWidth(mapped.codePointAt(0) ?? 32));
+        else putCluster(ch, cellWidth(ch.codePointAt(0) ?? 32));
+      }
+      return;
+    }
+    if (segmenter !== null && text.includes("‍")) {
+      for (const part of segmenter.segment(text)) {
+        putCluster(part.segment, graphemeWidth(part.segment));
+      }
+      return;
+    }
+    for (const ch of text) {
+      const code = ch.codePointAt(0);
+      if (code === void 0 || code < 32) continue;
+      putCluster(ch, graphemeWidth(ch));
+    }
   }
   function indexDown() {
     if (y === scrollBottom) scrollUp(1);
@@ -17639,43 +17908,55 @@ function createScreen({ cols = 80, rows = 24, scrollback = 1e3 } = {}) {
     if (y === scrollTop) scrollDown(1);
     else y = Math.max(0, y - 1);
   }
+  function newSeq() {
+    return buffer.nextSeq++;
+  }
   function scrollUp(count2) {
     const top = absRow(scrollTop);
     const bottom = absRow(scrollBottom);
-    if (top < 0 || bottom >= buffer.lines.length) return;
+    if (top < 0 || bottom >= buffer.count) return;
     const whole = scrollTop === 0 && scrollBottom === buffer.rows - 1;
-    for (let i = 0; i < count2; i++) {
-      if (whole) buffer.lines.push(blankLine(buffer.cols));
-      else buffer.lines.splice(top, 0, blankLine(buffer.cols));
-      if (!whole) buffer.lines.splice(bottom + 1, 1);
-      while (buffer.lines.length > buffer.rows + buffer.scrollback) buffer.lines.shift();
+    let lines = Math.min(count2, buffer.rows);
+    if (lines <= 0) return;
+    if (whole) {
+      while (lines-- > 0) buffer.pushBlank();
+      recordScroll(count2);
+      return;
     }
-    dirtyAll = true;
+    const region = buffer.readRegion(top, bottom);
+    const moves = Math.min(count2, region.length);
+    for (let i = 0; i < moves; i++) {
+      region.shift();
+      region.push(blankLine(buffer.cols, newSeq()));
+    }
+    buffer.writeRegion(top, region);
+    for (const line of region) damage.rows.add(line.seq);
   }
   function scrollDown(count2) {
     const top = absRow(scrollTop);
     const bottom = absRow(scrollBottom);
-    if (top < 0 || bottom >= buffer.lines.length) return;
-    for (let i = 0; i < count2; i++) {
-      buffer.lines.splice(bottom, 1);
-      buffer.lines.splice(top, 0, blankLine(buffer.cols));
+    if (top < 0 || bottom >= buffer.count) return;
+    const region = buffer.readRegion(top, bottom);
+    const lines = Math.min(count2, region.length);
+    for (let i = 0; i < lines; i++) {
+      region.pop();
+      region.unshift(blankLine(buffer.cols, newSeq()));
     }
-    dirtyAll = true;
+    buffer.writeRegion(top, region);
+    for (const line of region) damage.rows.add(line.seq);
   }
   function carriageReturn() {
     x = 0;
   }
   function lineFeed() {
     indexDown();
-    if (modes.echo) {
-    }
   }
   function eraseCells(row, from, to) {
     const line = lineAt(row);
     if (!line) return;
     const blank = blankCell();
     for (let col = Math.max(0, from); col < Math.min(buffer.cols, to); col++) line.cells[col] = blank;
-    line.version++;
+    mark(line);
   }
   function eraseInLine(mode) {
     if (mode === 0) eraseCells(y, x, buffer.cols);
@@ -17692,9 +17973,8 @@ function createScreen({ cols = 80, rows = 24, scrollback = 1e3 } = {}) {
     } else if (mode === 2) {
       for (let row = 0; row < buffer.rows; row++) eraseCells(row, 0, buffer.cols);
     } else if (mode === 3) {
-      const keep = Math.max(0, buffer.lines.length - buffer.rows);
-      buffer.lines.splice(0, keep);
-      dirtyAll = true;
+      buffer.dropScrollback();
+      markAll();
     }
   }
   function insertCells(count2) {
@@ -17704,7 +17984,7 @@ function createScreen({ cols = 80, rows = 24, scrollback = 1e3 } = {}) {
     const rest = line.cells.slice(x, Math.max(0, buffer.cols - count2));
     line.cells = head.concat(new Array(count2).fill(void 0), rest).slice(0, buffer.cols);
     while (line.cells.length < buffer.cols) line.cells.push(void 0);
-    line.version++;
+    mark(line);
   }
   function deleteCells(count2) {
     const line = lineAt();
@@ -17713,18 +17993,21 @@ function createScreen({ cols = 80, rows = 24, scrollback = 1e3 } = {}) {
     const rest = line.cells.slice(x + count2);
     line.cells = head.concat(rest, new Array(count2).fill(void 0)).slice(0, buffer.cols);
     while (line.cells.length < buffer.cols) line.cells.push(void 0);
-    line.version++;
+    mark(line);
   }
   function enterAlternate(clear) {
     if (!alt) {
       alt = true;
       modes.alt = true;
       buffer = alternate;
-      if (clear) alternate.lines = Array.from({ length: alternate.rows }, () => blankLine(alternate.cols));
-      dirtyAll = true;
+      scrollTop = 0;
+      scrollBottom = alternate.rows - 1;
+      modes.origin = false;
+      if (clear) alternate.reset();
+      markAll();
     } else if (clear) {
-      alternate.lines = Array.from({ length: alternate.rows }, () => blankLine(alternate.cols));
-      dirtyAll = true;
+      alternate.reset();
+      markAll();
     }
   }
   function leaveAlternate() {
@@ -17732,9 +18015,10 @@ function createScreen({ cols = 80, rows = 24, scrollback = 1e3 } = {}) {
     alt = false;
     modes.alt = false;
     buffer = primary;
+    modes.origin = false;
     scrollTop = 0;
     scrollBottom = primary.rows - 1;
-    dirtyAll = true;
+    markAll();
   }
   function setColor(target, params2, index) {
     const kind = Number(params2[index + 1]);
@@ -17794,6 +18078,8 @@ function createScreen({ cols = 80, rows = 24, scrollback = 1e3 } = {}) {
           attrs.fl |= FLAG.strike;
           break;
         case 21:
+          attrs.fl &= ~FLAG.bold;
+          break;
         case 22:
           attrs.fl &= ~(FLAG.bold | FLAG.dim);
           break;
@@ -17827,6 +18113,12 @@ function createScreen({ cols = 80, rows = 24, scrollback = 1e3 } = {}) {
         case 49:
           attrs.bg = -1;
           break;
+        case 53:
+          attrs.fl |= FLAG.overline;
+          break;
+        case 55:
+          attrs.fl &= ~FLAG.overline;
+          break;
         default:
           if (code >= 30 && code <= 37) attrs.fg = code - 30;
           else if (code >= 40 && code <= 47) attrs.bg = code - 40;
@@ -17842,6 +18134,7 @@ function createScreen({ cols = 80, rows = 24, scrollback = 1e3 } = {}) {
   }
   let list = [];
   function csi(final) {
+    if (prefix === ">") return;
     const params0 = list[0];
     switch (final) {
       case "@":
@@ -17911,8 +18204,10 @@ function createScreen({ cols = 80, rows = 24, scrollback = 1e3 } = {}) {
         break;
       case "b": {
         const line = lineAt();
-        const previous = line?.cells[x - 1];
-        if (previous) for (let i = 0; i < count(); i++) put(previous.c.codePointAt(0) ?? 32, previous.c);
+        let col = x - 1;
+        while (col >= 0 && line?.cells[col]?.w === 0) col--;
+        const previous = col >= 0 ? line?.cells[col] : void 0;
+        if (previous) for (let i = 0; i < count(); i++) putCluster(previous.c, previous.w || 1);
         break;
       }
       case "d":
@@ -17937,9 +18232,13 @@ function createScreen({ cols = 80, rows = 24, scrollback = 1e3 } = {}) {
       case "n":
         break;
       // status reports are answered by the host side, not us
-      case "q":
-        cursorStyle = ["block", "block", "block", "underline", "underline", "bar", "bar"][Number.isFinite(params0) ? params0 : 0] ?? "block";
+      case "q": {
+        const style = Number.isFinite(params0) ? params0 : 0;
+        const shapes = ["block", "block", "block", "underline", "underline", "bar", "bar"];
+        cursorStyle = shapes[style] ?? "block";
+        cursorBlink = style === 0 || style % 2 === 1;
         break;
+      }
       case "r": {
         const top = (Number.isFinite(list[0]) ? list[0] : 1) - 1;
         const bottom = (Number.isFinite(list[1]) ? list[1] : buffer.rows) - 1;
@@ -17955,8 +18254,8 @@ function createScreen({ cols = 80, rows = 24, scrollback = 1e3 } = {}) {
         saved = { x, y, attrs: { ...attrs }, origin: modes.origin };
         break;
       case "u":
-        x = saved.x;
-        y = saved.y;
+        x = clampCol(saved.x);
+        y = clampRow(saved.y);
         attrs = { ...saved.attrs };
         break;
       case "t":
@@ -17969,27 +18268,36 @@ function createScreen({ cols = 80, rows = 24, scrollback = 1e3 } = {}) {
   function scrollDownAt(countLines2) {
     const top = absRow(y);
     const bottom = absRow(scrollBottom);
-    if (top < 0 || bottom >= buffer.lines.length) return;
-    for (let i = 0; i < countLines2; i++) {
-      buffer.lines.splice(bottom, 1);
-      buffer.lines.splice(top, 0, blankLine(buffer.cols));
+    if (top < 0 || bottom >= buffer.count) return;
+    const region = buffer.readRegion(top, bottom);
+    const lines = Math.min(countLines2, region.length);
+    for (let i = 0; i < lines; i++) {
+      region.pop();
+      region.unshift(blankLine(buffer.cols, newSeq()));
     }
-    dirtyAll = true;
+    buffer.writeRegion(top, region);
+    for (const line of region) damage.rows.add(line.seq);
   }
   function scrollUpAt(countLines2) {
     const top = absRow(y);
     const bottom = absRow(scrollBottom);
-    if (top < 0 || bottom >= buffer.lines.length) return;
-    for (let i = 0; i < countLines2; i++) {
-      buffer.lines.splice(top, 1);
-      buffer.lines.splice(bottom, 0, blankLine(buffer.cols));
+    if (top < 0 || bottom >= buffer.count) return;
+    const region = buffer.readRegion(top, bottom);
+    const lines = Math.min(countLines2, region.length);
+    for (let i = 0; i < lines; i++) {
+      region.shift();
+      region.push(blankLine(buffer.cols, newSeq()));
     }
-    dirtyAll = true;
+    buffer.writeRegion(top, region);
+    for (const line of region) damage.rows.add(line.seq);
   }
   function setModes(on) {
     const isPrivate = prefix === "?";
+    if (!isPrivate) {
+      for (const value of list) if (value === 4) modes.insert = on;
+      return;
+    }
     for (const value of list) {
-      if (!isPrivate) continue;
       switch (value) {
         case 1:
           modes.appCursor = on;
@@ -18002,8 +18310,11 @@ function createScreen({ cols = 80, rows = 24, scrollback = 1e3 } = {}) {
         case 7:
           modes.wrap = on;
           break;
-        case 4:
-          modes.insert = on;
+        case 9:
+          modes.mouse = on ? "9" : "off";
+          break;
+        case 12:
+          cursorBlink = on;
           break;
         case 25:
           modes.cursor = on;
@@ -18013,6 +18324,20 @@ function createScreen({ cols = 80, rows = 24, scrollback = 1e3 } = {}) {
           if (on) enterAlternate(false);
           else leaveAlternate();
           break;
+        case 1e3:
+        case 1002:
+        case 1003:
+          modes.mouse = on ? String(value) : "off";
+          break;
+        case 1004:
+          modes.focus = on;
+          break;
+        case 1006:
+          modes.sgrMouse = on;
+          break;
+        case 1007:
+          modes.altScroll = on;
+          break;
         case 1049:
           if (on) {
             saved = { x, y, attrs: { ...attrs }, origin: modes.origin };
@@ -18021,25 +18346,23 @@ function createScreen({ cols = 80, rows = 24, scrollback = 1e3 } = {}) {
             y = 0;
           } else {
             leaveAlternate();
-            x = saved.x;
-            y = saved.y;
+            x = clampCol(saved.x);
+            y = clampRow(saved.y);
+            attrs = { ...saved.attrs };
+            modes.origin = saved.origin;
           }
-          break;
-        case 1e3:
-        case 1002:
-        case 1003:
-          modes.mouse = on ? String(value) : "off";
-          break;
-        case 1006:
-          modes.sgrMouse = on;
           break;
         case 2004:
           modes.bracketedPaste = on;
+          break;
+        case 2026:
+          modes.syncOutput = on;
           break;
         default:
           break;
       }
     }
+    emitMode();
   }
   function clampCol(value) {
     return Math.max(0, Math.min(buffer.cols - 1, value));
@@ -18071,8 +18394,8 @@ function createScreen({ cols = 80, rows = 24, scrollback = 1e3 } = {}) {
         saved = { x, y, attrs: { ...attrs }, origin: modes.origin };
         break;
       case "8":
-        x = saved.x;
-        y = saved.y;
+        x = clampCol(saved.x);
+        y = clampRow(saved.y);
         attrs = { ...saved.attrs };
         break;
       case "c":
@@ -18086,27 +18409,64 @@ function createScreen({ cols = 80, rows = 24, scrollback = 1e3 } = {}) {
     }
   }
   function reset() {
+    state = "ground";
+    params = "";
+    prefix = "";
+    intermediate = "";
+    osc = "";
+    dcsSkip = false;
+    charsetG0 = "ascii";
+    list = [];
     alt = false;
     modes.alt = false;
     buffer = primary;
-    primary.lines = Array.from({ length: primary.rows }, () => blankLine(primary.cols));
-    alternate.lines = Array.from({ length: alternate.rows }, () => blankLine(alternate.cols));
+    primary.reset();
+    alternate.reset();
     x = 0;
     y = 0;
     attrs = { ...DEFAULT_ATTR };
+    saved = { x: 0, y: 0, attrs: { ...DEFAULT_ATTR }, origin: false };
+    currentLink = null;
     scrollTop = 0;
     scrollBottom = primary.rows - 1;
     tabs = defaultTabs(primary.cols);
-    modes = { ...modes, wrap: true, origin: false, insert: false, cursor: true, appCursor: false, bracketedPaste: false, mouse: "off", sgrMouse: false };
-    dirtyAll = true;
+    cursorStyle = "block";
+    cursorBlink = true;
+    modes = {
+      ...modes,
+      wrap: true,
+      origin: false,
+      insert: false,
+      cursor: true,
+      appCursor: false,
+      bracketedPaste: false,
+      mouse: "off",
+      sgrMouse: false,
+      focus: false,
+      syncOutput: false,
+      altScroll: false
+    };
+    markAll();
   }
   function dispatchOsc(payload) {
     const semicolon = payload.indexOf(";");
     const command = semicolon === -1 ? payload : payload.slice(0, semicolon);
     const body = semicolon === -1 ? "" : payload.slice(semicolon + 1);
+    for (const listener of listeners.osc) listener({ command, body });
     if (command === "0" || command === "2") {
       title = body;
+      damage.title = true;
       for (const listener of listeners.title) listener(title);
+      return;
+    }
+    if (command === "7") {
+      cwd = fileUriToPath(body) ?? body;
+      return;
+    }
+    if (command === "8") {
+      const split = body.indexOf(";");
+      const uri = split === -1 ? "" : body.slice(split + 1);
+      currentLink = uri === "" ? null : uri;
     }
   }
   function write(data) {
@@ -18115,18 +18475,29 @@ function createScreen({ cols = 80, rows = 24, scrollback = 1e3 } = {}) {
     let i = 0;
     while (i < length) {
       if (state === "ground") {
-        let end = i;
-        while (end < length) {
-          const code2 = data.charCodeAt(end);
-          if (code2 < 32 || code2 === 127 || code2 === 27) break;
-          end++;
+        let asciiEnd = i;
+        while (asciiEnd < length) {
+          const code2 = data.charCodeAt(asciiEnd);
+          if (code2 < 32 || code2 >= 127 || code2 === 27) break;
+          asciiEnd++;
         }
-        if (end > i) {
-          writeText(data.slice(i, end), end - i === 0);
-          i = end;
+        if (asciiEnd > i) {
+          if (charsetG0 === "ascii") writeAsciiRun(data, i, asciiEnd);
+          else writeText(data.slice(i, asciiEnd));
+          i = asciiEnd;
           continue;
         }
-        const ch = data[i];
+        let wideEnd = i;
+        while (wideEnd < length) {
+          const code2 = data.charCodeAt(wideEnd);
+          if (code2 < 32 || code2 === 127 || code2 === 27 || code2 <= 126) break;
+          wideEnd++;
+        }
+        if (wideEnd > i) {
+          writeText(data.slice(i, wideEnd));
+          i = wideEnd;
+          continue;
+        }
         const code = data.charCodeAt(i);
         i++;
         if (code === 27) {
@@ -18152,10 +18523,10 @@ function createScreen({ cols = 80, rows = 24, scrollback = 1e3 } = {}) {
         }
         if (code === 7) {
           bell++;
+          damage.bell++;
           for (const listener of listeners.bell) listener();
           continue;
         }
-        void ch;
         continue;
       }
       if (state === "escape") {
@@ -18241,7 +18612,7 @@ function createScreen({ cols = 80, rows = 24, scrollback = 1e3 } = {}) {
           continue;
         }
         osc += ch;
-        if (osc.length > 4096) {
+        if (osc.length > 8192) {
           state = "ground";
           osc = "";
         }
@@ -18263,9 +18634,8 @@ function createScreen({ cols = 80, rows = 24, scrollback = 1e3 } = {}) {
         continue;
       }
       if (state === "dcsEsc") {
-        const ch = data[i++];
+        i++;
         state = "ground";
-        void ch;
         dcsSkip = false;
         continue;
       }
@@ -18279,63 +18649,140 @@ function createScreen({ cols = 80, rows = 24, scrollback = 1e3 } = {}) {
     }
     return out;
   }
-  function writeText(text, _unused) {
-    if (charsetG0 === "dec") {
-      for (const ch of text) {
-        const mapped = DEC_GRAPHICS[ch];
-        if (mapped) put(mapped.codePointAt(0), mapped);
-        else put(ch.codePointAt(0), ch);
+  function restoreCursor(cursorAbs, cursorX, evicted = 0) {
+    y = clampRow(cursorAbs - evicted - (buffer.count - buffer.rows));
+    x = clampCol(cursorX);
+  }
+  function reflowPrimary(nextCols, nextRows, cursorAbs, cursorX) {
+    const lines = primary.toArray();
+    const output = [];
+    let cursorOut = null;
+    let lastContentRow = -1;
+    let index = 0;
+    while (index < lines.length) {
+      const start = index;
+      const group = [];
+      while (index < lines.length) {
+        group.push(lines[index]);
+        const more = lines[index].wrapped;
+        index++;
+        if (!more) break;
       }
-      return;
+      const cells = [];
+      for (const line of group) {
+        const limit = Math.min(line.cells.length, primary.cols);
+        for (let col = 0; col < limit; col++) {
+          const cell = line.cells[col];
+          if (cell !== void 0 && cell.w === 0) continue;
+          cells.push(cell);
+        }
+      }
+      while (cells.length > 0 && cells[cells.length - 1] === void 0) cells.pop();
+      const rows2 = wrapCells(cells, nextCols);
+      if (cursorAbs >= start && cursorAbs < index) {
+        const rowInGroup = cursorAbs - start;
+        let offset = 0;
+        const advance = (cell) => cell === void 0 ? 1 : cell.w === 0 ? 0 : cell.w || 1;
+        for (let r = 0; r < rowInGroup; r++) {
+          for (let col = 0; col < group[r].cells.length; col++) offset += advance(group[r].cells[col]);
+        }
+        for (let col = 0; col < Math.min(cursorX, group[rowInGroup].cells.length); col++) offset += advance(group[rowInGroup].cells[col]);
+        let remaining = offset;
+        for (let r = 0; r < rows2.length && cursorOut === null; r++) {
+          for (let col = 0; col < nextCols; col++) {
+            const cell = rows2[r][col];
+            const width = cell === void 0 ? 1 : cell.w === 0 ? 0 : cell.w || 1;
+            if (remaining < width) {
+              cursorOut = { row: output.length + r, col };
+              break;
+            }
+            remaining -= width;
+          }
+        }
+        if (cursorOut === null) cursorOut = { row: output.length + rows2.length - 1, col: nextCols - 1 };
+      }
+      for (let r = 0; r < rows2.length; r++) {
+        if (rows2[r].some((cell) => cell !== void 0)) lastContentRow = output.length;
+        output.push(blankLine(nextCols, primary.nextSeq++, rows2[r], r < rows2.length - 1));
+      }
     }
-    for (const ch of text) {
-      const code = ch.codePointAt(0);
-      if (code === void 0) continue;
-      if (code < 32) continue;
-      put(code, ch);
+    const keep = Math.max(lastContentRow + 1, cursorOut === null ? 0 : cursorOut.row + 1, Math.min(nextRows, output.length));
+    if (keep > 0 && keep < output.length) output.length = keep;
+    primary.rebuild(nextCols, nextRows, primary.scrollback, output);
+    if (cursorOut !== null) {
+      const evicted = Math.max(0, output.length - primary.count);
+      y = clampRow(cursorOut.row - evicted - (primary.count - nextRows));
+      x = clampCol(cursorOut.col);
+    } else {
+      y = clampRow(y);
+      x = clampCol(x);
     }
   }
-  function viewport() {
-    const start = Math.max(0, buffer.lines.length - buffer.rows);
-    return buffer.lines.slice(start, start + buffer.rows);
-  }
-  function viewportAt(offset = 0) {
-    const maxOffset = buffer === primary ? Math.max(0, buffer.lines.length - buffer.rows) : 0;
-    const fromBottom = Math.min(Math.max(0, offset), maxOffset);
-    const start = Math.max(0, buffer.lines.length - buffer.rows - fromBottom);
-    if (fromBottom === 0) return viewport();
-    return buffer.lines.slice(start, start + buffer.rows);
+  function resizeAlt(nextCols, nextRows, cursorAbs, cursorX) {
+    alternate.resizeKeepTop(nextCols, nextRows);
+    if (buffer === alternate && cursorAbs >= 0) {
+      alternate.rows = nextRows;
+      y = clampRow(cursorAbs);
+      x = clampCol(cursorX);
+    }
   }
   return {
     write,
     reset,
     resize(cols2, rows2) {
-      if (cols2 === buffer.cols && rows2 === buffer.rows) return false;
-      primary.resize(cols2, rows2);
-      alternate.resize(cols2, rows2);
+      cols2 = Math.max(2, Math.trunc(Number(cols2) || primary.cols));
+      rows2 = Math.max(1, Math.trunc(Number(rows2) || primary.rows));
+      if (cols2 === primary.cols && rows2 === primary.rows) return false;
+      const active = buffer;
+      const cursorAbs = active.count - active.rows + y;
+      const cursorX = x;
+      const widthChanged = cols2 !== primary.cols;
+      if (widthChanged) {
+        if (active === primary) reflowPrimary(cols2, rows2, cursorAbs, cursorX);
+        else reflowPrimary(cols2, rows2, -1, 0);
+        resizeAlt(cols2, rows2, active === alternate ? cursorAbs : -1, cursorX);
+      } else if (rows2 !== active.rows) {
+        if (active === primary) {
+          const previousCount = primary.count;
+          primary.setRows(rows2);
+          restoreCursor(cursorAbs, cursorX, Math.max(0, previousCount - primary.count));
+          alternate.rows = rows2;
+          alternate.setRows(rows2);
+        } else {
+          alternate.resizeKeepTop(alternate.cols, rows2);
+          restoreCursor(cursorAbs, cursorX);
+          primary.setRows(rows2);
+        }
+      }
       scrollTop = 0;
       scrollBottom = rows2 - 1;
       tabs = defaultTabs(cols2);
       x = clampCol(x);
       y = clampRow(y);
-      dirtyAll = true;
+      markAll();
       return true;
     },
     viewport,
     viewportAt,
     /** Absolute buffer index of the viewport's first row, at a scrollback offset. */
     topRow(offset = 0) {
-      const maxOffset = buffer === primary ? Math.max(0, buffer.lines.length - buffer.rows) : 0;
+      const maxOffset = buffer === primary ? Math.max(0, buffer.count - buffer.rows) : 0;
       const fromBottom = Math.min(Math.max(0, offset), maxOffset);
-      return Math.max(0, buffer.lines.length - buffer.rows - fromBottom);
+      return Math.max(0, buffer.count - buffer.rows - fromBottom);
     },
     /** One row by absolute buffer index, for selection and copy. */
     lineAt(index) {
-      return buffer.lines[index] ?? null;
+      return buffer.at(index);
+    },
+    lineSeqAt(index) {
+      return buffer.at(index)?.seq ?? -1;
+    },
+    indexOfSeq(seq) {
+      return buffer.indexOfSeq(seq);
     },
     /** Total rows held, scrollback included. */
     get bufferRows() {
-      return buffer.lines.length;
+      return buffer.count;
     },
     get cols() {
       return buffer.cols;
@@ -18348,6 +18795,9 @@ function createScreen({ cols = 80, rows = 24, scrollback = 1e3 } = {}) {
     },
     get title() {
       return title;
+    },
+    get cwd() {
+      return cwd;
     },
     get bellCount() {
       return bell;
@@ -18362,13 +18812,33 @@ function createScreen({ cols = 80, rows = 24, scrollback = 1e3 } = {}) {
       return { ...attrs };
     },
     get scrollbackRows() {
-      return buffer === primary ? Math.max(0, buffer.lines.length - buffer.rows) : 0;
+      return buffer === primary ? Math.max(0, buffer.count - buffer.rows) : 0;
+    },
+    get scrollbackBytes() {
+      return buffer.bytes;
+    },
+    get firstSeq() {
+      return buffer.firstSeq;
     },
     get dirtyAll() {
-      return dirtyAll;
+      return damage.full;
+    },
+    get damage() {
+      return damage;
+    },
+    markFull() {
+      markAll();
+    },
+    consumeDamage() {
+      const out = damage;
+      damage = emptyDamage();
+      damage.full = false;
+      return out;
     },
     clearDirty() {
-      dirtyAll = false;
+      damage.full = false;
+      damage.rows.clear();
+      damage.scrolls.length = 0;
     },
     onTitle(listener) {
       listeners.title.push(listener);
@@ -18383,13 +18853,47 @@ function createScreen({ cols = 80, rows = 24, scrollback = 1e3 } = {}) {
         const i = listeners.bell.indexOf(listener);
         if (i >= 0) listeners.bell.splice(i, 1);
       };
+    },
+    onOsc(listener) {
+      listeners.osc.push(listener);
+      return () => {
+        const i = listeners.osc.indexOf(listener);
+        if (i >= 0) listeners.osc.splice(i, 1);
+      };
+    },
+    onMode(listener) {
+      listeners.mode.push(listener);
+      return () => {
+        const i = listeners.mode.indexOf(listener);
+        if (i >= 0) listeners.mode.splice(i, 1);
+      };
     }
   };
+  function viewport() {
+    const start = Math.max(0, buffer.count - buffer.rows);
+    return buffer.slice(start, buffer.rows);
+  }
+  function viewportAt(offset = 0) {
+    const maxOffset = buffer === primary ? Math.max(0, buffer.count - buffer.rows) : 0;
+    const fromBottom = Math.min(Math.max(0, offset), maxOffset);
+    const start = Math.max(0, buffer.count - buffer.rows - fromBottom);
+    return buffer.slice(start, buffer.rows);
+  }
+}
+var segmenter = typeof Intl !== "undefined" && typeof Intl.Segmenter === "function" ? new Intl.Segmenter(void 0, { granularity: "grapheme" }) : null;
+function fileUriToPath(value) {
+  if (!value.startsWith("file://")) return null;
+  try {
+    const url = new URL(value);
+    return decodeURIComponent(url.pathname);
+  } catch {
+    return null;
+  }
 }
 
 // src/client/vt/render.js
 var TRUECOLOR2 = 1 << 24;
-var FLAG2 = { bold: 1, dim: 2, italic: 4, underline: 8, blink: 16, inverse: 32, invisible: 64, strike: 128 };
+var FLAG2 = { bold: 1, dim: 2, italic: 4, underline: 8, blink: 16, inverse: 32, invisible: 64, strike: 128, overline: 256 };
 var BASE16 = [
   "#000000",
   "#cd0000",
@@ -18455,6 +18959,8 @@ function signature(cell, theme) {
   if (cell.fl & FLAG2.underline) parts.push("text-decoration:underline");
   if (cell.fl & FLAG2.strike) parts.push("text-decoration:line-through");
   if (cell.fl & FLAG2.invisible) parts.push("visibility:hidden");
+  if (cell.fl & FLAG2.overline) parts.push("text-decoration:overline");
+  if (cell.link) parts.push("cursor:pointer", "text-decoration:underline");
   if (cell.bg !== -1 || inverse) parts.push(`background:${bg}`);
   parts.push(`color:${fg}`);
   return parts.join(";");
@@ -18472,7 +18978,6 @@ function rowHtml(line, theme) {
   const flush = () => {
     if (run !== "") html += `<span style="${runStyle}">${run}</span>`;
     run = "";
-    pendingBlanks = 0;
   };
   for (let i = 0; i < cells.length; i++) {
     const cell = cells[i];
@@ -18508,10 +19013,22 @@ function createRenderer({ container, doc = globalThis.document, theme = () => ({
   container.appendChild(measureEl);
   let cellWidth2 = 8;
   let rowHeight = 16;
-  let rowEls = [];
+  const rowEls = [];
   const versions = [];
+  const seqs = [];
+  const cache = /* @__PURE__ */ new WeakMap();
   let themeValue = theme();
+  let themeKey = signatureTheme(themeValue);
+  let generation = 0;
   let lastCursor = null;
+  let scrollbar = null;
+  let searchLayer = null;
+  let copyCursor = null;
+  let searchRects = [];
+  let stats = { paintedRows: 0, movedRows: 0, ms: 0 };
+  function signatureTheme(value) {
+    return `${value.fg ?? ""}|${value.bg ?? ""}|${value.selection ?? ""}`;
+  }
   function measure() {
     const { fontFamily, fontSize } = font();
     const css = `${fontSize}px ${fontFamily}`;
@@ -18538,36 +19055,143 @@ function createRenderer({ container, doc = globalThis.document, theme = () => ({
       rowsEl.appendChild(el);
       rowEls.push(el);
       versions.push(-1);
+      seqs.push(-1);
     }
     while (rowEls.length > count) {
       const el = rowEls.pop();
       el.remove();
       versions.pop();
+      seqs.pop();
     }
   }
-  function paint(screen, { offset = 0 } = {}) {
+  function rotateRows(shift) {
+    const count = rowEls.length;
+    if (count === 0) return 0;
+    const amount = (shift % count + count) % count;
+    if (amount === 0) return 0;
+    const movedEls = rowEls.splice(0, amount);
+    for (const el of movedEls) rowsEl.appendChild(el);
+    rowEls.push(...movedEls);
+    const movedVersions = versions.splice(0, amount);
+    versions.push(...movedVersions);
+    const movedSeqs = seqs.splice(0, amount);
+    seqs.push(...movedSeqs);
+    for (let i = count - amount; i < count; i++) {
+      versions[i] = -1;
+      seqs[i] = -1;
+    }
+    return amount;
+  }
+  function lineHtml(line, key) {
+    const cached = cache.get(line);
+    if (cached !== void 0 && cached.version === line.version && cached.key === key) return cached.html;
+    const html = rowHtml(line, themeValue);
+    cache.set(line, { version: line.version, key, html });
+    return html;
+  }
+  function paint(screen, { offset = 0, damage = null } = {}) {
+    const started = typeof performance !== "undefined" ? performance.now() : Date.now();
     themeValue = theme();
+    const nextThemeKey = signatureTheme(themeValue);
+    const themeChanged = nextThemeKey !== themeKey;
+    if (themeChanged) {
+      themeKey = nextThemeKey;
+      invalidate();
+    }
     const lines = screen.viewportAt(offset);
     ensureRows(lines.length);
+    if (damage?.full) invalidate();
+    let moved = 0;
+    const scrolls = damage?.scrolls ?? [];
+    const canScroll = damage !== null && !damage.full && offset === 0 && scrolls.length > 0 && scrolls.every((entry) => entry.whole === true);
+    if (canScroll) moved = rotateRows(scrolls.reduce((sum, entry) => sum + entry.shift, 0));
+    let painted = 0;
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
+      const seq = line?.seq ?? -1;
       const version = line?.version ?? 0;
-      if (versions[i] === version) continue;
+      if (seqs[i] === seq && versions[i] === version && !themeChanged) continue;
+      const html = line === void 0 ? "" : lineHtml(line, `${themeKey}:${generation}`);
+      if (rowEls[i].innerHTML !== html) rowEls[i].innerHTML = html;
+      seqs[i] = seq;
       versions[i] = version;
-      rowEls[i].innerHTML = rowHtml(line, themeValue);
+      painted++;
     }
     const cursor = screen.cursor;
     const show = cursor.visible && offset === 0;
     cursorEl.style.display = show ? "block" : "none";
     if (show) {
       const style = cursor.style === "bar" ? "ce-term-cursor-bar" : cursor.style === "underline" ? "ce-term-cursor-underline" : "ce-term-cursor-block";
-      if (lastCursor !== style) {
-        cursorEl.className = `ce-term-cursor ${style}${cursor.blink ? " ce-term-cursor-blink" : ""}`;
-        lastCursor = style;
+      const cursorClass = `${style}${cursor.blink ? " ce-term-cursor-blink" : ""}`;
+      if (lastCursor !== cursorClass) {
+        cursorEl.className = `ce-term-cursor ${cursorClass}`;
+        lastCursor = cursorClass;
       }
       cursorEl.style.transform = `translate(${cursor.x * cellWidth2}px, ${cursor.y * rowHeight}px)`;
       cursorEl.style.width = `${cellWidth2}px`;
       cursorEl.style.height = `${rowHeight}px`;
+    }
+    stats = {
+      paintedRows: painted,
+      movedRows: moved,
+      ms: (typeof performance !== "undefined" ? performance.now() : Date.now()) - started
+    };
+    return stats;
+  }
+  function paintScrollbar(metrics) {
+    const maxOffset = Math.max(0, metrics?.maxOffset ?? 0);
+    if (maxOffset <= 0 && scrollbar === null) return null;
+    if (scrollbar === null) {
+      const track2 = doc.createElement("div");
+      track2.className = "ce-term-scrollbar";
+      const thumb2 = doc.createElement("div");
+      thumb2.className = "ce-term-scrollbar-thumb";
+      track2.appendChild(thumb2);
+      container.appendChild(track2);
+      scrollbar = { track: track2, thumb: thumb2 };
+    }
+    const { track, thumb } = scrollbar;
+    if (maxOffset <= 0) {
+      track.style.display = "none";
+      return null;
+    }
+    const viewportRows = Math.max(1, metrics.viewportRows ?? 1);
+    const trackHeight = Math.max(1, metrics.trackHeight ?? viewportRows * rowHeight);
+    const thumbHeight = Math.max(12, Math.round(viewportRows / (maxOffset + viewportRows) * trackHeight));
+    const travel = Math.max(0, trackHeight - thumbHeight);
+    const ratio = Math.min(1, Math.max(0, (metrics?.offset ?? 0) / maxOffset));
+    track.style.display = "block";
+    thumb.style.height = `${thumbHeight}px`;
+    thumb.style.transform = `translateY(${Math.round((1 - ratio) * travel)}px)`;
+    return { thumbHeight, trackHeight, travel };
+  }
+  function paintSearch(rects) {
+    const requested = Array.isArray(rects) ? rects : [];
+    if (requested.length === 0 && searchLayer === null) return;
+    if (searchLayer === null) {
+      searchLayer = doc.createElement("div");
+      searchLayer.className = "ce-term-search-layer";
+      container.appendChild(searchLayer);
+    }
+    const wanted = requested;
+    while (searchLayer.children.length < wanted.length) {
+      const el = doc.createElement("div");
+      el.className = "ce-term-search-rect";
+      searchLayer.appendChild(el);
+      searchRects.push(el);
+    }
+    while (searchLayer.children.length > wanted.length) {
+      const el = searchLayer.children[searchLayer.children.length - 1];
+      el.remove();
+      searchRects.pop();
+    }
+    for (let i = 0; i < wanted.length; i++) {
+      const rect = wanted[i];
+      const el = searchRects[i];
+      el.className = `ce-term-search-rect${rect.current ? " ce-term-search-current" : ""}`;
+      el.style.transform = `translate(${rect.left}px, ${rect.top}px)`;
+      el.style.width = `${rect.width}px`;
+      el.style.height = `${rect.height}px`;
     }
   }
   function cellAt(clientX, clientY) {
@@ -18580,6 +19204,22 @@ function createRenderer({ container, doc = globalThis.document, theme = () => ({
   }
   function invalidate() {
     for (let i = 0; i < versions.length; i++) versions[i] = -1;
+    generation++;
+  }
+  function paintCopyCursor(rect) {
+    if (rect === null || rect === void 0) {
+      if (copyCursor !== null) copyCursor.style.display = "none";
+      return;
+    }
+    if (copyCursor === null) {
+      copyCursor = doc.createElement("div");
+      copyCursor.className = "ce-term-copy-cursor";
+      container.appendChild(copyCursor);
+    }
+    copyCursor.style.display = "block";
+    copyCursor.style.transform = `translate(${rect.left}px, ${rect.top}px)`;
+    copyCursor.style.width = `${rect.width}px`;
+    copyCursor.style.height = `${rect.height}px`;
   }
   function paintSelection(rects) {
     const wanted = Array.isArray(rects) ? rects : [];
@@ -18604,12 +19244,21 @@ function createRenderer({ container, doc = globalThis.document, theme = () => ({
     cellAt,
     paint,
     paintSelection,
+    paintCopyCursor,
+    paintScrollbar,
+    paintSearch,
     invalidate,
     get cellWidth() {
       return cellWidth2;
     },
     get rowHeight() {
       return rowHeight;
+    },
+    get stats() {
+      return stats;
+    },
+    get scrollbarElement() {
+      return scrollbar?.track ?? null;
     },
     /** Size in device pixels consumed by the current grid. */
     gridSize(cols, rows) {
@@ -18620,8 +19269,13 @@ function createRenderer({ container, doc = globalThis.document, theme = () => ({
       selectionEl.remove();
       cursorEl.remove();
       measureEl.remove();
-      rowEls = [];
+      scrollbar?.track.remove();
+      searchLayer?.remove();
+      copyCursor?.remove();
+      rowEls.length = 0;
       versions.length = 0;
+      seqs.length = 0;
+      searchRects.length = 0;
     }
   };
 }
@@ -18697,10 +19351,38 @@ function keyToBytes(event, modes = {}) {
   }
   return null;
 }
-function pasteToBytes(text, bracketed) {
-  if (typeof text !== "string" || text === "") return "";
-  const normalised = text.replace(/\r\n/gu, "\r").replace(/\n/gu, "\r");
-  return bracketed ? `\x1B[200~${normalised}\x1B[201~` : normalised;
+function utf8Bytes(code) {
+  if (code <= 127) return 1;
+  if (code <= 2047) return 2;
+  if (code <= 65535) return 3;
+  return 4;
+}
+function normalisePaste(text) {
+  return text.replace(/\r\n/gu, "\r").replace(/\n/gu, "\r");
+}
+function pasteChunks(text, bracketed, maxBytes = 32 * 1024) {
+  if (typeof text !== "string" || text === "") return [];
+  const normalised = normalisePaste(text);
+  if (normalised === "") return [];
+  const limit = Math.max(1, Math.trunc(maxBytes));
+  const chunks = [];
+  let current = "";
+  let bytes = 0;
+  for (const char of normalised) {
+    const size = utf8Bytes(char.codePointAt(0) ?? 32);
+    if (current !== "" && bytes + size > limit) {
+      chunks.push(current);
+      current = "";
+      bytes = 0;
+    }
+    current += char;
+    bytes += size;
+  }
+  if (current !== "") chunks.push(current);
+  if (!bracketed) return chunks;
+  chunks[0] = `\x1B[200~${chunks[0]}`;
+  chunks[chunks.length - 1] += "\x1B[201~";
+  return chunks;
 }
 
 // src/client/vt/selection.js
@@ -18810,7 +19492,268 @@ function encodeWheel(event, options) {
   return encodeMouse({ ...event, button: event.deltaY < 0 ? "wheelUp" : "wheelDown", action: "press" }, options);
 }
 
+// src/client/vt/search.js
+function lineSearchText(line) {
+  const columns = [];
+  const widths = [];
+  let text = "";
+  for (let col = 0; col < (line?.cells?.length ?? 0); col++) {
+    const cell = line.cells[col];
+    if (cell === void 0 || cell.w === 0) continue;
+    for (let i = 0; i < cell.c.length; i++) {
+      columns.push(col);
+      widths.push(cell.w || 1);
+    }
+    text += cell.c;
+  }
+  return { text, columns, widths };
+}
+function findInLine(line, seq, query, { caseSensitive = false } = {}) {
+  if (typeof query !== "string" || query === "" || !line?.cells) return [];
+  const sensitive = caseSensitive || /[A-Z]/u.test(query);
+  const { text, columns, widths } = lineSearchText(line);
+  const haystack = sensitive ? text : text.toLocaleLowerCase();
+  const needle = sensitive ? query : query.toLocaleLowerCase();
+  const matches = [];
+  let from = 0;
+  while (from <= haystack.length) {
+    const at = haystack.indexOf(needle, from);
+    if (at < 0) break;
+    const start = columns[at] ?? 0;
+    const last = at + needle.length - 1;
+    const end = (columns[last] ?? start) + (widths[last] ?? 1);
+    matches.push({ seq, col: start, width: Math.max(1, end - start), text: text.slice(at, at + needle.length) });
+    from = at + Math.max(1, needle.length);
+  }
+  return matches;
+}
+function searchScreen(screen, query, { caseSensitive = false, limit = 5e3 } = {}) {
+  if (typeof query !== "string" || query === "") return [];
+  const total = screen.bufferRows;
+  const matches = [];
+  for (let index = 0; index < total && matches.length < limit; index++) {
+    const line = screen.lineAt(index);
+    if (!line) continue;
+    for (const match of findInLine(line, line.seq, query, { caseSensitive })) {
+      matches.push(match);
+      if (matches.length >= limit) break;
+    }
+  }
+  return matches;
+}
+function offsetForRow(screen, index, margin = 2) {
+  const maxOffset = Math.max(0, screen.bufferRows - screen.rows);
+  const context = Math.min(Math.max(0, margin), Math.max(0, screen.rows - 1));
+  const desiredStart = Math.max(0, Math.min(maxOffset, index - context));
+  return Math.max(0, Math.min(maxOffset, screen.bufferRows - screen.rows - desiredStart));
+}
+
+// src/client/vt/copy.js
+var WORD = /[\p{L}\p{N}_]/u;
+function infoAt(screen, index) {
+  const line = screen.lineAt(index);
+  return { index, line, ...lineSearchText(line) };
+}
+function clampIndex(screen, index) {
+  return Math.max(0, Math.min(screen.bufferRows - 1, index));
+}
+function lastCol(info) {
+  if (info.text.length === 0) return 0;
+  const index = info.text.length - 1;
+  return (info.columns[index] ?? 0) + (info.widths[index] ?? 1) - 1;
+}
+function textIndexAt(info, col) {
+  for (let i = 0; i < info.columns.length; i++) if (info.columns[i] >= col) return i;
+  return info.text.length;
+}
+function colAt(info, textIndex) {
+  if (info.text.length === 0) return 0;
+  const index = Math.max(0, Math.min(info.text.length - 1, textIndex));
+  return info.columns[index] ?? 0;
+}
+function normalizeCopyPosition(screen, position) {
+  let index = screen.indexOfSeq(position.seq);
+  if (index < 0) index = position.seq < screen.firstSeq ? 0 : clampIndex(screen, screen.bufferRows - 1);
+  const info = infoAt(screen, index);
+  const col = Math.max(0, Math.min(lastCol(info), Number.isFinite(position.col) ? position.col : 0));
+  return { seq: screen.lineSeqAt(index), col };
+}
+function copyStart(screen, offset) {
+  const row = clampIndex(screen, screen.topRow(offset) + Math.min(screen.rows - 1, screen.cursor.y));
+  const info = infoAt(screen, row);
+  return { seq: screen.lineSeqAt(row), col: Math.min(screen.cursor.x, lastCol(info)) };
+}
+function moveVertical(screen, position, delta) {
+  const index = clampIndex(screen, screen.indexOfSeq(position.seq) + delta);
+  const info = infoAt(screen, index);
+  return { seq: screen.lineSeqAt(index), col: Math.min(position.col, lastCol(info)) };
+}
+function moveHorizontal(screen, position, delta) {
+  let index = screen.indexOfSeq(position.seq);
+  if (index < 0) return normalizeCopyPosition(screen, position);
+  let info = infoAt(screen, index);
+  let at = textIndexAt(info, position.col) + delta;
+  if (at < 0) {
+    index = clampIndex(screen, index - 1);
+    info = infoAt(screen, index);
+    at = Math.max(0, info.text.length - 1);
+  } else if (at >= info.text.length) {
+    index = clampIndex(screen, index + 1);
+    info = infoAt(screen, index);
+    at = 0;
+  }
+  return { seq: screen.lineSeqAt(index), col: colAt(info, at) };
+}
+function classAt(char, big) {
+  if (char === void 0 || /\s/u.test(char)) return 0;
+  if (big) return 1;
+  return WORD.test(char) ? 1 : 2;
+}
+function nextWordStart(screen, position, big) {
+  let index = screen.indexOfSeq(position.seq);
+  let info = infoAt(screen, index);
+  let at = textIndexAt(info, position.col);
+  const startClass = classAt(info.text[at], big);
+  if (at < info.text.length) at++;
+  while (true) {
+    while (at < info.text.length && classAt(info.text[at], big) === startClass && startClass !== 0) at++;
+    while (at < info.text.length && classAt(info.text[at], big) === 0) at++;
+    if (at < info.text.length) return { seq: screen.lineSeqAt(index), col: colAt(info, at) };
+    index = clampIndex(screen, index + 1);
+    info = infoAt(screen, index);
+    at = 0;
+    while (at < info.text.length && classAt(info.text[at], big) === 0) at++;
+    if (at < info.text.length) return { seq: screen.lineSeqAt(index), col: colAt(info, at) };
+    if (index >= screen.bufferRows - 1) return { seq: screen.lineSeqAt(index), col: 0 };
+  }
+}
+function previousWordStart(screen, position, big) {
+  let index = screen.indexOfSeq(position.seq);
+  let info = infoAt(screen, index);
+  let at = textIndexAt(info, position.col);
+  if (at > 0) at--;
+  while (true) {
+    while (at > 0 && classAt(info.text[at], big) === 0) at--;
+    if (at > 0 || at === 0 && classAt(info.text[0], big) !== 0) {
+      const cls = classAt(info.text[at], big);
+      while (at > 0 && classAt(info.text[at - 1], big) === cls) at--;
+      return { seq: screen.lineSeqAt(index), col: colAt(info, at) };
+    }
+    index = clampIndex(screen, index - 1);
+    info = infoAt(screen, index);
+    at = Math.max(0, info.text.length - 1);
+    if (index === 0 && info.text.length === 0) return { seq: screen.lineSeqAt(index), col: 0 };
+  }
+}
+function nextWordEnd(screen, position, big) {
+  let index = screen.indexOfSeq(position.seq);
+  let info = infoAt(screen, index);
+  let at = textIndexAt(info, position.col) + 1;
+  while (true) {
+    while (at < info.text.length && classAt(info.text[at], big) === 0) at++;
+    if (at < info.text.length) {
+      const cls = classAt(info.text[at], big);
+      while (at + 1 < info.text.length && classAt(info.text[at + 1], big) === cls) at++;
+      return { seq: screen.lineSeqAt(index), col: colAt(info, at) };
+    }
+    index = clampIndex(screen, index + 1);
+    info = infoAt(screen, index);
+    at = 0;
+    if (index >= screen.bufferRows - 1) return { seq: screen.lineSeqAt(index), col: lastCol(info) };
+  }
+}
+function moveParagraph(screen, position, direction) {
+  let index = screen.indexOfSeq(position.seq);
+  for (let i = index + direction; i >= 0 && i < screen.bufferRows; i += direction) {
+    const info = infoAt(screen, i);
+    if (info.text.trim() === "") return { seq: screen.lineSeqAt(i), col: 0 };
+  }
+  return direction < 0 ? { seq: screen.lineSeqAt(0), col: 0 } : { seq: screen.lineSeqAt(screen.bufferRows - 1), col: 0 };
+}
+function moveCopy(screen, position, action, { page = screen.rows - 1 } = {}) {
+  switch (action) {
+    case "up":
+      return moveVertical(screen, position, -1);
+    case "down":
+      return moveVertical(screen, position, 1);
+    case "left":
+      return moveHorizontal(screen, position, -1);
+    case "right":
+      return moveHorizontal(screen, position, 1);
+    case "page-up":
+      return moveVertical(screen, position, -Math.max(1, page));
+    case "page-down":
+      return moveVertical(screen, position, Math.max(1, page));
+    case "top":
+      return { seq: screen.lineSeqAt(0), col: position.col };
+    case "bottom":
+      return { seq: screen.lineSeqAt(screen.bufferRows - 1), col: position.col };
+    case "line-start":
+      return { seq: position.seq, col: 0 };
+    case "line-end": {
+      const info = infoAt(screen, screen.indexOfSeq(position.seq));
+      return { seq: position.seq, col: lastCol(info) };
+    }
+    case "word":
+      return nextWordStart(screen, position, false);
+    case "big-word":
+      return nextWordStart(screen, position, true);
+    case "word-back":
+      return previousWordStart(screen, position, false);
+    case "big-word-back":
+      return previousWordStart(screen, position, true);
+    case "word-end":
+      return nextWordEnd(screen, position, false);
+    case "big-word-end":
+      return nextWordEnd(screen, position, true);
+    case "paragraph-back":
+      return moveParagraph(screen, position, -1);
+    case "paragraph":
+      return moveParagraph(screen, position, 1);
+    default:
+      return null;
+  }
+}
+function copyRows(screen, anchor, head) {
+  const toRow = (position) => {
+    const index = screen.indexOfSeq(position.seq);
+    return index < 0 ? position.seq < screen.firstSeq ? 0 : clampIndex(screen, screen.bufferRows - 1) : index;
+  };
+  return {
+    anchor: { row: toRow(anchor), col: anchor.col },
+    head: { row: toRow(head), col: head.col }
+  };
+}
+function copyText(screen, anchor, head) {
+  return selectionText(copyRows(screen, anchor, head), (row) => screen.lineAt(row), screen.cols);
+}
+function lineSelection(screen, position) {
+  const info = infoAt(screen, screen.indexOfSeq(position.seq));
+  return { anchor: { seq: position.seq, col: 0 }, head: { seq: position.seq, col: lastCol(info) + 1 } };
+}
+
 // src/client/vt/body.js
+var DEFAULT_THEME = {
+  fg: "#d4d4d4",
+  bg: "#1e1e1e",
+  fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+  fontSize: 13
+};
+var SEARCH_DEBOUNCE_MS = 140;
+var SYNC_OUTPUT_TIMEOUT_MS = 150;
+var FIT_DEBOUNCE_MS = 80;
+var PASTE_DELAY_MS = 10;
+function themeOf(snapshot) {
+  if (!snapshot || typeof snapshot !== "object") return DEFAULT_THEME;
+  const family = snapshot.fontFamilies?.terminal ?? DEFAULT_THEME.fontFamily;
+  const size = snapshot.fontSizes?.terminal ?? DEFAULT_THEME.fontSize;
+  return {
+    fg: DEFAULT_THEME.fg,
+    bg: DEFAULT_THEME.bg,
+    fontFamily: family === "" ? DEFAULT_THEME.fontFamily : `${family}, ${DEFAULT_THEME.fontFamily}`,
+    fontSize: Number.isFinite(size) ? size : DEFAULT_THEME.fontSize
+  };
+}
 function applyRenderFrame(screen, render) {
   const payload = render?.frame;
   if (!payload) return false;
@@ -18827,23 +19770,6 @@ function applyRenderFrame(screen, render) {
   }
   return false;
 }
-var DEFAULT_THEME = {
-  fg: "#d4d4d4",
-  bg: "#1e1e1e",
-  fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
-  fontSize: 13
-};
-function themeOf(snapshot) {
-  if (!snapshot || typeof snapshot !== "object") return DEFAULT_THEME;
-  const family = snapshot.fontFamilies?.terminal ?? DEFAULT_THEME.fontFamily;
-  const size = snapshot.fontSizes?.terminal ?? DEFAULT_THEME.fontSize;
-  return {
-    fg: DEFAULT_THEME.fg,
-    bg: DEFAULT_THEME.bg,
-    fontFamily: family === "" ? DEFAULT_THEME.fontFamily : `${family}, ${DEFAULT_THEME.fontFamily}`,
-    fontSize: Number.isFinite(size) ? size : DEFAULT_THEME.fontSize
-  };
-}
 function TerminalBody({ useTabInfo, useTerminal, useTheme, view, t }) {
   const { tab } = useTabInfo();
   const model = view(tab.id);
@@ -18852,17 +19778,27 @@ function TerminalBody({ useTabInfo, useTerminal, useTheme, view, t }) {
   const theme = themeOf(themeSnapshot);
   const hostRef = useRef(null);
   const engine = useRef(null);
+  const searchInputRef = useRef(null);
+  const searchOpenRef = useRef(false);
   const [engineReady, setEngineReady] = useState(0);
-  const latest = useRef({ state, writable: false, theme });
-  latest.current = { state, writable: Boolean(state?.writable), theme };
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchInfo, setSearchInfo] = useState({ index: 0, count: 0 });
+  const [copyInfo, setCopyInfo] = useState(null);
+  const [notice, setNotice] = useState("");
+  searchOpenRef.current = searchOpen;
+  const latest = useRef({ state, writable: Boolean(state?.writable), theme, visible: tab.visible !== false });
+  latest.current = { state, writable: Boolean(state?.writable), theme, visible: tab.visible !== false };
   useEffect(() => model.mount(), [model]);
   useEffect(() => {
     const host = hostRef.current;
     if (!host || typeof document === "undefined") return void 0;
+    const environment = latest.current.state?.environment;
     const screen = createScreen({
       cols: 80,
       rows: 24,
-      scrollback: latest.current.state?.environment?.scrollback ?? 1e3
+      scrollback: environment?.scrollback ?? 1e3,
+      scrollbackBytes: 10 * 1024 * 1024
     });
     const renderer = createRenderer({
       container: host,
@@ -18878,18 +19814,52 @@ function TerminalBody({ useTabInfo, useTerminal, useTheme, view, t }) {
     input.spellcheck = false;
     host.appendChild(input);
     let frame = 0;
+    let fitTimer = 0;
+    let syncTimer = 0;
+    let searchTimer = 0;
+    let pasteTimer = 0;
+    let pasteQueue = [];
     let offset = 0;
+    let anchorSeq = null;
     let dirty = true;
+    let visible = latest.current.visible;
+    let lastRevision = -1;
     let selection = null;
     let dragKind = null;
+    let scrollDrag = false;
     let clickCount = 0;
     let lastClick = { at: 0, row: -1, col: -1 };
-    const rectsForSelection = () => {
-      if (selection === null) return [];
+    let search = { query: "", matches: [], index: -1 };
+    let copy = null;
+    let noticeTimer = 0;
+    let lastAlt = screen.alt;
+    const now = () => typeof performance !== "undefined" ? performance.now() : Date.now();
+    const maxOffset = () => screen.alt ? 0 : screen.scrollbackRows;
+    const toRows = () => {
+      if (selection === null) return null;
+      const toRow = (position) => {
+        const index = screen.indexOfSeq(position.seq);
+        if (index >= 0) return index;
+        return position.seq < screen.firstSeq ? 0 : Math.max(0, screen.bufferRows - 1);
+      };
+      return {
+        anchor: { row: toRow(selection.anchor), col: selection.anchor.col },
+        head: { row: toRow(selection.head), col: selection.head.col }
+      };
+    };
+    const rowsToSelection = (rows) => {
+      if (rows === null) return null;
+      const toPosition = (position) => ({
+        seq: screen.lineSeqAt(position.row),
+        col: position.col
+      });
+      return { anchor: toPosition(rows.anchor), head: toPosition(rows.head) };
+    };
+    const rectsForRows = (rows) => {
       const first = screen.topRow(offset);
       const rects = [];
       for (let row = 0; row < screen.rows; row++) {
-        const span = selectionRow(selection, first + row, screen.cols);
+        const span = selectionRow(rows, first + row, screen.cols);
         if (span === null) continue;
         rects.push({
           left: span.from * renderer.cellWidth,
@@ -18900,15 +19870,70 @@ function TerminalBody({ useTabInfo, useTerminal, useTheme, view, t }) {
       }
       return rects;
     };
+    const rectsForSelection = () => {
+      const rects = [];
+      const mouse = toRows();
+      if (mouse !== null) rects.push(...rectsForRows(mouse));
+      if (copy?.anchor) rects.push(...rectsForRows(copyRows(screen, copy.anchor, copy.cursor)));
+      return rects;
+    };
+    const searchRects = () => {
+      if (search.query === "" || search.matches.length === 0) return [];
+      const first = screen.topRow(offset);
+      const rects = [];
+      for (let i = 0; i < search.matches.length && rects.length < 400; i++) {
+        const match = search.matches[i];
+        const index = screen.indexOfSeq(match.seq);
+        if (index < first || index >= first + screen.rows) continue;
+        rects.push({
+          left: match.col * renderer.cellWidth,
+          top: (index - first) * renderer.rowHeight,
+          width: Math.max(1, match.width * renderer.cellWidth),
+          height: renderer.rowHeight,
+          current: i === search.index
+        });
+      }
+      return rects;
+    };
     const paint = () => {
       frame = 0;
-      if (!dirty) return;
+      if (!dirty || !visible) return;
       dirty = false;
-      renderer.paint(screen, { offset });
+      const damage = screen.consumeDamage();
+      renderer.paint(screen, { offset, damage });
       renderer.paintSelection(rectsForSelection());
+      renderer.paintCopyCursor(copyCursorRect());
+      renderer.paintSearch(searchRects());
+      renderer.paintScrollbar({
+        offset,
+        maxOffset: maxOffset(),
+        viewportRows: screen.rows,
+        trackHeight: screen.rows * renderer.rowHeight
+      });
     };
     const schedule = () => {
       dirty = true;
+      if (!visible) {
+        screen.markFull();
+        return;
+      }
+      if (screen.modes.syncOutput) {
+        if (frame !== 0) {
+          cancelAnimationFrame(frame);
+          frame = 0;
+        }
+        if (syncTimer === 0) {
+          syncTimer = setTimeout(() => {
+            syncTimer = 0;
+            schedule();
+          }, SYNC_OUTPUT_TIMEOUT_MS);
+        }
+        return;
+      }
+      if (syncTimer !== 0) {
+        clearTimeout(syncTimer);
+        syncTimer = 0;
+      }
       if (frame === 0) frame = requestAnimationFrame(paint);
     };
     const clearSelection = () => {
@@ -18916,24 +19941,314 @@ function TerminalBody({ useTabInfo, useTerminal, useTheme, view, t }) {
       selection = null;
       schedule();
     };
-    const fit = () => {
+    const setOffset = (next) => {
+      const limit = maxOffset();
+      const clamped = Math.max(0, Math.min(limit, Math.trunc(next)));
+      if (clamped === offset) return false;
+      offset = clamped;
+      anchorSeq = clamped === 0 ? null : screen.lineSeqAt(screen.topRow(clamped));
+      schedule();
+      return true;
+    };
+    const followOutput = () => {
+      if (anchorSeq === null) {
+        offset = 0;
+        return;
+      }
+      const index = screen.indexOfSeq(anchorSeq);
+      const limit = maxOffset();
+      if (index < 0) {
+        offset = Math.min(limit, Math.max(0, offset));
+        anchorSeq = screen.lineSeqAt(screen.topRow(offset));
+        return;
+      }
+      offset = Math.max(0, Math.min(limit, limit - index));
+      if (offset === 0) anchorSeq = null;
+    };
+    const clearSearch = () => {
+      search = { query: "", matches: [], index: -1 };
+      if (searchTimer !== 0) {
+        clearTimeout(searchTimer);
+        searchTimer = 0;
+      }
+      setSearchInfo({ index: 0, count: 0 });
+      schedule();
+    };
+    const reportSearch = () => {
+      setSearchInfo({ index: search.index >= 0 ? search.index + 1 : 0, count: search.matches.length });
+    };
+    const goToMatch = (index) => {
+      if (search.matches.length === 0) return;
+      const count = search.matches.length;
+      search.index = (index % count + count) % count;
+      const match = search.matches[search.index];
+      const row = screen.indexOfSeq(match.seq);
+      if (row >= 0) {
+        const next = offsetForRow(screen, row, 2);
+        offset = next;
+        anchorSeq = next === 0 ? null : screen.lineSeqAt(screen.topRow(next));
+      }
+      reportSearch();
+      schedule();
+    };
+    const refreshSearch = () => {
+      if (search.query === "") return;
+      const previous = search.matches[search.index];
+      const matches = searchScreen(screen, search.query);
+      search.matches = matches;
+      if (previous !== void 0) {
+        const at = matches.findIndex((match) => match.seq === previous.seq && match.col === previous.col);
+        search.index = at >= 0 ? at : Math.min(search.index, matches.length - 1);
+      } else {
+        search.index = matches.length > 0 ? 0 : -1;
+      }
+      reportSearch();
+      schedule();
+    };
+    const scheduleSearchRefresh = () => {
+      if (search.query === "" || searchTimer !== 0) return;
+      searchTimer = setTimeout(() => {
+        searchTimer = 0;
+        refreshSearch();
+      }, SEARCH_DEBOUNCE_MS);
+    };
+    const setSearch = (query) => {
+      search.query = query;
+      if (searchTimer !== 0) {
+        clearTimeout(searchTimer);
+        searchTimer = 0;
+      }
+      if (query === "") {
+        search.matches = [];
+        search.index = -1;
+        reportSearch();
+        schedule();
+        return;
+      }
+      search.matches = searchScreen(screen, query);
+      search.index = search.matches.length > 0 ? 0 : -1;
+      if (search.index >= 0) {
+        const match = search.matches[0];
+        const row = screen.indexOfSeq(match.seq);
+        if (row >= 0) {
+          const next = offsetForRow(screen, row, 2);
+          offset = next;
+          anchorSeq = next === 0 ? null : screen.lineSeqAt(screen.topRow(next));
+        }
+      }
+      reportSearch();
+      schedule();
+    };
+    const openSearch = () => {
+      setSearchOpen(true);
+    };
+    const closeSearch = () => {
+      setSearchOpen(false);
+      setSearchQuery("");
+      clearSearch();
+    };
+    const announce = (text) => {
+      if (typeof text !== "string" || text === "") return;
+      setNotice(text.slice(0, 160));
+      if (noticeTimer !== 0) clearTimeout(noticeTimer);
+      noticeTimer = setTimeout(() => {
+        noticeTimer = 0;
+        setNotice("");
+      }, 2600);
+    };
+    const syncCopyInfo = () => {
+      if (copy === null) {
+        setCopyInfo(null);
+        return;
+      }
+      setCopyInfo({ selecting: copy.anchor !== null, row: screen.indexOfSeq(copy.cursor.seq), col: copy.cursor.col });
+    };
+    const ensureCopyVisible = () => {
+      if (copy === null) return;
+      const index = screen.indexOfSeq(copy.cursor.seq);
+      if (index < 0) return;
+      const top = screen.topRow(offset);
+      if (index < top) setOffset(offset - (top - index));
+      else if (index >= top + screen.rows) setOffset(offset + (index - (top + screen.rows) + 1));
+    };
+    const enterCopyMode = () => {
+      if (copy !== null) return;
+      if (searchOpenRef.current) closeSearch();
+      copy = { cursor: copyStart(screen, offset), anchor: null };
+      ensureCopyVisible();
+      syncCopyInfo();
+      schedule();
+      input.focus({ preventScroll: true });
+    };
+    const exitCopyMode = () => {
+      if (copy === null) return;
+      copy = null;
+      syncCopyInfo();
+      schedule();
+      input.focus({ preventScroll: true });
+    };
+    const yankCopy = async () => {
+      if (copy === null) return false;
+      const rows = copy.anchor !== null ? copyRows(screen, copy.anchor, copy.cursor) : lineSelection(screen, copy.cursor);
+      const text = copyText(screen, rows.anchor, rows.head);
+      if (text === "") {
+        exitCopyMode();
+        return false;
+      }
+      try {
+        await navigator.clipboard.writeText(text);
+      } catch {
+        announce(t("terminal.copyFailed"));
+        return false;
+      }
+      announce(t("terminal.copyDone"));
+      exitCopyMode();
+      return true;
+    };
+    const copyMove = (action) => {
+      if (copy === null) return;
+      const next = moveCopy(screen, copy.cursor, action, { page: Math.max(1, screen.rows - 1) });
+      if (next === null) return;
+      copy.cursor = normalizeCopyPosition(screen, next);
+      ensureCopyVisible();
+      syncCopyInfo();
+      schedule();
+    };
+    const toggleCopySelection = () => {
+      if (copy === null) return;
+      copy.anchor = copy.anchor === null ? copy.cursor : null;
+      syncCopyInfo();
+      schedule();
+    };
+    const selectCopyLine = () => {
+      if (copy === null) return;
+      const line = lineSelection(screen, copy.cursor);
+      copy.anchor = line.anchor;
+      copy.cursor = line.head;
+      ensureCopyVisible();
+      syncCopyInfo();
+      schedule();
+    };
+    const copyCursorRect = () => {
+      if (copy === null) return null;
+      const index = screen.indexOfSeq(copy.cursor.seq);
+      if (index < 0) return null;
+      const row = index - screen.topRow(offset);
+      if (row < 0 || row >= screen.rows) return null;
+      return {
+        left: copy.cursor.col * renderer.cellWidth,
+        top: row * renderer.rowHeight,
+        width: renderer.cellWidth,
+        height: renderer.rowHeight
+      };
+    };
+    const handleCopyKey = (event) => {
+      if (copy === null) return false;
+      const key = event.key;
+      if (key === "Escape" || key === "q") {
+        exitCopyMode();
+        return true;
+      }
+      if (key === "y" || key === "Enter") {
+        void yankCopy();
+        return true;
+      }
+      if (key === "v" || key === " ") {
+        toggleCopySelection();
+        return true;
+      }
+      if (key === "V") {
+        selectCopyLine();
+        return true;
+      }
+      if ((event.ctrlKey || event.metaKey) && key === "Home") {
+        copyMove("top");
+        return true;
+      }
+      if ((event.ctrlKey || event.metaKey) && key === "End") {
+        copyMove("bottom");
+        return true;
+      }
+      const motions = {
+        ArrowUp: "up",
+        k: "up",
+        ArrowDown: "down",
+        j: "down",
+        ArrowLeft: "left",
+        h: "left",
+        ArrowRight: "right",
+        l: "right",
+        PageUp: "page-up",
+        PageDown: "page-down",
+        Home: "line-start",
+        End: "line-end",
+        "0": "line-start",
+        "$": "line-end",
+        g: "top",
+        G: "bottom",
+        w: "word",
+        b: "word-back",
+        e: "word-end",
+        W: "big-word",
+        B: "big-word-back",
+        E: "big-word-end",
+        "{": "paragraph-back",
+        "}": "paragraph"
+      };
+      const action = motions[key];
+      if (action !== void 0) {
+        copyMove(action);
+        return true;
+      }
+      return true;
+    };
+    const fitNow = () => {
+      if (fitTimer !== 0) {
+        clearTimeout(fitTimer);
+        fitTimer = 0;
+      }
       const width = host.clientWidth;
       const height = host.clientHeight;
       if (width <= 0 || height <= 0) return;
       const cols = Math.max(2, Math.floor(width / renderer.cellWidth));
       const rows = Math.max(1, Math.floor(height / renderer.rowHeight));
+      const widthChanged = cols !== screen.cols;
+      const anchor = anchorSeq;
       const changed = screen.resize(cols, rows);
       renderer.measure();
       renderer.invalidate();
+      if (changed) selection = null;
+      if (changed && widthChanged) {
+        offset = 0;
+        anchorSeq = null;
+      } else if (changed && anchor !== null) {
+        const index = screen.indexOfSeq(anchor);
+        if (index < 0) {
+          offset = 0;
+          anchorSeq = null;
+        } else {
+          offset = Math.max(0, Math.min(maxOffset(), maxOffset() - index));
+          if (offset === 0) anchorSeq = null;
+        }
+      }
+      if (search.query !== "") scheduleSearchRefresh();
       schedule();
       const info = latest.current.state?.info;
       if (changed && latest.current.writable && (info === void 0 || info.cols !== cols || info.rows !== rows)) {
         model.resize(cols, rows);
       }
     };
+    const scheduleFit = () => {
+      if (fitTimer !== 0) return;
+      fitTimer = setTimeout(() => {
+        fitTimer = 0;
+        fitNow();
+      }, FIT_DEBOUNCE_MS);
+    };
     const copySelection = async () => {
-      if (selection === null) return false;
-      const text = selectionText(selection, (row) => screen.lineAt(row), screen.cols);
+      const rows = toRows();
+      if (rows === null) return false;
+      const text = selectionText(rows, (row) => screen.lineAt(row), screen.cols);
       if (text === "") return false;
       try {
         await navigator.clipboard.writeText(text);
@@ -18959,10 +20274,44 @@ function TerminalBody({ useTabInfo, useTerminal, useTheme, view, t }) {
       model.write(bytes, true);
       return true;
     };
+    const linkAt = (cell) => {
+      const line = screen.lineAt(screen.topRow(offset) + cell.y);
+      if (!line) return null;
+      let col = cell.x;
+      while (col >= 0 && line.cells[col]?.w === 0) col--;
+      return line.cells[col]?.link ?? null;
+    };
+    const openLink = (uri) => {
+      if (typeof uri !== "string" || !/^(https?:|mailto:)/iu.test(uri)) return;
+      const target = globalThis.window;
+      if (target?.open) target.open(uri, "_blank", "noopener,noreferrer");
+    };
     const onKeyDown = (event) => {
       if (event.isComposing || event.keyCode === 229) return;
+      if (copy !== null) {
+        event.preventDefault();
+        event.stopPropagation?.();
+        handleCopyKey(event);
+        return;
+      }
+      if ((event.ctrlKey || event.metaKey) && event.shiftKey && (event.key === " " || event.code === "Space")) {
+        event.preventDefault();
+        event.stopPropagation?.();
+        enterCopyMode();
+        return;
+      }
       if (!latest.current.writable) return;
       const mod = event.metaKey || event.ctrlKey;
+      if ((event.metaKey || event.ctrlKey && event.shiftKey) && !event.altKey && (event.key === "f" || event.key === "F")) {
+        event.preventDefault();
+        openSearch();
+        return;
+      }
+      if (event.key === "Escape" && searchOpenRef.current) {
+        event.preventDefault();
+        closeSearch();
+        return;
+      }
       if (mod && !event.altKey && (event.key === "c" || event.key === "C") && !event.shiftKey) {
         if (selection !== null) {
           event.preventDefault();
@@ -18984,24 +20333,28 @@ function TerminalBody({ useTabInfo, useTerminal, useTheme, view, t }) {
       }
       if (mod && !event.altKey && !event.shiftKey && (event.key === "a" || event.key === "A") && selection !== null) {
         event.preventDefault();
-        selection = selectAll(screen.bufferRows, screen.cols);
+        selection = rowsToSelection(selectAll(screen.bufferRows, screen.cols));
         schedule();
         return;
       }
       if (event.metaKey && !event.altKey && !event.ctrlKey && (event.key === "a" || event.key === "A") && selection === null) {
         event.preventDefault();
-        selection = selectAll(screen.bufferRows, screen.cols);
+        selection = rowsToSelection(selectAll(screen.bufferRows, screen.cols));
         schedule();
+        return;
+      }
+      if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && (event.key === "Home" || event.key === "End")) {
+        event.preventDefault();
+        setOffset(event.key === "Home" ? maxOffset() : 0);
         return;
       }
       if (event.shiftKey && (event.key === "PageUp" || event.key === "PageDown" || event.key === "Home" || event.key === "End")) {
         event.preventDefault();
         const pages = Math.max(1, screen.rows - 1);
-        if (event.key === "PageUp") offset = Math.min(offset + pages, screen.scrollbackRows);
-        else if (event.key === "PageDown") offset = Math.max(0, offset - pages);
-        else if (event.key === "Home") offset = screen.scrollbackRows;
-        else offset = 0;
-        schedule();
+        if (event.key === "PageUp") setOffset(Math.min(offset + pages, maxOffset()));
+        else if (event.key === "PageDown") setOffset(Math.max(0, offset - pages));
+        else if (event.key === "Home") setOffset(maxOffset());
+        else setOffset(0);
         return;
       }
       const bytes = keyToBytes(event, screen.modes);
@@ -19011,11 +20364,12 @@ function TerminalBody({ useTabInfo, useTerminal, useTheme, view, t }) {
       model.write(bytes, true);
       if (offset !== 0) {
         offset = 0;
+        anchorSeq = null;
         schedule();
       }
     };
     const onInput = () => {
-      if (!latest.current.writable) {
+      if (copy !== null || !latest.current.writable) {
         input.value = "";
         return;
       }
@@ -19026,18 +20380,37 @@ function TerminalBody({ useTabInfo, useTerminal, useTheme, view, t }) {
       model.write(text, true);
       if (offset !== 0) {
         offset = 0;
+        anchorSeq = null;
         schedule();
       }
     };
+    const pasteChunkSize = () => {
+      const configured = Number(latest.current.state?.environment?.maxInputBytes);
+      const budget = Number.isFinite(configured) && configured > 0 ? configured : 64 * 1024;
+      return Math.max(1024, Math.min(8192, Math.floor(budget / 16)));
+    };
+    const pumpPaste = () => {
+      pasteTimer = 0;
+      if (!latest.current.writable) {
+        pasteQueue = [];
+        return;
+      }
+      const chunk = pasteQueue.shift();
+      if (chunk === void 0) return;
+      model.write(chunk, true);
+      if (pasteQueue.length > 0) pasteTimer = setTimeout(pumpPaste, PASTE_DELAY_MS);
+    };
     const onPaste = (event) => {
-      if (!latest.current.writable) return;
+      if (copy !== null || !latest.current.writable) return;
       const text = event.clipboardData?.getData("text") ?? "";
       if (text === "") return;
       event.preventDefault();
       clearSelection();
-      model.write(pasteToBytes(text, screen.modes.bracketedPaste), true);
+      pasteQueue.push(...pasteChunks(text, screen.modes.bracketedPaste, pasteChunkSize()));
+      if (pasteTimer === 0) pumpPaste();
       if (offset !== 0) {
         offset = 0;
+        anchorSeq = null;
         schedule();
       }
     };
@@ -19056,19 +20429,58 @@ function TerminalBody({ useTabInfo, useTerminal, useTheme, view, t }) {
           }
         }
       }
+      if (screen.alt && screen.modes.altScroll && !event.shiftKey && latest.current.writable) {
+        event.preventDefault();
+        model.write(event.deltaY < 0 ? "\x1B[A" : "\x1B[B", true);
+        return;
+      }
       const step = event.deltaMode === 1 ? 1 : 3;
       const next = offset + (event.deltaY > 0 ? -step : step);
-      const clamped = Math.max(0, Math.min(next, screen.scrollbackRows));
-      if (clamped === offset) return;
-      event.preventDefault();
-      offset = clamped;
-      schedule();
+      if (setOffset(next)) event.preventDefault();
     };
-    const onFocus = () => host.classList.add("ce-term-focused");
-    const onBlur = () => host.classList.remove("ce-term-focused");
+    const onFocus = () => {
+      host.classList.add("ce-term-focused");
+      if (!searchOpenRef.current && latest.current.writable && screen.modes.focus) model.write("\x1B[I", true);
+    };
+    const onBlur = () => {
+      host.classList.remove("ce-term-focused");
+      if (!searchOpenRef.current && latest.current.writable && screen.modes.focus) model.write("\x1B[O", true);
+    };
+    const isScrollbarTarget = (target) => {
+      let node = target;
+      while (node) {
+        if (typeof node.className === "string" && node.className.includes("ce-term-scrollbar")) return true;
+        node = node.parent;
+      }
+      return false;
+    };
+    const scrollToClientY = (clientY) => {
+      const track = renderer.scrollbarElement;
+      const box = track?.getBoundingClientRect?.();
+      if (!box || box.height <= 0) return;
+      const ratio = Math.max(0, Math.min(1, 1 - (clientY - box.top) / box.height));
+      setOffset(Math.round(ratio * maxOffset()));
+    };
     const onPointerDown = (event) => {
+      if (copy !== null) exitCopyMode();
       input.focus({ preventScroll: true });
+      if (isScrollbarTarget(event.target)) {
+        scrollDrag = true;
+        host.setPointerCapture?.(event.pointerId);
+        scrollToClientY(event.clientY);
+        event.preventDefault?.();
+        return;
+      }
       if (event.button !== 0) return;
+      if ((event.metaKey || event.ctrlKey) && !event.altKey) {
+        const cell2 = renderer.cellAt(event.clientX, event.clientY);
+        const link = cell2 === null ? null : linkAt(cell2);
+        if (link) {
+          event.preventDefault?.();
+          openLink(link);
+          return;
+        }
+      }
       if (mouseOwned(screen.modes) && !event.shiftKey) {
         if (reportMouse("press", event)) {
           dragKind = "mouse";
@@ -19078,35 +20490,50 @@ function TerminalBody({ useTabInfo, useTerminal, useTheme, view, t }) {
       }
       const cell = renderer.cellAt(event.clientX, event.clientY);
       if (cell === null) return;
-      const row = screen.topRow(offset) + cell.y;
-      const now = typeof performance !== "undefined" ? performance.now() : Date.now();
-      const repeat = lastClick.row === row && lastClick.col === cell.x && now - lastClick.at < 500;
+      const row = Math.max(0, Math.min(screen.bufferRows - 1, screen.topRow(offset) + cell.y));
+      const at = now();
+      const repeat = lastClick.row === row && lastClick.col === cell.x && at - lastClick.at < 500;
       clickCount = repeat ? Math.min(3, clickCount + 1) : 1;
-      lastClick = { at: now, row, col: cell.x };
-      if (clickCount >= 3) selection = selectLine(row, screen.cols);
-      else if (clickCount === 2) selection = selectWord(screen.lineAt(row), row, cell.x);
-      else selection = { anchor: { row, col: cell.x }, head: { row, col: cell.x } };
+      lastClick = { at, row, col: cell.x };
+      if (clickCount >= 3) selection = rowsToSelection(selectLine(row, screen.cols));
+      else if (clickCount === 2) selection = rowsToSelection(selectWord(screen.lineAt(row), row, cell.x));
+      else selection = rowsToSelection({ anchor: { row, col: cell.x }, head: { row, col: cell.x } });
       dragKind = "select";
       host.setPointerCapture?.(event.pointerId);
       schedule();
     };
     const onPointerMove = (event) => {
+      if (scrollDrag) {
+        scrollToClientY(event.clientY);
+        return;
+      }
       if (dragKind === "mouse") {
         if (reportsMotion(screen.modes.mouse)) reportMouse("drag", event);
         return;
       }
-      if (dragKind !== "select" || selection === null) return;
+      if (dragKind !== "select" || selection === null) {
+        const cell2 = renderer.cellAt(event.clientX, event.clientY);
+        const link = cell2 === null ? null : linkAt(cell2);
+        host.style.cursor = link ? "pointer" : "text";
+        if (cell2 !== null && reportsHover(screen.modes.mouse) && latest.current.writable) reportMouse("move", event);
+        return;
+      }
       const cell = renderer.cellAt(event.clientX, event.clientY);
       if (cell === null) return;
-      const row = screen.topRow(offset) + cell.y;
-      if (selection.head.row === row && selection.head.col === cell.x) return;
-      selection = { anchor: selection.anchor, head: { row, col: cell.x } };
-      if (cell.y < 0 && offset < screen.scrollbackRows) offset += 1;
-      else if (cell.y >= screen.rows && offset > 0) offset -= 1;
+      const row = Math.max(0, Math.min(screen.bufferRows - 1, screen.topRow(offset) + cell.y));
+      if (selection.head.seq === screen.lineSeqAt(row) && selection.head.col === cell.x) return;
+      selection = { anchor: selection.anchor, head: { seq: screen.lineSeqAt(row), col: cell.x } };
+      if (cell.y < 0 && offset < maxOffset()) setOffset(offset + 1);
+      else if (cell.y >= screen.rows && offset > 0) setOffset(offset - 1);
       schedule();
     };
     const onPointerUp = (event) => {
-      if (dragKind === "mouse" && reportsMotion(screen.modes.mouse)) reportMouse("release", event);
+      if (scrollDrag) {
+        scrollDrag = false;
+        host.releasePointerCapture?.(event.pointerId);
+        return;
+      }
+      if (dragKind === "mouse") reportMouse("release", event);
       dragKind = null;
       host.releasePointerCapture?.(event.pointerId);
     };
@@ -19120,6 +20547,63 @@ function TerminalBody({ useTabInfo, useTerminal, useTheme, view, t }) {
       }
       input.focus({ preventScroll: true });
     };
+    const apply = (render) => {
+      if (!render) return;
+      const snapshot = render.frame?.type === "snapshot";
+      if (render.revision === lastRevision) return;
+      applyRenderFrame(screen, render);
+      lastRevision = render.revision;
+      if (snapshot) {
+        selection = null;
+        if (copy !== null) {
+          copy = null;
+          syncCopyInfo();
+        }
+        offset = 0;
+        anchorSeq = null;
+        renderer.invalidate();
+        fitNow();
+        if (search.query !== "") scheduleSearchRefresh();
+      } else {
+        followOutput();
+        if (copy !== null) {
+          copy.cursor = normalizeCopyPosition(screen, copy.cursor);
+          ensureCopyVisible();
+          syncCopyInfo();
+        }
+      }
+      schedule();
+      model.acknowledge(render.revision);
+    };
+    const offMode = screen.onMode((modes) => {
+      if (modes.alt === lastAlt) return;
+      lastAlt = modes.alt;
+      selection = null;
+      if (copy !== null) {
+        copy = null;
+        syncCopyInfo();
+      }
+      offset = 0;
+      anchorSeq = null;
+      if (search.query !== "") scheduleSearchRefresh();
+      schedule();
+    });
+    const offBell = screen.onBell(() => announce(t("terminal.bell")));
+    const offOsc = screen.onOsc(({ command, body }) => {
+      if (command !== "9" && command !== "777") return;
+      const text = command === "777" && body.startsWith("notify;") ? body.slice("notify;".length).replace(/;/gu, " ") : body;
+      if (text !== "") announce(text);
+    });
+    let offState = null;
+    if (typeof model.state?.subscribe === "function") {
+      const onState = () => {
+        const current = model.state.getSnapshot();
+        if (current?.render) apply(current.render);
+      };
+      offState = model.state.subscribe(onState);
+      const initial = model.state.getSnapshot();
+      if (initial?.render) apply(initial.render);
+    }
     input.addEventListener("keydown", onKeyDown);
     input.addEventListener("input", onInput);
     input.addEventListener("paste", onPaste);
@@ -19131,20 +20615,16 @@ function TerminalBody({ useTabInfo, useTerminal, useTheme, view, t }) {
     host.addEventListener("pointerup", onPointerUp);
     host.addEventListener("pointercancel", onPointerUp);
     host.addEventListener("contextmenu", onContextMenu);
-    const observer = new ResizeObserver(fit);
+    const observer = new ResizeObserver(scheduleFit);
     observer.observe(host);
-    fit();
+    fitNow();
     schedule();
     engine.current = {
       screen,
       renderer,
       input,
-      fit,
+      fit: fitNow,
       schedule,
-      resetOffset() {
-        offset = 0;
-      },
-      /** Apply one render frame and acknowledge it to the Host immediately. */
       copySelection,
       get selection() {
         return selection;
@@ -19152,19 +20632,47 @@ function TerminalBody({ useTabInfo, useTerminal, useTheme, view, t }) {
       get scrollbackOffset() {
         return offset;
       },
-      apply(render) {
-        if (!render) return;
-        const snapshot = render.frame?.type === "snapshot";
-        applyRenderFrame(screen, render);
-        if (snapshot) renderer.invalidate();
-        offset = 0;
+      setVisible(next) {
+        visible = next !== false;
+        if (!visible) {
+          if (frame !== 0) cancelAnimationFrame(frame);
+          frame = 0;
+          return;
+        }
+        dirty = true;
+        fitNow();
         schedule();
-        model.acknowledge(render.revision);
       },
-      measure: () => renderer.measure(),
+      apply,
+      setSearch,
+      nextMatch() {
+        goToMatch(search.index + 1);
+      },
+      previousMatch() {
+        goToMatch(search.index - 1);
+      },
+      clearSearch,
+      openSearch,
+      closeSearch,
+      refreshSearch,
+      measureAndFit() {
+        renderer.measure();
+        renderer.invalidate();
+        fitNow();
+      },
       dispose() {
         observer.disconnect();
         if (frame !== 0) cancelAnimationFrame(frame);
+        if (fitTimer !== 0) clearTimeout(fitTimer);
+        if (syncTimer !== 0) clearTimeout(syncTimer);
+        if (searchTimer !== 0) clearTimeout(searchTimer);
+        if (pasteTimer !== 0) clearTimeout(pasteTimer);
+        if (noticeTimer !== 0) clearTimeout(noticeTimer);
+        pasteQueue = [];
+        offState?.();
+        offMode();
+        offBell();
+        offOsc();
         input.removeEventListener("keydown", onKeyDown);
         input.removeEventListener("input", onInput);
         input.removeEventListener("paste", onPaste);
@@ -19189,34 +20697,126 @@ function TerminalBody({ useTabInfo, useTerminal, useTheme, view, t }) {
   useEffect(() => {
     const current = engine.current;
     if (!current) return;
-    const rows = current.screen.rows;
-    current.measure();
-    current.renderer.invalidate();
-    current.fit();
-    void rows;
+    current.measureAndFit();
   }, [theme.fontFamily, theme.fontSize, engineReady]);
   useEffect(() => {
-    engine.current?.apply(state?.render);
-  }, [state?.render, engineReady]);
+    engine.current?.setVisible(tab.visible !== false);
+  }, [tab.visible, engineReady]);
   useEffect(() => {
-    if (!state?.writable || tab.visible === false) return;
+    if (state?.writable) engine.current?.fit();
+    if (!state?.writable || tab.visible === false || searchOpen) return;
     const input = engine.current?.input;
     input?.focus({ preventScroll: true });
-  }, [state?.writable, tab.visible, engineReady]);
+  }, [state?.writable, tab.visible, engineReady, searchOpen]);
+  useEffect(() => {
+    if (typeof model.state?.subscribe === "function") return;
+    engine.current?.apply(state?.render);
+  }, [state?.render, model, engineReady]);
+  useEffect(() => {
+    if (!searchOpen) return;
+    const input = searchInputRef.current;
+    input?.focus({ preventScroll: true });
+  }, [searchOpen]);
   const failed = state?.phase === "failed" || state?.issue !== void 0;
+  const disconnected = state?.phase === "disconnected";
+  const searchBar = searchOpen ? h(
+    "div",
+    { className: "ce-term-find", role: "search" },
+    h("input", {
+      ref: searchInputRef,
+      className: "ce-input ce-term-find-input",
+      value: searchQuery,
+      placeholder: t("terminal.searchPlaceholder"),
+      "aria-label": t("terminal.searchPlaceholder"),
+      onChange: (event) => {
+        const value = event.target.value;
+        setSearchQuery(value);
+        engine.current?.setSearch(value);
+      },
+      onKeyDown: (event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          event.stopPropagation?.();
+          if (event.shiftKey) engine.current?.previousMatch();
+          else engine.current?.nextMatch();
+        } else if (event.key === "Escape") {
+          event.preventDefault();
+          event.stopPropagation?.();
+          engine.current?.closeSearch();
+        }
+      }
+    }),
+    h("span", { className: "ce-term-find-count" }, searchInfo.count === 0 ? t("terminal.searchNone") : `${searchInfo.index}/${searchInfo.count}`),
+    h("button", { type: "button", className: "ce-term-find-btn", "aria-label": t("terminal.searchPrevious"), onClick: () => engine.current?.previousMatch() }, "↑"),
+    h("button", { type: "button", className: "ce-term-find-btn", "aria-label": t("terminal.searchNext"), onClick: () => engine.current?.nextMatch() }, "↓"),
+    h("button", { type: "button", className: "ce-term-find-btn", "aria-label": t("terminal.searchClose"), onClick: () => engine.current?.closeSearch() }, "✕")
+  ) : null;
   return h(
     "div",
     { className: "ce-term-shell" },
     h("div", { className: "ce-term", ref: hostRef, "data-ce-terminal": "" }),
+    searchBar,
     state?.info === void 0 && !failed ? h("div", { className: "ce-term-status", role: "status" }, t("terminal.connecting")) : null,
-    failed ? h("div", { className: "ce-term-status ce-term-status-error", role: "alert" }, state?.error ?? t("terminal.failed")) : null
+    failed ? h("div", { className: "ce-term-status ce-term-status-error", role: "alert" }, state?.error ?? t("terminal.failed")) : null,
+    (disconnected || state?.phase === "failed") && typeof model.connect === "function" ? h("button", { type: "button", className: "ce-term-reconnect", onClick: () => model.connect() }, t("terminal.reconnect")) : null
   );
 }
 
 // src/client/termtab.js
+function chromeOf(state) {
+  if (!state || typeof state !== "object") return { phase: "idle", writable: false };
+  return {
+    phase: state.phase,
+    writable: state.writable,
+    info: state.info,
+    environment: state.environment,
+    title: state.title,
+    error: state.error,
+    issue: state.issue
+  };
+}
+function sameInfo(a, b) {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  return a.cols === b.cols && a.rows === b.rows && a.state === b.state && a.exitCode === b.exitCode && a.error === b.error && a.title === b.title;
+}
+function sameChrome(a, b) {
+  return a.phase === b.phase && a.writable === b.writable && a.title === b.title && a.error === b.error && a.issue === b.issue && a.environment === b.environment && sameInfo(a.info, b.info);
+}
+function chromeStore(state) {
+  if (!state || typeof state.getSnapshot !== "function" || typeof state.subscribe !== "function") return state;
+  let store = chromeStores.get(state);
+  if (store !== void 0) return store;
+  let snapshot = chromeOf(state.getSnapshot());
+  const listeners = /* @__PURE__ */ new Set();
+  let off = null;
+  const sync = () => {
+    const next = chromeOf(state.getSnapshot());
+    if (sameChrome(snapshot, next)) return;
+    snapshot = next;
+    for (const listener of [...listeners]) listener();
+  };
+  store = {
+    getSnapshot: () => snapshot,
+    subscribe(listener) {
+      listeners.add(listener);
+      if (off === null) off = state.subscribe(sync);
+      return () => {
+        listeners.delete(listener);
+        if (listeners.size === 0 && off !== null) {
+          off();
+          off = null;
+        }
+      };
+    }
+  };
+  chromeStores.set(state, store);
+  return store;
+}
 var TERM_TAB_ID = "dsh-plugin-kit/terminal";
 var TERM_TAB_KIND = "kit-terminal";
 var HELD_KINDS = [TERM_TAB_KIND, "terminal"];
+var chromeStores = /* @__PURE__ */ new WeakMap();
 function terminalDefinition(t) {
   return {
     id: TERM_TAB_ID,
@@ -19260,7 +20860,7 @@ function installTerminalTab(ctx, t) {
   };
   const injectBody = (sessionId) => ({
     view: (key) => viewFor(sessionId, key),
-    keyedHooks: { terminal: (key) => viewFor(sessionId, key).state },
+    keyedHooks: { terminal: (key) => chromeStore(viewFor(sessionId, key).state) },
     ...theme === void 0 ? {} : { hooks: { theme } }
   });
   const disposers = [];
@@ -19465,7 +21065,7 @@ function watchBranch(cwd, listener) {
     branches.delete(cwd);
   };
 }
-var BRANCH_CHIP_MAX = 24;
+var BRANCH_CHIP_MAX = 19;
 function shortBranch(name, max = BRANCH_CHIP_MAX) {
   const text = String(name ?? "");
   if (text.length <= max) return text;

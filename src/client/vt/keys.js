@@ -106,19 +106,65 @@ export function keyToBytes(event, modes = {}) {
 	return null;
 }
 
+/** UTF-8 bytes of one code point, without allocating an encoder per char. */
+function utf8Bytes(code) {
+	if (code <= 0x7f) return 1;
+	if (code <= 0x7ff) return 2;
+	if (code <= 0xffff) return 3;
+	return 4;
+}
+
+/** Normalise pasted newlines: a pasted CRLF is one Enter, not two. */
+function normalisePaste(text) {
+	return text.replace(/\r\n/gu, "\r").replace(/\n/gu, "\r");
+}
+
+/**
+ * Split a paste into bounded chunks for the Host's per-command limit.
+ *
+ * A single `write` larger than the Host's `maxInputBytes` is refused and
+ * detaches the attachment, so a large paste must arrive as ordered chunks.
+ * Bracketed-paste markers stay on the outside; a chunk never contains half of
+ * one. The limit is counted in UTF-8 bytes, matching the Host's check.
+ *
+ * @param text - clipboard text.
+ * @param bracketed - whether the terminal is in bracketed-paste mode.
+ * @param maxBytes - maximum UTF-8 bytes per chunk (default 32 KiB; callers
+ *   with a Host input budget should pass a smaller bound).
+ * @returns ordered writes; empty input returns an empty array.
+ */
+export function pasteChunks(text, bracketed, maxBytes = 32 * 1024) {
+	if (typeof text !== "string" || text === "") return [];
+	const normalised = normalisePaste(text);
+	if (normalised === "") return [];
+	const limit = Math.max(1, Math.trunc(maxBytes));
+	const chunks = [];
+	let current = "";
+	let bytes = 0;
+	for (const char of normalised) {
+		const size = utf8Bytes(char.codePointAt(0) ?? 32);
+		if (current !== "" && bytes + size > limit) {
+			chunks.push(current);
+			current = "";
+			bytes = 0;
+		}
+		current += char;
+		bytes += size;
+	}
+	if (current !== "") chunks.push(current);
+	if (!bracketed) return chunks;
+	chunks[0] = `\x1b[200~${chunks[0]}`;
+	chunks[chunks.length - 1] += "\x1b[201~";
+	return chunks;
+}
+
 /**
  * Wrap pasted text for the shell.
- *
- * Bracketed paste (?2004) is how a shell tells "this is a paste, do not execute
- * it line by line"; without it a multi-line paste runs each line as a command.
  *
  * @param text - clipboard text.
  * @param bracketed - whether the terminal is in bracketed-paste mode.
  * @returns the bytes to send.
  */
 export function pasteToBytes(text, bracketed) {
-	if (typeof text !== "string" || text === "") return "";
-	// Normalise newlines: a pasted CRLF is one Enter, not two.
-	const normalised = text.replace(/\r\n/gu, "\r").replace(/\n/gu, "\r");
-	return bracketed ? `\x1b[200~${normalised}\x1b[201~` : normalised;
+	return pasteChunks(text, bracketed).join("");
 }
