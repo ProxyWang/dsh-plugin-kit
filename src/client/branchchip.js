@@ -55,7 +55,7 @@ export function watchBranch(cwd, listener) {
 }
 
 /** Character budget for the always-visible row chip (the cell is ~16px tall). */
-export const BRANCH_CHIP_MAX = 24;
+export const BRANCH_CHIP_MAX = 19;
 
 /**
  * Shorten a branch name so its **ending stays complete**.

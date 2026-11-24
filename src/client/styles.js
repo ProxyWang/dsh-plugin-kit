@@ -1054,8 +1054,8 @@ export const CSS = `
 }
 
 /* Entry points live in native left PanelRows; the right guide is a work area. */
-.ce-branch-chip{display:inline-flex;align-items:center;gap:1px;flex:0 0 auto;padding:0 2px;margin-left:3px;border-radius:999px;background:var(--dsw-alias-bg-layer-1,#1d2126);border:.5px solid var(--dsw-alias-border-l1,#2a2e35);color:var(--dsw-alias-label-secondary,#aab);font-size:7.5px;line-height:13px;letter-spacing:-0.1px;vertical-align:middle;overflow:hidden;white-space:nowrap}
-.ce-branch-glyph{opacity:.75;flex:0 0 auto;font-size:9px}
+.ce-branch-chip{display:inline-flex;align-items:center;gap:2px;flex:0 0 auto;padding:0 3px;margin-left:4px;border-radius:999px;background:var(--dsw-alias-bg-layer-1,#1d2126);border:.5px solid var(--dsw-alias-border-l1,#2a2e35);color:var(--dsw-alias-label-secondary,#aab);font-size:9px;line-height:15px;vertical-align:middle;overflow:hidden;white-space:nowrap}
+.ce-branch-glyph{opacity:.75;flex:0 0 auto;font-size:10px}
 .ce-branch-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
 .ce-branch-card{display:flex;align-items:center;gap:5px;padding:4px 6px;margin:2px 0;border-radius:6px;background:var(--dsw-alias-bg-layer-1,#1d2126);color:var(--dsw-alias-label-secondary,#aab);font-size:11px;line-height:16px;min-width:0}
 .ce-branch-card-label{flex:0 0 auto;opacity:.8}
@@ -1183,6 +1183,21 @@ export const CSS = `
 .ce-term-input{position:absolute;left:-9999px;top:0;width:1px;height:1px;opacity:0;border:0;padding:0;margin:0;resize:none;overflow:hidden}
 .ce-term-status{position:absolute;left:8px;bottom:6px;right:8px;font-size:11.5px;color:var(--dsw-alias-label-secondary,#999);pointer-events:none}
 .ce-term-status-error{color:var(--dsw-alias-state-error-primary,#f85149)}
+.ce-term-scrollbar{position:absolute;top:8px;right:2px;bottom:8px;width:8px;border-radius:4px;background:transparent;touch-action:none;z-index:3}
+.ce-term-scrollbar:hover{background:var(--dsw-alias-interactive-bg-hover,#2b2b2b)}
+.ce-term-scrollbar-thumb{position:absolute;top:0;right:1px;width:6px;border-radius:3px;background:var(--dsw-alias-label-tertiary,#778);opacity:.65;min-height:12px}
+.ce-term-scrollbar:hover .ce-term-scrollbar-thumb,.ce-term-scrollbar-thumb:active{opacity:1;background:var(--dsw-alias-label-secondary,#999)}
+.ce-term-search-layer{position:absolute;top:8px;left:8px;pointer-events:none;z-index:2}
+.ce-term-search-rect{position:absolute;top:0;left:0;background:color-mix(in srgb,var(--dsw-alias-state-warn-primary,#e3b341) 32%,transparent);border-radius:2px}
+.ce-term-search-current{background:color-mix(in srgb,var(--dsw-alias-brand-primary,#59b7ff) 45%,transparent);outline:1px solid var(--dsw-alias-brand-primary,#59b7ff)}
+.ce-term-find{position:absolute;top:6px;right:10px;z-index:4;display:flex;align-items:center;gap:4px;padding:4px 6px;border-radius:7px;border:.5px solid var(--dsw-alias-border-l2,#444);background:var(--dsw-alias-bg-layer-1,#1d2126);box-shadow:0 4px 16px rgba(0,0,0,.28)}
+.ce-term-find-input{width:190px;height:24px;box-sizing:border-box;padding:2px 6px;font:inherit;font-size:12px;border-radius:4px;border:.5px solid var(--dsw-alias-border-l2,#444);background:var(--dsw-alias-bg-base,#181818);color:var(--dsw-alias-label-primary,#eee);outline:none}
+.ce-term-find-input:focus{border-color:var(--dsw-alias-brand-primary,#59b7ff)}
+.ce-term-find-count{min-width:42px;text-align:center;font-size:11px;color:var(--dsw-alias-label-secondary,#999);font-variant-numeric:tabular-nums}
+.ce-term-find-btn{width:22px;height:22px;display:inline-flex;align-items:center;justify-content:center;border:0;border-radius:4px;background:transparent;color:var(--dsw-alias-label-secondary,#999);font:inherit;font-size:12px;cursor:pointer}
+.ce-term-find-btn:hover{background:var(--dsw-alias-interactive-bg-hover,#2b2b2b);color:var(--dsw-alias-label-primary,#eee)}
+.ce-term-reconnect{position:absolute;right:10px;bottom:8px;z-index:4;font:inherit;font-size:11.5px;padding:3px 9px;border-radius:5px;border:.5px solid var(--dsw-alias-border-l2,#444);background:var(--dsw-alias-bg-layer-1,#1d2126);color:var(--dsw-alias-label-primary,#eee);cursor:pointer}
+.ce-term-reconnect:hover{background:var(--dsw-alias-interactive-bg-hover,#2b2b2b)}
 .ce-term-title{display:inline-flex;align-items:center;gap:4px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
 /* ---------------- request workbench: one tab, two protocols ---------------- */
 .ce-wb{display:flex;flex-direction:column;height:100%;min-height:0}
