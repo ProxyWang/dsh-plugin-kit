@@ -9,8 +9,9 @@
   errno values map onto the same codes. The historical `error` string stays in the envelope, so existing
   client code (and older bundles) keep working while new callers branch on `code`. See `docs/host-contracts.md` §2–§3.
 - **Every request is gated on the Host connection policy.** The route prefix now asks the Host's `connection`
-  service first and answers 403 before parsing the route; without that service it falls back to a loopback
-  Host-header check instead of opening the API. Contract §4.
+  service first. A browser-shaped request (any of `Origin` / `Sec-Fetch-Site` / `Cookie`) that the policy rejects
+  gets 403; a local CLI caller (none of those headers, loopback Host) still passes, so the documented `curl`
+  workflow keeps working, and hosts without the service fall back to a loopback Host-header check. Contract §4.
 - **Saves are atomic.** A file save writes a sibling dot-prefixed temp file, copies the target's mode,
   re-checks the editor's `baseMtime` when the rename lands, then renames over the target; failures unlink the
   temp. A kill or a full disk leaves either the old bytes or the new bytes, never a truncated source file. §6.

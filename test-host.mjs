@@ -1751,8 +1751,12 @@ service HelloService {
 	ctx.get = (name) => name === "connection"
 		? { requestRejection: (req) => (req.headers?.["x-dsh-reject"] === "1" ? "rejected" : undefined) }
 		: undefined;
-	const rejected = await callFull("fs.list", { cwd, path: "" }, { headers: { host: "127.0.0.1", "x-dsh-reject": "1" } });
-	check("the connection service can reject a loopback request", rejected.status === 403 && rejected.body.code === "forbidden", rejected);
+	const rejected = await callFull("fs.list", { cwd, path: "" }, { headers: { host: "127.0.0.1", origin: "http://127.0.0.1:65491", "x-dsh-reject": "1" } });
+	check("the connection service can reject a browser-shaped loopback request", rejected.status === 403 && rejected.body.code === "forbidden", rejected);
+	const cli = await callFull("fs.list", { cwd, path: "" }, { headers: { host: "127.0.0.1", "x-dsh-reject": "1" } });
+	check("a local CLI request without browser markers stays usable", cli.status === 200 && cli.body.ok === true, cli);
+	const cookie = await callFull("fs.list", { cwd, path: "" }, { headers: { host: "127.0.0.1", cookie: "dsh-auth-x=y", "x-dsh-reject": "1" } });
+	check("a cookie-bearing request stays under the Host policy", cookie.status === 403 && cookie.body.code === "forbidden", cookie);
 	const accepted = await callFull("fs.list", { cwd, path: "" }, { headers: { host: "evil.example" } });
 	check("the connection service overrides the Host fallback", accepted.status === 200, accepted);
 	delete ctx.get;

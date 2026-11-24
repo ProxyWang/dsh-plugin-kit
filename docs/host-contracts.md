@@ -42,8 +42,11 @@ errno 映射：`ENOENT/ENOTDIR→not-found`、`EEXIST/ENOTEMPTY→conflict`、`E
 
 ## §4 调用方准入
 
-- 每个请求先问 Host 的 `connection.requestRejection(req)`；返回非 undefined 即 `403 forbidden`。
-- 该服务缺失时（旧宿主、测试 harness）退化为 loopback Host 头校验：`127.0.0.1`、`localhost`、`[::1]`、`::1`；无 Host 头（非浏览器调用）放行。不得因为服务缺失而完全放开。
+- 每个请求先问 Host 的 `connection.requestRejection(req)`；服务接受即放行（面板带着浏览器会话，走这条路）。
+- 服务拒绝时区分调用方形状：
+  - **浏览器形状**（带 `Origin` / `Sec-Fetch-Site` / `Cookie` 任一）→ `403 forbidden`，完全交给 Host 策略；这是 DNS rebinding 与跨站 confused-deputy 的防线。
+  - **本地 CLI 形状**（三者都没有）且 Host 是 loopback → 放行。这是文档化的 `curl` 工作流（技能 `dsh-code-explorer` 依赖它），本机进程本来就有同样的文件权限，不构成新增边界。
+- 该服务缺失时（旧宿主、测试 harness）退化为 loopback Host 头校验；无 Host 头（非浏览器调用）放行。不得因为服务缺失而完全放开。
 - 不要从启动参数或复制的信任列表推断准入策略。
 
 ## §5 路径围栏

@@ -97,18 +97,31 @@ function apply(ctx, config) {
 	 * A request with no Host header is not a browser request and is allowed.
 	 */
 	function callerAllowed(req) {
+		const headers = req.headers ?? {};
+		const host = headers.host;
+		const loopbackHost = typeof host !== "string" || host === ""
+			? true
+			: ["127.0.0.1", "localhost", "[::1]", "::1"].includes(host.replace(/:\d+$/, "").toLowerCase());
 		const connection = typeof ctx.get === "function" ? ctx.get("connection") : undefined;
 		if (typeof connection?.requestRejection === "function") {
+			let rejection;
 			try {
-				return connection.requestRejection(req) === undefined;
+				rejection = connection.requestRejection(req);
 			} catch {
 				return false;
 			}
+			if (rejection === undefined) return true;
+			// The Host policy authenticates browser sessions. A local CLI caller
+			// (curl, an agent shell) carries none of the browser markers: no
+			// Origin, no Sec-Fetch-Site, no cookie. Let those through on a loopback
+			// Host — this is the documented curl workflow, and a local process can
+			// already read the workspace as the user. Browser-shaped requests
+			// (any of those headers present) stay under the Host policy, which is
+			// what defeats DNS rebinding and cross-site confused deputies.
+			const browserShaped = headers.origin !== undefined || headers["sec-fetch-site"] !== undefined || headers.cookie !== undefined;
+			return !browserShaped && loopbackHost;
 		}
-		const host = req.headers?.host;
-		if (typeof host !== "string" || host === "") return true;
-		const name = host.replace(/:\d+$/, "").toLowerCase();
-		return name === "127.0.0.1" || name === "localhost" || name === "[::1]" || name === "::1";
+		return loopbackHost;
 	}
 
 	ctx.inject(["webServer"], (webCtx) => {
