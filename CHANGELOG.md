@@ -12,7 +12,9 @@
   first use (`provisionLanguageServers`, `goplsCommand` to pin a different build) — the mechanism
   editors like Trae get by shipping their own gopls, without touching the user's PATH. TypeScript
   and Python servers now ship as package dependencies, so one install covers them. `lsp.stats`
-  exposes residency, counters and cache hits for measurement.
+  exposes residency, counters and cache hits for measurement. Installation is one command
+  (`dsh plugin --profile desktop add github:ProxyWang/dsh-plugin-kit`): TypeScript/Python servers
+  travel as npm dependencies, and gopls is provisioned from the local Go toolchain on first use.
   Verification: `node test-host.mjs` (warmup, result cache, stats, provisioning state, launcher
   ordering), `node scripts/build-client.mjs`, `node test-client.mjs`.
 

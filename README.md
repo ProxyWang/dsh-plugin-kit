@@ -96,20 +96,23 @@ Agent 可调用 `browser_bookmarks` 管理同一书签库；UI 与工具共用�
 
 ## 安装
 
-DSH profile 内 link 安装（开发态）：
+一行命令，从 GitHub 直接装进 DSH profile（推荐）：
 
 ```sh
-dsh plugin add /abs/path/to/dsh-plugin-kit   # 或插件管理器 install_bundle
+dsh plugin --profile desktop add github:ProxyWang/dsh-plugin-kit
 ```
 
-从 git 安装：
+本地开发态用 link：
 
 ```sh
-git clone https://gitee.com/wang-jun-07/dsh-plugin-kit.git
-# 插件管理器安装该目录
+dsh plugin --profile desktop add link:/abs/path/to/dsh-plugin-kit
 ```
 
-LSP 跳转按语言需要对应 server 在 Host 的 PATH（或常见全局 bin 目录）：Go 用 `gopls`，TS/JS 用 `typescript-language-server`，Python 用 `pyright-langserver` 或 `pylsp`。未安装时优雅降级（状态点提示，不影响其他功能）。
+依赖随第一次打开面板自动就位，不需要手工装语言服务器：
+
+- **TypeScript / JavaScript、Python**：`typescript-language-server`、`typescript`、`pyright` 已作为插件的 npm 依赖随包安装
+- **Go**：首次打开 Go 文件时，插件用本机 Go 工具链把 `gopls v0.22.0` 安装到 `$DSH_HOME/cache/dsh-plugin-kit/gopls/<version>/`（约 30–60 秒，一次性；`provisionLanguageServers: false` 可关闭，`goplsCommand` 可指定自己的 gopls）
+- 任何一步失败都会在状态栏说明原因，其余功能不受影响；`git` 与对应语言工具链（Go/Python）是语言功能的前置条件
 
 ## 开发
 
