@@ -7,7 +7,7 @@
 
 export const TOKENS_CSS = `
 /* ---------- tokens ---------- */
-:where(.ce-root,.cel-root,.cedb-root,.cerpc-root,.cea-root,.ceb-root,.ce-sk-root,.ce-wb,.ce-term,.ce-fast-hint,.ce-left-notice,.ce-workspace-guide){
+:where(.ce-root,.cel-root,.cedb-root,.cerpc-root,.cea-root,.ceb-root,.ce-sk-root,.ce-wb,.ce-term,.ce-fast-hint,.ce-left-notice,.ce-workspace-guide,.ce-branch-chip,.ce-branch-card){
 	--ce-bg:var(--dsw-alias-bg-base,#111315);
 	--ce-s1:var(--dsw-alias-bg-layer-1,#181b1f);
 	--ce-s2:var(--dsw-alias-bg-layer-2,#20242a);

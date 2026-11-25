@@ -2,6 +2,12 @@
  * transient layers that hang off them (palette, peek, menus, find, toasts). */
 
 export const SHELL_CSS = `
+/* The workspace fills the pane the Host hands it: a column whose middle row
+ * (toolbar/banners above, statusbar below) is the only part that scrolls.
+ * Height must be definite here, or every .ce-scroll inside grows with its
+ * content and the pane clips instead of scrolling. */
+.ce-root{height:100%;min-height:0;display:flex;flex-direction:column;position:relative}
+
 /* ---------- toolbar ---------- */
 .ce-toolbar{display:flex;align-items:center;gap:6px;flex:none;height:44px;padding:0 10px;background:var(--ce-bg);border-bottom:1px solid var(--ce-line);min-width:0}
 .ce-toolbar-rule{flex:none;width:1px;height:16px;background:var(--ce-line);margin:0 2px}
@@ -39,9 +45,14 @@ export const SHELL_CSS = `
 .ce-branch-chip{display:inline-flex;align-items:center;gap:2px;flex:0 0 auto;padding:0 3px;margin-left:4px;border-radius:999px;background:var(--ce-fill);color:var(--ce-fg-2);font-size:9px;line-height:15px;vertical-align:middle;overflow:hidden;white-space:nowrap}
 .ce-branch-glyph{opacity:.7;flex:0 0 auto;font-size:10px}
 .ce-branch-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
-.ce-branch-card{display:flex;align-items:center;gap:6px;padding:5px 8px;margin:2px 0;border-radius:6px;background:var(--ce-fill);color:var(--ce-fg-2);font-size:11px;line-height:16px;min-width:0}
-.ce-branch-card-label{flex:0 0 auto;opacity:.8}
-.ce-branch-card-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:var(--ce-mono);color:var(--ce-fg)}
+/* The Session hover card is a dark surface in both palettes (Host rule), so the
+ * branch line takes the Host's hover-card ink. Page tokens would resolve to the
+ * light palette there and paint dark-on-dark; currentColor keeps older Hosts
+ * readable when the hover-card tokens are absent. */
+.ce-branch-card{display:flex;align-items:center;gap:6px;min-width:0;font-size:12px;line-height:16px;color:var(--dsw-alias-hovercard-label-secondary,currentColor)}
+.ce-branch-card-label{flex:0 0 auto;color:var(--dsw-alias-hovercard-label-tertiary,currentColor)}
+.ce-branch-card-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:var(--ce-mono);color:var(--dsw-alias-hovercard-label-primary,currentColor)}
+.ce-branch-card .ce-branch-glyph{opacity:1;font-size:12px;color:var(--dsw-alias-hovercard-label-tertiary,currentColor)}
 
 /* ---------- workspace ---------- */
 .ce-main{flex:1;min-height:0;display:flex;overflow:hidden}

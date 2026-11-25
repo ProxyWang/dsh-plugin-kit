@@ -5,6 +5,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, writeFileSync, appendFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { gitWorktreeRemove, managedWorktreeOf, reclaimArchivedCheckout } from "./lib/host/worktrees.js";
 
 const fixture = "/tmp/ce-test";
 const cleanupFixture = () => { try { rmSync(fixture, { recursive: true, force: true }); } catch {} };
@@ -1778,6 +1779,174 @@ service HelloService {
 	check("stale atomic write is 409 conflict", refused.status === 409 && refused.body.code === "conflict", refused);
 	check("refused write left the file untouched", readFileSync(file, "utf8") === "new");
 	check("refused write leaves no temp files", readdirSync(dir).every((name) => !name.endsWith(".tmp")), readdirSync(dir));
+}
+
+/* ---------- worktrees: one checkout per branch, named <repo>-<branch> beside the repo ---------- */
+{
+	const wtRoot = "/tmp/ce-test-wt";
+	const wtRepo = `${wtRoot}/vas`;
+	rmSync(wtRoot, { recursive: true, force: true });
+	mkdirSync(wtRepo, { recursive: true });
+	const wtGit = (args) => execFileSync("git", args, { cwd: wtRepo, stdio: "ignore" });
+	wtGit(["init", "-q"]);
+	wtGit(["config", "user.email", "t@t"]);
+	wtGit(["config", "user.name", "t"]);
+	writeFileSync(`${wtRepo}/file.txt`, "one\n");
+	wtGit(["add", "-A"]);
+	wtGit(["commit", "-qm", "init"]);
+	wtGit(["branch", "release/2.3"]);
+	/** Sibling a branch is expected to land in (`vas-<slug>`). */
+	const checkoutOf = (branch) => `${wtRoot}/vas-${branch.replace(/[^A-Za-z0-9._-]+/g, "-")}`;
+	process.on("exit", () => { try { rmSync(wtRoot, { recursive: true, force: true }); } catch {} });
+
+	const wtNew = await call("git.worktreeCreate", { cwd: wtRepo, branch: "feat/a", mode: "new" });
+	check("git.worktreeCreate puts the checkout beside the repository", wtNew.ok && wtNew.value.path.endsWith("/ce-test-wt/vas-feat-a") && existsSync(checkoutOf("feat/a")), wtNew);
+	check("the new checkout has the branch checked out", wtNew.ok && readFileSync(`${checkoutOf("feat/a")}/file.txt`, "utf8") === "one\n", wtNew);
+	const wtExisting = await call("git.worktreeCreate", { cwd: wtRepo, branch: "release/2.3", mode: "existing" });
+	check("git.worktreeCreate adopts an existing branch beside the repository", wtExisting.ok && wtExisting.value.path.endsWith("/ce-test-wt/vas-release-2.3") && existsSync(checkoutOf("release/2.3")), wtExisting);
+	const wtList = await call("git.worktrees", { cwd: wtRepo });
+	check("git.worktrees lists every checkout", wtList.ok && wtList.value.worktrees.length === 3 && wtList.value.worktrees.every((row) => row.branch !== ""), wtList.value);
+	check("git.worktrees names the main checkout", wtList.ok && wtList.value.main.endsWith("/ce-test-wt/vas") && wtList.value.worktrees.some((row) => row.main === true && row.current === true), wtList.value);
+	check("git.worktrees marks generated siblings as managed", wtList.ok && wtList.value.worktrees.filter((row) => row.managed === true).length === 2, wtList.value);
+	// The checked-out branch lives in the main checkout, so its sibling target does
+	// not exist yet: this reaches the occupancy check rather than the path check.
+	const wtHead = execFileSync("git", ["-C", wtRepo, "symbolic-ref", "--short", "HEAD"], { encoding: "utf8" }).trim();
+	const wtOccupied = await call("git.worktreeCreate", { cwd: wtRepo, branch: wtHead, mode: "existing" });
+	check("a branch already checked out is refused with a pointer", wtOccupied.ok === false && /already checked out/.test(String(wtOccupied.error)), wtOccupied);
+	const wtTraversal = await call("git.worktreeCreate", { cwd: wtRepo, branch: "../escape", mode: "new" });
+	check("traversal-shaped branch names are refused", wtTraversal.ok === false, wtTraversal);
+	const wtReuse = await call("git.worktreeCreate", { cwd: wtRepo, branch: "feat/a", mode: "new" });
+	check("an existing checkout directory is refused", wtReuse.ok === false, wtReuse);
+	const wtNoRepo = await call("git.worktrees", { cwd: "/tmp" });
+	check("git.worktrees reports a non-repository workspace", wtNoRepo.ok && wtNoRepo.value.repo === false, wtNoRepo);
+
+	// The menu probe must answer without Git: repo root, nested repos, and neither.
+	const probeRoot = await call("git.repos", { cwd: wtRepo });
+	check("git.repos recognizes the workspace repository", probeRoot.ok && probeRoot.value.repo === true && /ce-test-wt\/vas$/.test(probeRoot.value.root), probeRoot);
+	const parent = "/tmp/ce-test-multi";
+	mkdirSync(`${parent}/svc-a`, { recursive: true });
+	mkdirSync(`${parent}/svc-b`, { recursive: true });
+	execFileSync("git", ["init", "-q"], { cwd: `${parent}/svc-a` });
+	execFileSync("git", ["init", "-q"], { cwd: `${parent}/svc-b` });
+	const probeParent = await call("git.repos", { cwd: parent });
+	check("git.repos finds repositories below a multi-repo parent", probeParent.ok && probeParent.value.repo === false && probeParent.value.repos.length === 2, probeParent.value);
+	mkdirSync(`${parent}/plain`, { recursive: true });
+	const probePlain = await call("git.repos", { cwd: `${parent}/plain` });
+	check("git.repos says so for a plain directory", probePlain.ok && probePlain.value.repo === false && probePlain.value.repos.length === 0, probePlain.value);
+	const probeMissing = await call("git.repos", { cwd: "/Users/proxy/orca/does-not-exist-dsh-kit" });
+	check("git.repos reports a moved-away workspace instead of failing", probeMissing.ok && probeMissing.value.missing === true, probeMissing);
+	process.on("exit", () => { try { rmSync(parent, { recursive: true, force: true }); } catch {} });
+
+	// Managed recognition: only a sibling named after the main checkout counts.
+	const managed = await managedWorktreeOf(checkoutOf("release/2.3"));
+	check("managedWorktreeOf recognizes a generated sibling", managed !== null && managed.root.endsWith("/ce-test-wt/vas"), managed);
+	check("managedWorktreeOf ignores an ordinary repository", await managedWorktreeOf(wtRepo) === null);
+
+	// Cleanup: the checkout goes, the branch stays, and the filesystem is honest.
+	writeFileSync(`${checkoutOf("feat/a")}/dirty.txt`, "uncommitted\n");
+	const wtDirty = await call("git.worktreeRemove", { cwd: wtRepo, path: checkoutOf("feat/a") });
+	check("removing a dirty checkout needs force", wtDirty.ok === false && existsSync(checkoutOf("feat/a")), wtDirty);
+	const wtForced = await call("git.worktreeRemove", { cwd: wtRepo, path: checkoutOf("feat/a"), force: true });
+	check("a forced remove deletes the checkout but keeps the branch", wtForced.ok && !existsSync(checkoutOf("feat/a")) && execFileSync("git", ["-C", wtRepo, "branch", "--list", "feat/a"], { encoding: "utf8" }).trim() !== "", wtForced);
+	const wtListAfter = await call("git.worktrees", { cwd: wtRepo });
+	check("the removed checkout leaves the list", wtListAfter.ok && wtListAfter.value.worktrees.length === 2, wtListAfter.value);
+	const wtForeign = await call("git.worktreeRemove", { cwd: wtRepo, path: `${wtRoot}/unrelated` });
+	check("removal outside the generated naming is refused", wtForeign.ok === false && wtForeign.code === "forbidden", wtForeign);
+	const wtSelf = await call("git.worktreeRemove", { cwd: checkoutOf("release/2.3"), path: checkoutOf("release/2.3") });
+	check("the checkout a workspace stands in is refused", wtSelf.ok === false && wtSelf.code === "conflict", wtSelf);
+
+	// Legacy checkouts: the earlier layout pooled them inside the repository.
+	// They must stay visible to Manage and to archive cleanup — otherwise the
+	// branch they hold can never be checked out again.
+	const legacyPool = `${wtRepo}/.agents/worktrees`;
+	wtGit(["branch", "legacy/b1"]);
+	wtGit(["worktree", "add", `${legacyPool}/legacy-b1`, "legacy/b1"]);
+	const legacyList = await call("git.worktrees", { cwd: wtRepo });
+	const legacyRow = legacyList.ok ? legacyList.value.worktrees.find((row) => row.branch === "legacy/b1") : undefined;
+	check("git.worktrees still manages legacy pool checkouts", legacyRow?.managed === true && legacyRow?.legacy === true, legacyRow);
+	const legacyManaged = await managedWorktreeOf(`${legacyPool}/legacy-b1`);
+	check("managedWorktreeOf recognizes a legacy checkout", legacyManaged !== null && legacyManaged.root.endsWith("/ce-test-wt/vas"), legacyManaged);
+	const legacyOccupied = await call("git.worktreeCreate", { cwd: wtRepo, branch: "legacy/b1", mode: "existing" });
+	check("a branch held by a legacy checkout is reported as occupied", legacyOccupied.ok === false && /already checked out/.test(String(legacyOccupied.error)), legacyOccupied);
+	const legacyRemoved = await call("git.worktreeRemove", { cwd: wtRepo, path: `${legacyPool}/legacy-b1` });
+	check("a legacy checkout is removable and keeps its branch", legacyRemoved.ok && !existsSync(`${legacyPool}/legacy-b1`) && execFileSync("git", ["-C", wtRepo, "branch", "--list", "legacy/b1"], { encoding: "utf8" }).trim() !== "", legacyRemoved);
+
+	// A checkout deleted by hand leaves an admin entry behind; creating the same
+	// branch again must prune it instead of refusing forever.
+	const staleCreated = await call("git.worktreeCreate", { cwd: wtRepo, branch: "stale/x", mode: "new" });
+	check("a checkout for the stale case is created", staleCreated.ok && existsSync(checkoutOf("stale/x")), staleCreated);
+	rmSync(checkoutOf("stale/x"), { recursive: true, force: true });
+	const staleAgain = await call("git.worktreeCreate", { cwd: wtRepo, branch: "stale/x", mode: "existing" });
+	check("a hand-deleted checkout is pruned instead of blocking the branch", staleAgain.ok && existsSync(checkoutOf("stale/x")), staleAgain);
+	// Removing a stale registration (directory already gone) still frees the branch.
+	rmSync(checkoutOf("stale/x"), { recursive: true, force: true });
+	const staleRemove = await call("git.worktreeRemove", { cwd: wtRepo, path: checkoutOf("stale/x") });
+	check("removing a vanished checkout prunes its registration", staleRemove.ok === true, staleRemove);
+
+	// Archive cleanup policy: pure decisions first.
+	const calls = [];
+	const fakeDeps = (overrides = {}) => ({
+		cwdOf: async () => checkoutOf("release/2.3"),
+		referencedByOther: async () => false,
+		remove: async (root, checkout) => { calls.push([root, checkout]); },
+		workspaceAt: async () => ({ id: "ws-1", sessionIds: ["s1"] }),
+		deleteWorkspace: async (id) => { calls.push(["delete", id]); },
+		archivedIds: new Set(["s1"]),
+		...overrides,
+	});
+	const skipForeign = await reclaimArchivedCheckout("s1", fakeDeps({ cwdOf: async () => wtRepo }));
+	check("archive cleanup leaves ordinary workspaces alone", skipForeign.removed === false && skipForeign.reason === "not-managed", skipForeign);
+	const skipBusy = await reclaimArchivedCheckout("s1", fakeDeps({ referencedByOther: async () => true }));
+	check("archive cleanup keeps a checkout another Session stands in", skipBusy.removed === false && skipBusy.reason === "in-use", skipBusy);
+	calls.length = 0;
+	const reclaim = await reclaimArchivedCheckout("s1", fakeDeps());
+	check("archive cleanup removes the checkout and drops the empty Workspace", reclaim.removed === true && calls.length === 2 && calls[0][1].endsWith("vas-release-2.3") && calls[1][0] === "delete", calls);
+	calls.length = 0;
+	const keepWorkspace = await reclaimArchivedCheckout("s1", fakeDeps({ archivedIds: new Set(["s1"]), workspaceAt: async () => ({ id: "ws-2", sessionIds: ["s1", "s2"] }) }));
+	check("archive cleanup keeps a Workspace that still lists a live Session", keepWorkspace.removed === true && calls.length === 1, calls);
+
+	// End to end on the real checkout: removal succeeds, branch survives.
+	const realReclaim = await reclaimArchivedCheckout("s1", {
+		cwdOf: async () => checkoutOf("release/2.3"),
+		referencedByOther: async () => false,
+		remove: async (root, checkout) => { await gitWorktreeRemove(root, "", { path: checkout, force: false }); },
+		workspaceAt: async () => undefined,
+		archivedIds: new Set(["s1"]),
+	});
+	check("archive cleanup removes the checkout on disk", realReclaim.removed === true && !existsSync(checkoutOf("release/2.3")), realReclaim);
+	check("archive cleanup keeps the branch", execFileSync("git", ["-C", wtRepo, "branch", "--list", "release/2.3"], { encoding: "utf8" }).trim() !== "");
+
+	// The archive hook goes through the same remove path; legacy checkouts are
+	// reclaimed exactly like siblings (the branch always survives).
+	wtGit(["branch", "legacy/b2"]);
+	wtGit(["worktree", "add", `${legacyPool}/legacy-b2`, "legacy/b2"]);
+	const legacyReclaim = await reclaimArchivedCheckout("s2", {
+		cwdOf: async () => `${legacyPool}/legacy-b2`,
+		referencedByOther: async () => false,
+		remove: async (root, checkout) => { await gitWorktreeRemove(root, "", { path: checkout, force: false }); },
+		workspaceAt: async () => undefined,
+		archivedIds: new Set(["s2"]),
+	});
+	check("archive cleanup reclaims a legacy checkout", legacyReclaim.removed === true && !existsSync(`${legacyPool}/legacy-b2`), legacyReclaim);
+
+	// Merged annotation: "already merged" is relative to the repository base.
+	const wtBase = execFileSync("git", ["-C", wtRepo, "symbolic-ref", "--short", "HEAD"], { encoding: "utf8" }).trim();
+	execFileSync("git", ["-C", wtRepo, "branch", "merged-x"], { stdio: "ignore" });
+	execFileSync("git", ["-C", wtRepo, "checkout", "-q", "-b", "ahead-x"], { stdio: "ignore" });
+	writeFileSync(`${wtRepo}/ahead.txt`, "ahead\n");
+	execFileSync("git", ["-C", wtRepo, "add", "-A"], { stdio: "ignore" });
+	execFileSync("git", ["-C", wtRepo, "commit", "-qm", "ahead"], { stdio: "ignore" });
+	execFileSync("git", ["-C", wtRepo, "checkout", "-q", wtBase], { stdio: "ignore" });
+	const annotated = await call("git.branches", { cwd: wtRepo, annotateMerged: true });
+	const byName = new Map((annotated.value?.branches ?? []).map((branch) => [branch.name, branch]));
+	check("git.branches flags a branch merged into the base", annotated.ok && byName.get("merged-x")?.merged === true, byName.get("merged-x"));
+	check("git.branches leaves an unmerged branch unflagged", annotated.ok && byName.get("ahead-x")?.merged === false, byName.get("ahead-x"));
+
+	// A branch that only exists on a remote becomes a local tracking checkout.
+	const headSha = execFileSync("git", ["-C", wtRepo, "rev-parse", "HEAD"], { encoding: "utf8" }).trim();
+	execFileSync("git", ["-C", wtRepo, "update-ref", "refs/remotes/origin/feat/remote-only", headSha]);
+	const wtRemote = await call("git.worktreeCreate", { cwd: wtRepo, branch: "feat/remote-only", mode: "existing", remoteRef: "origin/feat/remote-only" });
+	check("a remote-only branch checks out as a new local branch", wtRemote.ok && existsSync(checkoutOf("feat/remote-only")) && execFileSync("git", ["-C", wtRepo, "branch", "--list", "feat/remote-only"], { encoding: "utf8" }).trim() !== "", wtRemote);
 }
 
 console.log(`\n${pass} passed, ${fail} failed${skipped ? `, ${skipped} skipped` : ""}`);

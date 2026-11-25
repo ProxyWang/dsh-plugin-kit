@@ -912,7 +912,63 @@ var zh = {
   "diff.scopeCommit": "提交",
   "diff.back": "返回文件",
   "changes.commitsToggle": "展开 / 收起提交列表",
-  "quickopen.command": "快速打开文件（代码 IDE）"
+  "quickopen.command": "快速打开文件（代码 IDE）",
+  "worktree.menu": "以分支开新对话…",
+  "worktree.missingDir": "工作区目录不存在：{path}",
+  "worktree.title": "以分支开新对话",
+  "worktree.modeNew": "新建分支",
+  "worktree.modeExisting": "已有分支",
+  "worktree.branchName": "分支名",
+  "worktree.placeholder": "例如 feature/login",
+  "worktree.base": "起点",
+  "worktree.existing": "选择分支",
+  "worktree.create": "创建并打开",
+  "worktree.cancel": "取消",
+  "worktree.creating": "创建中…",
+  "worktree.creatingCheckout": "正在创建检出…",
+  "worktree.opening": "正在打开新对话…",
+  "worktree.created": "已在 {branch} 上开新对话",
+  "worktree.fail": "创建失败：{msg}",
+  "worktree.partial": "检出已建在 {path}，但打开对话失败：{msg}",
+  "worktree.search": "搜索分支…",
+  "worktree.inRepo": "仓库：{repo}",
+  "worktree.showMerged": "显示已合并分支",
+  "worktree.mergedNote": "已合并",
+  "worktree.remoteNote": "远端 {ref}",
+  "worktree.moreRows": "还有 {n} 个分支，继续输入以缩小范围",
+  "worktree.fetch": "从远端刷新",
+  "worktree.fetching": "正在从远端刷新…",
+  "worktree.fetchFail": "刷新失败：{msg}",
+  "worktree.tryFetch": "远端可能有更新的分支，点「从远端刷新」后再搜",
+  "worktree.pickOne": "请先选择一个分支",
+  "worktree.hostOld": "Host 插件还是旧版本：远端分支检出需要重启一次 Desktop（只刷新页面不够）",
+  "worktree.empty": "没有匹配的分支",
+  "worktree.occupiedNote": "已在 {path} 检出",
+  "worktree.openCheckout": "打开此检出",
+  "worktree.reused": "已在 {branch} 上打开对话",
+  "worktree.openFail": "打开 {path} 失败：{msg}",
+  "worktree.occupiedPick": "该分支已在 {path} 检出：点该行的「打开此检出」使用它，或先删除该检出再新建",
+  "worktree.nameInvalid": "分支名不合法：不要以 - 或 . 开头，不要包含 ..",
+  "worktree.needsName": "请输入分支名",
+  "worktree.noLocal": "这个仓库还没有可用的本地分支",
+  "worktree.noServices": "会话/工作区服务不可用，检出已创建",
+  "worktree.poolHint": "检出会放在仓库同级的 <仓库名>-<分支> 目录下；一个分支一个检出。",
+  "worktree.manageMenu": "管理工作树…",
+  "worktree.manageTitle": "工作树（检出）",
+  "worktree.repo": "仓库",
+  "worktree.currentCheckout": "当前工作区",
+  "worktree.locked": "已锁定",
+  "worktree.branchKept": "删除检出不会删除分支；主检出和当前工作区所在的检出不能在这里删。",
+  "worktree.force": "丢弃检出中的未提交改动（强制删除）",
+  "worktree.remove": "删除",
+  "worktree.removing": "正在删除检出…",
+  "worktree.removed": "已删除检出 {path}（分支保留）",
+  "worktree.removeFail": "删除失败：{msg}",
+  "worktree.removeBlocked": "这个检出不能在这里删除",
+  "worktree.emptyList": "这里还没有由本插件创建的检出",
+  "worktree.detached": "分离 HEAD",
+  "worktree.loading": "加载中…",
+  "worktree.close": "关闭"
 };
 var en = {
   "browser.navigation": "Page navigation",
@@ -1752,7 +1808,63 @@ var en = {
   "diff.scopeCommit": "Commit",
   "diff.back": "Back to file",
   "changes.commitsToggle": "Show / hide commits",
-  "quickopen.command": "Quick Open File (Code IDE)"
+  "quickopen.command": "Quick Open File (Code IDE)",
+  "worktree.menu": "New conversation on a branch…",
+  "worktree.missingDir": "Workspace directory is missing: {path}",
+  "worktree.title": "New conversation on a branch",
+  "worktree.modeNew": "New branch",
+  "worktree.modeExisting": "Existing branch",
+  "worktree.branchName": "Branch name",
+  "worktree.placeholder": "e.g. feature/login",
+  "worktree.base": "Start point",
+  "worktree.existing": "Choose a branch",
+  "worktree.create": "Create and open",
+  "worktree.cancel": "Cancel",
+  "worktree.creating": "Creating…",
+  "worktree.creatingCheckout": "Creating the checkout…",
+  "worktree.opening": "Opening the new conversation…",
+  "worktree.created": "Opened a new conversation on {branch}",
+  "worktree.fail": "Creation failed: {msg}",
+  "worktree.partial": "The checkout exists at {path} but opening the conversation failed: {msg}",
+  "worktree.search": "Search branches…",
+  "worktree.inRepo": "Repository: {repo}",
+  "worktree.showMerged": "Show merged branches",
+  "worktree.mergedNote": "merged",
+  "worktree.remoteNote": "remote {ref}",
+  "worktree.moreRows": "{n} more branches — keep typing to narrow",
+  "worktree.fetch": "Fetch from remote",
+  "worktree.fetching": "Fetching from remote…",
+  "worktree.fetchFail": "Fetch failed: {msg}",
+  "worktree.tryFetch": "The remote may have newer branches — fetch, then search again",
+  "worktree.pickOne": "Pick a branch first",
+  "worktree.hostOld": "The Host plugin is older: checking out a remote-only branch needs one Desktop restart (a page refresh is not enough)",
+  "worktree.empty": "No matching branches",
+  "worktree.occupiedNote": "checked out at {path}",
+  "worktree.openCheckout": "Open this checkout",
+  "worktree.reused": "Opened a conversation on {branch}",
+  "worktree.openFail": "Could not open {path}: {msg}",
+  "worktree.occupiedPick": "That branch is already checked out at {path}: use “Open this checkout”, or remove that checkout first",
+  "worktree.nameInvalid": "Invalid branch name: no leading - or ., no ..",
+  "worktree.needsName": "Enter a branch name",
+  "worktree.noLocal": "This repository has no local branches yet",
+  "worktree.noServices": "Session/workspace services are unavailable; the checkout was created",
+  "worktree.poolHint": "The checkout goes next to the repository as <repo>-<branch> — one checkout per branch.",
+  "worktree.manageMenu": "Manage worktrees…",
+  "worktree.manageTitle": "Worktrees (checkouts)",
+  "worktree.repo": "Repository",
+  "worktree.currentCheckout": "This workspace",
+  "worktree.locked": "Locked",
+  "worktree.branchKept": "Removing a checkout keeps its branch; the main checkout and the one this workspace stands in are not removable here.",
+  "worktree.force": "Discard uncommitted changes in the checkout (force)",
+  "worktree.remove": "Remove",
+  "worktree.removing": "Removing the checkout…",
+  "worktree.removed": "Removed checkout {path} (branch kept)",
+  "worktree.removeFail": "Removal failed: {msg}",
+  "worktree.removeBlocked": "This checkout cannot be removed here",
+  "worktree.emptyList": "No checkouts created by this plugin yet",
+  "worktree.detached": "detached HEAD",
+  "worktree.loading": "Loading…",
+  "worktree.close": "Close"
 };
 
 // src/client/storage.js
@@ -4934,10 +5046,10 @@ function TaskOutputPanel({ t, state, onStop, onClose, onOpenFile, tail = 2e3 }) 
   }, [state.chunks, tail]);
   const scrolledTo = useRef(0);
   useEffect(() => {
-    const el = bodyRef.current;
-    if (el && state.seq !== scrolledTo.current) {
+    const el2 = bodyRef.current;
+    if (el2 && state.seq !== scrolledTo.current) {
       scrolledTo.current = state.seq;
-      el.scrollTop = el.scrollHeight;
+      el2.scrollTop = el2.scrollHeight;
     }
   }, [state.seq]);
   const status = state.done ? state.code === 0 ? t("task.exited", { code: String(state.code) }) : t("task.failed", { code: String(state.code ?? "?") }) : t("task.running");
@@ -8781,7 +8893,7 @@ function createPluginKitService({ openWorkspace, emit = emitAction, delayMs = 12
 // src/client/css/tokens.js
 var TOKENS_CSS = `
 /* ---------- tokens ---------- */
-:where(.ce-root,.cel-root,.cedb-root,.cerpc-root,.cea-root,.ceb-root,.ce-sk-root,.ce-wb,.ce-term,.ce-fast-hint,.ce-left-notice,.ce-workspace-guide){
+:where(.ce-root,.cel-root,.cedb-root,.cerpc-root,.cea-root,.ceb-root,.ce-sk-root,.ce-wb,.ce-term,.ce-fast-hint,.ce-left-notice,.ce-workspace-guide,.ce-branch-chip,.ce-branch-card){
 	--ce-bg:var(--dsw-alias-bg-base,#111315);
 	--ce-s1:var(--dsw-alias-bg-layer-1,#181b1f);
 	--ce-s2:var(--dsw-alias-bg-layer-2,#20242a);
@@ -8929,6 +9041,12 @@ textarea.ce-input{height:auto;padding:7px 9px;line-height:1.55;resize:vertical}
 
 // src/client/css/shell.js
 var SHELL_CSS = `
+/* The workspace fills the pane the Host hands it: a column whose middle row
+ * (toolbar/banners above, statusbar below) is the only part that scrolls.
+ * Height must be definite here, or every .ce-scroll inside grows with its
+ * content and the pane clips instead of scrolling. */
+.ce-root{height:100%;min-height:0;display:flex;flex-direction:column;position:relative}
+
 /* ---------- toolbar ---------- */
 .ce-toolbar{display:flex;align-items:center;gap:6px;flex:none;height:44px;padding:0 10px;background:var(--ce-bg);border-bottom:1px solid var(--ce-line);min-width:0}
 .ce-toolbar-rule{flex:none;width:1px;height:16px;background:var(--ce-line);margin:0 2px}
@@ -8966,9 +9084,14 @@ var SHELL_CSS = `
 .ce-branch-chip{display:inline-flex;align-items:center;gap:2px;flex:0 0 auto;padding:0 3px;margin-left:4px;border-radius:999px;background:var(--ce-fill);color:var(--ce-fg-2);font-size:9px;line-height:15px;vertical-align:middle;overflow:hidden;white-space:nowrap}
 .ce-branch-glyph{opacity:.7;flex:0 0 auto;font-size:10px}
 .ce-branch-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
-.ce-branch-card{display:flex;align-items:center;gap:6px;padding:5px 8px;margin:2px 0;border-radius:6px;background:var(--ce-fill);color:var(--ce-fg-2);font-size:11px;line-height:16px;min-width:0}
-.ce-branch-card-label{flex:0 0 auto;opacity:.8}
-.ce-branch-card-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:var(--ce-mono);color:var(--ce-fg)}
+/* The Session hover card is a dark surface in both palettes (Host rule), so the
+ * branch line takes the Host's hover-card ink. Page tokens would resolve to the
+ * light palette there and paint dark-on-dark; currentColor keeps older Hosts
+ * readable when the hover-card tokens are absent. */
+.ce-branch-card{display:flex;align-items:center;gap:6px;min-width:0;font-size:12px;line-height:16px;color:var(--dsw-alias-hovercard-label-secondary,currentColor)}
+.ce-branch-card-label{flex:0 0 auto;color:var(--dsw-alias-hovercard-label-tertiary,currentColor)}
+.ce-branch-card-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:var(--ce-mono);color:var(--dsw-alias-hovercard-label-primary,currentColor)}
+.ce-branch-card .ce-branch-glyph{opacity:1;font-size:12px;color:var(--dsw-alias-hovercard-label-tertiary,currentColor)}
 
 /* ---------- workspace ---------- */
 .ce-main{flex:1;min-height:0;display:flex;overflow:hidden}
@@ -10307,6 +10430,104 @@ var CHROME_CSS = `
 }
 `;
 
+// src/client/css/worktree.js
+var WORKTREE_CSS = `
+/* ---------- branch conversation dialog ---------- */
+.ce-wt-overlay{
+	position:fixed;inset:0;z-index:2147483000;
+	display:flex;align-items:center;justify-content:center;
+	background:rgba(0,0,0,.42);
+	-webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px);
+	animation:ce-wt-fade var(--ce-dur) var(--ce-ease);
+}
+@keyframes ce-wt-fade{from{opacity:0}to{opacity:1}}
+.ce-wt-card{
+	width:min(460px,calc(100vw - 48px));
+	background:var(--ce-s1);color:var(--ce-fg);
+	border:1px solid var(--ce-line-strong);border-radius:var(--ce-radius-lg);
+	box-shadow:var(--ce-shadow-2);overflow:hidden;
+	font-size:13px;line-height:1.45;
+	animation:ce-wt-rise var(--ce-dur) var(--ce-ease);
+}
+@keyframes ce-wt-rise{from{transform:translateY(6px);opacity:.6}to{transform:none;opacity:1}}
+.ce-wt-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px 4px}
+.ce-wt-title{font-weight:600;font-size:14px}
+.ce-wt-close{appearance:none;border:0;background:transparent;color:var(--ce-fg-3);font-size:18px;line-height:1;cursor:pointer;padding:2px 6px;border-radius:var(--ce-radius-sm)}
+.ce-wt-close:hover{background:var(--ce-hover);color:var(--ce-fg)}
+.ce-wt-body{padding:8px 16px 4px;display:flex;flex-direction:column;gap:12px}
+.ce-wt-modes{display:flex;gap:6px;background:var(--ce-fill);padding:3px;border-radius:var(--ce-radius)}
+.ce-wt-mode{flex:1;appearance:none;border:0;background:transparent;color:var(--ce-fg-2);font:inherit;padding:6px 8px;border-radius:var(--ce-radius-sm);cursor:pointer}
+.ce-wt-mode.is-active{background:var(--ce-accent);color:var(--ce-on-accent);font-weight:600;box-shadow:none}
+.ce-wt-mode.is-active:hover{background:var(--ce-accent);filter:brightness(1.04)}
+.ce-wt-field{display:flex;flex-direction:column;gap:5px}
+.ce-wt-field[hidden]{display:none}
+.ce-wt-field-head[hidden]{display:none}
+.ce-wt-label{color:var(--ce-fg-2);font-size:12px}
+.ce-wt-input,.ce-wt-select{
+	appearance:none;width:100%;box-sizing:border-box;
+	background:var(--ce-bg);color:var(--ce-fg);
+	border:1px solid var(--ce-line-strong);border-radius:var(--ce-radius-sm);
+	font:inherit;padding:7px 9px;outline:none;
+}
+.ce-wt-input:focus,.ce-wt-select:focus{border-color:var(--ce-accent-line);box-shadow:0 0 0 3px var(--ce-accent-softer)}
+.ce-wt-input::placeholder{color:var(--ce-fg-3)}
+.ce-wt-picker{display:flex;flex-direction:column;gap:6px}
+.ce-wt-list{
+	max-height:196px;overflow:auto;overscroll-behavior:contain;
+	border:1px solid var(--ce-line-strong);border-radius:var(--ce-radius-sm);
+	background:var(--ce-bg);padding:4px;
+}
+.ce-wt-option{
+	display:flex;align-items:baseline;gap:10px;min-width:0;
+	padding:6px 8px;border-radius:var(--ce-radius-sm);cursor:pointer;color:var(--ce-fg-2);
+	font-family:var(--ce-mono);font-size:12.5px;white-space:nowrap;overflow:hidden;
+}
+.ce-wt-option-name{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.ce-wt-option-note{flex:0 1 auto;min-width:0;margin-left:auto;overflow:hidden;text-overflow:ellipsis;color:var(--ce-fg-3);font-family:inherit;font-size:11.5px}
+.ce-wt-option.is-active{background:var(--ce-accent-soft);color:var(--ce-fg);box-shadow:inset 2px 0 var(--ce-accent)}
+.ce-wt-option.is-occupied{cursor:default;color:var(--ce-fg-3);text-decoration:line-through;text-decoration-color:color-mix(in srgb,var(--ce-fg-3) 55%,transparent)}
+.ce-wt-option.is-occupied{flex-wrap:wrap;row-gap:2px}
+/* Occupied rows carry a note and an action; give the branch its own line so the
+ * name is never squeezed to zero and the button cannot be clipped by the path. */
+.ce-wt-option.is-occupied .ce-wt-option-name{flex:1 1 100%}
+.ce-wt-option.is-occupied .ce-wt-option-note{flex:1 1 auto;margin-left:0;text-decoration:none}
+.ce-wt-option.is-occupied .ce-wt-option-open{margin-left:auto}
+.ce-wt-option-open{flex:none;appearance:none;border:1px solid var(--ce-line-strong);border-radius:999px;background:var(--ce-s2);color:var(--ce-fg-2);font:inherit;font-family:inherit;font-size:11px;line-height:16px;padding:1px 8px;cursor:pointer;text-decoration:none}
+.ce-wt-option-open:hover{background:var(--ce-hover);color:var(--ce-fg)}
+.ce-wt-empty{padding:10px 8px;color:var(--ce-fg-3);font-size:12px}
+.ce-wt-check[hidden]{display:none}
+.ce-wt-check{display:flex;align-items:center;gap:8px;color:var(--ce-fg-2);font-size:12px;cursor:pointer}
+.ce-wt-check input{accent-color:var(--ce-accent)}
+.ce-wt-wt-list{display:flex;flex-direction:column;gap:6px;max-height:280px;overflow:auto;overscroll-behavior:contain}
+.ce-wt-wt-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--ce-line);border-radius:var(--ce-radius-sm);background:var(--ce-bg)}
+.ce-wt-wt-text{flex:1;min-width:0}
+.ce-wt-wt-branch{display:flex;align-items:center;gap:6px;font-family:var(--ce-mono);font-size:12.5px;color:var(--ce-fg);min-width:0}
+.ce-wt-wt-path{color:var(--ce-fg-3);font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ce-wt-badge{flex:none;font-family:inherit;font-size:10.5px;color:var(--ce-fg-2);border:1px solid var(--ce-line-strong);border-radius:999px;padding:0 6px;line-height:16px}
+.ce-wt-danger{color:var(--ce-bad);border-color:color-mix(in srgb,var(--ce-bad) 42%,transparent)}
+.ce-wt-danger:hover{background:var(--ce-bad-soft)}
+.ce-wt-btn[disabled].ce-wt-danger{color:var(--ce-fg-3);border-color:var(--ce-line)}
+.ce-wt-field-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.ce-wt-link{appearance:none;border:0;background:transparent;color:var(--ce-accent);font:inherit;font-size:12px;cursor:pointer;padding:0 2px;border-radius:var(--ce-radius-sm)}
+.ce-wt-link:hover{text-decoration:underline}
+.ce-wt-link[disabled]{color:var(--ce-fg-3);cursor:default;text-decoration:none}
+.ce-wt-sub{color:var(--ce-fg-3);font-size:12px;font-family:var(--ce-mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ce-wt-more{padding:6px 8px;color:var(--ce-fg-3);font-size:11.5px}
+.ce-wt-note{color:var(--ce-warn);font-size:12px}
+.ce-wt-note[hidden]{display:none}
+.ce-wt-hint{color:var(--ce-fg-3);font-size:12px}
+.ce-wt-error{color:var(--ce-bad);font-size:12px;white-space:pre-wrap}
+.ce-wt-error[hidden]{display:none}
+.ce-wt-status{color:var(--ce-fg-2);font-size:12px;padding:0 16px}
+.ce-wt-status[hidden]{display:none}
+.ce-wt-foot{display:flex;justify-content:flex-end;gap:8px;padding:12px 16px 16px}
+.ce-wt-btn{appearance:none;border:1px solid var(--ce-line-strong);background:var(--ce-s2);color:var(--ce-fg);font:inherit;padding:6px 14px;border-radius:var(--ce-radius-sm);cursor:pointer}
+.ce-wt-btn:hover{background:var(--ce-hover)}
+.ce-wt-btn[disabled]{opacity:.55;cursor:default}
+.ce-wt-primary{border-color:transparent;background:var(--ce-accent);color:var(--ce-on-accent)}
+.ce-wt-primary:hover{filter:brightness(1.06);background:var(--ce-accent)}
+`;
+
 // src/client/styles.js
 var CSS2 = [
   TOKENS_CSS,
@@ -10315,7 +10536,8 @@ var CSS2 = [
   API_CSS,
   DATA_CSS,
   SKILLS_CSS,
-  CHROME_CSS
+  CHROME_CSS,
+  WORKTREE_CSS
 ].join("\n");
 
 // src/client/register.js
@@ -13055,11 +13277,11 @@ function ApiView({ t, useTabInfo, sessionId, useSessions, incoming }) {
             bodyType === "raw" ? h("textarea", { className: "cea-body", "aria-label": t("api.body"), placeholder: rawSub === "json" ? '{\n  "key": "value"\n}' : t("api.body"), value: body, spellcheck: false, onKeyDown: (e) => {
               if (e.key !== "Tab" || e.shiftKey) return;
               e.preventDefault();
-              const el = e.currentTarget;
-              const start = el.selectionStart;
-              const end = el.selectionEnd;
+              const el2 = e.currentTarget;
+              const start = el2.selectionStart;
+              const end = el2.selectionEnd;
               setBody(body.slice(0, start) + "  " + body.slice(end));
-              requestAnimationFrame(() => el.setSelectionRange(start + 2, start + 2));
+              requestAnimationFrame(() => el2.setSelectionRange(start + 2, start + 2));
             }, onChange: (e) => {
               setBody(e.target.value);
               setBeautifyErr("");
@@ -16342,7 +16564,7 @@ function groupMethods(methods) {
     if (!groups.has(method.service)) groups.set(method.service, []);
     groups.get(method.service).push(method);
   }
-  return [...groups.entries()].map(([service, entries]) => ({ service, methods: entries }));
+  return [...groups.entries()].map(([service2, entries]) => ({ service: service2, methods: entries }));
 }
 function splitProtoPath(path) {
   const text = String(path ?? "");
@@ -19566,26 +19788,26 @@ function createRenderer({ container, doc = globalThis.document, theme = () => ({
     const style2 = doc.defaultView?.getComputedStyle?.(rowsEl);
     const lineHeight = style2 ? Number.parseFloat(style2.lineHeight) : Number.NaN;
     rowHeight = Number.isFinite(lineHeight) && lineHeight > 0 ? lineHeight : Math.ceil(font().fontSize * 1.2);
-    for (const el of rowEls) {
-      el.style.height = `${rowHeight}px`;
-      el.style.lineHeight = `${rowHeight}px`;
+    for (const el2 of rowEls) {
+      el2.style.height = `${rowHeight}px`;
+      el2.style.lineHeight = `${rowHeight}px`;
     }
     return { cellWidth: cellWidth2, rowHeight };
   }
   function ensureRows(count) {
     while (rowEls.length < count) {
-      const el = doc.createElement("div");
-      el.className = "ce-term-row";
-      el.style.height = `${rowHeight}px`;
-      el.style.lineHeight = `${rowHeight}px`;
-      rowsEl.appendChild(el);
-      rowEls.push(el);
+      const el2 = doc.createElement("div");
+      el2.className = "ce-term-row";
+      el2.style.height = `${rowHeight}px`;
+      el2.style.lineHeight = `${rowHeight}px`;
+      rowsEl.appendChild(el2);
+      rowEls.push(el2);
       versions.push(-1);
       seqs.push(-1);
     }
     while (rowEls.length > count) {
-      const el = rowEls.pop();
-      el.remove();
+      const el2 = rowEls.pop();
+      el2.remove();
       versions.pop();
       seqs.pop();
     }
@@ -19596,7 +19818,7 @@ function createRenderer({ container, doc = globalThis.document, theme = () => ({
     const amount = (shift % count + count) % count;
     if (amount === 0) return 0;
     const movedEls = rowEls.splice(0, amount);
-    for (const el of movedEls) rowsEl.appendChild(el);
+    for (const el2 of movedEls) rowsEl.appendChild(el2);
     rowEls.push(...movedEls);
     const movedVersions = versions.splice(0, amount);
     versions.push(...movedVersions);
@@ -19701,23 +19923,23 @@ function createRenderer({ container, doc = globalThis.document, theme = () => ({
     }
     const wanted = requested;
     while (searchLayer.children.length < wanted.length) {
-      const el = doc.createElement("div");
-      el.className = "ce-term-search-rect";
-      searchLayer.appendChild(el);
-      searchRects.push(el);
+      const el2 = doc.createElement("div");
+      el2.className = "ce-term-search-rect";
+      searchLayer.appendChild(el2);
+      searchRects.push(el2);
     }
     while (searchLayer.children.length > wanted.length) {
-      const el = searchLayer.children[searchLayer.children.length - 1];
-      el.remove();
+      const el2 = searchLayer.children[searchLayer.children.length - 1];
+      el2.remove();
       searchRects.pop();
     }
     for (let i = 0; i < wanted.length; i++) {
       const rect = wanted[i];
-      const el = searchRects[i];
-      el.className = `ce-term-search-rect${rect.current ? " ce-term-search-current" : ""}`;
-      el.style.transform = `translate(${rect.left}px, ${rect.top}px)`;
-      el.style.width = `${rect.width}px`;
-      el.style.height = `${rect.height}px`;
+      const el2 = searchRects[i];
+      el2.className = `ce-term-search-rect${rect.current ? " ce-term-search-current" : ""}`;
+      el2.style.transform = `translate(${rect.left}px, ${rect.top}px)`;
+      el2.style.width = `${rect.width}px`;
+      el2.style.height = `${rect.height}px`;
     }
   }
   function cellAt(clientX, clientY) {
@@ -19750,9 +19972,9 @@ function createRenderer({ container, doc = globalThis.document, theme = () => ({
   function paintSelection(rects) {
     const wanted = Array.isArray(rects) ? rects : [];
     while (selectionEl.children.length < wanted.length) {
-      const el = doc.createElement("div");
-      el.className = "ce-term-selection-rect";
-      selectionEl.appendChild(el);
+      const el2 = doc.createElement("div");
+      el2.className = "ce-term-selection-rect";
+      selectionEl.appendChild(el2);
     }
     while (selectionEl.children.length > wanted.length) {
       selectionEl.children[selectionEl.children.length - 1].remove();
@@ -21831,6 +22053,703 @@ function SessionBranchCard({ t, cwd }) {
   );
 }
 
+// src/client/worktrees.js
+var ICON_KEY = "kit.worktree";
+var BRANCH_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*(?:\/[A-Za-z0-9._-]+)*$/;
+function worktreeNameError(name) {
+  const value = String(name ?? "").trim();
+  if (value === "") return "needs-name";
+  if (value.startsWith("-") || value.startsWith(".") || value.includes("..")) return "invalid";
+  return BRANCH_RE.test(value) ? "" : "invalid";
+}
+function branchScore(query, name) {
+  const needle = String(query ?? "").trim().toLowerCase();
+  const haystack = String(name ?? "").toLowerCase();
+  if (needle === "") return 0;
+  let index = 0;
+  let last = -1;
+  let score = 0;
+  for (let i = 0; i < haystack.length && index < needle.length; i += 1) {
+    if (haystack[i] !== needle[index]) continue;
+    let bonus = 1;
+    if (index === 0) bonus += 3;
+    if (i === 0) bonus += 6;
+    if (i > 0 && "/-_.".includes(haystack[i - 1])) bonus += 4;
+    if (last >= 0 && i === last + 1) bonus += 2;
+    score += bonus;
+    last = i;
+    index += 1;
+  }
+  if (index !== needle.length) return null;
+  return score - haystack.length * 0.01;
+}
+function repoLabel(cwd, root) {
+  const base = String(cwd ?? "");
+  const value = String(root ?? "");
+  if (base !== "" && value.startsWith(`${base}/`)) return value.slice(base.length + 1);
+  return value;
+}
+function pathLabel(root, path) {
+  const base = String(root ?? "");
+  const value = String(path ?? "");
+  return base !== "" && value.startsWith(`${base}/`) ? value.slice(base.length + 1) : value;
+}
+function hostAnnotatesMerged(branches2) {
+  return Array.isArray(branches2) && branches2.length > 0 && branches2.some((branch) => Object.hasOwn(branch, "merged"));
+}
+function branchPickerRows(branches2, { occupied = /* @__PURE__ */ new Map(), showMerged = false, onlyLocal = false } = {}) {
+  const rows = [];
+  const locals = /* @__PURE__ */ new Set();
+  for (const branch of branches2) {
+    if (branch.remote === true) continue;
+    locals.add(branch.name);
+    if (!showMerged && branch.merged === true && branch.current !== true) continue;
+    rows.push({
+      name: branch.name,
+      current: branch.current === true,
+      merged: branch.merged === true,
+      remoteRef: "",
+      occupied: occupied.has(branch.name),
+      occupiedPath: occupied.get(branch.name) ?? ""
+    });
+  }
+  if (onlyLocal) return rows;
+  const seen = /* @__PURE__ */ new Set();
+  for (const branch of branches2) {
+    if (branch.remote !== true) continue;
+    const short = branch.name.slice(branch.name.indexOf("/") + 1);
+    if (short === "" || short === "HEAD" || locals.has(short) || seen.has(short)) continue;
+    seen.add(short);
+    rows.push({
+      name: short,
+      current: false,
+      merged: false,
+      remoteRef: branch.name,
+      occupied: occupied.has(short),
+      occupiedPath: occupied.get(short) ?? ""
+    });
+  }
+  return rows;
+}
+function placementBefore(items, sourceId, newId) {
+  const rows = Array.isArray(items) ? items : [];
+  const index = rows.findIndex((row) => String(row?.workspaceId ?? "") === String(sourceId ?? ""));
+  if (index < 0) return null;
+  const successor = rows.slice(index + 1).find((row) => String(row?.workspaceId ?? "") !== String(newId ?? ""));
+  return { before: successor?.workspaceId };
+}
+function checkoutTitle(repoRoot, branch) {
+  const repo = String(repoRoot ?? "").split(/[\\/]/).filter(Boolean).pop() ?? "";
+  const name = String(branch ?? "").trim();
+  if (repo === "") return name;
+  return name === "" ? repo : `${repo}-${name}`;
+}
+function service(ctx, name) {
+  try {
+    return typeof ctx.get === "function" ? ctx.get(name) : void 0;
+  } catch {
+    return void 0;
+  }
+}
+function el(tag, className, text) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text !== void 0) node.textContent = text;
+  return node;
+}
+function WorktreeIcon({ size = 16 }) {
+  return h(
+    "svg",
+    { viewBox: "0 0 24 24", width: size, height: size, fill: "none", stroke: "currentColor", strokeWidth: 1.7, "aria-hidden": true },
+    h("circle", { cx: 6, cy: 5, r: 2.1 }),
+    h("circle", { cx: 6, cy: 19, r: 2.1 }),
+    h("circle", { cx: 18, cy: 12, r: 2.1 }),
+    h("path", { d: "M6 7.1v9.8M8.1 5h4.4a3 3 0 0 1 3 3v1.9M8.1 19h4.4a3 3 0 0 0 3-3v-1.9" })
+  );
+}
+function installBranchConversations(ctx, t) {
+  const stopIcon = ctx.slots.inject("contextMenu.icon", () => ctx.slots.register({ name: "contextMenu.icon", key: ICON_KEY }, WorktreeIcon));
+  const stopMenu = ctx.contextMenus.register({
+    id: "kit.branch-conversation",
+    target: "workspace",
+    order: 150,
+    resolve: async (target) => {
+      const cwd = String(target?.path ?? "");
+      const sourceWorkspaceId = String(target?.workspaceId ?? "");
+      if (cwd === "") return [];
+      let probe;
+      try {
+        probe = await api("git.repos", { cwd });
+      } catch {
+        return [];
+      }
+      if (!probe.ok) return [];
+      const value = probe.value ?? {};
+      if (value.missing === true) {
+        return [{ id: "missing-directory", label: t("worktree.missingDir", { path: cwd }), disabled: true }];
+      }
+      const repos = value.repo === true ? [""] : Array.isArray(value.repos) ? value.repos.map((root) => String(root ?? "")).filter((root) => root !== "") : [];
+      if (repos.length === 0) return [];
+      return [
+        {
+          id: "branch-conversation",
+          label: t("worktree.menu"),
+          icon: { key: ICON_KEY },
+          run: () => {
+            void openBranchDialog(ctx, t, { cwd, repos, sourceWorkspaceId });
+          }
+        },
+        {
+          id: "manage-worktrees",
+          label: t("worktree.manageMenu"),
+          icon: { key: ICON_KEY },
+          run: () => {
+            void openManageDialog(ctx, t, { cwd, repos });
+          }
+        }
+      ];
+    }
+  });
+  return () => {
+    stopMenu();
+    if (typeof stopIcon === "function") stopIcon();
+  };
+}
+function createFrame(t, ariaLabel) {
+  const overlay = el("div", "ce-root ce-wt-overlay");
+  const card = el("div", "ce-wt-card");
+  card.setAttribute("role", "dialog");
+  card.setAttribute("aria-modal", "true");
+  card.setAttribute("aria-label", ariaLabel);
+  const head = el("div", "ce-wt-head");
+  const title = el("div", "ce-wt-title", ariaLabel);
+  const close = el("button", "ce-wt-close", "×");
+  close.type = "button";
+  close.setAttribute("aria-label", t("worktree.cancel"));
+  head.append(title, close);
+  const body = el("div", "ce-wt-body");
+  const errorLine = el("div", "ce-wt-error");
+  errorLine.hidden = true;
+  const status = el("div", "ce-wt-status");
+  status.hidden = true;
+  const foot = el("div", "ce-wt-foot");
+  card.append(head, body, errorLine, status, foot);
+  overlay.append(card);
+  let closed = false;
+  const closeDialog = () => {
+    if (closed) return;
+    closed = true;
+    document.removeEventListener("keydown", onKey, true);
+    overlay.remove();
+  };
+  const onKey = (event) => {
+    if (event.key === "Escape") {
+      event.stopPropagation();
+      closeDialog();
+    }
+  };
+  document.addEventListener("keydown", onKey, true);
+  overlay.addEventListener("mousedown", (event) => {
+    if (event.target === overlay) closeDialog();
+  });
+  close.addEventListener("click", closeDialog);
+  document.body.append(overlay);
+  return {
+    body,
+    foot,
+    card,
+    close,
+    closeDialog,
+    isClosed: () => closed,
+    setError: (text) => {
+      errorLine.textContent = text ?? "";
+      errorLine.hidden = !text;
+    },
+    setStatus: (text) => {
+      status.textContent = text ?? "";
+      status.hidden = !text;
+    }
+  };
+}
+function createPicker(t, placeholder, onChange, emptyHint = "", onReuse = null) {
+  const MAX_RENDERED = 300;
+  const wrap = el("div", "ce-wt-picker");
+  const input = el("input", "ce-wt-input ce-wt-search");
+  input.type = "text";
+  input.placeholder = placeholder;
+  input.autocomplete = "off";
+  input.spellcheck = false;
+  const list = el("div", "ce-wt-list");
+  list.setAttribute("role", "listbox");
+  wrap.append(input, list);
+  const state = { rows: [], filtered: [], active: 0, disabled: false };
+  const render = () => {
+    list.replaceChildren();
+    if (state.filtered.length === 0) {
+      list.append(el("div", "ce-wt-empty", t(state.rows.length === 0 ? "worktree.noLocal" : "worktree.empty")));
+      if (state.rows.length > 0 && emptyHint !== "") list.append(el("div", "ce-wt-more", emptyHint));
+      return;
+    }
+    const shown = state.filtered.slice(0, MAX_RENDERED);
+    for (const [index, row] of shown.entries()) {
+      const option = el("div", row.occupied ? "ce-wt-option is-occupied" : "ce-wt-option");
+      option.append(el("span", "ce-wt-option-name", row.label ?? row.name));
+      const note = row.occupied ? t("worktree.occupiedNote", { path: row.occupiedPath }) : row.remoteRef !== "" ? t("worktree.remoteNote", { ref: row.remoteRef }) : row.merged === true ? t("worktree.mergedNote") : "";
+      if (note !== "") option.append(el("span", "ce-wt-option-note", note));
+      if (row.occupied && typeof onReuse === "function") {
+        const reuse = el("button", "ce-wt-option-open", t("worktree.openCheckout"));
+        reuse.type = "button";
+        reuse.title = row.occupiedPath;
+        reuse.addEventListener("mousedown", (event) => event.stopPropagation());
+        reuse.addEventListener("click", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          onReuse(row);
+        });
+        option.append(reuse);
+      }
+      option.setAttribute("role", "option");
+      if (row.occupied) option.setAttribute("aria-disabled", "true");
+      option.classList.toggle("is-active", index === state.active);
+      option.addEventListener("mousedown", (event) => {
+        event.preventDefault();
+        if (state.disabled || row.occupied) return;
+        state.active = index;
+        render();
+        onChange?.(row.name);
+      });
+      list.append(option);
+    }
+    if (state.filtered.length > shown.length) {
+      list.append(el("div", "ce-wt-more", t("worktree.moreRows", { n: state.filtered.length - shown.length })));
+    }
+    const active = list.querySelector(".ce-wt-option.is-active");
+    active?.scrollIntoView?.({ block: "nearest" });
+  };
+  const filter = () => {
+    const query = input.value;
+    const scored = [];
+    for (const row of state.rows) {
+      const score = branchScore(query, row.label ?? row.name);
+      if (score === null) continue;
+      scored.push({ row, score });
+    }
+    if (String(query).trim() !== "") scored.sort((a, b) => b.score - a.score || a.row.name.localeCompare(b.row.name));
+    state.filtered = scored.map((entry) => entry.row);
+    const free = state.filtered.findIndex((row) => !row.occupied);
+    state.active = free < 0 ? 0 : free;
+    render();
+  };
+  input.addEventListener("input", filter);
+  input.addEventListener("keydown", (event) => {
+    if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+    event.preventDefault();
+    if (state.filtered.length === 0) return;
+    const delta = event.key === "ArrowDown" ? 1 : -1;
+    let next = state.active;
+    for (let step = 0; step < state.filtered.length; step += 1) {
+      next = (next + delta + state.filtered.length) % state.filtered.length;
+      if (!state.filtered[next].occupied) break;
+    }
+    state.active = next;
+    render();
+    onChange?.(state.filtered[next].name);
+  });
+  return {
+    element: wrap,
+    setRows: (rows, preferred = "") => {
+      state.rows = rows;
+      filter();
+      if (preferred === "") return;
+      const index = state.filtered.findIndex((row) => row.name === preferred && !row.occupied);
+      if (index < 0) return;
+      state.active = index;
+      render();
+    },
+    value: () => {
+      const row = state.filtered[state.active];
+      return row !== void 0 && !row.occupied ? row.name : "";
+    },
+    selected: () => {
+      const row = state.filtered[state.active];
+      return row !== void 0 && !row.occupied ? row : null;
+    },
+    /** The highlighted row even when it is occupied (its checkout is usable). */
+    activeRow: () => state.filtered[state.active] ?? null,
+    setDisabled: (disabled) => {
+      state.disabled = disabled;
+      input.disabled = disabled;
+    },
+    focus: () => input.focus({ preventScroll: true })
+  };
+}
+function createRepoField(t, cwd, repos) {
+  if (repos.length <= 1) return { element: null, value: () => repos[0] ?? "", onChange: () => {
+  } };
+  const listeners2 = [];
+  const field = el("div", "ce-wt-field");
+  field.append(el("span", "ce-wt-label", t("worktree.repo")));
+  const picker = createPicker(t, t("worktree.search"), (value) => {
+    for (const listener of listeners2) listener(value);
+  });
+  picker.setRows(repos.map((root) => ({ name: root, label: repoLabel(cwd, root), occupied: false, occupiedPath: "" })), repos[0]);
+  field.append(picker.element);
+  return {
+    element: field,
+    value: () => picker.value() || repos[0] || "",
+    onChange: (listener) => {
+      listeners2.push(listener);
+    }
+  };
+}
+async function openBranchDialog(ctx, t, target) {
+  if (typeof document === "undefined") return;
+  const cwd = String(target?.cwd ?? "");
+  const repos = Array.isArray(target?.repos) && target.repos.length > 0 ? target.repos : [""];
+  const sourceWorkspaceId = String(target?.sourceWorkspaceId ?? "");
+  const frame = createFrame(t, t("worktree.title"));
+  const { body, foot, setError, setStatus } = frame;
+  const repoField = createRepoField(t, cwd, repos);
+  if (repoField.element !== null) body.append(repoField.element);
+  const modes = el("div", "ce-wt-modes");
+  const modeExisting = el("button", "ce-wt-mode", t("worktree.modeExisting"));
+  const modeNew = el("button", "ce-wt-mode", t("worktree.modeNew"));
+  modeExisting.type = "button";
+  modeNew.type = "button";
+  modes.append(modeExisting, modeNew);
+  const existingField = el("div", "ce-wt-field");
+  const existingHead = el("div", "ce-wt-field-head");
+  existingHead.append(el("span", "ce-wt-label", t("worktree.existing")));
+  const fetchButton = el("button", "ce-wt-link", t("worktree.fetch"));
+  fetchButton.type = "button";
+  existingHead.append(fetchButton);
+  const existingPicker = createPicker(t, t("worktree.search"), void 0, t("worktree.tryFetch"), (row) => {
+    void reuseCheckout(row);
+  });
+  existingField.append(existingHead, existingPicker.element);
+  const mergedRow = el("label", "ce-wt-check");
+  const mergedToggle = el("input");
+  mergedToggle.type = "checkbox";
+  mergedRow.append(mergedToggle, el("span", "", t("worktree.showMerged")));
+  existingField.append(mergedRow);
+  const nameField = el("label", "ce-wt-field");
+  nameField.append(el("span", "ce-wt-label", t("worktree.branchName")));
+  const nameInput = el("input", "ce-wt-input");
+  nameInput.type = "text";
+  nameInput.placeholder = t("worktree.placeholder");
+  nameInput.autocomplete = "off";
+  nameInput.spellcheck = false;
+  nameField.append(nameInput);
+  const baseField = el("div", "ce-wt-field");
+  baseField.append(el("span", "ce-wt-label", t("worktree.base")));
+  const basePicker = createPicker(t, t("worktree.search"));
+  baseField.append(basePicker.element);
+  const hint = el("div", "ce-wt-hint", t("worktree.poolHint"));
+  const hostNote = el("div", "ce-wt-note", t("worktree.hostOld"));
+  hostNote.hidden = true;
+  body.append(modes, existingField, nameField, baseField, hint, hostNote);
+  const cancel = el("button", "ce-wt-btn", t("worktree.cancel"));
+  const create = el("button", "ce-wt-btn ce-wt-primary", t("worktree.create"));
+  cancel.type = "button";
+  create.type = "button";
+  foot.append(cancel, create);
+  const subLine = el("div", "ce-wt-sub", cwd);
+  body.prepend(subLine);
+  const state = { mode: "existing", busy: false, branches: [], occupied: /* @__PURE__ */ new Map(), showMerged: false, root: "", hostStale: false };
+  const repo = () => repoField.value();
+  const setBusy = (busy) => {
+    state.busy = busy;
+    create.disabled = busy;
+    cancel.disabled = busy;
+    modeExisting.disabled = busy;
+    modeNew.disabled = busy;
+    nameInput.disabled = busy;
+    existingPicker.setDisabled(busy);
+    basePicker.setDisabled(busy);
+    create.textContent = busy ? t("worktree.creating") : t("worktree.create");
+  };
+  const paint = () => {
+    modeExisting.classList.toggle("is-active", state.mode === "existing");
+    modeNew.classList.toggle("is-active", state.mode === "new");
+    existingField.hidden = state.mode !== "existing";
+    nameField.hidden = state.mode !== "new";
+    baseField.hidden = state.mode !== "new";
+  };
+  const fillBranches = () => {
+    const rows = branchPickerRows(state.branches, { occupied: state.occupied, showMerged: state.showMerged });
+    const baseRows = branchPickerRows(state.branches, { onlyLocal: true, showMerged: true });
+    existingPicker.setRows(rows);
+    const current = baseRows.find((row) => row.current)?.name ?? "";
+    basePicker.setRows(baseRows.map((row) => ({ ...row, occupied: false, occupiedPath: "" })), current);
+    if (rows.length > 0 && rows.every((row) => row.occupied)) state.mode = "new";
+    state.hostStale = state.branches.length > 0 && !hostAnnotatesMerged(state.branches);
+    mergedRow.hidden = state.hostStale;
+    hostNote.hidden = !state.hostStale;
+    if (state.branches.filter((branch) => !branch.remote).length === 0) setError(t("worktree.noLocal"));
+    paint();
+  };
+  const load = async () => {
+    setError("");
+    setStatus(t("worktree.loading"));
+    state.branches = [];
+    state.occupied = /* @__PURE__ */ new Map();
+    const hint2 = repo() === "" ? { cwd } : { cwd, repo: repo() };
+    const [branches2, worktrees] = await Promise.all([
+      api("git.branches", { ...hint2, annotateMerged: true }),
+      api("git.worktrees", hint2)
+    ]);
+    setStatus("");
+    if (!branches2.ok) {
+      setError(t("worktree.fail", { msg: branches2.error ?? "?" }));
+      return;
+    }
+    state.branches = Array.isArray(branches2.value?.branches) ? branches2.value.branches : [];
+    if (worktrees.ok) {
+      state.root = String(worktrees.value?.main ?? worktrees.value?.root ?? "");
+      for (const row of Array.isArray(worktrees.value?.worktrees) ? worktrees.value.worktrees : []) {
+        if (typeof row.branch === "string" && row.branch !== "") state.occupied.set(row.branch, row.path);
+      }
+    }
+    subLine.textContent = t("worktree.inRepo", { repo: state.root === "" ? cwd : repoLabel(cwd, state.root) });
+    fillBranches();
+  };
+  const enterCheckout = async (path, branch) => {
+    const workspaces = service(ctx, "workspaces");
+    const sessions = service(ctx, "sessions");
+    if (typeof workspaces?.create !== "function" || typeof sessions?.create !== "function") {
+      throw new Error(t("worktree.noServices"));
+    }
+    const rows = typeof workspaces.list?.getSnapshot === "function" ? workspaces.list.getSnapshot()?.items : void 0;
+    const existed = Array.isArray(rows) && rows.some((row) => row.path === path);
+    const view = await workspaces.create({ path });
+    const workspaceId = view?.workspaceId;
+    if (workspaceId === void 0) throw new Error(t("worktree.noServices"));
+    try {
+      await workspaces.rename?.(workspaceId, checkoutTitle(state.root, branch));
+    } catch {
+    }
+    if (!existed) {
+      const placement = placementBefore(rows, sourceWorkspaceId, workspaceId);
+      if (placement !== null) {
+        try {
+          await workspaces.insertBefore?.(workspaceId, placement.before);
+        } catch {
+        }
+      }
+    }
+    const sessionId = await sessions.create({ workspaceId });
+    try {
+      service(ctx, "uiWorkspace")?.openSession?.(sessionId);
+    } catch {
+    }
+  };
+  const reuseCheckout = async (row) => {
+    if (state.busy) return;
+    setError("");
+    setBusy(true);
+    setStatus(t("worktree.opening"));
+    try {
+      await enterCheckout(row.occupiedPath, row.name);
+      frame.closeDialog();
+      ctx.contextMenus.notify(t("worktree.reused", { branch: row.name }), true);
+    } catch (failure) {
+      setBusy(false);
+      setStatus("");
+      setError(t("worktree.openFail", { path: row.occupiedPath, msg: String(failure?.message ?? failure) }));
+    }
+  };
+  const submit = async () => {
+    if (state.busy) return;
+    const mode = state.mode;
+    const picked = mode === "new" ? null : existingPicker.selected();
+    const branch = mode === "new" ? nameInput.value.trim() : picked?.name ?? "";
+    if (mode === "new") {
+      const reason = worktreeNameError(branch);
+      if (reason !== "") {
+        setError(t(reason === "needs-name" ? "worktree.needsName" : "worktree.nameInvalid"));
+        return;
+      }
+    } else if (branch === "") {
+      const active = existingPicker.activeRow();
+      setError(active?.occupied ? t("worktree.occupiedPick", { path: active.occupiedPath }) : t("worktree.pickOne"));
+      return;
+    }
+    if (mode === "existing" && picked?.remoteRef && state.hostStale) {
+      setError(t("worktree.hostOld"));
+      return;
+    }
+    setError("");
+    setBusy(true);
+    setStatus(t("worktree.creatingCheckout"));
+    const payload = { cwd, branch, mode, base: mode === "new" ? basePicker.value() : "" };
+    if (repo() !== "") payload.repo = repo();
+    if (mode === "existing" && picked?.remoteRef) payload.remoteRef = picked.remoteRef;
+    const res = await api("git.worktreeCreate", payload);
+    if (!res.ok) {
+      setBusy(false);
+      setStatus("");
+      setError(t("worktree.fail", { msg: res.error ?? "?" }));
+      return;
+    }
+    const created = res.value ?? {};
+    setStatus(t("worktree.opening"));
+    try {
+      await enterCheckout(created.path, created.branch);
+      frame.closeDialog();
+      ctx.contextMenus.notify(t("worktree.created", { branch: created.branch }), true);
+    } catch (failure) {
+      setBusy(false);
+      setStatus("");
+      setError(t("worktree.partial", { path: created.path ?? "", msg: String(failure?.message ?? failure) }));
+    }
+  };
+  const refreshFromRemote = async () => {
+    if (state.busy || fetchButton.disabled) return;
+    fetchButton.disabled = true;
+    setError("");
+    setStatus(t("worktree.fetching"));
+    const hint2 = repo() === "" ? { cwd } : { cwd, repo: repo() };
+    const res = await api("git.fetch", hint2);
+    setStatus("");
+    fetchButton.disabled = false;
+    const failure = !res.ok ? res.error : res.value?.error;
+    if (typeof failure === "string" && failure !== "") {
+      setError(t("worktree.fetchFail", { msg: failure }));
+      return;
+    }
+    await load();
+  };
+  fetchButton.addEventListener("click", () => {
+    void refreshFromRemote();
+  });
+  mergedToggle.addEventListener("change", () => {
+    state.showMerged = mergedToggle.checked;
+    fillBranches();
+    existingPicker.focus();
+  });
+  modeExisting.addEventListener("click", () => {
+    if (!state.busy) {
+      state.mode = "existing";
+      setError("");
+      paint();
+      existingPicker.focus();
+    }
+  });
+  modeNew.addEventListener("click", () => {
+    if (!state.busy) {
+      state.mode = "new";
+      setError("");
+      paint();
+      nameInput.focus({ preventScroll: true });
+    }
+  });
+  cancel.addEventListener("click", () => {
+    if (!state.busy) frame.closeDialog();
+  });
+  create.addEventListener("click", () => {
+    void submit();
+  });
+  repoField.onChange(() => {
+    if (!state.busy) void load();
+  });
+  frame.card.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" || state.busy || event.isComposing) return;
+    if (event.target === create || event.target === cancel || event.target === frame.close) return;
+    event.preventDefault();
+    void submit();
+  });
+  paint();
+  setBusy(false);
+  existingPicker.focus();
+  await load();
+}
+async function openManageDialog(ctx, t, target) {
+  if (typeof document === "undefined") return;
+  const cwd = String(target?.cwd ?? "");
+  const repos = Array.isArray(target?.repos) && target.repos.length > 0 ? target.repos : [""];
+  const frame = createFrame(t, t("worktree.manageTitle"));
+  const { body, foot, setError, setStatus } = frame;
+  const repoField = createRepoField(t, cwd, repos);
+  if (repoField.element !== null) body.append(repoField.element);
+  const list = el("div", "ce-wt-wt-list");
+  const hint = el("div", "ce-wt-hint", t("worktree.branchKept"));
+  const discardRow = el("label", "ce-wt-check");
+  const discard = el("input");
+  discard.type = "checkbox";
+  discardRow.append(discard, el("span", "", t("worktree.force")));
+  body.append(list, hint, discardRow);
+  const close = el("button", "ce-wt-btn", t("worktree.close"));
+  close.type = "button";
+  foot.append(close);
+  close.addEventListener("click", () => frame.closeDialog());
+  const state = { busy: false, worktrees: [], root: "", main: "" };
+  const remove = async (row) => {
+    if (state.busy) return;
+    state.busy = true;
+    setError("");
+    setStatus(t("worktree.removing"));
+    const payload = { cwd, path: row.path };
+    if (repoField.value() !== "") payload.repo = repoField.value();
+    if (discard.checked) payload.force = true;
+    const res = await api("git.worktreeRemove", payload);
+    state.busy = false;
+    setStatus("");
+    if (!res.ok) {
+      setError(t("worktree.removeFail", { msg: res.error ?? "?" }));
+      return;
+    }
+    ctx.contextMenus.notify(t("worktree.removed", { path: pathLabel(state.main === "" ? state.root : state.main, row.path) }), true);
+    discard.checked = false;
+    await load();
+  };
+  const render = () => {
+    list.replaceChildren();
+    const rows = state.worktrees.filter((row) => row.managed === true);
+    if (rows.length === 0) {
+      list.append(el("div", "ce-wt-empty", t("worktree.emptyList")));
+      return;
+    }
+    for (const row of rows) {
+      const item = el("div", "ce-wt-wt-row");
+      const text = el("div", "ce-wt-wt-text");
+      const head = el("div", "ce-wt-wt-branch");
+      head.append(el("span", "ce-wt-option-name", row.detached ? t("worktree.detached") : row.branch));
+      if (row.path === cwd) head.append(el("span", "ce-wt-badge", t("worktree.currentCheckout")));
+      if (row.locked) head.append(el("span", "ce-wt-badge", t("worktree.locked")));
+      text.append(head, el("div", "ce-wt-wt-path", pathLabel(state.main === "" ? state.root : state.main, row.path)));
+      const action = el("button", "ce-wt-btn ce-wt-danger", t("worktree.remove"));
+      action.type = "button";
+      const blocked = row.path === cwd || row.locked;
+      action.disabled = blocked;
+      action.title = blocked ? t("worktree.removeBlocked") : t("worktree.remove");
+      action.addEventListener("click", () => {
+        void remove(row);
+      });
+      item.append(text, action);
+      list.append(item);
+    }
+  };
+  const load = async () => {
+    setError("");
+    setStatus(t("worktree.loading"));
+    const hint2 = repoField.value() === "" ? { cwd } : { cwd, repo: repoField.value() };
+    const res = await api("git.worktrees", hint2);
+    setStatus("");
+    if (!res.ok) {
+      setError(t("worktree.fail", { msg: res.error ?? "?" }));
+      return;
+    }
+    state.root = String(res.value?.root ?? "");
+    state.main = String(res.value?.main ?? "");
+    state.worktrees = Array.isArray(res.value?.worktrees) ? res.value.worktrees : [];
+    render();
+  };
+  repoField.onChange(() => {
+    if (!state.busy) void load();
+  });
+  await load();
+}
+
 // src/client/index.js
 var index_default = {
   inject: ["slots", "locale", "sidebarRightTabs", "sidebarRight", "layout"],
@@ -21885,8 +22804,8 @@ var index_default = {
     });
     safe("tab type", () => ctx.sidebarRightTabs.register(definition(bound)));
     safe("pluginKit service", () => {
-      const service = createPluginKitService({ openWorkspace: () => ctx.sidebarRight.openTab(TAB_KIND, {}) });
-      if (typeof ctx.provide === "function") ctx.provide("pluginKit", service);
+      const service2 = createPluginKitService({ openWorkspace: () => ctx.sidebarRight.openTab(TAB_KIND, {}) });
+      if (typeof ctx.provide === "function") ctx.provide("pluginKit", service2);
     });
     const Bound = (props) => h(CodeBody, { ...props, t: props.t ?? bound, terminal, openBuiltinTerminal, builtinTerminal: () => builtinTerminal });
     safe("tab body", () => ctx.slots.inject("sidebar.right.pane.tab", () => ctx.slots.register({
@@ -21992,6 +22911,9 @@ var index_default = {
         return cwd === "" ? null : h(SessionBranchCard, { t: bound, cwd });
       }
     )));
+    safe("branch conversations", () => ctx.inject(["contextMenus", "workspaces", "sessions"], (branchCtx) => {
+      branchCtx.effect(() => installBranchConversations(branchCtx, bound), "code-explorer: branch conversations");
+    }));
     safe("left tool entries", () => installLeftTools(ctx, bound));
     const Guide = () => h(WorkspaceGuide, { t: bound });
     safe("workspace guide", () => ctx.slots.inject("sidebar.right.tab.guide", () => ctx.slots.register({

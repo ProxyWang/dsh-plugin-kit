@@ -12,6 +12,7 @@ import { API_CSS } from "./css/api.js";
 import { DATA_CSS } from "./css/data.js";
 import { SKILLS_CSS } from "./css/skills.js";
 import { CHROME_CSS } from "./css/browser.js";
+import { WORKTREE_CSS } from "./css/worktree.js";
 
 export const CSS = [
 	TOKENS_CSS,
@@ -21,4 +22,5 @@ export const CSS = [
 	DATA_CSS,
 	SKILLS_CSS,
 	CHROME_CSS,
+	WORKTREE_CSS,
 ].join("\n");

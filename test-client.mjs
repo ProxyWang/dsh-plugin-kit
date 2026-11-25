@@ -10,6 +10,7 @@ const { buildLineStates, tokenizeLine, wordAt, langFor } = await import("./src/c
 const { parseDiff } = await import("./src/client/diff.js");
 const { draftDiskDiff } = await import("./src/client/draftdiff.js");
 const sourceDescriptor = (await import("./src/client/index.js")).default;
+const { branchPickerRows, branchScore, checkoutTitle, hostAnnotatesMerged, installBranchConversations, placementBefore, repoLabel, worktreeNameError } = await import("./src/client/worktrees.js");
 const ReactStub = (await import("./test-support/react-stub.mjs")).default;
 
 let pass = 0;
@@ -23,6 +24,106 @@ const check = (name, cond, extra) => {
 		console.log(`FAIL  ${name}${extra !== undefined ? ` → ${JSON.stringify(extra)}` : ""}`);
 	}
 };
+
+// The workspace-menu provider: one cheap probe decides whether both entries show.
+// (A slow provider is dropped by the menu's 1 s resolution deadline, so the
+// probe route must stay a directory scan.)
+{
+	const originalFetch = globalThis.fetch;
+	const capture = (payload) => {
+		globalThis.fetch = async () => ({ json: async () => payload });
+	};
+	const install = () => {
+		let contribution;
+		const ctx = {
+			slots: { inject: (_name, run) => run(), register: () => () => {} },
+			contextMenus: { register: (input) => { contribution = input; return () => {}; }, notify: () => {} },
+		};
+		const stop = installBranchConversations(ctx, (key) => key);
+		return { contribution, stop };
+	};
+	const { contribution } = install();
+	check("menu provider targets the workspace row", contribution.target === "workspace" && contribution.order === 150, contribution);
+	capture({ ok: true, value: { repo: true, root: "/repo", repos: [] } });
+	const repoActions = await contribution.resolve({ path: "/repo" });
+	check("a repository workspace offers both entries", repoActions.length === 2 && repoActions[0].id === "branch-conversation" && repoActions[1].id === "manage-worktrees", repoActions);
+	capture({ ok: true, value: { repo: false, root: "", repos: ["/work/a", "/work/b"] } });
+	const parentActions = await contribution.resolve({ path: "/work" });
+	check("a multi-repo parent still offers both entries", parentActions.length === 2, parentActions);
+	capture({ ok: true, value: { repo: false, root: "", repos: [], missing: true } });
+	const missing = await contribution.resolve({ path: "/moved-away" });
+	check("a moved-away workspace explains itself instead of vanishing", missing.length === 1 && missing[0].disabled === true, missing);
+	capture({ ok: true, value: { repo: false, root: "", repos: [] } });
+	check("a plain directory offers none", (await contribution.resolve({ path: "/plain" })).length === 0);
+	capture({ ok: false, error: "boom" });
+	check("a failed probe hides the entries instead of throwing", (await contribution.resolve({ path: "/repo" })).length === 0);
+	globalThis.fetch = async () => { throw new Error("offline"); };
+	check("an unreachable Host hides the entries", (await contribution.resolve({ path: "/repo" })).length === 0);
+	globalThis.fetch = originalFetch;
+}
+
+// Branch search is a subsequence match, so abbreviated queries still find the branch.
+check("branch search accepts an empty query", branchScore("", "release/2.3") === 0);
+check("branch search matches a subsequence", branchScore("fads", "feat/ads-fatigue-control") !== null, branchScore("fads", "feat/ads-fatigue-control"));
+check("branch search matches abbreviations across separators", branchScore("rel23", "release/2.3") !== null, branchScore("rel23", "release/2.3"));
+check("branch search rejects a non-subsequence", branchScore("zzz", "master") === null, branchScore("zzz", "master"));
+check("branch search ranks an exact prefix first", branchScore("master", "master") > branchScore("master", "master-backup"), [branchScore("master", "master"), branchScore("master", "master-backup")]);
+check("branch search is case-insensitive", branchScore("FEAT", "feat/x") !== null, branchScore("FEAT", "feat/x"));
+
+// A generated Workspace is placed under the repository it came from.
+{
+	const rows = [{ workspaceId: "a" }, { workspaceId: "b" }, { workspaceId: "c" }];
+	check("placement lands right after the source", placementBefore(rows, "a", "new")?.before === "b", placementBefore(rows, "a", "new"));
+	check("placement appends when the source is last", placementBefore(rows, "c", "new")?.before === undefined, placementBefore(rows, "c", "new"));
+	const prepended = [{ workspaceId: "new" }, { workspaceId: "a" }, { workspaceId: "b" }];
+	check("placement skips the row being placed", placementBefore(prepended, "a", "new")?.before === "b", placementBefore(prepended, "a", "new"));
+	check("placement leaves unknown sources alone", placementBefore(rows, "zzz", "new") === null);
+}
+
+// Branch conversations are titled `<repository>-<branch>`, like the checkout directory.
+check("checkout title prefixes the repository", checkoutTitle("/Users/proxy/orca/vas", "release_vip_uat") === "vas-release_vip_uat", checkoutTitle("/Users/proxy/orca/vas", "release_vip_uat"));
+check("checkout title keeps a slashed branch readable", checkoutTitle("/Users/proxy/orca/vas", "feat/login") === "vas-feat/login", checkoutTitle("/Users/proxy/orca/vas", "feat/login"));
+check("checkout title falls back to the branch alone", checkoutTitle("", "release_vip_uat") === "release_vip_uat", checkoutTitle("", "release_vip_uat"));
+check("checkout title tolerates a missing branch", checkoutTitle("/Users/proxy/orca/vas", "") === "vas", checkoutTitle("/Users/proxy/orca/vas", ""));
+
+// Host capability: remote-branch checkout and merged annotation ship together.
+check("an old Host response is recognized", hostAnnotatesMerged([{ name: "a", remote: false }]) === false);
+check("a new Host response is recognized", hostAnnotatesMerged([{ name: "a", remote: false, merged: false }]) === true);
+check("an empty branch list is not evidence of a new Host", hostAnnotatesMerged([]) === false);
+
+// Branch rows: merged branches are stale by default, remote-only ones stay usable.
+{
+	const branches = [
+		{ name: "master", current: true, merged: true, remote: false },
+		{ name: "feat/old", current: false, merged: true, remote: false },
+		{ name: "feat/new", current: false, merged: false, remote: false },
+		{ name: "origin/feat/new", current: false, remote: true },
+		{ name: "origin/feat/remote-only", current: false, remote: true },
+		{ name: "origin/HEAD", current: false, remote: true },
+	];
+	const defaults = branchPickerRows(branches);
+	check("merged branches are hidden by default", !defaults.some((row) => row.name === "feat/old"), defaults.map((row) => row.name));
+	check("the checked-out branch stays visible even when merged", defaults.some((row) => row.name === "master" && row.current === true), defaults.map((row) => row.name));
+	check("remote-only branches are offered with their remote ref", defaults.some((row) => row.name === "feat/remote-only" && row.remoteRef === "origin/feat/remote-only"), defaults);
+	check("a remote branch does not duplicate its local branch", defaults.filter((row) => row.name === "feat/new").length === 1 && defaults.find((row) => row.name === "feat/new").remoteRef === "", defaults.filter((row) => row.name === "feat/new"));
+	check("origin/HEAD is not offered", !defaults.some((row) => row.name === "HEAD"), defaults.map((row) => row.name));
+	check("merged branches appear when asked for", branchPickerRows(branches, { showMerged: true }).some((row) => row.name === "feat/old" && row.merged === true));
+	check("start-point rows stay local", branchPickerRows(branches, { onlyLocal: true, showMerged: true }).every((row) => row.remoteRef === ""));
+	check("an occupied branch carries its checkout path", branchPickerRows(branches, { occupied: new Map([["feat/new", "/x"]]) }).find((row) => row.name === "feat/new").occupiedPath === "/x");
+}
+
+// A multi-repo workspace labels its repositories by their tail, not the full path.
+check("repo label shortens a nested repository", repoLabel("/work", "/work/svc-a") === "svc-a", repoLabel("/work", "/work/svc-a"));
+check("repo label keeps an outside path whole", repoLabel("/work", "/elsewhere/svc") === "/elsewhere/svc", repoLabel("/work", "/elsewhere/svc"));
+
+// A worktree branch name must never read as a Git option or a path escape.
+check("worktree name accepts slashed branches", worktreeNameError("feature/login") === "", worktreeNameError("feature/login"));
+check("worktree name accepts a plain name", worktreeNameError("fix-404") === "", worktreeNameError("fix-404"));
+check("worktree name needs a value", worktreeNameError("   ") === "needs-name", worktreeNameError("   "));
+check("worktree name refuses a leading dash", worktreeNameError("-b") === "invalid", worktreeNameError("-b"));
+check("worktree name refuses traversal", worktreeNameError("a/../../b") === "invalid", worktreeNameError("a/../../b"));
+check("worktree name refuses a leading dot", worktreeNameError(".hidden") === "invalid", worktreeNameError(".hidden"));
+check("worktree name refuses spaces", worktreeNameError("my branch") === "invalid", worktreeNameError("my branch"));
 
 // block comment spanning lines
 const lines = ["package main", "/* start", "middle", "end */", "func main() {}"];
@@ -5926,6 +6027,29 @@ check(
 	check("openFile refuses an empty path", emptyPathThrew);
 	check("no registerViewer until the panel owns a viewer pipeline", service.registerViewer === undefined);
 	actions.resetActions();
+}
+
+// A CSS-string refactor can drop a load-bearing rule while every behavior
+// test still passes. The shell root must stay the bounded flex column that
+// every .ce-scroll inside it sizes against, or the whole panel stops scrolling.
+{
+	const { CSS } = await import("./src/client/styles.js");
+	const rootRules = [...CSS.matchAll(/(?:^|\n)\.ce-root\{([^}]*)\}/g)].map((match) => match[1]).join(";");
+	check("the workspace root is a bounded flex column",
+		/height:100%/.test(rootRules) && /min-height:0/.test(rootRules) && /display:flex/.test(rootRules) && /flex-direction:column/.test(rootRules) && /position:relative/.test(rootRules),
+		rootRules);
+}
+
+// Session-row seats render into Host-owned DOM, outside every .ce-root surface,
+// so the kit tokens only exist there if the element carries the token scope.
+// The hover card is a dark surface in both palettes: it must take the Host's
+// hover-card ink, not the page's light-palette label colors.
+{
+	const { CSS } = await import("./src/client/styles.js");
+	const scope = CSS.match(/:where\(([^)]*)\)\{/)?.[1] ?? "";
+	check("side-slot surfaces define the kit tokens", [".ce-branch-chip", ".ce-branch-card"].every((cls) => scope.includes(cls)), scope.slice(0, 80));
+	const cardName = [...CSS.matchAll(/\.ce-branch-card-name\{([^}]*)\}/g)].map((match) => match[1]).join(";");
+	check("the hover-card branch line uses the Host hover-card ink", cardName.includes("--dsw-alias-hovercard-label-primary"), cardName);
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

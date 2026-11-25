@@ -21,6 +21,7 @@ import { installTerminalTab, TERM_TAB_KIND } from "./termtab.js";
 import { installRightbarWidth } from "./rightbarwidth.js";
 import { pruneOrphanKeys } from "./orphans.js";
 import { SessionBranch, SessionBranchCard, sessionCwd } from "./branchchip.js";
+import { installBranchConversations } from "./worktrees.js";
 
 export default {
 	inject: ["slots", "locale", "sidebarRightTabs", "sidebarRight", "layout"],
@@ -198,6 +199,12 @@ export default {
 				return cwd === "" ? null : h(SessionBranchCard, { t: bound, cwd });
 			},
 		)));
+		// Branch conversations: the workspace menu entry that creates a worktree and
+		// opens a blank Session in it. Chained through the client services, so the
+		// entry only appears when the menu (and these) are composed.
+		safe("branch conversations", () => ctx.inject(["contextMenus", "workspaces", "sessions"], (branchCtx) => {
+			branchCtx.effect(() => installBranchConversations(branchCtx, bound), "code-explorer: branch conversations");
+		}));
 		// Left navigation owns all tool launchers; right pages remain session-bound.
 		safe("left tool entries", () => installLeftTools(ctx, bound));
 		const Guide = () => h(WorkspaceGuide, { t: bound });

@@ -54,6 +54,8 @@ errno 映射：`ENOENT/ENOTDIR→not-found`、`EEXIST/ENOTEMPTY→conflict`、`E
 - 所有 Host 侧路径解析经 `lib/host/fence.js`：`realpath(cwd)` 为根做词法 containment；`..` 逃逸、逃出围栏的 symlink 一律拒绝；写入拒绝任何 symlink（即使解析后仍在围栏内）。
 - 读路径额外允许"兄弟仓库 + Go 工具链根"（`extraReadRoots`），但这些根不提供隐藏（点开头）路径，且**写入永不使用额外根**。
 - `cwd` 必须是绝对路径的工作区根；路由把相对 `path` 解析到 `cwd` 下。
+- worktree 写入（`git.worktreeCreate`）是围栏的一条**窄例外**：检出落在仓库根的直属兄弟目录，名为 `<仓库名>-<分支slug>`（`~/Projects/vas` + `feat/login` → `~/Projects/vas-feat-login`）。目标路径完全由 Host 生成（调用方只给分支名），必须是仓库根的兄弟、以 `<仓库名>-` 开头，且已存在路径一律拒绝——绝不覆盖或复用；分支名不接受 `..` 或 flag 形态。旧版布局的 `<仓库名>/.agents/worktrees/<slug>` 池仍然被识别为“本插件创建的检出”（`git.worktrees` 行带 `legacy: true`），但新建一律落在兄弟目录；分支已被别处检出时回 `409` 并给出检出路径，若该目录已被手工删除则先 `worktree prune` 再重试。
+- worktree 删除（`git.worktreeRemove`）只接受本插件创建的检出：同级的 `<仓库名>-…` 或旧版 `<仓库名>/.agents/worktrees/…` 池条目。不符合命名/位置的回 `403`，工作区自身所在的检出回 `409`，未登记路径回 `404`，目录已不存在的登记会被 prune 并回成功；不带 `force` 时不丢弃未提交改动。会话归档时的自动回收复用同一函数（策略在 `reclaimArchivedCheckout`，依赖注入、可单测），旧版池条目同样会被回收。
 
 ## §6 写入语义
 

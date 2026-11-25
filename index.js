@@ -38,6 +38,8 @@ import { dbRoutes, closeAll as closeAllDb, setDbProfileService } from "./lib/hos
 import { createDbProfileService } from "./lib/host/dbprofiles.js";
 import { createToolboxTools } from "./lib/host/tools.js";
 import { setExternalTerminalApp } from "./lib/host/external-terminal.js";
+import { gitWorktreeRemove, reclaimArchivedCheckout } from "./lib/host/worktrees.js";
+import { insideFence } from "./lib/host/fence.js";
 
 /** Plugin configuration schema. Fields are read at apply time; changes require
  *  a plugin restart (non-volatile). Users override via cordis.patch.yml.
@@ -164,6 +166,45 @@ function apply(ctx, config) {
 				},
 			});
 		}, "code-explorer: api route");
+	});
+
+	// Archive cleanup: a Session that lives in an `.agents/worktrees/` checkout
+	// (how the branch-conversation flow starts one) gives that checkout back
+	// when it is archived — but only when the checkout is ours, clean, and no
+	// other live Session still stands in it. The branch always survives; only
+	// the working tree goes. A Workspace record that pointed at the removed
+	// checkout is dropped once nothing but archived Sessions remain in it.
+	ctx.inject(["workspaceRegistry", "sessionQuery", "sessions"], (archiveCtx) => {
+		// Compositions without the Workspace/Session providers simply have no
+		// archive to clean up after.
+		if (typeof archiveCtx.on !== "function" || typeof archiveCtx.sessions?.get !== "function" || typeof archiveCtx.sessionQuery?.listSessions !== "function" || archiveCtx.workspaceRegistry === undefined) return;
+		const reclaim = (sessionId) => reclaimArchivedCheckout(sessionId, {
+			cwdOf: async (id) => {
+				const live = archiveCtx.sessions.get(id);
+				if (typeof live?.header?.cwd === "string") return live.header.cwd;
+				const records = await archiveCtx.sessionQuery.listSessions();
+				return records.find((record) => record.header.id === id)?.header?.cwd;
+			},
+			referencedByOther: async (checkout, id) => {
+				const records = await archiveCtx.sessionQuery.listSessions();
+				const archived = new Set(archiveCtx.workspaceRegistry.archivedSessionIds ?? []);
+				return records.some((record) => {
+					const other = record.header.cwd;
+					return record.header.id !== id && typeof other === "string" && !archived.has(record.header.id) && insideFence(checkout, other);
+				});
+			},
+			remove: async (root, checkout) => { await gitWorktreeRemove(root, "", { path: checkout, force: false }); },
+			workspaceAt: async (path) => archiveCtx.workspaceRegistry.resolveByPath?.(path),
+			deleteWorkspace: async (workspaceId) => { await archiveCtx.workspaceRegistry.delete(workspaceId); },
+			archivedIds: new Set(archiveCtx.workspaceRegistry.archivedSessionIds ?? []),
+		}).catch((error) => {
+			archiveCtx.logger?.warn?.("code-explorer: worktree reclaim skipped for %s: %s", sessionId, String(error?.message ?? error));
+			return { removed: false, reason: "failed" };
+		});
+		archiveCtx.effect(() => {
+			const off = archiveCtx.on("workspace/session-archived", ({ sessionId }) => { void reclaim(sessionId); });
+			return () => { off?.(); };
+		}, "code-explorer: worktree archive cleanup");
 	});
 
 	ctx.effect(() => () => {

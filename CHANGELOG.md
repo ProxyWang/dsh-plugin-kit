@@ -2,6 +2,78 @@
 
 ## Unreleased — a quieter, theme-native visual system
 
+- **The workspace pane scrolls again after the style-module split.** The visual-system refactor
+  moved every rule into `src/client/css/*` and left `.ce-root` with only its theme tokens: the
+  pane root had no definite height, so the shell column grew to its content, `.ce-main` never
+  received a bounded height, and every `.ce-scroll` inside it — the file tree first among them —
+  became exactly as tall as its rows. The Host then clipped the bottom edge instead of scrolling
+  it, and the status bar and the absolutely positioned palette/drop hints drifted out of the
+  pane. `.ce-root` now restores `height:100%; min-height:0; display:flex; flex-direction:column;
+  position:relative`.
+- **The branch chip and the hover-card branch line are legible again.** Both render into
+  Host-owned seats (`sidebar.session.row.trailing` / `.hover`), outside the kit's `.ce-root`
+  surfaces, so `--ce-*` never resolved there: the row chip drew no pill, and the hover line
+  inherited the page's dark label color while sitting on the Host's always-dark hover card —
+  1.13:1 contrast, effectively invisible in the light theme. Chip and card now carry the token
+  scope; the card takes the Host's `--dsw-alias-hovercard-label-*` ink and the card's own
+  12 px/16 px type (falling back to `currentColor` when a Host predates those tokens), while the
+  row chip stays on the page tokens.
+- **Orphaned branch checkouts no longer hold a branch hostage.** Checkouts created by the earlier
+  layout live in `<repository>/.agents/worktrees/<slug>`; the sibling layout that replaced it made
+  them invisible — "Manage worktrees…" hid them, archive cleanup ignored them, and their branch
+  was reported as "already checked out", so `git.worktreeCreate` refused forever. Deleting the
+  Project removed the Workspace record but not the checkout, which is exactly how a branch gets
+  stuck. Legacy pool entries are managed again (listed, removable, reclaimed on archive), and an
+  occupied branch now offers **Open this checkout** in the create dialog: it adopts that directory
+  as a Workspace and starts a blank Session instead of dead-ending. Occupied rows lay the branch
+  name on its own line with the checkout path and the action below it; the long absolute path used
+  to overflow the row, squeeze the name to zero width and clip the action out of sight. A checkout
+  deleted by hand no longer blocks either — creation prunes its stale admin entry, and removing it
+  prunes the registration instead of failing.
+- **Branch-scoped conversations from the workspace menu.** The workspace "⋯" menu now carries
+  `New conversation on a branch…` for Git checkouts. It creates a Git worktree **beside the
+  repository**, named `<repository>-<branch>` (`~/Projects/vas` + `feat/login` →
+  `~/Projects/vas-feat-login`) — a new branch from a chosen start point, or an existing local
+  branch — then registers that directory as its own Workspace and opens a blank Session there. The
+  Workspace is titled `<repository>-<branch>` (`vas` + `release_vip_uat` → `vas-release_vip_uat`),
+  so the sidebar row and the directory on disk carry the same name, and a new row is inserted directly
+  under the Workspace it was started from instead of at the top of the list (the registry prepends). One object database, one checkout per conversation: no more copying
+  a repository per branch. Branches already checked out somewhere else are refused with the
+  occupying path, and the Host routes (`git.worktrees`, `git.worktreeCreate`) validate names,
+  refuse traversal, and stay inside the workspace fence. Branch picking is a filtered list with
+  subsequence matching (`fads` → `feat/ads-fatigue-control`), arrow-key selection, and occupied
+  branches shown struck through with their checkout path — repositories carry hundreds of branches,
+  so a native `<select>` was the wrong control. The picker now names the repository it acts on,
+  offers branches that exist only on a remote (checking one out creates the local tracking branch),
+  hides branches already merged into the repository base behind a "show merged" switch, drops
+  `origin/HEAD`, caps the drawn rows at 300 with a "keep typing" hint for repositories with
+  thousands of refs, and paints the active mode with the accent fill instead of a subtle tint.
+  A branch pushed since the last `git fetch` is invisible to every Git listing, so the picker
+  carries a `Fetch from remote` action and explains it when a query matches nothing; an empty
+  selection now says "pick a branch" instead of claiming the repository has no local branches, and
+  the merged switch hides itself when the Host does not annotate merged branches. A page refresh only
+  reloads the Client half: when the running Host is older than the page, the dialog now says so up
+  front (remote-only checkout is refused with that explanation instead of a raw `no such local
+  branch`), and the merged switch actually hides (its `hidden` attribute was losing to a flex rule).
+- **Worktree management, archive cleanup, and multi-repo workspaces.** The same workspace menu gained
+  `Manage worktrees…`: it lists the sibling `<repo>-…` checkouts (plus any leftover
+  `<repo>/.agents/worktrees/` entry) with their branch, path, current/locked badges, and removes
+  one on request (the branch always survives; a dirty
+  checkout needs the explicit "discard uncommitted changes" switch, and the main checkout or the one
+  the workspace stands in is not removable). Archiving a Session that lives in such a checkout
+  reclaims it automatically — only when it is clean and no other non-archived Session points inside
+  it, and an emptied Workspace record is dropped with it. A workspace that is a parent of several
+  repositories (a multi-repo directory, not a checkout itself) now offers both menu entries with a
+  repository selector instead of hiding them. The menu decides what to offer with a directory scan
+  (`git.repos`), not a `git status`: the context menu aborts a provider after one second, and a cold
+  `git status` on a large repository is slower than that — which silently dropped both entries. A
+  Workspace record whose directory was renamed or moved away now gets one disabled explanatory row
+  (`Workspace directory is missing: …`) instead of a silently empty menu.
+  Verification: `node test-host.mjs` (new branch / existing branch / occupied branch / traversal /
+  checkout reuse, remove route incl. dirty/force/self/foreign, archive-reclaim policy and a real
+  checkout removal, repository pool detection, merged annotation, remote-only checkout),
+  `node test-client.mjs` (branch-name validation, repository labels, merged/remote picker rows),
+  `node scripts/build-client.mjs`.
 - **The panel's chrome was redrawn as one system instead of two stacked skin passes.** The old
   monolith (`src/client/styles.js`, ~1.2k lines) mixed a pre-token layer with a later override
   layer, so the same control could be a boxed segment in one tab and a pill in another. The rules
@@ -28,8 +100,12 @@
   `PREVIEW_HEIGHT` and `PREVIEW_DIR`, so the same fixtures can be rendered at sidebar width
   (430 px) as well as the 1100 px README size.
 
-验证：`pnpm test`（manifest、contract、构建、client 1223 项、host、browser、search、nested、parent、remote 全绿）；
-README 预览在 1100×760 与 430×760 下按 light/dark 重新渲染并逐屏检查。
+验证：`pnpm test`（manifest、contract、构建、client 1259 项、host 365 项、browser、search、nested、parent、remote 全绿）；
+README 预览在 1100×760 与 430×760 下按 light/dark 重新渲染并逐屏检查；
+分支卡另按 Host 的 244 px 悬停卡复现：修复前文字对比度 1.13:1（`#202329` on `#2c2c2e`），修复后分支名 13.94:1、次要文字 6.53:1；
+滚动修复另用 690×1372 与 400×800 的静态页复现：修复前 `.ce-rail` 的 `scrollHeight === clientHeight`、
+`scrollTop` 恒为 0，修复后 `scrollHeight 1599 > clientHeight 1283` 且 `scrollTop` 可达 200 / 300；
+另加一条根布局契约守卫（删掉 `.ce-root` 的那组声明即失败）。
 
 ## Unreleased — packaging is verified, not assumed
 
