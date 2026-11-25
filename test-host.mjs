@@ -6,6 +6,7 @@ import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, st
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { gitWorktreeRemove, managedWorktreeOf, reclaimArchivedCheckout } from "./lib/host/worktrees.js";
+import { GOPLS_VERSION, goplsProvisionState, provisionedGopls } from "./lib/host/provision.js";
 
 const fixture = "/tmp/ce-test";
 const cleanupFixture = () => { try { rmSync(fixture, { recursive: true, force: true }); } catch {} };
@@ -184,6 +185,24 @@ check("lsp diagnostics shape", diag.ok && Array.isArray(diag.value.items), diag)
 const stat = await call("lsp.status", { cwd });
 checkLsp("lsp status ready", stat.ok && stat.value.state === "ready", stat);
 check("lsp status carries progress field", stat.ok && typeof (stat.value.progress ?? "") === "string", stat);
+
+// Warmup + result cache + observability (the acceleration path).
+const warm = await call("lsp.warmup", { cwd, path: "main.go" });
+checkLsp("lsp.warmup returns a usable state", warm.ok && ["starting", "ready"].includes(warm.value.state), warm);
+const statsBefore = await call("lsp.stats", {});
+check("lsp.stats reports language servers and counters", statsBefore.ok && Array.isArray(statsBefore.value.servers) && statsBefore.value.servers.length >= 1 && statsBefore.value.servers.every((row) => typeof row.requests === "number" && typeof row.cacheHits === "number" && typeof row.cacheMisses === "number"), statsBefore.value);
+check("lsp.stats reports the provisioning state", statsBefore.ok && statsBefore.value.provision?.version === GOPLS_VERSION, statsBefore.value?.provision);
+const refsAgain = await call("lsp.request", { cwd, path: "main.go", kind: "references", line: 6, col: 6 });
+const statsAfter = await call("lsp.stats", {});
+const hitsBefore = (statsBefore.value?.servers ?? []).reduce((n, row) => n + row.cacheHits, 0);
+const hitsAfter = (statsAfter.value?.servers ?? []).reduce((n, row) => n + row.cacheHits, 0);
+checkLsp("a repeated symbol query is served from the result cache", refsAgain.ok && hitsAfter > hitsBefore, { hitsBefore, hitsAfter });
+
+// Provisioning is observable and pinned (the one-command install depends on it).
+check("gopls provisioning targets a pinned release", /^v\d+\./.test(GOPLS_VERSION), GOPLS_VERSION);
+const provisionState = goplsProvisionState();
+check("gopls provisioning state is observable", ["idle", "ready", "installing", "failed", "disabled"].includes(provisionState.state), provisionState);
+check("the provisioned gopls lives in the plugin cache", provisionedGopls() === "" || provisionedGopls().includes("dsh-plugin-kit/gopls"), provisionedGopls());
 
 const sym = await call("lsp.request", { cwd, path: "main.go", kind: "symbol", line: 1, col: 1 });
 checkLsp("documentSymbol lists helper & main", sym.ok && sym.value.symbols.some((s) => s.name === "helper" && s.line === 6) && sym.value.symbols.some((s) => s.name === "main"), sym);

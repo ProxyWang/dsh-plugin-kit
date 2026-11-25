@@ -105,3 +105,15 @@
 - `build.directoryFilters` 对 vas5 首次 references 的实际缩短幅度（需 P2 实测）。
 - `-remote=auto` 在当前 gopls 版本的稳定性与多 root 行为。
 - VSCode 侧的具体实现细节来自其公开机制（CancellationToken / `$/progress` / 编辑器模型复用文件内容），未逐行核对源码。
+
+## 6. 落地状态（2026-11-25）
+
+已实现：**S1 预热**（`lsp.warmup`，打开文件即预热；空闲淘汰 5 分钟 → 30 分钟）、**S3 结果缓存 + 单飞**
+（键含文档 mtime，30 s TTL，同键 in-flight 合并）、**S4 片段并行**（按文件去重、并行读、只取目标行）、
+按语言限制常驻 root 数（LRU，默认 4，工作树场景必需）、`lsp.stats` 观测（常驻数、请求/缓存命中、provision 状态）。
+
+另外把 Trae 的做法本地化验证了一遍：Trae 用自编译 `trae-gopls v0.22.0+bd4` 走 VS Code 的
+`go.alternateTools.gopls`，真正起作用的是 gopls v0.21+ 自带的**内容寻址持久 file cache**（本机
+`~/Library/Caches/gopls/33f7eb11` 已 1.5 GB）；`-remote=auto` daemon 在 gopls v0.21/本机不可用
+（`dial … no such file`）。因此插件采用“固定版本 + 首次使用自动安装 + 预热 + 常驻”的等价路线，
+`gopls stats` 可作为后续的显式灌缓存手段。

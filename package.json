@@ -59,6 +59,9 @@
   "dependencies": {
     "mysql2": "^3.24.6",
     "pg": "^8.23.1",
+    "pyright": "^1.1.414",
+    "typescript": "^5.9.3",
+    "typescript-language-server": "^6.1.0",
     "zod": "^4.6.7"
   }
 }

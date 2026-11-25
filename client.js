@@ -6483,6 +6483,38 @@ function addTabPath(list, path, cap = 15) {
   while (next.length > cap) next.shift();
   return next;
 }
+var warmedFiles = /* @__PURE__ */ new Map();
+var warmingRetries = /* @__PURE__ */ new Map();
+function warmLanguage(cwd, path, onState) {
+  if (!cwd || !path) return;
+  const key = `${cwd}\0${path}`;
+  const now = Date.now();
+  if (now - (warmedFiles.get(key) ?? 0) < 10 * 60 * 1e3) return;
+  warmedFiles.set(key, now);
+  api("lsp.warmup", { cwd, path }).then((res) => {
+    if (!res.ok || res.value === void 0) {
+      warmedFiles.delete(key);
+      return;
+    }
+    const value = res.value;
+    if (typeof onState === "function") onState(value);
+    if (value.state === "provisioning" || value.state === "starting") {
+      const attempt = (warmingRetries.get(key) ?? 0) + 1;
+      warmingRetries.set(key, attempt);
+      if (attempt <= 20) {
+        setTimeout(() => {
+          warmedFiles.delete(key);
+          warmLanguage(cwd, path, onState);
+        }, 15e3);
+      }
+      return;
+    }
+    warmingRetries.delete(key);
+    if (value.state === "unsupported" || value.state === "missing") warmedFiles.delete(key);
+  }).catch(() => {
+    warmedFiles.delete(key);
+  });
+}
 function CodeBody(props) {
   const { useTabInfo, sessionId, useSessions, t, terminal, openBuiltinTerminal, builtinTerminal } = props;
   const terminalEntry = terminal ?? inertTerminalEntry;
@@ -6734,6 +6766,10 @@ function CodeBody(props) {
         else say(`${t("error")}: ${res.error}`, "error");
         return null;
       }
+      warmLanguage(cwd, path, (value) => {
+        if (value.state === "provisioning") say(value.message ?? "installing gopls…", "info");
+        else setStatus({ state: value.state, message: value.message ?? "", progress: value.progress ?? "", label: value.label ?? "" });
+      });
       if (opts?.checkExternal && !opts.force) {
         const cur = docRef.current;
         if (cur && cur.path === path && !cur.image) {

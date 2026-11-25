@@ -2,6 +2,21 @@
 
 ## Unreleased — a quieter, theme-native visual system
 
+- **Language servers are warm, pinned, and installed by the plugin itself.** Opening a file now
+  warms the workspace's language server in the background instead of paying the cold load on the
+  first definition (`lsp.warmup`), servers stay resident for 30 minutes instead of 5, and roots per
+  language are capped with least-recently-used eviction so worktrees cannot multiply servers without
+  bound. Symbol queries are cached by document version for 30 s with in-flight de-duplication, and
+  reference snippets are read once per file in parallel instead of serially. The Go server is
+  provisioned into `$DSH_HOME/cache/dsh-plugin-kit/gopls/<version>/` from the local Go toolchain on
+  first use (`provisionLanguageServers`, `goplsCommand` to pin a different build) — the mechanism
+  editors like Trae get by shipping their own gopls, without touching the user's PATH. TypeScript
+  and Python servers now ship as package dependencies, so one install covers them. `lsp.stats`
+  exposes residency, counters and cache hits for measurement.
+  Verification: `node test-host.mjs` (warmup, result cache, stats, provisioning state, launcher
+  ordering), `node scripts/build-client.mjs`, `node test-client.mjs`.
+
+
 - **The workspace pane scrolls again after the style-module split.** The visual-system refactor
   moved every rule into `src/client/css/*` and left `.ce-root` with only its theme tokens: the
   pane root had no definite height, so the shell column grew to its content, `.ce-main` never

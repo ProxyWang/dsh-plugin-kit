@@ -44,6 +44,44 @@ export function addTabPath(list, path, cap = 15) {
 	return next;
 }
 
+/**
+ * Warm the language server the way editors do: the first file opened in a
+ * workspace starts it and pays the package-graph load while the operator reads,
+ * so the first go-to-definition is served by a hot server. One attempt per
+ * workspace+file per ten minutes; failures are silent (the status bar shows
+ * whatever the server reports).
+ */
+const warmedFiles = new Map();
+/** Workspaces whose gopls provisioning is still running (retry warmup later). */
+const warmingRetries = new Map();
+function warmLanguage(cwd, path, onState) {
+	if (!cwd || !path) return;
+	const key = `${cwd}\u0000${path}`;
+	const now = Date.now();
+	if (now - (warmedFiles.get(key) ?? 0) < 10 * 60 * 1000) return;
+	warmedFiles.set(key, now);
+	api("lsp.warmup", { cwd, path }).then((res) => {
+		if (!res.ok || res.value === undefined) {
+			warmedFiles.delete(key);
+			return;
+		}
+		const value = res.value;
+		if (typeof onState === "function") onState(value);
+		if (value.state === "provisioning" || value.state === "starting") {
+			// Provisioning/loading runs in the Host; retry later so the first
+			// definition lands on a warm server. Bounded to ~5 minutes.
+			const attempt = (warmingRetries.get(key) ?? 0) + 1;
+			warmingRetries.set(key, attempt);
+			if (attempt <= 20) {
+				setTimeout(() => { warmedFiles.delete(key); warmLanguage(cwd, path, onState); }, 15_000);
+			}
+			return;
+		}
+		warmingRetries.delete(key);
+		if (value.state === "unsupported" || value.state === "missing") warmedFiles.delete(key);
+	}).catch(() => { warmedFiles.delete(key); });
+}
+
 export function CodeBody(props) {
 	const { useTabInfo, sessionId, useSessions, t, terminal, openBuiltinTerminal, builtinTerminal } = props;
 	// Two terminals, both optional: the plugin's own rendered tab when the
@@ -316,6 +354,10 @@ export function CodeBody(props) {
 				else say(`${t("error")}: ${res.error}`, "error");
 				return null;
 			}
+			warmLanguage(cwd, path, (value) => {
+				if (value.state === "provisioning") say(value.message ?? "installing gopls…", "info");
+				else setStatus({ state: value.state, message: value.message ?? "", progress: value.progress ?? "", label: value.label ?? "" });
+			});
 			if (opts?.checkExternal && !opts.force) {
 				const cur = docRef.current;
 				if (cur && cur.path === path && !cur.image) {

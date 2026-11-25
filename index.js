@@ -26,7 +26,8 @@ import { API_PREFIX } from "./lib/host/constants.js";
 import { readJsonBody, sendOk, sendError } from "./lib/host/http.js";
 import { ApiError } from "./lib/host/errors.js";
 import { textCache } from "./lib/host/fence.js";
-import { servers } from "./lib/host/lsp.js";
+import { servers, setLspOptions } from "./lib/host/lsp.js";
+import { setProvisionOptions } from "./lib/host/provision.js";
 import { routes } from "./lib/host/routes.js";
 import { setSkillsRegistry } from "./lib/host/skills.js";
 import { stopAllTasks } from "./lib/host/tasks.js";
@@ -52,14 +53,21 @@ import { insideFence } from "./lib/host/fence.js";
 export const Config = z.object({
 	formatOnSave: z.boolean().default(true).describe("Format Go/TS/JS/Python files on save via the language server."),
 	liveRefresh: z.boolean().default(true).describe("Watch the workspace and live-refresh editor, tree and git status."),
-	lspIdleMs: z.number().default(300_000).describe("Shut down idle LSP servers after this many milliseconds."),
+	lspIdleMs: z.number().default(1_800_000).describe("Shut down idle LSP servers after this many milliseconds (default 30 minutes; the server is warmed when a file opens)."),
+	lspMaxServers: z.number().default(4).describe("Most language-server roots kept resident per language; the least recently used is stopped first (worktrees multiply roots)."),
+	goplsCommand: z.string().default("").describe("Go language server to run instead of the provisioned/PATH one: an absolute path to a newer gopls, a vendored build, or a fork. Empty means the plugin's own provisioned gopls."),
+	provisionLanguageServers: z.boolean().default(true).describe("Install the Go language server (gopls) into the plugin's cache on first use. Requires the Go toolchain; TypeScript/Python servers ship as package dependencies."),
 	apiTimeoutMs: z.number().default(30_000).describe("Default timeout for API workbench requests (1000–120000 ms)."),
 	collectionDir: z.string().default("").describe("Workspace-relative .bru collection directory for the API workbench."),
 	terminalApp: z.string().default("").describe("Terminal application opened by the External Terminal action (macOS app name, e.g. iTerm or Warp; empty probes iTerm then Terminal)."),
 	dbDefaultDriver: z.string().default("sqlite").describe("Default database driver for new connections (sqlite, mysql, postgres)."),
 }).prefault({});
 
-function apply(ctx, config) {
+function apply(ctx, config = {}) {
+	// Language-server tuning lives in the LSP module; this is where the plugin's
+	// config reaches it (see Config above).
+	setLspOptions({ goplsCommand: config.goplsCommand ?? "", idleMs: config.lspIdleMs, maxServers: config.lspMaxServers });
+	setProvisionOptions({ auto: config.provisionLanguageServers !== false });
 	// Deployment preference for the External Terminal action; "" probes at open time.
 	setExternalTerminalApp(typeof config?.terminalApp === "string" ? config.terminalApp : "");
 	let browser;
