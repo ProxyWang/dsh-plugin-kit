@@ -1,6 +1,19 @@
 # Changelog
 
-## Unreleased — a quieter, theme-native visual system
+## Unreleased — visual system, branch conversations, self-provisioning language servers
+
+- **Follow-up fixes on the install path.** A branch checked out from a remote-only ref now tracks it
+  (`--set-upstream-to` after `worktree add`), so pull/push work in the new conversation instead of
+  reporting "no upstream". Disabling `provisionLanguageServers` stops the client from retrying an
+  install the user turned off (warmup reports `missing`, not `provisioning`). A gopls install that
+  fails because the local Go is older than the pinned release now names the required version.
+  Conversation titles use the same slug as the checkout directory (`vas-feat-login`), so row and
+  disk match for slashed branches too.
+- **Known limitations.** Windows is untested end to end (pnpm `.cmd` shims, and workspace text
+  search needs `rg` or `grep` — neither is provisioned yet); the warmup retry timer keeps its
+  bounded schedule after the panel closes; the multi-repo probe scans two levels with a 2 000-entry
+  budget, so an unusually wide parent can miss a repository; pre-existing contract warnings remain
+  for `lsp.workspaceDiagnostics`, `api.streamStop` and `collection.run`.
 
 - **Language servers are warm, pinned, and installed by the plugin itself.** Opening a file now
   warms the workspace's language server in the background instead of paying the cold load on the

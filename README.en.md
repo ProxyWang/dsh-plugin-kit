@@ -91,18 +91,23 @@ After installing, select a session and choose a tool from **left navigation** to
 
 ## Install
 
-Link-install inside a DSH profile (development mode):
+One command, straight from GitHub into a DSH profile (recommended):
 
 ```sh
-dsh plugin add /abs/path/to/dsh-plugin-kit   # or install_bundle in the plugin manager
+dsh plugin --profile desktop add github:ProxyWang/dsh-plugin-kit
 ```
 
-From git:
+Local development mode uses a link:
 
 ```sh
-git clone https://gitee.com/wang-jun-07/dsh-plugin-kit.git
-# install the directory via the plugin manager
+dsh plugin --profile desktop add link:/abs/path/to/dsh-plugin-kit
 ```
+
+Dependencies land on their own after the first open — no manual language-server setup:
+
+- **TypeScript / JavaScript and Python**: `typescript-language-server`, `typescript` and `pyright` ship as plugin npm dependencies.
+- **Go**: on first opening a Go file the plugin installs `gopls v0.22.0` into `$DSH_HOME/cache/dsh-plugin-kit/gopls/<version>/` using the local Go toolchain (one-time, 30–60 s; `provisionLanguageServers: false` disables it, `goplsCommand` pins a different build).
+- Failures explain themselves in the status bar and never break the rest of the panel. `git` and the language toolchain (Go/Python) stay prerequisites for those features.
 
 LSP jumps require the matching language server on the Host's PATH (or in common global bin locations): `gopls` for Go, `typescript-language-server` for TS/JS, `pyright-langserver` or `pylsp` for Python. Missing servers degrade gracefully (the status dot reports it; everything else keeps working).
 

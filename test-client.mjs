@@ -82,7 +82,7 @@ check("branch search is case-insensitive", branchScore("FEAT", "feat/x") !== nul
 
 // Branch conversations are titled `<repository>-<branch>`, like the checkout directory.
 check("checkout title prefixes the repository", checkoutTitle("/Users/proxy/orca/vas", "release_vip_uat") === "vas-release_vip_uat", checkoutTitle("/Users/proxy/orca/vas", "release_vip_uat"));
-check("checkout title keeps a slashed branch readable", checkoutTitle("/Users/proxy/orca/vas", "feat/login") === "vas-feat/login", checkoutTitle("/Users/proxy/orca/vas", "feat/login"));
+check("checkout title slashes a branched name like the directory", checkoutTitle("/Users/proxy/orca/vas", "feat/login") === "vas-feat-login", checkoutTitle("/Users/proxy/orca/vas", "feat/login"));
 check("checkout title falls back to the branch alone", checkoutTitle("", "release_vip_uat") === "release_vip_uat", checkoutTitle("", "release_vip_uat"));
 check("checkout title tolerates a missing branch", checkoutTitle("/Users/proxy/orca/vas", "") === "vas", checkoutTitle("/Users/proxy/orca/vas", ""));
 

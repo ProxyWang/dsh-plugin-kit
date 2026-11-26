@@ -7,6 +7,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { gitWorktreeRemove, managedWorktreeOf, reclaimArchivedCheckout } from "./lib/host/worktrees.js";
 import { GOPLS_VERSION, goplsProvisionState, provisionedGopls } from "./lib/host/provision.js";
+import { provisionWarmState } from "./lib/host/lsp.js";
 
 const fixture = "/tmp/ce-test";
 const cleanupFixture = () => { try { rmSync(fixture, { recursive: true, force: true }); } catch {} };
@@ -200,6 +201,8 @@ checkLsp("a repeated symbol query is served from the result cache", refsAgain.ok
 
 // Provisioning is observable and pinned (the one-command install depends on it).
 check("gopls provisioning targets a pinned release", /^v\d+\./.test(GOPLS_VERSION), GOPLS_VERSION);
+check("a disabled install is terminal for warmup", provisionWarmState("disabled") === "missing" && provisionWarmState("failed") === "missing", [provisionWarmState("disabled"), provisionWarmState("failed")]);
+check("an installing state keeps warmup waiting", provisionWarmState("installing") === "provisioning", provisionWarmState("installing"));
 const provisionState = goplsProvisionState();
 check("gopls provisioning state is observable", ["idle", "ready", "installing", "failed", "disabled"].includes(provisionState.state), provisionState);
 check("the provisioned gopls lives in the plugin cache", provisionedGopls() === "" || provisionedGopls().includes("dsh-plugin-kit/gopls"), provisionedGopls());
@@ -1962,10 +1965,14 @@ service HelloService {
 	check("git.branches leaves an unmerged branch unflagged", annotated.ok && byName.get("ahead-x")?.merged === false, byName.get("ahead-x"));
 
 	// A branch that only exists on a remote becomes a local tracking checkout.
+	// `--set-upstream-to` needs the remote itself to be configured, so the
+	// fixture gains a (never contacted) origin, like a real clone has.
+	execFileSync("git", ["-C", wtRepo, "remote", "add", "origin", `${wtRoot}/upstream.git`], { stdio: "ignore" });
 	const headSha = execFileSync("git", ["-C", wtRepo, "rev-parse", "HEAD"], { encoding: "utf8" }).trim();
 	execFileSync("git", ["-C", wtRepo, "update-ref", "refs/remotes/origin/feat/remote-only", headSha]);
 	const wtRemote = await call("git.worktreeCreate", { cwd: wtRepo, branch: "feat/remote-only", mode: "existing", remoteRef: "origin/feat/remote-only" });
 	check("a remote-only branch checks out as a new local branch", wtRemote.ok && existsSync(checkoutOf("feat/remote-only")) && execFileSync("git", ["-C", wtRepo, "branch", "--list", "feat/remote-only"], { encoding: "utf8" }).trim() !== "", wtRemote);
+	check("the remote-only checkout tracks its remote branch", execFileSync("git", ["-C", checkoutOf("feat/remote-only"), "rev-parse", "--abbrev-ref", "@{upstream}"], { encoding: "utf8" }).trim() === "origin/feat/remote-only");
 }
 
 console.log(`\n${pass} passed, ${fail} failed${skipped ? `, ${skipped} skipped` : ""}`);

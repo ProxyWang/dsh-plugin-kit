@@ -22177,8 +22177,9 @@ function placementBefore(items, sourceId, newId) {
 function checkoutTitle(repoRoot, branch) {
   const repo = String(repoRoot ?? "").split(/[\\/]/).filter(Boolean).pop() ?? "";
   const name = String(branch ?? "").trim();
-  if (repo === "") return name;
-  return name === "" ? repo : `${repo}-${name}`;
+  const slug = name.replace(/[^A-Za-z0-9._-]+/g, "-").replace(/^[-.]+/, "").replace(/[-.]+$/, "").slice(0, 80);
+  if (repo === "") return slug === "" ? name : slug;
+  return slug === "" ? repo : `${repo}-${slug}`;
 }
 function service(ctx, name) {
   try {

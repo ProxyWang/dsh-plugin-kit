@@ -4,7 +4,10 @@
       config:
         formatOnSave: true
         liveRefresh: true
-        lspIdleMs: 300000
+        lspIdleMs: 1800000
+        lspMaxServers: 4
+        goplsCommand: ''
+        provisionLanguageServers: true
         apiTimeoutMs: 30000
         collectionDir: ''
         dbDefaultDriver: sqlite
